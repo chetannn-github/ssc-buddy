@@ -91,7 +91,13 @@ function ResultDetail() {
   return (
     <AppShell
       title={record ? record.subject : "Result details"}
-      subtitle={record ? record.chapter : undefined}
+      subtitle={
+        record
+          ? record.exercise
+            ? `${record.chapter} · ${record.exercise}`
+            : record.chapter
+          : undefined
+      }
     >
       <div className="mb-3 flex items-center justify-between gap-2">
         <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2 text-xs" asChild>
