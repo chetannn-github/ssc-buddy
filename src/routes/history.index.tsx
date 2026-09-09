@@ -10,12 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  attemptKey,
-  deleteRecord,
-  loadHistory,
-  type TestRecord,
-} from "@/lib/exam";
+import { attemptKey, deleteRecord, loadHistory, type TestRecord } from "@/lib/exam";
 
 function friendlyDate(iso: string) {
   const d = new Date(iso);
@@ -78,8 +73,7 @@ function HistoryPage() {
   const visible = useMemo(() => {
     const list = records.filter(
       (r) =>
-        (subject === ALL || r.subject === subject) &&
-        (chapter === ALL || r.chapter === chapter),
+        (subject === ALL || r.subject === subject) && (chapter === ALL || r.chapter === chapter),
     );
     const groups = new Map<string, TestRecord[]>();
     for (const r of list) {
@@ -99,17 +93,11 @@ function HistoryPage() {
           first: sorted[0] as TestRecord,
         };
       })
-      .sort(
-        (a, b) => new Date(b.latest.date).getTime() - new Date(a.latest.date).getTime(),
-      );
-
+      .sort((a, b) => new Date(b.latest.date).getTime() - new Date(a.latest.date).getTime());
   }, [records, subject, chapter]);
 
-
   return (
-    <AppShell
-      title="Test History"
-    >
+    <AppShell title="Test History">
       <div className="space-y-4">
         <div className="card-surface grid gap-3 p-4 sm:grid-cols-2">
           <Select
@@ -150,7 +138,9 @@ function HistoryPage() {
           <div className="card-surface p-10 text-center">
             <p className="text-sm text-muted-foreground">No tests match your filters yet.</p>
             <Button className="mt-4" asChild>
-              <Link to="/" search={{}}>Start a test</Link>
+              <Link to="/test" search={{}}>
+                Start a test
+              </Link>
             </Button>
           </div>
         ) : (
@@ -164,93 +154,92 @@ function HistoryPage() {
               const maxMarks = r.answers.length * r.marking.positive;
 
               return (
-              <article
-                key={r.id}
-                role="link"
-                tabIndex={0}
-                onClick={() => navigate({ to: "/history/$id", params: { id: r.id } })}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    navigate({ to: "/history/$id", params: { id: r.id } });
-                  }
-                }}
-                className="card-surface group flex cursor-pointer flex-col p-4 transition-shadow hover:shadow-[var(--shadow-lift)] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-              >
-                <div className="flex items-center gap-4">
-                  <DonutChart
-                    size={64}
-                    thickness={9}
-                    segments={[
-                      { label: "Correct", value: correct, color: "var(--color-answered)" },
-                      { label: "Wrong", value: wrong, color: "var(--color-destructive)" },
-                      { label: "Unattempted", value: unattempted, color: "var(--color-unvisited)" },
-                    ]}
-                    centerValue={r.score ?? "—"}
-                    centerSubValue={`/ ${maxMarks}`}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <h2 className="truncate text-sm font-semibold">{r.subject}</h2>
-                      {isReattempt && (
-                        <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
-                          {g.attempts.length} attempts
-                        </span>
-                      )}
-                    </div>
-                    <p className="truncate text-xs text-muted-foreground">{r.chapter}</p>
-                    {r.exercise && (
-                      <p className="truncate text-xs font-medium text-primary">{r.exercise}</p>
-                    )}
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {friendlyDate(r.date)}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-3 flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-xs"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      navigate({
-                        to: "/",
-                        search: {
-                          subject: r.subject,
-                          chapter: r.chapter,
-                          exercise: r.exercise,
-                          minutes: r.durationMinutes ?? undefined,
-                          start: r.startNumber,
-                          count: r.answers.length,
+                <article
+                  key={r.id}
+                  role="link"
+                  tabIndex={0}
+                  onClick={() => navigate({ to: "/history/$id", params: { id: r.id } })}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      navigate({ to: "/history/$id", params: { id: r.id } });
+                    }
+                  }}
+                  className="card-surface group flex cursor-pointer flex-col p-4 transition-shadow hover:shadow-[var(--shadow-lift)] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                >
+                  <div className="flex items-center gap-4">
+                    <DonutChart
+                      size={64}
+                      thickness={9}
+                      segments={[
+                        { label: "Correct", value: correct, color: "var(--color-answered)" },
+                        { label: "Wrong", value: wrong, color: "var(--color-destructive)" },
+                        {
+                          label: "Unattempted",
+                          value: unattempted,
+                          color: "var(--color-unvisited)",
                         },
-                      });
-                    }}
-                  >
-                    Reattempt
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 text-xs text-muted-foreground"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteRecord(r.id);
-                      setRecords(loadHistory());
-                    }}
-                  >
-                    {isReattempt ? "Delete latest" : "Delete"}
-                  </Button>
-                </div>
+                      ]}
+                      centerValue={r.score ?? "—"}
+                      centerSubValue={`/ ${maxMarks}`}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <h2 className="truncate text-sm font-semibold">{r.subject}</h2>
+                        {isReattempt && (
+                          <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                            {g.attempts.length} attempts
+                          </span>
+                        )}
+                      </div>
+                      <p className="truncate text-xs text-muted-foreground">{r.chapter}</p>
+                      {r.exercise && (
+                        <p className="truncate text-xs font-medium text-primary">{r.exercise}</p>
+                      )}
+                      <p className="mt-1 text-xs text-muted-foreground">{friendlyDate(r.date)}</p>
+                    </div>
+                  </div>
 
-              </article>
-
+                  <div className="mt-3 flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate({
+                          to: "/test",
+                          search: {
+                            subject: r.subject,
+                            chapter: r.chapter,
+                            exercise: r.exercise,
+                            minutes: r.durationMinutes ?? undefined,
+                            start: r.startNumber,
+                            count: r.answers.length,
+                          },
+                        });
+                      }}
+                    >
+                      Reattempt
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs text-muted-foreground"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteRecord(r.id);
+                        setRecords(loadHistory());
+                      }}
+                    >
+                      {isReattempt ? "Delete latest" : "Delete"}
+                    </Button>
+                  </div>
+                </article>
               );
             })}
           </div>
         )}
-
       </div>
     </AppShell>
   );

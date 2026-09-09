@@ -1,41 +1,50 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useMemo, useState, type ComponentType } from "react";
+import {
+  Activity,
+  AlertCircle,
+  BarChart3,
+  BookOpen,
+  CheckCircle2,
+  Clock3,
+  Flame,
+  History as HistoryIcon,
+  ListChecks,
+  PlayCircle,
+  Target,
+  TrendingUp,
+  Trophy,
+  XCircle,
+} from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
-import { SetupScreen, type TestConfig } from "@/components/exam/SetupScreen";
-import { TestScreen } from "@/components/exam/TestScreen";
-import { AnswerKeyScreen } from "@/components/exam/AnswerKeyScreen";
-import { ResultScreen } from "@/components/exam/ResultScreen";
-import { computeScore, saveRecord, type Option, type TestRecord } from "@/lib/exam";
+import { DonutChart } from "@/components/exam/DonutChart";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  aggregateRecords,
+  filterByTime,
+  getDailyActivity,
+  getImprovements,
+  getStreaks,
+  groupPerformance,
+  metricsForRecord,
+  type TimeRange,
+} from "@/lib/analytics";
+import { loadHistory, type TestRecord } from "@/lib/exam";
+import { cn } from "@/lib/utils";
 
-const title = "CBT MCQ Practice — Mark Answers for SSC, UPSC, Banking";
+const title = "Performance Dashboard — CBT MCQ Practice";
 const description =
-  "A free offline OMR-style CBT interface for government exam aspirants: pick subject and chapter, set a timer, mark A/B/C/D answers from your book, and track scores.";
-
-type IndexSearch = {
-  subject?: string | undefined;
-  chapter?: string | undefined;
-  exercise?: string | undefined;
-  minutes?: number | undefined;
-  start?: number | undefined;
-  count?: number | undefined;
-};
-
-
-const numOrUndefined = (v: unknown) => {
-  const n = Number(v);
-  return v === undefined || Number.isNaN(n) || n <= 0 ? undefined : n;
-};
+  "Track questions attempted, accuracy, scores, strong chapters and improvement across CBT practice tests.";
+const ALL = "__all__";
 
 export const Route = createFileRoute("/")({
-  validateSearch: (search: Record<string, unknown>): IndexSearch => ({
-    subject: typeof search["subject"] === "string" ? search["subject"] : undefined,
-    chapter: typeof search["chapter"] === "string" ? search["chapter"] : undefined,
-    exercise: typeof search["exercise"] === "string" ? search["exercise"] : undefined,
-    minutes: numOrUndefined(search["minutes"]),
-    start: numOrUndefined(search["start"]),
-    count: numOrUndefined(search["count"]),
-  }),
-
   head: () => ({
     meta: [
       { title },
@@ -44,108 +53,680 @@ export const Route = createFileRoute("/")({
       { property: "og:description", content: description },
     ],
   }),
-  component: Index,
+  component: Dashboard,
 });
 
-type Phase = "setup" | "key" | "test" | "result";
+function formatNumber(value: number, maximumFractionDigits = 0) {
+  return new Intl.NumberFormat(undefined, { maximumFractionDigits }).format(value);
+}
 
-function Index() {
-  const search = Route.useSearch();
-  const [phase, setPhase] = useState<Phase>("setup");
-  const [config, setConfig] = useState<TestConfig | null>(null);
-  const [answerKey, setAnswerKey] = useState<(Option | null)[] | null>(null);
-  const [record, setRecord] = useState<TestRecord | null>(null);
+function formatPercent(value: number | null) {
+  return value === null ? "—" : `${Math.round(value)}%`;
+}
 
-  const handleSubmit = (answers: (Option | null)[], timeTakenSeconds: number) => {
-    if (!config) return;
-    const key = answerKey;
-    const evaluations = key
-      ? answers.map((a, i) => (!a || !key[i] ? null : a === key[i] ? "correct" : "incorrect"))
-      : undefined;
-    const correct = evaluations ? evaluations.filter((v) => v === "correct").length : null;
-    const wrong = evaluations ? evaluations.filter((v) => v === "incorrect").length : null;
-    const saved: TestRecord = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      date: new Date().toISOString(),
-      subject: config.subject,
-      chapter: config.chapter,
-      ...(config.exercise ? { exercise: config.exercise } : {}),
-      startNumber: config.startNumber,
-      durationMinutes: config.minutes,
-      timeTakenSeconds,
-      answers,
-      ...(key ? { answerKey: key } : {}),
-      ...(evaluations ? { evaluations } : {}),
-      correct,
-      wrong,
-      marking: config.marking,
-      score: computeScore(correct, wrong, config.marking),
+function formatDuration(seconds: number) {
+  if (seconds < 60) return `${Math.round(seconds)} sec`;
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.round((seconds % 3600) / 60);
+  return hours > 0 ? `${hours}h ${minutes}m` : `${minutes} min`;
+}
+
+function friendlyDate(iso: string) {
+  return new Date(iso).toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+type MetricCardProps = {
+  label: string;
+  value: string;
+  helper: string;
+  icon: ComponentType<{ className?: string }>;
+  tone?: "default" | "good" | "bad";
+};
+
+function MetricCard({ label, value, helper, icon: Icon, tone = "default" }: MetricCardProps) {
+  return (
+    <article className="card-surface p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-medium text-muted-foreground">{label}</p>
+          <p
+            className={cn(
+              "mt-1 text-2xl font-semibold tracking-tight",
+              tone === "good" && "text-answered",
+              tone === "bad" && "text-destructive",
+            )}
+          >
+            {value}
+          </p>
+        </div>
+        <span
+          className={cn(
+            "flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary",
+            tone === "good" && "bg-answered/10 text-answered",
+            tone === "bad" && "bg-destructive/10 text-destructive",
+          )}
+        >
+          <Icon className="h-4 w-4" />
+        </span>
+      </div>
+      <p className="mt-2 truncate text-[11px] text-muted-foreground">{helper}</p>
+    </article>
+  );
+}
+
+function Dashboard() {
+  const [records, setRecords] = useState<TestRecord[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [range, setRange] = useState<TimeRange>("all");
+  const [subject, setSubject] = useState(ALL);
+  const [chapter, setChapter] = useState(ALL);
+  const [exercise, setExercise] = useState(ALL);
+
+  useEffect(() => {
+    const refresh = () => {
+      setRecords(loadHistory());
+      setLoaded(true);
     };
-    saveRecord(saved);
-    setRecord(saved);
-    setPhase("result");
+    refresh();
+    const onStorage = (event: StorageEvent) => {
+      if (!event.key || event.key === "cbt-history") refresh();
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
+  const timeRecords = useMemo(() => filterByTime(records, range), [records, range]);
+  const subjects = useMemo(
+    () => Array.from(new Set(timeRecords.map((record) => record.subject))).sort(),
+    [timeRecords],
+  );
+  const chapters = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          timeRecords
+            .filter((record) => subject === ALL || record.subject === subject)
+            .map((record) => record.chapter),
+        ),
+      ).sort(),
+    [timeRecords, subject],
+  );
+  const exercises = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          timeRecords
+            .filter(
+              (record) =>
+                (subject === ALL || record.subject === subject) &&
+                (chapter === ALL || record.chapter === chapter),
+            )
+            .map((record) => record.exercise ?? "Exercise 1"),
+        ),
+      ).sort(),
+    [timeRecords, subject, chapter],
+  );
+
+  const filtered = useMemo(
+    () =>
+      timeRecords.filter(
+        (record) =>
+          (subject === ALL || record.subject === subject) &&
+          (chapter === ALL || record.chapter === chapter) &&
+          (exercise === ALL || (record.exercise ?? "Exercise 1") === exercise),
+      ),
+    [timeRecords, subject, chapter, exercise],
+  );
+
+  const totals = useMemo(() => aggregateRecords(filtered), [filtered]);
+  const groups = useMemo(() => groupPerformance(filtered), [filtered]);
+  const improvements = useMemo(() => getImprovements(filtered), [filtered]);
+  const streaks = useMemo(() => getStreaks(filtered), [filtered]);
+  const daily = useMemo(() => getDailyActivity(filtered), [filtered]);
+  const recent = useMemo(
+    () =>
+      [...filtered]
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+        .slice(0, 5),
+    [filtered],
+  );
+  const subjectStats = useMemo(
+    () =>
+      Array.from(new Set(filtered.map((record) => record.subject)))
+        .map((name) => ({
+          name,
+          ...aggregateRecords(filtered.filter((record) => record.subject === name)),
+        }))
+        .sort((a, b) => b.attempted - a.attempted),
+    [filtered],
+  );
+  const rankedGroups = groups.filter((group) => group.evaluated >= 5 && group.accuracy !== null);
+  const strongest = [...rankedGroups].sort((a, b) => (b.accuracy ?? 0) - (a.accuracy ?? 0))[0];
+  const weakest = [...rankedGroups].sort((a, b) => (a.accuracy ?? 0) - (b.accuracy ?? 0))[0];
+  const maxDailyAttempted = Math.max(1, ...daily.map((item) => item.attempted));
+
+  const clearFilters = () => {
+    setRange("all");
+    setSubject(ALL);
+    setChapter(ALL);
+    setExercise(ALL);
   };
 
-  if (phase === "test" && config) {
+  if (loaded && records.length === 0) {
     return (
-      <TestScreen
-        minutes={config.minutes}
-        startNumber={config.startNumber}
-        subject={config.subject}
-        chapter={config.exercise ? `${config.chapter} · ${config.exercise}` : config.chapter}
-        questionCount={config.questionCount}
-        maxQuestions={config.maxQuestions}
-        onSubmit={handleSubmit}
-      />
+      <AppShell title="Performance Dashboard" subtitle="Track your practice and improvement">
+        <div className="card-surface flex min-h-[420px] flex-col items-center justify-center px-6 text-center">
+          <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+            <BarChart3 className="h-8 w-8" />
+          </span>
+          <h2 className="mt-5 text-xl font-semibold">Start your first test</h2>
+          <p className="mt-2 max-w-md text-sm text-muted-foreground">
+            Complete a test and your accuracy, strong chapters and progress will appear here.
+          </p>
+          <Button className="mt-6 gap-2" asChild>
+            <Link to="/test" search={{}}>
+              <PlayCircle className="h-4 w-4" /> Start New Test
+            </Link>
+          </Button>
+        </div>
+      </AppShell>
     );
   }
 
   return (
     <AppShell
-      title={phase === "result" ? "Test result" : phase === "key" ? "Answer key" : "New test"}
-      subtitle={
-        phase === "result" && record ? `${record.subject} · ${record.chapter}` : undefined
+      title="Performance Dashboard"
+      subtitle="Track your practice, accuracy and improvement"
+      actions={
+        <Button size="sm" variant="secondary" className="hidden gap-1.5 sm:flex" asChild>
+          <Link to="/test" search={{}}>
+            <PlayCircle className="h-4 w-4" /> Start Test
+          </Link>
+        </Button>
       }
     >
-      {phase === "result" && record ? (
-        <ResultScreen
-          record={record}
-          onRestart={() => {
-            setRecord(null);
-            setAnswerKey(null);
-            setPhase("setup");
-          }}
-        />
-      ) : phase === "key" && config && config.questionCount ? (
-        <AnswerKeyScreen
-          count={config.questionCount}
-          startNumber={config.startNumber}
-          subject={config.subject}
-          chapter={config.chapter}
-          onBack={() => setPhase("setup")}
-          onConfirm={(key) => {
-            setAnswerKey(key.some(Boolean) ? key : null);
-            setPhase("test");
-          }}
-        />
-      ) : (
-        <SetupScreen
-          prefill={{
-            subject: search.subject,
-            chapter: search.chapter,
-            exercise: search.exercise,
-            minutes: search.minutes,
-            startNumber: search.start,
-            questionCount: search.count ?? null,
-          }}
-          onStart={(c) => {
-            setConfig(c);
-            setAnswerKey(c.answerKey);
-            setPhase(c.answerKey ? "test" : c.questionCount ? "key" : "test");
-          }}
-        />
-      )}
+      <div className="space-y-5">
+        <section
+          className="card-surface grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4"
+          aria-label="Dashboard filters"
+        >
+          <Select value={range} onValueChange={(value) => setRange(value as TimeRange)}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All time</SelectItem>
+              <SelectItem value="today">Today</SelectItem>
+              <SelectItem value="7d">Last 7 days</SelectItem>
+              <SelectItem value="30d">Last 30 days</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select
+            value={subject}
+            onValueChange={(value) => {
+              setSubject(value);
+              setChapter(ALL);
+              setExercise(ALL);
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="All subjects" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>All subjects</SelectItem>
+              {subjects.map((name) => (
+                <SelectItem key={name} value={name}>
+                  {name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={chapter}
+            onValueChange={(value) => {
+              setChapter(value);
+              setExercise(ALL);
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="All chapters" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>All chapters</SelectItem>
+              {chapters.map((name) => (
+                <SelectItem key={name} value={name}>
+                  {name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={exercise} onValueChange={setExercise}>
+            <SelectTrigger>
+              <SelectValue placeholder="All exercises" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>All exercises</SelectItem>
+              {exercises.map((name) => (
+                <SelectItem key={name} value={name}>
+                  {name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </section>
+
+        {filtered.length === 0 ? (
+          <section className="card-surface p-10 text-center">
+            <AlertCircle className="mx-auto h-8 w-8 text-muted-foreground" />
+            <h2 className="mt-3 text-base font-semibold">No matching practice data</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              No tests match the selected filters.
+            </p>
+            <Button className="mt-4" variant="outline" onClick={clearFilters}>
+              Clear filters
+            </Button>
+          </section>
+        ) : (
+          <>
+            <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <MetricCard
+                label="Total Tests"
+                value={formatNumber(totals.tests)}
+                helper={`${totals.total} questions presented`}
+                icon={ListChecks}
+              />
+              <MetricCard
+                label="Questions Attempted"
+                value={formatNumber(totals.attempted)}
+                helper={`${formatPercent(totals.attemptRate)} attempt rate`}
+                icon={Target}
+              />
+              <MetricCard
+                label="Correct Answers"
+                value={formatNumber(totals.correct)}
+                helper={`${totals.evaluated} evaluated answers`}
+                icon={CheckCircle2}
+                tone="good"
+              />
+              <MetricCard
+                label="Wrong Answers"
+                value={formatNumber(totals.wrong)}
+                helper={`${totals.unattempted} left unattempted`}
+                icon={XCircle}
+                tone="bad"
+              />
+              <MetricCard
+                label="Overall Accuracy"
+                value={formatPercent(totals.accuracy)}
+                helper="Weighted across evaluated answers"
+                icon={Trophy}
+                tone="good"
+              />
+              <MetricCard
+                label="Total Score"
+                value={totals.scoredTests ? formatNumber(totals.totalScore, 2) : "—"}
+                helper={`${totals.scoredTests} scored tests`}
+                icon={BarChart3}
+              />
+              <MetricCard
+                label="Study Time"
+                value={formatDuration(totals.studySeconds)}
+                helper={
+                  totals.secondsPerAttempt
+                    ? `${formatDuration(totals.secondsPerAttempt)} per answer`
+                    : "No attempted answers"
+                }
+                icon={Clock3}
+              />
+              <MetricCard
+                label="Unevaluated"
+                value={formatNumber(totals.unevaluatedTests)}
+                helper="Tests without an answer key"
+                icon={AlertCircle}
+              />
+            </section>
+
+            <section className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
+              <article className="card-surface flex items-center gap-5 p-5 lg:flex-col lg:items-start">
+                <DonutChart
+                  size={112}
+                  segments={[
+                    { label: "Correct", value: totals.correct, color: "var(--color-answered)" },
+                    { label: "Wrong", value: totals.wrong, color: "var(--color-destructive)" },
+                    {
+                      label: "Unattempted",
+                      value: totals.unattempted,
+                      color: "var(--color-unvisited)",
+                    },
+                  ]}
+                  centerValue={formatPercent(totals.accuracy)}
+                  centerLabel="accuracy"
+                />
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-sm font-semibold">Performance Summary</h2>
+                  <div className="mt-3 space-y-2 text-xs">
+                    <div className="flex justify-between gap-3">
+                      <span className="text-muted-foreground">Attempt rate</span>
+                      <strong>{formatPercent(totals.attemptRate)}</strong>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <span className="text-muted-foreground">Average score</span>
+                      <strong>
+                        {totals.averageScore === null ? "—" : formatNumber(totals.averageScore, 2)}
+                      </strong>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <span className="text-muted-foreground">Max marks</span>
+                      <strong>{formatNumber(totals.maxMarks, 2)}</strong>
+                    </div>
+                  </div>
+                </div>
+              </article>
+
+              <article className="card-surface p-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-sm font-semibold">Last 7 Days</h2>
+                    <p className="text-xs text-muted-foreground">Questions attempted each day</p>
+                  </div>
+                  <Activity className="h-5 w-5 text-primary" />
+                </div>
+                <div
+                  className="mt-5 flex h-40 items-end gap-2"
+                  role="img"
+                  aria-label="Questions attempted during the last seven days"
+                >
+                  {daily.map((item) => (
+                    <div
+                      key={item.day}
+                      className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1.5"
+                    >
+                      <span className="text-[10px] font-semibold">{item.attempted || ""}</span>
+                      <div className="flex h-28 w-full items-end rounded-md bg-muted/60 px-1">
+                        <div
+                          className="w-full rounded-sm bg-primary transition-all"
+                          style={{
+                            height: `${item.attempted ? Math.max(8, (item.attempted / maxDailyAttempted) * 100) : 0}%`,
+                          }}
+                        />
+                      </div>
+                      <span className="text-[10px] text-muted-foreground">{item.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </article>
+            </section>
+
+            <section className="grid gap-4 lg:grid-cols-2">
+              <article className="card-surface p-5">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-sm font-semibold">Subject Performance</h2>
+                  <BookOpen className="h-5 w-5 text-primary" />
+                </div>
+                <div className="mt-4 space-y-4">
+                  {subjectStats.slice(0, 6).map((item) => (
+                    <div key={item.name}>
+                      <div className="flex items-center justify-between gap-3 text-xs">
+                        <div>
+                          <strong>{item.name}</strong>
+                          <span className="ml-2 text-muted-foreground">
+                            {item.attempted} attempted
+                          </span>
+                        </div>
+                        <strong>{formatPercent(item.accuracy)}</strong>
+                      </div>
+                      <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="h-full rounded-full bg-answered"
+                          style={{ width: `${item.accuracy ?? 0}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </article>
+
+              <article className="card-surface p-5">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-sm font-semibold">Practice Consistency</h2>
+                  <Flame className="h-5 w-5 text-primary" />
+                </div>
+                <div className="mt-5 grid grid-cols-3 gap-3 text-center">
+                  <div className="rounded-lg bg-muted/60 p-3">
+                    <p className="text-xl font-semibold">{streaks.current}</p>
+                    <p className="mt-1 text-[10px] text-muted-foreground">Current streak</p>
+                  </div>
+                  <div className="rounded-lg bg-muted/60 p-3">
+                    <p className="text-xl font-semibold">{streaks.longest}</p>
+                    <p className="mt-1 text-[10px] text-muted-foreground">Longest streak</p>
+                  </div>
+                  <div className="rounded-lg bg-muted/60 p-3">
+                    <p className="text-xl font-semibold">{streaks.activeLast30}</p>
+                    <p className="mt-1 text-[10px] text-muted-foreground">Active days</p>
+                  </div>
+                </div>
+                <div className="mt-4 rounded-lg border border-border p-3 text-xs text-muted-foreground">
+                  {strongest
+                    ? `Strongest: ${strongest.chapter} · ${strongest.exercise} at ${formatPercent(strongest.accuracy)} accuracy.`
+                    : "Complete at least 5 evaluated questions in a chapter to unlock insights."}
+                </div>
+              </article>
+            </section>
+
+            <section className="grid gap-4 lg:grid-cols-2">
+              <article className="card-surface p-5">
+                <h2 className="text-sm font-semibold text-answered">Strong Area</h2>
+                {strongest ? (
+                  <div className="mt-3">
+                    <p className="font-semibold">{strongest.chapter}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {strongest.subject} · {strongest.exercise}
+                    </p>
+                    <p className="mt-2 text-2xl font-semibold text-answered">
+                      {formatPercent(strongest.accuracy)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {strongest.evaluated} evaluated answers
+                    </p>
+                  </div>
+                ) : (
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    Not enough evaluated data yet.
+                  </p>
+                )}
+              </article>
+              <article className="card-surface p-5">
+                <h2 className="text-sm font-semibold text-destructive">Needs Improvement</h2>
+                {weakest ? (
+                  <div className="mt-3 flex items-end justify-between gap-3">
+                    <div>
+                      <p className="font-semibold">{weakest.chapter}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {weakest.subject} · {weakest.exercise}
+                      </p>
+                      <p className="mt-2 text-2xl font-semibold text-destructive">
+                        {formatPercent(weakest.accuracy)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{weakest.wrong} wrong answers</p>
+                    </div>
+                    <Button size="sm" variant="outline" asChild>
+                      <Link
+                        to="/test"
+                        search={{
+                          subject: weakest.subject,
+                          chapter: weakest.chapter,
+                          exercise: weakest.exercise,
+                          count: weakest.latest.answers.length,
+                          start: weakest.latest.startNumber,
+                          minutes: weakest.latest.durationMinutes ?? undefined,
+                        }}
+                      >
+                        Practice Again
+                      </Link>
+                    </Button>
+                  </div>
+                ) : (
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    Not enough evaluated data yet.
+                  </p>
+                )}
+              </article>
+            </section>
+
+            <section className="card-surface overflow-hidden">
+              <div className="flex items-center justify-between border-b border-border px-5 py-4">
+                <div>
+                  <h2 className="text-sm font-semibold">Chapter & Exercise Stats</h2>
+                  <p className="text-xs text-muted-foreground">
+                    Detailed performance by practice area
+                  </p>
+                </div>
+                <BarChart3 className="h-5 w-5 text-primary" />
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[720px] text-left text-xs">
+                  <thead className="bg-muted/50 text-muted-foreground">
+                    <tr>
+                      <th className="px-5 py-3 font-medium">Topic</th>
+                      <th className="px-3 py-3 font-medium">Tests</th>
+                      <th className="px-3 py-3 font-medium">Attempted</th>
+                      <th className="px-3 py-3 font-medium">Correct</th>
+                      <th className="px-3 py-3 font-medium">Wrong</th>
+                      <th className="px-3 py-3 font-medium">Accuracy</th>
+                      <th className="px-3 py-3 font-medium">Last practiced</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {groups.map((group) => (
+                      <tr key={group.key} className="border-t border-border hover:bg-muted/30">
+                        <td className="px-5 py-3">
+                          <Link
+                            to="/history/$id"
+                            params={{ id: group.latest.id }}
+                            className="font-semibold hover:text-primary"
+                          >
+                            {group.chapter}
+                          </Link>
+                          <p className="text-[10px] text-muted-foreground">
+                            {group.subject} · {group.exercise}
+                          </p>
+                        </td>
+                        <td className="px-3 py-3">{group.tests}</td>
+                        <td className="px-3 py-3">{group.attempted}</td>
+                        <td className="px-3 py-3 text-answered">{group.correct}</td>
+                        <td className="px-3 py-3 text-destructive">{group.wrong}</td>
+                        <td className="px-3 py-3 font-semibold">{formatPercent(group.accuracy)}</td>
+                        <td className="px-3 py-3 text-muted-foreground">
+                          {friendlyDate(group.latest.date)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            {improvements.length > 0 && (
+              <section className="card-surface p-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-sm font-semibold">Reattempt Improvement</h2>
+                    <p className="text-xs text-muted-foreground">
+                      First attempt compared with latest
+                    </p>
+                  </div>
+                  <TrendingUp className="h-5 w-5 text-primary" />
+                </div>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {improvements.slice(0, 3).map((item) => (
+                    <Link
+                      key={item.key}
+                      to="/history/$id"
+                      params={{ id: item.latest.id }}
+                      className="rounded-lg border border-border p-3 transition-colors hover:border-primary/50"
+                    >
+                      <p className="truncate text-xs font-semibold">
+                        {item.chapter} · {item.exercise}
+                      </p>
+                      <p className="mt-1 text-[10px] text-muted-foreground">
+                        {item.attempts} attempts
+                      </p>
+                      <p
+                        className={cn(
+                          "mt-3 text-lg font-semibold",
+                          (item.accuracyChange ?? 0) >= 0 ? "text-answered" : "text-destructive",
+                        )}
+                      >
+                        {item.accuracyChange === null
+                          ? "—"
+                          : `${item.accuracyChange >= 0 ? "+" : ""}${Math.round(item.accuracyChange)} pp`}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">accuracy change</p>
+                    </Link>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            <section className="card-surface p-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-sm font-semibold">Recent Activity</h2>
+                  <p className="text-xs text-muted-foreground">Your latest practice tests</p>
+                </div>
+                <Button size="sm" variant="ghost" asChild>
+                  <Link to="/history">
+                    <HistoryIcon className="mr-1.5 h-4 w-4" />
+                    View all
+                  </Link>
+                </Button>
+              </div>
+              <div className="mt-3 divide-y divide-border">
+                {recent.map((record) => {
+                  const metrics = metricsForRecord(record);
+                  return (
+                    <Link
+                      key={record.id}
+                      to="/history/$id"
+                      params={{ id: record.id }}
+                      className="flex items-center gap-3 py-3 first:pt-1 hover:text-primary"
+                    >
+                      <span
+                        className={cn(
+                          "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
+                          metrics.accuracy !== null && metrics.accuracy >= 60
+                            ? "bg-answered/10 text-answered"
+                            : "bg-destructive/10 text-destructive",
+                        )}
+                      >
+                        {record.score ?? "—"}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-xs font-semibold">
+                          {record.subject} · {record.chapter}
+                        </p>
+                        <p className="truncate text-[10px] text-muted-foreground">
+                          {record.exercise ?? "Exercise 1"} · {friendlyDate(record.date)}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-semibold">{formatPercent(metrics.accuracy)}</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {metrics.correct} correct · {metrics.wrong} wrong
+                        </p>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            </section>
+          </>
+        )}
+      </div>
     </AppShell>
   );
 }
-

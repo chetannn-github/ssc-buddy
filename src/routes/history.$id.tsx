@@ -135,7 +135,7 @@ function ResultDetail() {
             </Button>
             <Button variant="outline" size="sm" className="h-8 gap-1.5 px-3 text-xs" asChild>
               <Link
-                to="/"
+                to="/test"
                 search={{
                   subject: record.subject,
                   chapter: record.chapter,
@@ -172,7 +172,6 @@ function ResultDetail() {
           ))}
         </div>
       )}
-
 
       {record ? (
         <ResultScreen key={record.id} record={record} />

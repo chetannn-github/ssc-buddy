@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { GraduationCap, History, PenSquare } from "lucide-react";
+import { GraduationCap, History, LayoutDashboard, PenSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -11,7 +11,8 @@ type Props = {
 };
 
 const nav = [
-  { title: "New test", url: "/", icon: PenSquare },
+  { title: "Dashboard", url: "/", icon: LayoutDashboard },
+  { title: "New test", url: "/test", icon: PenSquare },
   { title: "History", url: "/history", icon: History },
 ];
 
@@ -30,15 +31,12 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
           </span>
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-base font-semibold sm:text-lg">{title}</h1>
-            {subtitle && (
-              <p className="truncate text-xs opacity-75 sm:text-sm">{subtitle}</p>
-            )}
+            {subtitle && <p className="truncate text-xs opacity-75 sm:text-sm">{subtitle}</p>}
           </div>
           {actions}
           <nav className="flex shrink-0 items-center gap-1">
             {nav.map((item) => {
-              const active =
-                item.url === "/" ? path === "/" : path.startsWith(item.url);
+              const active = item.url === "/" ? path === "/" : path.startsWith(item.url);
               return (
                 <Link
                   key={item.url}
@@ -58,9 +56,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
           </nav>
         </div>
       </header>
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 sm:px-6">
-        {children}
-      </main>
+      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 sm:px-6">{children}</main>
     </div>
   );
 }
