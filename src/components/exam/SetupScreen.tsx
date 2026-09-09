@@ -14,7 +14,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { AnswerKeyScreen } from "@/components/exam/AnswerKeyScreen";
 import {
   upsertExercise,
-  
   getExercise,
   addSubject,
   DEFAULT_EXERCISE,
@@ -41,6 +40,7 @@ export type TestConfig = {
 };
 
 const PRESETS = [15, 30, 45, 60];
+const MAX_DURATION_MINUTES = 300;
 
 export type SetupPrefill = {
   subject?: string | undefined;
@@ -50,7 +50,6 @@ export type SetupPrefill = {
   startNumber?: number | undefined;
   questionCount?: number | null | undefined;
 };
-
 
 export function SetupScreen({
   onStart,
@@ -72,7 +71,9 @@ export function SetupScreen({
   const [draftKey, setDraftKey] = useState<(Option | null)[] | null>(null);
   const [isEditing, setIsEditing] = useState(false);
 
-  const [minutes, setMinutes] = useState(String(prefill?.minutes ?? 30));
+  const [minutes, setMinutes] = useState(
+    String(Math.min(MAX_DURATION_MINUTES, prefill?.minutes ?? 30)),
+  );
   const [startNumber, setStartNumber] = useState(String(prefill?.startNumber ?? 1));
   const [countMode, setCountMode] = useState<"unlimited" | "fixed">(
     prefill?.questionCount ? "fixed" : "unlimited",
@@ -85,7 +86,9 @@ export function SetupScreen({
   const [negative, setNegative] = useState("1");
 
   useEffect(() => {
-    setSubjects(loadSubjects());
+    const savedSubjects = loadSubjects();
+    setSubjects(savedSubjects);
+    setSubject((current) => current || savedSubjects[0]?.name || "");
     const saved = loadMarking();
     if (saved) {
       setMarking(saved);
@@ -96,13 +99,12 @@ export function SetupScreen({
     }
   }, []);
 
-
   const chapters = subjects.find((s) => s.name === subject)?.chapters ?? [];
   const exercises = chapters.find((c) => c.name === chapter)?.exercises ?? [];
   const activeExercise = chapter ? getExercise(subject, chapter, exercise || null) : null;
   const activeExerciseName = activeExercise?.name ?? exercise;
   const chapterTotal = activeExercise?.questionCount ?? null;
-  const parsedMinutes = Math.min(600, Math.max(1, Number(minutes) || 0));
+  const parsedMinutes = Math.min(MAX_DURATION_MINUTES, Math.max(1, Number(minutes) || 0));
   const parsedStart = Math.max(1, Number(startNumber) || 1);
   const available = chapterTotal ? chapterTotal - parsedStart + 1 : null;
   const startTooHigh = chapterTotal !== null && parsedStart > chapterTotal;
@@ -114,6 +116,7 @@ export function SetupScreen({
     countMode === "fixed" && available !== null && Number(questionCount) > available;
   const valid =
     Number(minutes) >= 1 &&
+    Number(minutes) <= MAX_DURATION_MINUTES &&
     subject !== "" &&
     chapter !== "" &&
     !editingMarking &&
@@ -242,11 +245,7 @@ export function SetupScreen({
           </div>
 
           <div className="space-y-2">
-            <Select
-              value={chapter}
-              onValueChange={(v) => selectChapter(v)}
-              disabled={!subject}
-            >
+            <Select value={chapter} onValueChange={(v) => selectChapter(v)} disabled={!subject}>
               <SelectTrigger>
                 <SelectValue placeholder={subject ? "Select chapter" : "Select a subject first"} />
               </SelectTrigger>
@@ -313,8 +312,12 @@ export function SetupScreen({
           <div className="space-y-2">
             <Input
               inputMode="numeric"
+              max={MAX_DURATION_MINUTES}
               value={minutes}
-              onChange={(e) => setMinutes(e.target.value.replace(/\D/g, ""))}
+              onChange={(e) => {
+                const next = e.target.value.replace(/\D/g, "");
+                setMinutes(next === "" ? "" : String(Math.min(MAX_DURATION_MINUTES, Number(next))));
+              }}
               placeholder="Duration (minutes)"
             />
             <div className="flex flex-wrap gap-2">
@@ -340,10 +343,7 @@ export function SetupScreen({
               placeholder="Start question no. e.g. 151"
             />
             <p
-              className={cn(
-                "text-xs",
-                startTooHigh ? "text-destructive" : "text-muted-foreground",
-              )}
+              className={cn("text-xs", startTooHigh ? "text-destructive" : "text-muted-foreground")}
             >
               {startTooHigh
                 ? `Is chapter me sirf ${chapterTotal} questions hain.`
