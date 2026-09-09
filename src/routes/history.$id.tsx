@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, BookOpenCheck, RefreshCw, RotateCcw } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { ResultScreen } from "@/components/exam/ResultScreen";
@@ -37,26 +37,33 @@ function ResultDetail() {
   const [loaded, setLoaded] = useState(false);
   const [attempts, setAttempts] = useState<TestRecord[]>([]);
   const [solution, setSolution] = useState(false);
-  const [reevaluationNotice, setReevaluationNotice] = useState<string | null>(null);
+  const [reevaluating, setReevaluating] = useState(false);
+  const reevaluationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     setRecord(getRecord(id));
     setAttempts(getAttemptGroup(id));
     setSolution(false);
-    setReevaluationNotice(null);
     setLoaded(true);
   }, [id]);
 
+  useEffect(
+    () => () => {
+      if (reevaluationTimer.current) clearTimeout(reevaluationTimer.current);
+    },
+    [],
+  );
+
   const reevaluate = () => {
-    if (!record) return;
+    if (!record || reevaluating) return;
+
+    setReevaluating(true);
+    reevaluationTimer.current = setTimeout(() => setReevaluating(false), 2000);
 
     const exercise = getExercise(record.subject, record.chapter, record.exercise);
     const fullAnswerKey = exercise?.answerKey;
-    if (!fullAnswerKey) {
-      setReevaluationNotice("No current answer key is saved for this exercise.");
-      return;
-    }
+    if (!fullAnswerKey) return;
 
     const answerKey = fullAnswerKey.slice(
       record.startNumber - 1,
@@ -81,7 +88,6 @@ function ResultDetail() {
     saveRecord(updatedRecord);
     setRecord(updatedRecord);
     setAttempts(getAttemptGroup(updatedRecord.id));
-    setReevaluationNotice("Marks updated using the latest answer key.");
   };
 
   if (solution && record) {
@@ -112,19 +118,20 @@ function ResultDetail() {
               variant="outline"
               size="sm"
               className="h-8 gap-1.5 px-3 text-xs"
-              onClick={() => setSolution(true)}
+              onClick={reevaluate}
+              disabled={reevaluating}
             >
-              <BookOpenCheck className="h-4 w-4" />
-              View Solution
+              <RefreshCw className={cn("h-4 w-4", reevaluating && "animate-spin")} />
+              Reevaluate
             </Button>
             <Button
               variant="outline"
               size="sm"
               className="h-8 gap-1.5 px-3 text-xs"
-              onClick={reevaluate}
+              onClick={() => setSolution(true)}
             >
-              <RefreshCw className="h-4 w-4" />
-              Reevaluate
+              <BookOpenCheck className="h-4 w-4" />
+              View Solution
             </Button>
             <Button variant="outline" size="sm" className="h-8 gap-1.5 px-3 text-xs" asChild>
               <Link
@@ -145,12 +152,6 @@ function ResultDetail() {
           </div>
         ) : null}
       </div>
-
-      {reevaluationNotice && (
-        <p className="mb-3 text-xs text-muted-foreground" role="status">
-          {reevaluationNotice}
-        </p>
-      )}
 
       {attempts.length > 1 && (
         <div className="card-surface mb-3 flex flex-wrap items-center gap-1.5 p-3">

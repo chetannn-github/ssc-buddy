@@ -208,25 +208,6 @@ function HistoryPage() {
                   </div>
                 </div>
 
-                {isReattempt && (
-                  <div className="mt-3 flex flex-wrap gap-1">
-                    {g.attempts.map((a, i) => (
-                      <button
-                        key={a.id}
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate({ to: "/history/$id", params: { id: a.id } });
-                        }}
-                        className="rounded-md border border-border bg-background px-2 py-0.5 text-[11px] hover:border-primary hover:text-primary"
-                      >
-                        #{i + 1}
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-
                 <div className="mt-3 flex gap-2">
                   <Button
                     variant="outline"
