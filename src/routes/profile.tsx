@@ -74,7 +74,7 @@ function ActivityHeatmap({ records, maxStreak }: { records: TestRecord[]; maxStr
             <span className="font-semibold text-zinc-100">{activeDays}</span>
             <span>active days</span>
           </span>
-          <span className="mx-6 text-zinc-600 sm:mx-8">·</span>
+          <span className="mx-3 text-zinc-600 sm:mx-4">·</span>
           <span className="inline-flex items-center gap-2">
             <span className="font-semibold text-zinc-100">{maxStreak}</span>
             <span>max streak</span>
@@ -199,18 +199,20 @@ export function Profile() {
   const [goalDraft, setGoalDraft] = useState("");
 
   useEffect(() => {
+    let loaderTimer: ReturnType<typeof setTimeout> | undefined;
     const refresh = () => {
       const saved = loadPracticeProfile();
       setRecords(loadHistory());
       setProfile(saved);
       setNameDraft(saved?.name ?? "");
       setGoalDraft(saved ? String(saved.questionGoal) : "100");
-      setIsLoading(false);
+      loaderTimer = setTimeout(() => setIsLoading(false), 700);
     };
     refresh();
     window.addEventListener("cbt-profile-updated", refresh);
     window.addEventListener("storage", refresh);
     return () => {
+      if (loaderTimer) clearTimeout(loaderTimer);
       window.removeEventListener("cbt-profile-updated", refresh);
       window.removeEventListener("storage", refresh);
     };
