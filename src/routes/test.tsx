@@ -1,10 +1,9 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { SetupScreen, type TestConfig } from "@/components/exam/SetupScreen";
 import { TestScreen } from "@/components/exam/TestScreen";
 import { AnswerKeyScreen } from "@/components/exam/AnswerKeyScreen";
-import { ResultScreen } from "@/components/exam/ResultScreen";
 import { computeScore, saveRecord, type Option, type TestRecord } from "@/lib/exam";
 
 const title = "New CBT MCQ Practice Test";
@@ -45,14 +44,14 @@ export const Route = createFileRoute("/test")({
   component: TestPage,
 });
 
-type Phase = "setup" | "key" | "test" | "result";
+type Phase = "setup" | "key" | "test";
 
 function TestPage() {
   const search = Route.useSearch();
+  const navigate = useNavigate();
   const [phase, setPhase] = useState<Phase>("setup");
   const [config, setConfig] = useState<TestConfig | null>(null);
   const [answerKey, setAnswerKey] = useState<(Option | null)[] | null>(null);
-  const [record, setRecord] = useState<TestRecord | null>(null);
 
   const handleSubmit = (answers: (Option | null)[], timeTakenSeconds: number) => {
     if (!config) return;
@@ -86,8 +85,7 @@ function TestPage() {
       score: computeScore(correct, wrong, config.marking),
     };
     saveRecord(saved);
-    setRecord(saved);
-    setPhase("result");
+    void navigate({ to: "/history/$id", params: { id: saved.id } });
   };
 
   if (phase === "test" && config) {
@@ -105,24 +103,8 @@ function TestPage() {
   }
 
   return (
-    <AppShell
-      title={phase === "result" ? "Test result" : phase === "key" ? "Answer key" : "New test"}
-      subtitle={
-        phase === "result" && record
-          ? `${record.subject} · ${record.chapter}${record.exercise ? ` · ${record.exercise}` : ""}`
-          : undefined
-      }
-    >
-      {phase === "result" && record ? (
-        <ResultScreen
-          record={record}
-          onRestart={() => {
-            setRecord(null);
-            setAnswerKey(null);
-            setPhase("setup");
-          }}
-        />
-      ) : phase === "key" && config && config.questionCount ? (
+    <AppShell title={phase === "key" ? "Answer key" : "New test"}>
+      {phase === "key" && config && config.questionCount ? (
         <AnswerKeyScreen
           count={config.questionCount}
           startNumber={config.startNumber}
