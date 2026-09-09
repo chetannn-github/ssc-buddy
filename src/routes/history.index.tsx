@@ -199,6 +199,9 @@ function HistoryPage() {
                       )}
                     </div>
                     <p className="truncate text-xs text-muted-foreground">{r.chapter}</p>
+                    {r.exercise && (
+                      <p className="truncate text-xs font-medium text-primary">{r.exercise}</p>
+                    )}
                     <p className="mt-1 text-xs text-muted-foreground">
                       {friendlyDate(r.date)}
                     </p>
