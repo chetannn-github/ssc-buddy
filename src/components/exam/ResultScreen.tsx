@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { DonutChart } from "@/components/exam/DonutChart";
 import { cn } from "@/lib/utils";
@@ -9,7 +9,10 @@ type Props = {
   onRestart?: () => void;
 };
 
+type AnswerFilter = "all" | "correct" | "incorrect" | "unattempted";
+
 export function ResultScreen({ record, onRestart }: Props) {
+  const [answerFilter, setAnswerFilter] = useState<AnswerFilter>("all");
   const total = record.answers.length;
   const verdicts = useMemo<Verdict[]>(
     () =>
@@ -39,6 +42,26 @@ export function ResultScreen({ record, onRestart }: Props) {
   const maxMarks = total * record.marking.positive;
   const percent = attempted === 0 ? 100 : Math.round((checked / attempted) * 100);
   const complete = remaining === 0;
+  const filteredAnswers = useMemo(
+    () =>
+      record.answers
+        .map((answer, index) => ({ answer, index, verdict: verdicts[index] }))
+        .filter(({ answer, verdict }) => {
+          if (answerFilter === "all") return true;
+          if (answerFilter === "unattempted") return !answer;
+          return verdict === answerFilter;
+        }),
+    [answerFilter, record.answers, verdicts],
+  );
+
+  const filterClass = (filter: AnswerFilter, tone: "good" | "bad" | "neutral") =>
+    cn(
+      "rounded-full px-2 py-0.5 transition-all",
+      tone === "good" && "bg-answered/15 text-answered",
+      tone === "bad" && "bg-destructive/15 text-destructive",
+      tone === "neutral" && "bg-muted text-muted-foreground",
+      answerFilter === filter && "ring-2 ring-ring ring-offset-1",
+    );
 
   return (
     <div className="grid items-start gap-3 lg:grid-cols-[300px_minmax(0,1fr)]">
@@ -56,14 +79,33 @@ export function ResultScreen({ record, onRestart }: Props) {
         />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2 text-xs">
-
-            <span className="rounded-full bg-answered/15 px-2 py-0.5 text-answered">✓ {c}</span>
-            <span className="rounded-full bg-destructive/15 px-2 py-0.5 text-destructive">✗ {w}</span>
-            {remaining > 0 ? (
-              <span className="rounded-full bg-muted px-2 py-0.5 text-muted-foreground">{remaining} left</span>
-            ) : (
-              <span className="rounded-full bg-muted px-2 py-0.5 text-muted-foreground">{unattempted} skip</span>
-            )}
+            <button
+              type="button"
+              className={filterClass("correct", "good")}
+              onClick={() => setAnswerFilter((current) => (current === "correct" ? "all" : "correct"))}
+            >
+              ✓ {c}
+            </button>
+            <button
+              type="button"
+              className={filterClass("incorrect", "bad")}
+              onClick={() =>
+                setAnswerFilter((current) => (current === "incorrect" ? "all" : "incorrect"))
+              }
+            >
+              ✗ {w}
+            </button>
+            <button
+              type="button"
+              className={filterClass("unattempted", "neutral")}
+              onClick={() =>
+                setAnswerFilter((current) =>
+                  current === "unattempted" ? "all" : "unattempted",
+                )
+              }
+            >
+              {unattempted} skip
+            </button>
           </div>
           <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
             <div
@@ -90,7 +132,9 @@ export function ResultScreen({ record, onRestart }: Props) {
       <div className="card-surface p-3 sm:p-4">
         <div className="mb-2 flex items-center justify-between">
           <h2 className="text-xs font-medium text-muted-foreground">Answers</h2>
-          <span className="text-[10px] text-muted-foreground">{total} questions</span>
+          <span className="text-[10px] text-muted-foreground">
+            {answerFilter === "all" ? total : filteredAnswers.length} of {total} questions
+          </span>
         </div>
         {unattemptedNumbers.length > 0 && (
           <div className="mb-3 flex flex-wrap items-center gap-1.5 rounded-lg border border-dashed border-border bg-muted/40 p-2">
@@ -103,8 +147,7 @@ export function ResultScreen({ record, onRestart }: Props) {
           </div>
         )}
         <div className="max-h-[32rem] space-y-1.5 overflow-y-auto pr-1 lg:max-h-none lg:overflow-visible lg:pr-0">
-          {record.answers.map((a: Option | null, i: number) => {
-            const v = verdicts[i];
+          {filteredAnswers.map(({ answer: a, index: i, verdict: v }) => {
             const attemptedRow = Boolean(a);
             return (
               <div
@@ -153,6 +196,11 @@ export function ResultScreen({ record, onRestart }: Props) {
               </div>
             );
           })}
+          {filteredAnswers.length === 0 && (
+            <p className="rounded-lg border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
+              No questions in this filter.
+            </p>
+          )}
         </div>
         {onRestart && (
           <Button className="mt-4" size="sm" onClick={onRestart}>
