@@ -197,12 +197,16 @@ export function Profile() {
 
   useEffect(() => {
     let loaderTimer: ReturnType<typeof setTimeout> | undefined;
+    let loaderFailSafe: ReturnType<typeof setTimeout> | undefined;
     const refresh = async () => {
+      const startedAt = Date.now();
       const saved = loadPracticeProfile();
       setRecords(loadHistory());
       setProfile(saved);
       setNameDraft(saved?.name ?? "");
       setGoalDraft(saved ? String(saved.questionGoal) : "100");
+      // Never leave the screen blocked if a static avatar file stalls on a weak connection.
+      loaderFailSafe = setTimeout(() => setIsLoading(false), 1500);
       try {
         const response = await fetch("/avatars/manifest.json", { cache: "no-store" });
         if (response.ok) {
@@ -213,14 +217,20 @@ export function Profile() {
         }
       } catch {
         setAvatarFiles([]);
+      } finally {
+        if (loaderFailSafe) clearTimeout(loaderFailSafe);
+        loaderTimer = setTimeout(
+          () => setIsLoading(false),
+          Math.max(0, 700 - (Date.now() - startedAt)),
+        );
       }
-      loaderTimer = setTimeout(() => setIsLoading(false), 700);
     };
     refresh();
     window.addEventListener("cbt-profile-updated", refresh);
     window.addEventListener("storage", refresh);
     return () => {
       if (loaderTimer) clearTimeout(loaderTimer);
+      if (loaderFailSafe) clearTimeout(loaderFailSafe);
       window.removeEventListener("cbt-profile-updated", refresh);
       window.removeEventListener("storage", refresh);
     };
