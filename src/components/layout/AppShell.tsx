@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { getStreaks } from "@/lib/analytics";
 import { loadHistory, type TestRecord } from "@/lib/exam";
 import { loadPracticeProfile, savePracticeProfile, type PracticeProfile } from "@/lib/profile";
+import { requestLightPageLoader } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -117,6 +118,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
     }
 
     event.preventDefault();
+    requestLightPageLoader(isProfilePage && to !== "/");
     const viewDocument = document as ViewTransitionDocument;
     const transitionName = isProfilePage && to !== "/" ? "to-light" : "to-profile";
     if (!viewDocument.startViewTransition) {

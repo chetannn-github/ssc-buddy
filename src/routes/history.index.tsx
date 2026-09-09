@@ -4,6 +4,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { DonutChart } from "@/components/exam/DonutChart";
 import { Button } from "@/components/ui/button";
 import { PageLoader } from "@/components/ui/page-loader";
+import { consumeLightPageLoader } from "@/lib/navigation";
 import {
   Select,
   SelectContent,
@@ -52,13 +53,14 @@ function HistoryPage() {
   const [records, setRecords] = useState<TestRecord[]>([]);
   const [subject, setSubject] = useState(ALL);
   const [chapter, setChapter] = useState(ALL);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(consumeLightPageLoader);
 
   useEffect(() => {
     setRecords(loadHistory());
+    if (!isLoading) return;
     const timer = window.setTimeout(() => setIsLoading(false), 700);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [isLoading]);
 
   const subjects = useMemo(
     () => Array.from(new Set(records.map((r) => r.subject))).sort(),

@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AnswerKeyScreen } from "@/components/exam/AnswerKeyScreen";
 import { PageLoader } from "@/components/ui/page-loader";
+import { consumeLightPageLoader } from "@/lib/navigation";
 import {
   upsertExercise,
   getExercise,
@@ -83,7 +84,7 @@ export function SetupScreen({
 
   const [marking, setMarking] = useState<MarkingScheme>(DEFAULT_MARKING);
   const [editingMarking, setEditingMarking] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(consumeLightPageLoader);
   const [positive, setPositive] = useState("4");
   const [negative, setNegative] = useState("1");
 
@@ -99,9 +100,10 @@ export function SetupScreen({
     } else {
       setEditingMarking(true);
     }
+    if (!isLoading) return;
     const timer = window.setTimeout(() => setIsLoading(false), 700);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [isLoading]);
 
   const chapters = subjects.find((s) => s.name === subject)?.chapters ?? [];
   const exercises = chapters.find((c) => c.name === chapter)?.exercises ?? [];
