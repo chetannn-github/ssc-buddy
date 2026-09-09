@@ -1,6 +1,9 @@
 import type { ReactNode } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { GraduationCap, History, LayoutDashboard, PenSquare } from "lucide-react";
+import { Flame, GraduationCap, History, LayoutDashboard, PenSquare } from "lucide-react";
+import { useEffect, useState } from "react";
+import { getStreaks } from "@/lib/analytics";
+import { loadHistory, type TestRecord } from "@/lib/exam";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -18,6 +21,16 @@ const nav = [
 
 export function AppShell({ title, subtitle, actions, children }: Props) {
   const path = useRouterState({ select: (r) => r.location.pathname });
+  const [records, setRecords] = useState<TestRecord[]>([]);
+
+  useEffect(() => {
+    const refresh = () => setRecords(loadHistory());
+    refresh();
+    window.addEventListener("storage", refresh);
+    return () => window.removeEventListener("storage", refresh);
+  }, []);
+
+  const currentStreak = getStreaks(records).current;
 
   return (
     <div className="flex min-h-screen w-full flex-col bg-background">
@@ -54,6 +67,21 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
               );
             })}
           </nav>
+          <Link
+            to="/profile"
+            aria-label={`Practice streak: ${currentStreak} days`}
+            className={cn(
+              "ml-1 flex h-9 min-w-12 items-center justify-center gap-1.5 rounded-full px-3 text-xs font-semibold transition-all",
+              currentStreak > 0
+                ? "bg-amber-400/20 text-amber-200 shadow-[0_0_18px_oklch(0.82_0.17_85_/_0.48)] ring-1 ring-amber-300/35 hover:bg-amber-400/30"
+                : "bg-white/10 text-white/75 hover:bg-white/15 hover:text-white",
+            )}
+          >
+            <Flame
+              className={cn("h-4 w-4", currentStreak > 0 && "fill-amber-300 text-amber-300")}
+            />
+            <span>{currentStreak}</span>
+          </Link>
         </div>
       </header>
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 sm:px-6">{children}</main>
