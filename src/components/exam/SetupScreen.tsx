@@ -12,6 +12,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AnswerKeyScreen } from "@/components/exam/AnswerKeyScreen";
+import { PageLoader } from "@/components/ui/page-loader";
 import {
   upsertExercise,
   getExercise,
@@ -82,6 +83,7 @@ export function SetupScreen({
 
   const [marking, setMarking] = useState<MarkingScheme>(DEFAULT_MARKING);
   const [editingMarking, setEditingMarking] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [positive, setPositive] = useState("4");
   const [negative, setNegative] = useState("1");
 
@@ -97,6 +99,8 @@ export function SetupScreen({
     } else {
       setEditingMarking(true);
     }
+    const timer = window.setTimeout(() => setIsLoading(false), 350);
+    return () => window.clearTimeout(timer);
   }, []);
 
   const chapters = subjects.find((s) => s.name === subject)?.chapters ?? [];
@@ -204,6 +208,8 @@ export function SetupScreen({
   };
 
   const num = (v: string) => v.replace(/[^0-9.]/g, "");
+
+  if (isLoading) return <PageLoader label="Preparing your test" />;
 
   return (
     <div className="card-surface space-y-7 p-6 sm:p-8">

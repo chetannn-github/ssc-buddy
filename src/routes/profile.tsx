@@ -139,20 +139,16 @@ function ActivityHeatmap({ records, maxStreak }: { records: TestRecord[]; maxStr
   );
 }
 
-function initials(name: string) {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join("")
-    .toUpperCase();
-}
-
 function avatarColor(name: string) {
   const colors = ["bg-violet-500", "bg-sky-500", "bg-rose-500", "bg-teal-500", "bg-orange-500"];
   const hash = Array.from(name).reduce((sum, character) => sum + character.charCodeAt(0), 0);
   return colors[hash % colors.length] ?? "bg-primary";
+}
+
+function avatarEmoji(name: string) {
+  const avatars = ["😎", "🛸", "🪩", "🐸", "⚡", "🍒", "🧃", "🦋", "🎧", "🫠"];
+  const hash = Array.from(name).reduce((sum, character) => sum + character.charCodeAt(0), 0);
+  return avatars[hash % avatars.length] ?? "😎";
 }
 
 function TargetProgress({
@@ -260,7 +256,7 @@ export function Profile() {
                 )}
               >
                 <span className="transition-opacity group-hover:opacity-0">
-                  {initials(displayName)}
+                  {avatarEmoji(displayName)}
                 </span>
                 <Pencil className="absolute h-5 w-5 opacity-0 transition-opacity group-hover:opacity-100" />
               </button>
