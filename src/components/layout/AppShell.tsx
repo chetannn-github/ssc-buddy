@@ -95,17 +95,21 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
   }, []);
 
   const currentStreak = getStreaks(records).current;
+  const isProfilePage = path === "/" || path === "/profile";
 
   return (
     <div
       className={cn(
         "flex min-h-screen w-full flex-col",
-        path === "/" || path === "/profile" ? "bg-[#121212]" : "bg-background",
+        isProfilePage ? "bg-[#121212]" : "bg-background",
       )}
     >
       <header
-        className="h-16 border-0 text-exam-header-foreground shadow-none"
-        style={{ backgroundImage: "var(--gradient-header)" }}
+        className={cn(
+          "h-16 border-0 shadow-none",
+          isProfilePage ? "bg-[#1b1b1b] text-zinc-100" : "text-exam-header-foreground",
+        )}
+        style={isProfilePage ? undefined : { backgroundImage: "var(--gradient-header)" }}
       >
         <div className="mx-auto flex h-16 w-full max-w-5xl items-center gap-4 px-4 sm:px-6">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10">

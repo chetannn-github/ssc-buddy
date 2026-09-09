@@ -280,7 +280,7 @@ export function Profile() {
   return (
     <AppShell title="Your Profile">
       <div className="profile-dark -mx-4 -my-6 min-h-[calc(100vh-4rem)] space-y-5 bg-[#121212] px-4 py-6 text-zinc-100 sm:-mx-6 sm:px-6">
-        <section className="rounded-2xl border border-white/10 bg-[#202020] p-5 sm:p-6">
+        <section className="rounded-2xl border border-white/10 bg-[#1d1d1d] p-5 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-5">
             <div className="flex min-w-0 items-center gap-4">
               <button
@@ -297,7 +297,7 @@ export function Profile() {
                 <Pencil className="absolute h-5 w-5 opacity-0 transition-opacity group-hover:opacity-100" />
               </button>
               <div className="min-w-0">
-                <h2 className="truncate text-2xl font-semibold">{displayName}</h2>
+                <h2 className="truncate text-2xl font-semibold text-zinc-50">{displayName}</h2>
               </div>
             </div>
           </div>
@@ -352,13 +352,15 @@ export function Profile() {
       </div>
       {editingProfile && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-md">
-          <section className="w-full max-w-md rounded-3xl border border-white/10 bg-[#202020] p-6 shadow-[0_24px_70px_-24px_black] sm:p-8">
-            <h2 className="text-2xl font-semibold">Setup your profile</h2>
+          <section className="w-full max-w-md rounded-2xl border border-white/10 bg-[#1e1e1e] p-6 text-zinc-100 shadow-2xl sm:p-8">
+            <h2 className="text-xl font-semibold tracking-tight text-zinc-50">
+              Setup your profile
+            </h2>
             <div className="mt-6 space-y-4">
               <label className="block text-sm font-medium text-zinc-200">
                 Your name
                 <Input
-                  className="mt-2 h-11 border-white/10 bg-zinc-900 text-zinc-100"
+                  className="mt-2 h-11 border-white/10 bg-[#151515] text-zinc-100 placeholder:text-zinc-500 focus-visible:border-zinc-500"
                   value={nameDraft}
                   onChange={(event) => setNameDraft(event.target.value)}
                   autoFocus
@@ -367,7 +369,7 @@ export function Profile() {
               <label className="block text-sm font-medium text-zinc-200">
                 Question goal
                 <Input
-                  className="mt-2 h-11 border-white/10 bg-zinc-900 text-zinc-100"
+                  className="mt-2 h-11 border-white/10 bg-[#151515] text-zinc-100 placeholder:text-zinc-500 focus-visible:border-zinc-500"
                   inputMode="numeric"
                   value={goalDraft}
                   onChange={(event) => setGoalDraft(event.target.value.replace(/\D/g, ""))}
@@ -375,7 +377,11 @@ export function Profile() {
               </label>
             </div>
             <div className="mt-6 flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setEditingProfile(false)}>
+              <Button
+                variant="outline"
+                className="border-white/10 bg-white/5 text-zinc-200 hover:bg-white/10 hover:text-white"
+                onClick={() => setEditingProfile(false)}
+              >
                 Cancel
               </Button>
               <Button className="bg-emerald-600 hover:bg-emerald-500" onClick={saveProfile}>
