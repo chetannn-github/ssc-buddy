@@ -75,13 +75,15 @@ type MetricCardProps = {
 
 function MetricCard({ label, value, icon: Icon, tone = "default" }: MetricCardProps) {
   return (
-    <article className="card-surface p-4">
+    <article className="card-surface group relative overflow-hidden p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[var(--shadow-lift)]">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-medium text-muted-foreground">{label}</p>
+          <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+            {label}
+          </p>
           <p
             className={cn(
-              "mt-1 text-2xl font-semibold tracking-tight",
+              "mt-2 text-3xl font-semibold tracking-tight",
               tone === "good" && "text-answered",
               tone === "bad" && "text-destructive",
             )}
@@ -91,12 +93,12 @@ function MetricCard({ label, value, icon: Icon, tone = "default" }: MetricCardPr
         </div>
         <span
           className={cn(
-            "flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary",
+            "flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/10 transition-transform duration-200 group-hover:scale-105",
             tone === "good" && "bg-answered/10 text-answered",
             tone === "bad" && "bg-destructive/10 text-destructive",
           )}
         >
-          <Icon className="h-4 w-4" />
+          <Icon className="h-[18px] w-[18px]" />
         </span>
       </div>
     </article>
@@ -233,11 +235,11 @@ function Dashboard() {
     <AppShell title="Performance Dashboard">
       <div className="space-y-5">
         <section
-          className="card-surface grid gap-3 p-4 sm:grid-cols-3"
+          className="card-surface grid gap-3 bg-surface/90 p-3 sm:grid-cols-3"
           aria-label="Dashboard filters"
         >
           <Select value={range} onValueChange={(value) => setRange(value as TimeRange)}>
-            <SelectTrigger>
+            <SelectTrigger className="bg-muted/45">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -254,7 +256,7 @@ function Dashboard() {
               setChapter(ALL);
             }}
           >
-            <SelectTrigger>
+            <SelectTrigger className="bg-muted/45">
               <SelectValue placeholder="All subjects" />
             </SelectTrigger>
             <SelectContent>
@@ -267,7 +269,7 @@ function Dashboard() {
             </SelectContent>
           </Select>
           <Select value={chapter} onValueChange={setChapter}>
-            <SelectTrigger>
+            <SelectTrigger className="bg-muted/45">
               <SelectValue placeholder="All chapters" />
             </SelectTrigger>
             <SelectContent>
@@ -320,12 +322,14 @@ function Dashboard() {
             </section>
 
             <section className="grid gap-4 lg:grid-cols-2">
-              <article className="card-surface p-5">
+              <article className="card-surface p-5 sm:p-6">
                 <div className="flex items-center justify-between">
                   <h2 className="text-sm font-semibold">Subject Performance</h2>
-                  <BookOpen className="h-5 w-5 text-primary" />
+                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/10">
+                    <BookOpen className="h-4 w-4" />
+                  </span>
                 </div>
-                <div className="mt-4 space-y-4">
+                <div className="mt-5 space-y-5">
                   {subjectStats.slice(0, 6).map((item) => (
                     <div key={item.name}>
                       <div className="flex items-center justify-between gap-3 text-xs">
@@ -335,11 +339,11 @@ function Dashboard() {
                             {item.attempted} attempted
                           </span>
                         </div>
-                        <strong>{formatPercent(item.accuracy)}</strong>
+                        <strong className="text-sm">{formatPercent(item.accuracy)}</strong>
                       </div>
                       <div
                         className={cn(
-                          "mt-1.5 h-2 overflow-hidden rounded-full",
+                          "mt-2 h-2.5 overflow-hidden rounded-full",
                           item.accuracy === null ? "bg-muted" : "bg-destructive",
                         )}
                       >
@@ -353,26 +357,28 @@ function Dashboard() {
                 </div>
               </article>
 
-              <article className="card-surface p-5">
+              <article className="card-surface p-5 sm:p-6">
                 <div className="flex items-center justify-between">
                   <h2 className="text-sm font-semibold">Practice Consistency</h2>
-                  <Flame
-                    className={cn(
-                      "h-5 w-5 fill-amber-400 text-amber-500",
-                      isConsistencyAnimating && "animate-consistency-flame",
-                    )}
-                  />
+                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-400/15 ring-1 ring-amber-500/15">
+                    <Flame
+                      className={cn(
+                        "h-5 w-5 fill-amber-400 text-amber-500",
+                        isConsistencyAnimating && "animate-consistency-flame",
+                      )}
+                    />
+                  </span>
                 </div>
                 <div className="mt-5 grid grid-cols-3 gap-3 text-center">
-                  <div className="rounded-lg bg-muted/60 p-3">
+                  <div className="rounded-xl bg-primary/5 p-3 ring-1 ring-primary/10">
                     <p className="text-xl font-semibold">{streaks.current}</p>
                     <p className="mt-1 text-[10px] text-muted-foreground">Current streak</p>
                   </div>
-                  <div className="rounded-lg bg-muted/60 p-3">
+                  <div className="rounded-xl bg-amber-400/10 p-3 ring-1 ring-amber-500/10">
                     <p className="text-xl font-semibold">{streaks.longest}</p>
                     <p className="mt-1 text-[10px] text-muted-foreground">Longest streak</p>
                   </div>
-                  <div className="rounded-lg bg-muted/60 p-3">
+                  <div className="rounded-xl bg-muted/60 p-3 ring-1 ring-border/60">
                     <p className="text-xl font-semibold">{streaks.activeLast30}</p>
                     <p className="mt-1 text-[10px] text-muted-foreground">Active days</p>
                   </div>
@@ -380,12 +386,9 @@ function Dashboard() {
               </article>
             </section>
 
-            <section className="card-surface p-5">
+            <section className="card-surface p-5 sm:p-6">
               <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-sm font-semibold">Recent Activity</h2>
-                  <p className="text-xs text-muted-foreground">Your latest practice tests</p>
-                </div>
+                <h2 className="text-sm font-semibold">Recent Activity</h2>
                 <Button size="sm" variant="ghost" asChild>
                   <Link to="/history">
                     <HistoryIcon className="mr-1.5 h-4 w-4" />
@@ -393,7 +396,7 @@ function Dashboard() {
                   </Link>
                 </Button>
               </div>
-              <div className="mt-3 divide-y divide-border">
+              <div className="mt-4 space-y-2">
                 {recent.map((record) => {
                   const metrics = metricsForRecord(record);
                   return (
@@ -401,11 +404,11 @@ function Dashboard() {
                       key={record.id}
                       to="/history/$id"
                       params={{ id: record.id }}
-                      className="flex items-center gap-3 py-3 first:pt-1 hover:text-primary"
+                      className="flex items-center gap-3 rounded-xl px-3 py-3 transition-all hover:bg-muted/70 hover:text-primary hover:shadow-sm"
                     >
                       <span
                         className={cn(
-                          "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
+                          "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xs font-semibold",
                           metrics.accuracy !== null && metrics.accuracy >= 60
                             ? "bg-answered/10 text-answered"
                             : "bg-destructive/10 text-destructive",
