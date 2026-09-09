@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Flame, GraduationCap, History, LayoutDashboard, PenSquare } from "lucide-react";
+import { Flame, GraduationCap, History, PenSquare } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,7 +17,6 @@ type Props = {
 };
 
 const nav = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "New test", url: "/test", icon: PenSquare },
   { title: "History", url: "/history", icon: History },
 ];
@@ -101,7 +100,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
     <div
       className={cn(
         "flex min-h-screen w-full flex-col",
-        path === "/profile" ? "bg-[#121212]" : "bg-background",
+        path === "/" || path === "/profile" ? "bg-[#121212]" : "bg-background",
       )}
     >
       <header
@@ -138,7 +137,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
             })}
           </nav>
           <Link
-            to="/profile"
+            to="/"
             aria-label={`Practice streak: ${currentStreak} days`}
             className={cn(
               "ml-1 flex h-9 min-w-12 items-center justify-center gap-1.5 rounded-full px-3 text-xs font-semibold transition-all",

@@ -234,7 +234,7 @@ function TargetProgress({
   );
 }
 
-function Profile() {
+export function Profile() {
   const records = useMemo(() => loadHistory(), []);
   const [profile, setProfile] = useState<PracticeProfile | null>(null);
   const [editingProfile, setEditingProfile] = useState(false);
