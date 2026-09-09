@@ -1,10 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { BarChart3, CalendarDays, CheckCircle2, Flame, Target, XCircle } from "lucide-react";
-import { useMemo } from "react";
+import { BarChart3, CheckCircle2, Flame, Pencil, Save, Target, XCircle } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { aggregateRecords, getStreaks, metricsForRecord } from "@/lib/analytics";
 import { loadHistory, type TestRecord } from "@/lib/exam";
+import { loadPracticeProfile, savePracticeProfile, type PracticeProfile } from "@/lib/profile";
 import { cn } from "@/lib/utils";
 
 const title = "Practice Profile — MCQ Practice";
@@ -149,10 +151,10 @@ function ActivityHeatmap({ records }: { records: TestRecord[] }) {
                   className={cn(
                     "h-3 w-3 rounded-[3px] ring-1 ring-inset ring-border/50",
                     intensity === 0 && "bg-muted",
-                    intensity === 1 && "bg-amber-200",
-                    intensity === 2 && "bg-amber-300",
-                    intensity === 3 && "bg-amber-400",
-                    intensity === 4 && "bg-amber-500",
+                    intensity === 1 && "bg-emerald-200",
+                    intensity === 2 && "bg-emerald-300",
+                    intensity === 3 && "bg-emerald-500",
+                    intensity === 4 && "bg-emerald-700",
                   )}
                 />
               );
@@ -168,10 +170,10 @@ function ActivityHeatmap({ records }: { records: TestRecord[] }) {
             className={cn(
               "h-3 w-3 rounded-[3px]",
               intensity === 0 && "bg-muted",
-              intensity === 1 && "bg-amber-200",
-              intensity === 2 && "bg-amber-300",
-              intensity === 3 && "bg-amber-400",
-              intensity === 4 && "bg-amber-500",
+              intensity === 1 && "bg-emerald-200",
+              intensity === 2 && "bg-emerald-300",
+              intensity === 3 && "bg-emerald-500",
+              intensity === 4 && "bg-emerald-700",
             )}
           />
         ))}
@@ -181,8 +183,93 @@ function ActivityHeatmap({ records }: { records: TestRecord[] }) {
   );
 }
 
+function initials(name: string) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+}
+
+function avatarColor(name: string) {
+  const colors = ["bg-violet-500", "bg-sky-500", "bg-rose-500", "bg-teal-500", "bg-orange-500"];
+  const hash = Array.from(name).reduce((sum, character) => sum + character.charCodeAt(0), 0);
+  return colors[hash % colors.length] ?? "bg-primary";
+}
+
+function TargetProgress({
+  attempted,
+  goal,
+  subjectStats,
+}: {
+  attempted: number;
+  goal: number;
+  subjectStats: Array<{ subject: string; attempted: number }>;
+}) {
+  const progress = Math.min(100, Math.round((attempted / Math.max(1, goal)) * 100));
+
+  return (
+    <section className="card-surface p-5 sm:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-semibold">Target progress</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Questions completed against your goal</p>
+        </div>
+        <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+          {progress}% complete
+        </span>
+      </div>
+      <div className="mt-5 grid items-center gap-5 sm:grid-cols-[132px_1fr]">
+        <div
+          className="relative mx-auto flex h-32 w-32 items-center justify-center rounded-full"
+          style={{
+            background: `conic-gradient(var(--color-primary) 0 ${progress}%, var(--color-muted) ${progress}% 100%)`,
+          }}
+        >
+          <div className="flex h-[104px] w-[104px] flex-col items-center justify-center rounded-full bg-surface">
+            <span className="text-2xl font-semibold">{attempted}</span>
+            <span className="text-[10px] text-muted-foreground">/ {goal} target</span>
+          </div>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {subjectStats.length ? (
+            subjectStats.map((item) => (
+              <div key={item.subject} className="rounded-xl bg-muted/60 p-3">
+                <p className="truncate text-xs font-semibold">{item.subject}</p>
+                <p className="mt-1 text-lg font-semibold text-primary">{item.attempted}</p>
+                <p className="text-[10px] text-muted-foreground">questions completed</p>
+              </div>
+            ))
+          ) : (
+            <p className="text-sm text-muted-foreground">Your subjects will appear after your first test.</p>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function Profile() {
   const records = useMemo(() => loadHistory(), []);
+  const [profile, setProfile] = useState<PracticeProfile | null>(null);
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
+  const [goalDraft, setGoalDraft] = useState("");
+
+  useEffect(() => {
+    const refresh = () => {
+      const saved = loadPracticeProfile();
+      setProfile(saved);
+      setNameDraft(saved?.name ?? "");
+      setGoalDraft(saved ? String(saved.questionGoal) : "100");
+    };
+    refresh();
+    window.addEventListener("cbt-profile-updated", refresh);
+    return () => window.removeEventListener("cbt-profile-updated", refresh);
+  }, []);
+
   const totals = useMemo(() => aggregateRecords(records), [records]);
   const streaks = useMemo(() => getStreaks(records), [records]);
   const subjectStats = useMemo(
@@ -197,20 +284,59 @@ function Profile() {
     () => [...records].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5),
     [records],
   );
+  const saveProfile = () => {
+    if (!nameDraft.trim() || Number(goalDraft) < 1) return;
+    const next = { name: nameDraft.trim(), questionGoal: Math.min(100000, Number(goalDraft)) };
+    savePracticeProfile(next);
+    setProfile(next);
+    setEditingProfile(false);
+  };
+  const displayName = profile?.name ?? "Your profile";
+  const questionGoal = profile?.questionGoal ?? 100;
 
   return (
-    <AppShell title="Practice Profile" subtitle="Your activity and performance centre">
+    <AppShell title="Your Profile">
       <div className="space-y-5">
-        <section className="card-surface overflow-hidden bg-gradient-to-br from-amber-50 to-surface p-5 sm:p-6">
+        <section className="card-surface overflow-hidden p-5 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-5">
-            <div>
-              <p className="text-xs font-semibold tracking-[0.14em] text-muted-foreground uppercase">
-                Practice consistency
-              </p>
-              <h2 className="mt-1 text-2xl font-semibold">Keep your streak alive</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Every practice test adds to your yearly activity.
-              </p>
+            <div className="flex min-w-0 items-center gap-4">
+              <span
+                className={cn(
+                  "flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl text-xl font-semibold text-white",
+                  avatarColor(displayName),
+                )}
+              >
+                {initials(displayName)}
+              </span>
+              <div className="min-w-0">
+                {editingProfile ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Input
+                      className="h-9 w-44"
+                      value={nameDraft}
+                      onChange={(event) => setNameDraft(event.target.value)}
+                      aria-label="Your name"
+                    />
+                    <Input
+                      className="h-9 w-28"
+                      inputMode="numeric"
+                      value={goalDraft}
+                      onChange={(event) => setGoalDraft(event.target.value.replace(/\D/g, ""))}
+                      aria-label="Question goal"
+                    />
+                    <Button size="sm" onClick={saveProfile}>
+                      <Save className="h-3.5 w-3.5" /> Save
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <h2 className="truncate text-2xl font-semibold">{displayName}</h2>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Goal: {questionGoal.toLocaleString()} questions
+                    </p>
+                  </>
+                )}
+              </div>
             </div>
             <div
               className={cn(
@@ -227,7 +353,18 @@ function Profile() {
               <span className="text-[10px] font-medium">days</span>
             </div>
           </div>
+          {!editingProfile && (
+            <Button className="mt-4" size="sm" variant="outline" onClick={() => setEditingProfile(true)}>
+              <Pencil className="h-3.5 w-3.5" /> Edit profile & goal
+            </Button>
+          )}
         </section>
+
+        <TargetProgress
+          attempted={totals.attempted}
+          goal={questionGoal}
+          subjectStats={subjectStats.map(({ subject, attempted }) => ({ subject, attempted }))}
+        />
 
         <ActivityHeatmap records={records} />
 
@@ -241,65 +378,6 @@ function Profile() {
             tone="good"
           />
           <SummaryCard label="Wrong answers" value={totals.wrong} icon={XCircle} tone="bad" />
-        </section>
-
-        <section className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-          <article className="card-surface p-5 sm:p-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold">Subject performance</h2>
-              <BarChart3 className="h-5 w-5 text-primary" />
-            </div>
-            <div className="mt-5 space-y-4">
-              {subjectStats.length ? (
-                subjectStats.map((item) => (
-                  <div key={item.subject}>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="font-semibold">{item.subject}</span>
-                      <span className="font-semibold">
-                        {item.accuracy === null ? "—" : `${Math.round(item.accuracy)}%`}
-                      </span>
-                    </div>
-                    <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-destructive">
-                      <div
-                        className="h-full rounded-l-full bg-answered"
-                        style={{ width: `${item.accuracy ?? 0}%` }}
-                      />
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  Complete a test to see subject performance.
-                </p>
-              )}
-            </div>
-          </article>
-
-          <article className="card-surface p-5 sm:p-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold">Performance summary</h2>
-              <CalendarDays className="h-5 w-5 text-primary" />
-            </div>
-            <dl className="mt-5 grid grid-cols-3 gap-3 text-center">
-              <div className="rounded-xl bg-muted/60 p-3">
-                <dt className="text-[10px] text-muted-foreground">Current streak</dt>
-                <dd className="mt-1 text-xl font-semibold">{streaks.current}</dd>
-              </div>
-              <div className="rounded-xl bg-muted/60 p-3">
-                <dt className="text-[10px] text-muted-foreground">Longest streak</dt>
-                <dd className="mt-1 text-xl font-semibold">{streaks.longest}</dd>
-              </div>
-              <div className="rounded-xl bg-muted/60 p-3">
-                <dt className="text-[10px] text-muted-foreground">Active days</dt>
-                <dd className="mt-1 text-xl font-semibold">{streaks.activeLast30}</dd>
-              </div>
-            </dl>
-            <Button className="mt-5 w-full" asChild>
-              <Link to="/test" search={{}}>
-                Start a test
-              </Link>
-            </Button>
-          </article>
         </section>
 
         <section className="card-surface p-5 sm:p-6">

@@ -2,8 +2,11 @@ import type { ReactNode } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { Flame, GraduationCap, History, LayoutDashboard, PenSquare } from "lucide-react";
 import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { getStreaks } from "@/lib/analytics";
 import { loadHistory, type TestRecord } from "@/lib/exam";
+import { loadPracticeProfile, savePracticeProfile, type PracticeProfile } from "@/lib/profile";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -19,15 +22,77 @@ const nav = [
   { title: "History", url: "/history", icon: History },
 ];
 
+function ProfileOnboarding({ onComplete }: { onComplete: (profile: PracticeProfile) => void }) {
+  const [name, setName] = useState("");
+  const [goal, setGoal] = useState("100");
+  const parsedGoal = Math.max(1, Math.min(100000, Number(goal) || 0));
+  const canContinue = name.trim().length > 0 && Number(goal) >= 1;
+
+  const submit = () => {
+    if (!canContinue) return;
+    const profile = { name: name.trim(), questionGoal: parsedGoal };
+    savePracticeProfile(profile);
+    onComplete(profile);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/35 p-4 backdrop-blur-sm">
+      <section className="w-full max-w-md rounded-3xl border border-border bg-surface p-6 shadow-[0_24px_70px_-24px_oklch(0.24_0.05_259_/_0.55)] sm:p-8">
+        <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+          <GraduationCap className="h-6 w-6" />
+        </span>
+        <p className="mt-5 text-xs font-semibold tracking-[0.14em] text-primary uppercase">Welcome</p>
+        <h2 className="mt-1 text-2xl font-semibold">Let’s set your practice goal</h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          We’ll use this to personalise your profile and track your progress.
+        </p>
+        <div className="mt-6 space-y-4">
+          <label className="block text-sm font-medium">
+            Your name
+            <Input
+              className="mt-2 h-11"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="Enter your name"
+              autoFocus
+            />
+          </label>
+          <label className="block text-sm font-medium">
+            Questions you want to complete
+            <Input
+              className="mt-2 h-11"
+              inputMode="numeric"
+              value={goal}
+              onChange={(event) => setGoal(event.target.value.replace(/\D/g, ""))}
+              placeholder="e.g. 500"
+            />
+          </label>
+        </div>
+        <Button className="mt-6 h-11 w-full" disabled={!canContinue} onClick={submit}>
+          Create my profile
+        </Button>
+      </section>
+    </div>
+  );
+}
+
 export function AppShell({ title, subtitle, actions, children }: Props) {
   const path = useRouterState({ select: (r) => r.location.pathname });
   const [records, setRecords] = useState<TestRecord[]>([]);
+  const [profile, setProfile] = useState<PracticeProfile | null | undefined>(undefined);
 
   useEffect(() => {
     const refresh = () => setRecords(loadHistory());
     refresh();
     window.addEventListener("storage", refresh);
     return () => window.removeEventListener("storage", refresh);
+  }, []);
+
+  useEffect(() => {
+    const refresh = () => setProfile(loadPracticeProfile());
+    refresh();
+    window.addEventListener("cbt-profile-updated", refresh);
+    return () => window.removeEventListener("cbt-profile-updated", refresh);
   }, []);
 
   const currentStreak = getStreaks(records).current;
@@ -85,6 +150,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
         </div>
       </header>
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 sm:px-6">{children}</main>
+      {profile === null && <ProfileOnboarding onComplete={setProfile} />}
     </div>
   );
 }
