@@ -29,7 +29,7 @@ function friendlyDate(iso: string) {
   });
 }
 
-const title = "Test History & Results Dashboard — MCQ Practice";
+const title = "History";
 const description =
   "Browse every saved practice test: filter by subject and chapter, search, sort by latest or highest score, and open detailed results.";
 

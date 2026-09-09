@@ -9,7 +9,7 @@ import { loadHistory, type TestRecord } from "@/lib/exam";
 import { loadPracticeProfile, savePracticeProfile, type PracticeProfile } from "@/lib/profile";
 import { cn } from "@/lib/utils";
 
-const title = "Practice Profile — MCQ Practice";
+const title = "Profile";
 const description = "Your yearly practice activity and progress.";
 
 export const Route = createFileRoute("/profile")({

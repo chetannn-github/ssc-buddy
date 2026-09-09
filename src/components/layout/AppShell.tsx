@@ -1,5 +1,5 @@
-import type { ReactNode } from "react";
-import { Link, useRouterState } from "@tanstack/react-router";
+import type { MouseEvent, ReactNode } from "react";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { Flame, GraduationCap, History, PenSquare } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,13 @@ type Props = {
 const nav = [
   { title: "New test", url: "/test", icon: PenSquare },
   { title: "History", url: "/history", icon: History },
-];
+] as const;
+
+type AppPath = "/" | "/test" | "/history";
+
+type ViewTransitionDocument = Document & {
+  startViewTransition?: (callback: () => Promise<unknown>) => { finished: Promise<void> };
+};
 
 function ProfileOnboarding({ onComplete }: { onComplete: (profile: PracticeProfile) => void }) {
   const [name, setName] = useState("");
@@ -77,6 +83,7 @@ function ProfileOnboarding({ onComplete }: { onComplete: (profile: PracticeProfi
 
 export function AppShell({ title, subtitle, actions, children }: Props) {
   const path = useRouterState({ select: (r) => r.location.pathname });
+  const navigate = useNavigate();
   const [records, setRecords] = useState<TestRecord[]>([]);
   const [profile, setProfile] = useState<PracticeProfile | null | undefined>(undefined);
 
@@ -96,6 +103,35 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
 
   const currentStreak = getStreaks(records).current;
   const isProfilePage = path === "/" || path === "/profile";
+  const navigateWithThemeTransition = (event: MouseEvent<HTMLAnchorElement>, to: AppPath) => {
+    if (
+      event.defaultPrevented ||
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey ||
+      path === to
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    const viewDocument = document as ViewTransitionDocument;
+    const transitionName = isProfilePage && to !== "/" ? "to-light" : "to-profile";
+    if (!viewDocument.startViewTransition) {
+      void navigate({ to });
+      return;
+    }
+
+    const transition = viewDocument.startViewTransition(() => {
+      document.documentElement.dataset["profileTransition"] = transitionName;
+      return navigate({ to });
+    });
+    void transition.finished.finally(() => {
+      delete document.documentElement.dataset["profileTransition"];
+    });
+  };
 
   return (
     <div
@@ -122,11 +158,12 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
           {actions}
           <nav className="flex shrink-0 items-center gap-1">
             {nav.map((item) => {
-              const active = item.url === "/" ? path === "/" : path.startsWith(item.url);
+              const active = path.startsWith(item.url);
               return (
                 <Link
                   key={item.url}
                   to={item.url}
+                  onClick={(event) => navigateWithThemeTransition(event, item.url)}
                   className={cn(
                     "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors sm:text-sm",
                     active
@@ -142,6 +179,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
           </nav>
           <Link
             to="/"
+            onClick={(event) => navigateWithThemeTransition(event, "/")}
             aria-label={`Practice streak: ${currentStreak} days`}
             className={cn(
               "ml-1 flex h-9 min-w-12 items-center justify-center gap-1.5 rounded-full px-3 text-xs font-semibold transition-all",

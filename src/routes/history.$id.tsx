@@ -15,7 +15,7 @@ import {
   type TestRecord,
 } from "@/lib/exam";
 
-const title = "Test Result Details — MCQ Practice";
+const title = "Test Detail";
 const description =
   "Detailed result of a saved practice test: all marked answers, correct and wrong counts, marking scheme and final score.";
 

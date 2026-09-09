@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Profile } from "./profile";
 
-const title = "Your Profile — MCQ Practice";
+const title = "Profile";
 const description = "Your yearly practice activity and progress.";
 
 export const Route = createFileRoute("/")({

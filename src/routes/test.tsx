@@ -7,7 +7,7 @@ import { TestScreen } from "@/components/exam/TestScreen";
 import { AnswerKeyScreen } from "@/components/exam/AnswerKeyScreen";
 import { computeScore, saveRecord, type Option, type TestRecord } from "@/lib/exam";
 
-const title = "New CBT MCQ Practice Test";
+const title = "New Test";
 const description =
   "Create an offline OMR-style CBT test, mark A/B/C/D answers and track your score.";
 

@@ -218,3 +218,47 @@
   border-radius: var(--radius);
   box-shadow: var(--shadow-card);
 }
+
+@keyframes profile-light-reveal {
+  from {
+    clip-path: circle(0% at 92% 8%);
+  }
+  to {
+    clip-path: circle(150% at 92% 8%);
+  }
+}
+
+@keyframes profile-dark-reveal {
+  from {
+    clip-path: circle(0% at 92% 8%);
+  }
+  to {
+    clip-path: circle(150% at 92% 8%);
+  }
+}
+
+:root[data-profile-transition]::view-transition-old(root),
+:root[data-profile-transition]::view-transition-new(root) {
+  animation-duration: 520ms;
+  animation-timing-function: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+:root[data-profile-transition="to-light"]::view-transition-old(root),
+:root[data-profile-transition="to-profile"]::view-transition-old(root) {
+  animation: none;
+}
+
+:root[data-profile-transition="to-light"]::view-transition-new(root) {
+  animation-name: profile-light-reveal;
+}
+
+:root[data-profile-transition="to-profile"]::view-transition-new(root) {
+  animation-name: profile-dark-reveal;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-profile-transition]::view-transition-old(root),
+  :root[data-profile-transition]::view-transition-new(root) {
+    animation-duration: 1ms;
+  }
+}
