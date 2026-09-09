@@ -48,11 +48,15 @@ export function SolutionScreen({ record, onExit }: Props) {
     );
 
   const optionClass = (opt: Option) => {
-    // Reattempt mode: hide original markings until user picks
+    // Reattempt mode must not reveal the answer key. Only the option selected
+    // for this retry is coloured, based on its result.
     if (reattempt) {
       if (!retry) return "border-border bg-surface hover:border-primary/40 hover:bg-accent/50";
-      if (correctOpt && opt === correctOpt) return "border-answered bg-answered/15 font-semibold";
-      if (opt === retry) return "border-destructive bg-destructive/10 font-semibold";
+      if (opt === retry) {
+        return retry === correctOpt
+          ? "border-answered bg-answered/15 font-semibold"
+          : "border-destructive bg-destructive/10 font-semibold";
+      }
       return "border-border bg-surface";
     }
     if (correctOpt && opt === correctOpt) return "border-answered bg-answered/15 font-semibold";
@@ -61,9 +65,11 @@ export function SolutionScreen({ record, onExit }: Props) {
   };
 
   const badgeClass = (opt: Option) => {
-    const active = reattempt ? (retry ? opt === retry || opt === correctOpt : false) : opt === original || opt === correctOpt;
+    const active = reattempt ? opt === retry : opt === original || opt === correctOpt;
     if (!active) return "border-border text-muted-foreground";
-    if (correctOpt && opt === correctOpt) return "border-answered bg-answered text-answered-foreground";
+    if ((reattempt && retry === correctOpt) || (!reattempt && correctOpt && opt === correctOpt)) {
+      return "border-answered bg-answered text-answered-foreground";
+    }
     return "border-destructive bg-destructive text-destructive-foreground";
   };
 
@@ -137,7 +143,7 @@ export function SolutionScreen({ record, onExit }: Props) {
                 </span>
                 Option {opt}
                 <span className="ml-auto flex items-center gap-1.5 text-[10px] font-medium">
-                  {correctOpt === opt && (
+                  {!reattempt && correctOpt === opt && (
                     <span className="rounded-full bg-answered/15 px-2 py-0.5 text-answered">
                       Correct
                     </span>
