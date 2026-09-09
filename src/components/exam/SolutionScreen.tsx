@@ -14,7 +14,7 @@ type Props = {
 export function SolutionScreen({ record, onExit }: Props) {
   const total = record.answers.length;
   const [current, setCurrent] = useState(0);
-  const [reattempt, setReattempt] = useState(false);
+  const [reattempt, setReattempt] = useState(true);
   const [retryAnswers, setRetryAnswers] = useState<(Option | null)[]>(() =>
     Array.from({ length: total }, () => null),
   );
