@@ -48,14 +48,17 @@ export function SolutionScreen({ record, onExit }: Props) {
     );
 
   const optionClass = (opt: Option) => {
-    // Reattempt mode must not reveal the answer key. Only the option selected
-    // for this retry is coloured, based on its result.
+    // Keep the key hidden until an answer is selected. After a wrong retry,
+    // reveal the correct option alongside the selected wrong option.
     if (reattempt) {
       if (!retry) return "border-border bg-surface hover:border-primary/40 hover:bg-accent/50";
       if (opt === retry) {
         return retry === correctOpt
           ? "border-answered bg-answered/15 font-semibold"
           : "border-destructive bg-destructive/10 font-semibold";
+      }
+      if (retry !== correctOpt && opt === correctOpt) {
+        return "border-answered bg-answered/15 font-semibold";
       }
       return "border-border bg-surface";
     }
@@ -65,9 +68,17 @@ export function SolutionScreen({ record, onExit }: Props) {
   };
 
   const badgeClass = (opt: Option) => {
-    const active = reattempt ? opt === retry : opt === original || opt === correctOpt;
+    const showCorrectAfterWrongRetry =
+      reattempt && retry !== null && retry !== correctOpt && opt === correctOpt;
+    const active = reattempt
+      ? opt === retry || showCorrectAfterWrongRetry
+      : opt === original || opt === correctOpt;
     if (!active) return "border-border text-muted-foreground";
-    if ((reattempt && retry === correctOpt) || (!reattempt && correctOpt && opt === correctOpt)) {
+    if (
+      showCorrectAfterWrongRetry ||
+      (reattempt && retry === correctOpt) ||
+      (!reattempt && correctOpt && opt === correctOpt)
+    ) {
       return "border-answered bg-answered text-answered-foreground";
     }
     return "border-destructive bg-destructive text-destructive-foreground";
@@ -89,9 +100,13 @@ export function SolutionScreen({ record, onExit }: Props) {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <label className="flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs backdrop-blur-sm">
+            <label className="flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-xs backdrop-blur-sm">
               Reattempt Mode
-              <Switch checked={reattempt} onCheckedChange={setReattempt} />
+              <Switch
+                checked={reattempt}
+                onCheckedChange={setReattempt}
+                className="data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-white/30"
+              />
             </label>
             <Button size="sm" variant="secondary" onClick={onExit}>
               Close
@@ -143,7 +158,8 @@ export function SolutionScreen({ record, onExit }: Props) {
                 </span>
                 Option {opt}
                 <span className="ml-auto flex items-center gap-1.5 text-[10px] font-medium">
-                  {!reattempt && correctOpt === opt && (
+                  {(!reattempt || (retry !== null && retry !== correctOpt)) &&
+                    correctOpt === opt && (
                     <span className="rounded-full bg-answered/15 px-2 py-0.5 text-answered">
                       Correct
                     </span>
