@@ -270,7 +270,7 @@ export function Profile() {
       <div className="profile-dark -mx-4 -my-6 min-h-[calc(100vh-4rem)] bg-[#121212] px-4 py-10 text-zinc-100 sm:-mx-6 sm:px-6 sm:py-14">
         <div className="mx-auto max-w-4xl space-y-7">
           <section className="flex flex-col items-center text-center">
-            <div className="flex min-w-0 flex-col items-center gap-3">
+            <div className="relative flex min-w-0 flex-col items-center gap-3">
               {avatar ? (
                 <button
                   type="button"
@@ -288,30 +288,29 @@ export function Profile() {
               ) : (
                 <div className="h-20 w-20 rounded-full bg-white/10" />
               )}
-              <div className="min-w-0">
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="absolute top-14 right-[calc(50%+3.5rem)] h-8 w-8 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
+                onClick={() => setEditingProfile(true)}
+                aria-label="Edit profile"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="absolute top-14 left-[calc(50%+3.5rem)] h-8 w-8 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
+                onClick={updateAvatar}
+                disabled={avatarFiles.length < 2}
+                aria-label="Change profile image"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+              </Button>
+              <div className="min-w-0 pt-1">
                 <h2 className="truncate text-2xl font-semibold text-zinc-50">{displayName}</h2>
-              </div>
-              <div className="flex items-center gap-1">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  className="h-8 gap-1.5 text-xs text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
-                  onClick={() => setEditingProfile(true)}
-                >
-                  <Pencil className="h-3.5 w-3.5" /> Edit profile
-                </Button>
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="ghost"
-                  className="h-8 w-8 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
-                  onClick={updateAvatar}
-                  disabled={avatarFiles.length < 2}
-                  aria-label="Change profile image"
-                >
-                  <RefreshCw className="h-3.5 w-3.5" />
-                </Button>
               </div>
             </div>
           </section>
