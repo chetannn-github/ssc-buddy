@@ -2,6 +2,36 @@
 @source "../src";
 @import "tw-animate-css";
 
+@keyframes consistency-flame {
+  0%,
+  100% {
+    transform: rotate(0deg) scale(1);
+    filter: drop-shadow(0 0 0 transparent);
+  }
+  15% {
+    transform: rotate(-8deg) scale(1.12, 1.22);
+  }
+  30% {
+    transform: rotate(7deg) scale(0.96, 1.16);
+    filter: drop-shadow(0 0 5px rgb(251 191 36 / 75%));
+  }
+  48% {
+    transform: rotate(-5deg) scale(1.15, 1.28);
+  }
+  65% {
+    transform: rotate(6deg) scale(1.02, 1.18);
+    filter: drop-shadow(0 0 7px rgb(245 158 11 / 85%));
+  }
+  82% {
+    transform: rotate(-3deg) scale(1.08, 1.2);
+  }
+}
+
+.animate-consistency-flame {
+  transform-origin: center bottom;
+  animation: consistency-flame 2s ease-in-out 1;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 /*
@@ -107,8 +137,10 @@
   --exam-header: oklch(0.27 0.07 262);
   --exam-header-foreground: oklch(0.98 0.005 250);
   --gradient-header: linear-gradient(120deg, oklch(0.24 0.07 264), oklch(0.36 0.08 252));
-  --shadow-card: 0 1px 2px oklch(0.24 0.05 259 / 0.06), 0 8px 24px -16px oklch(0.24 0.05 259 / 0.35);
-  --shadow-lift: 0 2px 4px oklch(0.24 0.05 259 / 0.06), 0 18px 40px -22px oklch(0.24 0.05 259 / 0.45);
+  --shadow-card:
+    0 1px 2px oklch(0.24 0.05 259 / 0.06), 0 8px 24px -16px oklch(0.24 0.05 259 / 0.35);
+  --shadow-lift:
+    0 2px 4px oklch(0.24 0.05 259 / 0.06), 0 18px 40px -22px oklch(0.24 0.05 259 / 0.45);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);

@@ -354,7 +354,7 @@ function Dashboard() {
               <article className="card-surface p-5">
                 <div className="flex items-center justify-between">
                   <h2 className="text-sm font-semibold">Practice Consistency</h2>
-                  <Flame className="h-5 w-5 text-primary" />
+                  <Flame className="animate-consistency-flame h-5 w-5 fill-amber-400 text-amber-500" />
                 </div>
                 <div className="mt-5 grid grid-cols-3 gap-3 text-center">
                   <div className="rounded-lg bg-muted/60 p-3">
