@@ -270,12 +270,12 @@ export function Profile() {
       <div className="profile-dark -mx-4 -my-6 min-h-[calc(100vh-4rem)] bg-[#121212] px-4 py-10 text-zinc-100 sm:-mx-6 sm:px-6 sm:py-14">
         <div className="mx-auto max-w-4xl space-y-7">
           <section className="flex flex-col items-center text-center">
-            <div className="relative flex min-w-0 flex-col items-center gap-3">
+            <div className="relative flex w-40 min-w-0 flex-col items-center gap-3">
               {avatar ? (
                 <button
                   type="button"
                   onClick={() => setPreviewingAvatar(true)}
-                  className="group relative h-20 w-20 shrink-0 overflow-hidden rounded-full ring-2 ring-white/10 transition-transform hover:scale-105 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+                  className="group relative h-28 w-28 shrink-0 overflow-hidden rounded-full ring-2 ring-white/10 transition-transform hover:scale-105 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
                   aria-label="Preview profile image"
                 >
                   <img
@@ -292,7 +292,7 @@ export function Profile() {
                 type="button"
                 size="icon"
                 variant="ghost"
-                className="absolute top-14 right-[calc(50%+3.5rem)] h-8 w-8 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
+                className="absolute top-24 left-2 h-8 w-8 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
                 onClick={() => setEditingProfile(true)}
                 aria-label="Edit profile"
               >
@@ -302,7 +302,7 @@ export function Profile() {
                 type="button"
                 size="icon"
                 variant="ghost"
-                className="absolute top-14 left-[calc(50%+3.5rem)] h-8 w-8 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
+                className="absolute top-24 right-2 h-8 w-8 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
                 onClick={updateAvatar}
                 disabled={avatarFiles.length < 2}
                 aria-label="Change profile image"
