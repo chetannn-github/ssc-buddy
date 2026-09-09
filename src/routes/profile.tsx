@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { LoaderCircle, Pencil, Save } from "lucide-react";
+import { LoaderCircle, RefreshCw, Save } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
@@ -139,16 +139,21 @@ function ActivityHeatmap({ records, maxStreak }: { records: TestRecord[]; maxStr
   );
 }
 
-function avatarColor(name: string) {
-  const colors = ["bg-violet-500", "bg-sky-500", "bg-rose-500", "bg-teal-500", "bg-orange-500"];
+const AVATAR_FILES = [
+  "1.jpg",
+  "babe get up i believe in you_.jpg",
+  "download (1).jpg",
+  "download (2).jpg",
+  "pain is  fuel 🦅🟥.jpg",
+];
+
+function defaultAvatar(name: string) {
   const hash = Array.from(name).reduce((sum, character) => sum + character.charCodeAt(0), 0);
-  return colors[hash % colors.length] ?? "bg-primary";
+  return AVATAR_FILES[hash % AVATAR_FILES.length] ?? "1.jpg";
 }
 
-function avatarEmoji(name: string) {
-  const avatars = ["😎", "🛸", "🪩", "🐸", "⚡", "🍒", "🧃", "🦋", "🎧", "🫠"];
-  const hash = Array.from(name).reduce((sum, character) => sum + character.charCodeAt(0), 0);
-  return avatars[hash % avatars.length] ?? "😎";
+function avatarUrl(file: string) {
+  return `/avatars/${encodeURIComponent(file)}`;
 }
 
 function TargetProgress({
@@ -191,6 +196,7 @@ export function Profile() {
   const [profile, setProfile] = useState<PracticeProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [editingProfile, setEditingProfile] = useState(false);
+  const [previewingAvatar, setPreviewingAvatar] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
   const [goalDraft, setGoalDraft] = useState("");
 
@@ -222,13 +228,25 @@ export function Profile() {
   );
   const saveProfile = () => {
     if (!nameDraft.trim() || Number(goalDraft) < 1) return;
-    const next = { name: nameDraft.trim(), questionGoal: Math.min(100000, Number(goalDraft)) };
+    const next = {
+      name: nameDraft.trim(),
+      questionGoal: Math.min(100000, Number(goalDraft)),
+      ...(profile?.avatar ? { avatar: profile.avatar } : {}),
+    };
     savePracticeProfile(next);
     setProfile(next);
     setEditingProfile(false);
   };
   const displayName = profile?.name ?? "Your profile";
   const questionGoal = profile?.questionGoal ?? 100;
+  const avatar = profile?.avatar ?? defaultAvatar(displayName);
+  const updateAvatar = () => {
+    const options = AVATAR_FILES.filter((file) => file !== avatar);
+    const nextAvatar = options[Math.floor(Math.random() * options.length)] ?? avatar;
+    const next = { name: displayName, questionGoal, avatar: nextAvatar };
+    savePracticeProfile(next);
+    setProfile(next);
+  };
 
   if (isLoading) {
     return (
@@ -249,20 +267,29 @@ export function Profile() {
             <div className="flex min-w-0 flex-col items-center gap-3">
               <button
                 type="button"
-                onClick={() => setEditingProfile(true)}
-                className={cn(
-                  "group relative flex h-20 w-20 shrink-0 cursor-pointer items-center justify-center rounded-full text-2xl font-semibold text-white",
-                  avatarColor(displayName),
-                )}
+                onClick={() => setPreviewingAvatar(true)}
+                className="group relative h-20 w-20 shrink-0 overflow-hidden rounded-full ring-2 ring-white/10 transition-transform hover:scale-105 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+                aria-label="Preview profile image"
               >
-                <span className="transition-opacity group-hover:opacity-0">
-                  {avatarEmoji(displayName)}
-                </span>
-                <Pencil className="absolute h-5 w-5 opacity-0 transition-opacity group-hover:opacity-100" />
+                <img
+                  src={avatarUrl(avatar)}
+                  alt="Profile avatar"
+                  className="h-full w-full object-cover"
+                />
+                <span className="absolute inset-0 bg-black/0 transition-colors group-hover:bg-black/20" />
               </button>
               <div className="min-w-0">
                 <h2 className="truncate text-2xl font-semibold text-zinc-50">{displayName}</h2>
               </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-8 gap-1.5 text-xs text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
+                onClick={updateAvatar}
+              >
+                <RefreshCw className="h-3.5 w-3.5" /> Update avatar
+              </Button>
             </div>
           </section>
 
@@ -313,6 +340,20 @@ export function Profile() {
           </section>
         </div>
       </div>
+      {previewingAvatar && (
+        <button
+          type="button"
+          className="fixed inset-0 z-50 flex cursor-zoom-out items-center justify-center bg-black/80 p-6 backdrop-blur-md"
+          onClick={() => setPreviewingAvatar(false)}
+          aria-label="Close profile image preview"
+        >
+          <img
+            src={avatarUrl(avatar)}
+            alt="Profile avatar preview"
+            className="max-h-[80vh] max-w-[min(80vw,32rem)] rounded-2xl object-contain shadow-2xl"
+          />
+        </button>
+      )}
       {editingProfile && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-md">
           <section className="w-full max-w-md rounded-2xl border border-white/10 bg-[#1e1e1e] p-6 text-zinc-100 shadow-2xl sm:p-8">
