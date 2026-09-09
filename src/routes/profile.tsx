@@ -66,7 +66,7 @@ function ActivityHeatmap({ records, maxStreak }: { records: TestRecord[]; maxStr
   }, [records]);
 
   return (
-    <section className="overflow-hidden rounded-2xl bg-[#222] p-5 text-zinc-100 shadow-[0_14px_36px_-24px_rgba(0,0,0,0.8)] sm:p-6">
+    <section className="overflow-hidden py-5 text-zinc-100 sm:py-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold text-zinc-50">Yearly activity</h2>
@@ -162,14 +162,12 @@ function avatarColor(name: string) {
 function TargetProgress({
   attempted,
   goal,
-  subjectStats,
   tests,
   correct,
   wrong,
 }: {
   attempted: number;
   goal: number;
-  subjectStats: Array<{ subject: string; attempted: number }>;
   tests: number;
   correct: number;
   wrong: number;
@@ -177,56 +175,18 @@ function TargetProgress({
   const progress = Math.min(100, Math.round((attempted / Math.max(1, goal)) * 100));
 
   return (
-    <section className="rounded-2xl border border-white/10 bg-[#202020] p-5 sm:p-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h2 className="text-lg font-semibold">Target progress</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Questions completed against your goal
-          </p>
-        </div>
-        <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-          {progress}% complete
-        </span>
-      </div>
-      <div className="mt-5 grid items-center gap-5 sm:grid-cols-[132px_1fr]">
-        <div
-          className="relative mx-auto flex h-32 w-32 items-center justify-center rounded-full"
-          style={{
-            background: `conic-gradient(var(--color-primary) 0 ${progress}%, var(--color-muted) ${progress}% 100%)`,
-          }}
-        >
-          <div className="flex h-[104px] w-[104px] flex-col items-center justify-center rounded-full bg-[#202020]">
-            <span className="text-2xl font-semibold">{attempted}</span>
-            <span className="text-[10px] text-muted-foreground">/ {goal} target</span>
-          </div>
-        </div>
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {subjectStats.length ? (
-            subjectStats.map((item) => (
-              <div key={item.subject} className="rounded-xl bg-muted/60 p-3">
-                <p className="truncate text-xs font-semibold">{item.subject}</p>
-                <p className="mt-1 text-lg font-semibold text-primary">{item.attempted}</p>
-                <p className="text-[10px] text-muted-foreground">questions completed</p>
-              </div>
-            ))
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              Your subjects will appear after your first test.
-            </p>
-          )}
-        </div>
-      </div>
-      <div className="mt-5 grid grid-cols-2 gap-2 border-t border-border pt-4 sm:grid-cols-4">
+    <section className="rounded-2xl border border-white/10 bg-[#1a1a1a] px-2 py-4 sm:px-4">
+      <div className="grid grid-cols-2 divide-x-0 divide-y divide-white/10 sm:grid-cols-5 sm:divide-x sm:divide-y-0">
         {[
-          ["Tests", tests],
-          ["Attempted", attempted],
+          ["Question goal", goal],
+          ["Completed", `${attempted} · ${progress}%`],
+          ["Total tests", tests],
           ["Correct", correct],
           ["Wrong", wrong],
         ].map(([label, value]) => (
-          <div key={String(label)} className="text-center">
-            <p className="text-lg font-semibold">{value}</p>
-            <p className="text-[10px] text-muted-foreground">{label}</p>
+          <div key={String(label)} className="px-3 py-2 text-center sm:px-4">
+            <p className="text-base font-semibold text-zinc-100">{value}</p>
+            <p className="mt-0.5 text-xs text-zinc-400">{label}</p>
           </div>
         ))}
       </div>
@@ -255,14 +215,6 @@ export function Profile() {
 
   const totals = useMemo(() => aggregateRecords(records), [records]);
   const streaks = useMemo(() => getStreaks(records), [records]);
-  const subjectStats = useMemo(
-    () =>
-      Array.from(new Set(records.map((record) => record.subject))).map((subject) => ({
-        subject,
-        ...aggregateRecords(records.filter((record) => record.subject === subject)),
-      })),
-    [records],
-  );
   const recent = useMemo(
     () => [...records].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5),
     [records],
@@ -279,15 +231,15 @@ export function Profile() {
 
   return (
     <AppShell title="Your Profile">
-      <div className="profile-dark -mx-4 -my-6 min-h-[calc(100vh-4rem)] space-y-5 bg-[#121212] px-4 py-6 text-zinc-100 sm:-mx-6 sm:px-6">
-        <section className="rounded-2xl border border-white/10 bg-[#1d1d1d] p-5 sm:p-6">
-          <div className="flex flex-wrap items-center justify-between gap-5">
-            <div className="flex min-w-0 items-center gap-4">
+      <div className="profile-dark -mx-4 -my-6 min-h-[calc(100vh-4rem)] bg-[#121212] px-4 py-10 text-zinc-100 sm:-mx-6 sm:px-6 sm:py-14">
+        <div className="mx-auto max-w-4xl space-y-7">
+          <section className="flex flex-col items-center text-center">
+            <div className="flex min-w-0 flex-col items-center gap-3">
               <button
                 type="button"
                 onClick={() => setEditingProfile(true)}
                 className={cn(
-                  "group relative flex h-16 w-16 shrink-0 cursor-pointer items-center justify-center rounded-full text-xl font-semibold text-white",
+                  "group relative flex h-20 w-20 shrink-0 cursor-pointer items-center justify-center rounded-full text-2xl font-semibold text-white",
                   avatarColor(displayName),
                 )}
               >
@@ -300,55 +252,54 @@ export function Profile() {
                 <h2 className="truncate text-2xl font-semibold text-zinc-50">{displayName}</h2>
               </div>
             </div>
-          </div>
-        </section>
+          </section>
 
-        <TargetProgress
-          attempted={totals.attempted}
-          goal={questionGoal}
-          subjectStats={subjectStats.map(({ subject, attempted }) => ({ subject, attempted }))}
-          tests={totals.tests}
-          correct={totals.correct}
-          wrong={totals.wrong}
-        />
+          <TargetProgress
+            attempted={totals.attempted}
+            goal={questionGoal}
+            tests={totals.tests}
+            correct={totals.correct}
+            wrong={totals.wrong}
+          />
 
-        <ActivityHeatmap records={records} maxStreak={streaks.longest} />
+          <ActivityHeatmap records={records} maxStreak={streaks.longest} />
 
-        <section className="rounded-2xl border border-white/10 bg-[#202020] p-5 sm:p-6">
-          <h2 className="text-base font-semibold">Recent activity</h2>
-          <div className="mt-3 divide-y divide-border">
-            {recent.length ? (
-              recent.map((record) => {
-                const metrics = metricsForRecord(record);
-                return (
-                  <Link
-                    key={record.id}
-                    to="/history/$id"
-                    params={{ id: record.id }}
-                    className="flex items-center justify-between gap-3 py-3 hover:text-primary"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold">
-                        {record.subject} · {record.chapter}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {record.exercise ?? "Exercise 1"} · {formatDate(record.date)}
-                      </p>
-                    </div>
-                    <div className="text-right text-xs">
-                      <p className="font-semibold">{record.score ?? "—"} marks</p>
-                      <p className="text-muted-foreground">
-                        {metrics.accuracy === null ? "—" : `${Math.round(metrics.accuracy)}%`}
-                      </p>
-                    </div>
-                  </Link>
-                );
-              })
-            ) : (
-              <p className="py-4 text-sm text-muted-foreground">No practice recorded yet.</p>
-            )}
-          </div>
-        </section>
+          <section className="border-t border-white/10 pt-5 sm:pt-6">
+            <h2 className="text-base font-semibold">Recent activity</h2>
+            <div className="mt-3 divide-y divide-border">
+              {recent.length ? (
+                recent.map((record) => {
+                  const metrics = metricsForRecord(record);
+                  return (
+                    <Link
+                      key={record.id}
+                      to="/history/$id"
+                      params={{ id: record.id }}
+                      className="flex items-center justify-between gap-3 py-3 hover:text-primary"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold">
+                          {record.subject} · {record.chapter}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {record.exercise ?? "Exercise 1"} · {formatDate(record.date)}
+                        </p>
+                      </div>
+                      <div className="text-right text-xs">
+                        <p className="font-semibold">{record.score ?? "—"} marks</p>
+                        <p className="text-muted-foreground">
+                          {metrics.accuracy === null ? "—" : `${Math.round(metrics.accuracy)}%`}
+                        </p>
+                      </div>
+                    </Link>
+                  );
+                })
+              ) : (
+                <p className="py-4 text-sm text-muted-foreground">No practice recorded yet.</p>
+              )}
+            </div>
+          </section>
+        </div>
       </div>
       {editingProfile && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-md">
