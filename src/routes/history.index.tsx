@@ -236,6 +236,7 @@ function HistoryPage() {
                         search: {
                           subject: r.subject,
                           chapter: r.chapter,
+                          exercise: r.exercise,
                           minutes: r.durationMinutes ?? undefined,
                           start: r.startNumber,
                           count: r.answers.length,
