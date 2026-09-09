@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { BarChart3, CheckCircle2, Flame, Pencil, Save, Target, XCircle } from "lucide-react";
+import { BarChart3, CheckCircle2, Pencil, Save, Target, XCircle } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
@@ -70,7 +70,7 @@ function SummaryCard({
   );
 }
 
-function ActivityHeatmap({ records }: { records: TestRecord[] }) {
+function ActivityHeatmap({ records, maxStreak }: { records: TestRecord[]; maxStreak: number }) {
   const { days, monthLabels, totalActivity, activeDays } = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -108,29 +108,29 @@ function ActivityHeatmap({ records }: { records: TestRecord[] }) {
   }, [records]);
 
   return (
-    <section className="card-surface overflow-hidden p-5 sm:p-6">
+    <section className="overflow-hidden rounded-2xl bg-[#222] p-5 text-zinc-100 shadow-[0_14px_36px_-24px_rgba(0,0,0,0.8)] sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold">Yearly activity</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <h2 className="text-lg font-semibold text-zinc-50">Yearly activity</h2>
+          <p className="mt-1 text-sm text-zinc-400">
             {totalActivity} questions practiced in the last year
           </p>
         </div>
-        <div className="flex gap-4 text-right text-xs">
+        <div className="flex gap-5 text-right text-xs">
           <div>
-            <p className="font-semibold text-foreground">{activeDays}</p>
-            <p className="text-muted-foreground">Active days</p>
+            <p className="font-semibold text-zinc-100">{activeDays}</p>
+            <p className="text-zinc-400">Active days</p>
           </div>
           <div>
-            <p className="font-semibold text-foreground">{days.length}</p>
-            <p className="text-muted-foreground">Days tracked</p>
+            <p className="font-semibold text-zinc-100">{maxStreak}</p>
+            <p className="text-zinc-400">Max streak</p>
           </div>
         </div>
       </div>
 
       <div className="mt-5 overflow-x-auto pb-2">
         <div className="min-w-[720px]">
-          <div className="relative mb-2 h-4 text-[10px] text-muted-foreground">
+          <div className="relative mb-2 h-4 text-[10px] text-zinc-400">
             {monthLabels.map(({ label, index }) => (
               <span
                 key={`${label}-${index}`}
@@ -149,8 +149,8 @@ function ActivityHeatmap({ records }: { records: TestRecord[] }) {
                   key={localDay(date)}
                   title={`${formatDate(localDay(date))}: ${value} question${value === 1 ? "" : "s"}`}
                   className={cn(
-                    "h-3 w-3 rounded-[3px] ring-1 ring-inset ring-border/50",
-                    intensity === 0 && "bg-muted",
+                    "h-3 w-3 rounded-[3px] ring-1 ring-inset ring-white/5",
+                    intensity === 0 && "bg-zinc-700",
                     intensity === 1 && "bg-emerald-200",
                     intensity === 2 && "bg-emerald-300",
                     intensity === 3 && "bg-emerald-500",
@@ -162,14 +162,14 @@ function ActivityHeatmap({ records }: { records: TestRecord[] }) {
           </div>
         </div>
       </div>
-      <div className="mt-3 flex items-center justify-end gap-1.5 text-[10px] text-muted-foreground">
+      <div className="mt-3 flex items-center justify-end gap-1.5 text-[10px] text-zinc-400">
         Less
         {[0, 1, 2, 3, 4].map((intensity) => (
           <span
             key={intensity}
             className={cn(
               "h-3 w-3 rounded-[3px]",
-              intensity === 0 && "bg-muted",
+              intensity === 0 && "bg-zinc-700",
               intensity === 1 && "bg-emerald-200",
               intensity === 2 && "bg-emerald-300",
               intensity === 3 && "bg-emerald-500",
@@ -215,7 +215,9 @@ function TargetProgress({
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h2 className="text-lg font-semibold">Target progress</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Questions completed against your goal</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Questions completed against your goal
+          </p>
         </div>
         <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
           {progress}% complete
@@ -243,7 +245,9 @@ function TargetProgress({
               </div>
             ))
           ) : (
-            <p className="text-sm text-muted-foreground">Your subjects will appear after your first test.</p>
+            <p className="text-sm text-muted-foreground">
+              Your subjects will appear after your first test.
+            </p>
           )}
         </div>
       </div>
@@ -297,12 +301,12 @@ function Profile() {
   return (
     <AppShell title="Your Profile">
       <div className="space-y-5">
-        <section className="card-surface overflow-hidden p-5 sm:p-6">
+        <section className="card-surface p-5 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-5">
             <div className="flex min-w-0 items-center gap-4">
               <span
                 className={cn(
-                  "flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl text-xl font-semibold text-white",
+                  "flex h-16 w-16 shrink-0 items-center justify-center rounded-full text-xl font-semibold text-white",
                   avatarColor(displayName),
                 )}
               >
@@ -331,30 +335,18 @@ function Profile() {
                 ) : (
                   <>
                     <h2 className="truncate text-2xl font-semibold">{displayName}</h2>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Goal: {questionGoal.toLocaleString()} questions
-                    </p>
                   </>
                 )}
               </div>
             </div>
-            <div
-              className={cn(
-                "flex h-24 w-24 flex-col items-center justify-center rounded-full border-4",
-                streaks.current > 0
-                  ? "border-amber-400 bg-amber-100 text-amber-700 shadow-[0_0_28px_oklch(0.82_0.17_85_/_0.42)]"
-                  : "border-muted bg-muted/60 text-muted-foreground",
-              )}
-            >
-              <Flame
-                className={cn("h-6 w-6", streaks.current > 0 && "fill-amber-400 text-amber-500")}
-              />
-              <span className="text-2xl font-semibold">{streaks.current}</span>
-              <span className="text-[10px] font-medium">days</span>
-            </div>
           </div>
           {!editingProfile && (
-            <Button className="mt-4" size="sm" variant="outline" onClick={() => setEditingProfile(true)}>
+            <Button
+              className="mt-4"
+              size="sm"
+              variant="outline"
+              onClick={() => setEditingProfile(true)}
+            >
               <Pencil className="h-3.5 w-3.5" /> Edit profile & goal
             </Button>
           )}
@@ -366,7 +358,7 @@ function Profile() {
           subjectStats={subjectStats.map(({ subject, attempted }) => ({ subject, attempted }))}
         />
 
-        <ActivityHeatmap records={records} />
+        <ActivityHeatmap records={records} maxStreak={streaks.longest} />
 
         <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <SummaryCard label="Total tests" value={totals.tests} icon={BarChart3} />

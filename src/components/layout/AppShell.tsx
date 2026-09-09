@@ -41,7 +41,9 @@ function ProfileOnboarding({ onComplete }: { onComplete: (profile: PracticeProfi
         <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
           <GraduationCap className="h-6 w-6" />
         </span>
-        <p className="mt-5 text-xs font-semibold tracking-[0.14em] text-primary uppercase">Welcome</p>
+        <p className="mt-5 text-xs font-semibold tracking-[0.14em] text-primary uppercase">
+          Welcome
+        </p>
         <h2 className="mt-1 text-2xl font-semibold">Let’s set your practice goal</h2>
         <p className="mt-2 text-sm text-muted-foreground">
           We’ll use this to personalise your profile and track your progress.
@@ -100,7 +102,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
   return (
     <div className="flex min-h-screen w-full flex-col bg-background">
       <header
-        className="h-16 text-exam-header-foreground"
+        className="h-16 border-0 text-exam-header-foreground shadow-none"
         style={{ backgroundImage: "var(--gradient-header)" }}
       >
         <div className="mx-auto flex h-16 w-full max-w-5xl items-center gap-4 px-4 sm:px-6">

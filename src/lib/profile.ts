@@ -27,7 +27,10 @@ export function loadPracticeProfile(): PracticeProfile | null {
 export function savePracticeProfile(profile: PracticeProfile) {
   localStorage.setItem(
     PROFILE_KEY,
-    JSON.stringify({ name: profile.name.trim(), questionGoal: Math.max(1, Math.round(profile.questionGoal)) }),
+    JSON.stringify({
+      name: profile.name.trim(),
+      questionGoal: Math.max(1, Math.round(profile.questionGoal)),
+    }),
   );
   window.dispatchEvent(new Event("cbt-profile-updated"));
 }
