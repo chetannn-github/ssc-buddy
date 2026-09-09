@@ -163,26 +163,6 @@ export function SolutionScreen({ record, onExit }: Props) {
             ))}
           </div>
 
-          {reattempt && retry && (
-            <p
-              className={cn(
-                "mt-4 text-sm font-semibold",
-                retry === correctOpt ? "text-answered" : "text-destructive",
-              )}
-            >
-              {retry === correctOpt ? "✓ Correct" : "✗ Wrong"}
-              {original ? (
-                <span className="ml-2 text-xs font-normal text-muted-foreground">
-                  First attempt: {original}
-                </span>
-              ) : (
-                <span className="ml-2 text-xs font-normal text-muted-foreground">
-                  First attempt: not attempted
-                </span>
-              )}
-            </p>
-          )}
-
           {!reattempt && !original && (
             <p className="mt-4 text-sm text-muted-foreground">Not attempted · 0 marks</p>
           )}
