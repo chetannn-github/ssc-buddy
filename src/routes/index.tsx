@@ -1,7 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type ComponentType } from "react";
 import {
-  Activity,
   AlertCircle,
   BarChart3,
   BookOpen,
@@ -11,7 +10,6 @@ import {
   ListChecks,
   PlayCircle,
   Target,
-  Trophy,
   XCircle,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
@@ -26,7 +24,6 @@ import {
 import {
   aggregateRecords,
   filterByTime,
-  getDailyActivity,
   getStreaks,
   metricsForRecord,
   type TimeRange,
@@ -70,12 +67,11 @@ function friendlyDate(iso: string) {
 type MetricCardProps = {
   label: string;
   value: string;
-  helper: string;
   icon: ComponentType<{ className?: string }>;
   tone?: "default" | "good" | "bad";
 };
 
-function MetricCard({ label, value, helper, icon: Icon, tone = "default" }: MetricCardProps) {
+function MetricCard({ label, value, icon: Icon, tone = "default" }: MetricCardProps) {
   return (
     <article className="card-surface p-4">
       <div className="flex items-start justify-between gap-3">
@@ -101,7 +97,6 @@ function MetricCard({ label, value, helper, icon: Icon, tone = "default" }: Metr
           <Icon className="h-4 w-4" />
         </span>
       </div>
-      <p className="mt-2 truncate text-[11px] text-muted-foreground">{helper}</p>
     </article>
   );
 }
@@ -172,7 +167,6 @@ function Dashboard() {
 
   const totals = useMemo(() => aggregateRecords(filtered), [filtered]);
   const streaks = useMemo(() => getStreaks(filtered), [filtered]);
-  const daily = useMemo(() => getDailyActivity(filtered), [filtered]);
   const recent = useMemo(
     () =>
       [...filtered]
@@ -190,8 +184,6 @@ function Dashboard() {
         .sort((a, b) => b.attempted - a.attempted),
     [filtered],
   );
-  const maxDailyAttempted = Math.max(1, ...daily.map((item) => item.attempted));
-
   const clearFilters = () => {
     setRange("all");
     setSubject(ALL);
@@ -201,7 +193,7 @@ function Dashboard() {
 
   if (loaded && records.length === 0) {
     return (
-      <AppShell title="Performance Dashboard" subtitle="Track your practice and improvement">
+      <AppShell title="Performance Dashboard">
         <div className="card-surface flex min-h-[420px] flex-col items-center justify-center px-6 text-center">
           <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary">
             <BarChart3 className="h-8 w-8" />
@@ -221,10 +213,7 @@ function Dashboard() {
   }
 
   return (
-    <AppShell
-      title="Performance Dashboard"
-      subtitle="Track your practice, accuracy and improvement"
-    >
+    <AppShell title="Performance Dashboard">
       <div className="space-y-5">
         <section
           className="card-surface grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4"
@@ -312,69 +301,25 @@ function Dashboard() {
               <MetricCard
                 label="Total Tests"
                 value={formatNumber(totals.tests)}
-                helper={`${totals.total} questions presented`}
                 icon={ListChecks}
               />
               <MetricCard
                 label="Questions Attempted"
                 value={formatNumber(totals.attempted)}
-                helper={`${formatPercent(totals.attemptRate)} attempt rate`}
                 icon={Target}
               />
               <MetricCard
                 label="Correct Answers"
                 value={formatNumber(totals.correct)}
-                helper={`${totals.evaluated} evaluated answers`}
                 icon={CheckCircle2}
                 tone="good"
               />
               <MetricCard
                 label="Wrong Answers"
                 value={formatNumber(totals.wrong)}
-                helper={`${totals.unattempted} left unattempted`}
                 icon={XCircle}
                 tone="bad"
               />
-              <MetricCard
-                label="Overall Accuracy"
-                value={formatPercent(totals.accuracy)}
-                helper="Weighted across evaluated answers"
-                icon={Trophy}
-                tone="good"
-              />
-            </section>
-
-            <section className="card-surface p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-sm font-semibold">Last 7 Days</h2>
-                  <p className="text-xs text-muted-foreground">Questions attempted each day</p>
-                </div>
-                <Activity className="h-5 w-5 text-primary" />
-              </div>
-              <div
-                className="mt-5 flex h-40 items-end gap-2"
-                role="img"
-                aria-label="Questions attempted during the last seven days"
-              >
-                {daily.map((item) => (
-                  <div
-                    key={item.day}
-                    className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1.5"
-                  >
-                    <span className="text-[10px] font-semibold">{item.attempted || ""}</span>
-                    <div className="flex h-28 w-full items-end rounded-md bg-muted/60 px-1">
-                      <div
-                        className="w-full rounded-sm bg-primary transition-all"
-                        style={{
-                          height: `${item.attempted ? Math.max(8, (item.attempted / maxDailyAttempted) * 100) : 0}%`,
-                        }}
-                      />
-                    </div>
-                    <span className="text-[10px] text-muted-foreground">{item.label}</span>
-                  </div>
-                ))}
-              </div>
             </section>
 
             <section className="grid gap-4 lg:grid-cols-2">

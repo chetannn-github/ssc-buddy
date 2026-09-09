@@ -19,7 +19,7 @@ export function SolutionScreen({ record, onExit }: Props) {
     Array.from({ length: total }, () => null),
   );
 
-  const key = record.answerKey ?? [];
+  const key = useMemo(() => record.answerKey ?? [], [record.answerKey]);
 
   const verdicts = useMemo(
     () =>
@@ -60,6 +60,9 @@ export function SolutionScreen({ record, onExit }: Props) {
       if (retry !== correctOpt && opt === correctOpt) {
         return "border-answered bg-answered/15 font-semibold";
       }
+      if (retry === correctOpt && original && original !== correctOpt && opt === original) {
+        return "border-destructive bg-destructive/10 font-semibold";
+      }
       return "border-border bg-surface";
     }
     if (correctOpt && opt === correctOpt) return "border-answered bg-answered/15 font-semibold";
@@ -70,8 +73,14 @@ export function SolutionScreen({ record, onExit }: Props) {
   const badgeClass = (opt: Option) => {
     const showCorrectAfterWrongRetry =
       reattempt && retry !== null && retry !== correctOpt && opt === correctOpt;
+    const showOriginalWrongAfterCorrectRetry =
+      reattempt &&
+      retry === correctOpt &&
+      original !== null &&
+      original !== correctOpt &&
+      opt === original;
     const active = reattempt
-      ? opt === retry || showCorrectAfterWrongRetry
+      ? opt === retry || showCorrectAfterWrongRetry || showOriginalWrongAfterCorrectRetry
       : opt === original || opt === correctOpt;
     if (!active) return "border-border text-muted-foreground";
     if (
@@ -97,6 +106,7 @@ export function SolutionScreen({ record, onExit }: Props) {
             </h1>
             <p className="truncate text-sm font-medium">
               {record.subject} · {record.chapter}
+              {record.exercise ? ` · ${record.exercise}` : ""}
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -124,11 +134,11 @@ export function SolutionScreen({ record, onExit }: Props) {
             </span>
           </div>
 
-          <p className="mt-4 text-sm text-muted-foreground">
-            {reattempt
-              ? "Attempt this question again — you will see instantly if it is right or wrong."
-              : "Your answer from the original attempt, with the correct option marked."}
-          </p>
+          {!reattempt && (
+            <p className="mt-4 text-sm text-muted-foreground">
+              Your answer from the original attempt, with the correct option marked.
+            </p>
+          )}
 
           <div className="mt-4 grid gap-2 sm:grid-cols-2">
             {OPTIONS.map((opt) => (
@@ -160,10 +170,10 @@ export function SolutionScreen({ record, onExit }: Props) {
                 <span className="ml-auto flex items-center gap-1.5 text-[10px] font-medium">
                   {(!reattempt || (retry !== null && retry !== correctOpt)) &&
                     correctOpt === opt && (
-                    <span className="rounded-full bg-answered/15 px-2 py-0.5 text-answered">
-                      Correct
-                    </span>
-                  )}
+                      <span className="rounded-full bg-answered/15 px-2 py-0.5 text-answered">
+                        Correct
+                      </span>
+                    )}
                   {reattempt && retry && original === opt && (
                     <span className="rounded-full bg-muted px-2 py-0.5 text-muted-foreground">
                       Your 1st attempt
@@ -216,7 +226,12 @@ export function SolutionScreen({ record, onExit }: Props) {
 
           <div className="mt-4 grid max-h-[420px] grid-cols-5 gap-2 overflow-y-auto pr-1">
             {record.answers.map((_, i) => (
-              <button key={i} type="button" className={paletteClass(i)} onClick={() => setCurrent(i)}>
+              <button
+                key={i}
+                type="button"
+                className={paletteClass(i)}
+                onClick={() => setCurrent(i)}
+              >
                 {record.startNumber + i}
               </button>
             ))}
