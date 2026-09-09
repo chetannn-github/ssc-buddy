@@ -233,7 +233,7 @@ export function TestScreen({
             ) : null}
           </ul>
 
-          <div className="mt-4 grid max-h-[420px] grid-cols-5 gap-2 overflow-y-auto pr-1">
+          <div className="mt-4 grid max-h-[420px] grid-cols-5 gap-2 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {states.map((s, i) => (
               <button key={i} type="button" className={paletteClass(s, i)} onClick={() => goTo(i)}>
                 {startNumber + i}

@@ -224,7 +224,7 @@ export function SolutionScreen({ record, onExit }: Props) {
             </li>
           </ul>
 
-          <div className="mt-4 grid max-h-[420px] grid-cols-5 gap-2 overflow-y-auto pr-1">
+          <div className="mt-4 grid max-h-[420px] grid-cols-5 gap-2 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {record.answers.map((_, i) => (
               <button
                 key={i}
