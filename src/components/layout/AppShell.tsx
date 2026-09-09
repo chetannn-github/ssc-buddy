@@ -95,21 +95,21 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
   }, []);
 
   const currentStreak = getStreaks(records).current;
-  const isDarkPage = path === "/" || path === "/profile" || path.startsWith("/history");
+  const isProfilePage = path === "/" || path === "/profile";
 
   return (
     <div
       className={cn(
         "flex min-h-screen w-full flex-col",
-        isDarkPage ? "dark bg-[#121212]" : "bg-background",
+        isProfilePage ? "bg-[#121212]" : "bg-background",
       )}
     >
       <header
         className={cn(
           "h-16 border-0 shadow-none",
-          isDarkPage ? "bg-[#1b1b1b] text-zinc-100" : "text-exam-header-foreground",
+          isProfilePage ? "bg-[#1b1b1b] text-zinc-100" : "text-exam-header-foreground",
         )}
-        style={isDarkPage ? undefined : { backgroundImage: "var(--gradient-header)" }}
+        style={isProfilePage ? undefined : { backgroundImage: "var(--gradient-header)" }}
       >
         <div className="mx-auto flex h-16 w-full max-w-5xl items-center gap-4 px-4 sm:px-6">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10">
