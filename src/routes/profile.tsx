@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Pencil, Save } from "lucide-react";
+import { LoaderCircle, Pencil, Save } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
@@ -70,9 +70,15 @@ function ActivityHeatmap({ records, maxStreak }: { records: TestRecord[]; maxStr
       <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-2 text-sm">
         <p className="text-zinc-400">{totalActivity} questions practiced in the last year</p>
         <p className="text-zinc-400">
-          <span className="font-semibold text-zinc-100">{activeDays}</span> active days
+          <span className="inline-flex items-center gap-2">
+            <span className="font-semibold text-zinc-100">{activeDays}</span>
+            <span>active days</span>
+          </span>
           <span className="mx-6 text-zinc-600 sm:mx-8">·</span>
-          <span className="font-semibold text-zinc-100">{maxStreak}</span> max streak
+          <span className="inline-flex items-center gap-2">
+            <span className="font-semibold text-zinc-100">{maxStreak}</span>
+            <span>max streak</span>
+          </span>
         </p>
       </div>
 
@@ -185,8 +191,9 @@ function TargetProgress({
 }
 
 export function Profile() {
-  const records = useMemo(() => loadHistory(), []);
+  const [records, setRecords] = useState<TestRecord[]>([]);
   const [profile, setProfile] = useState<PracticeProfile | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [editingProfile, setEditingProfile] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
   const [goalDraft, setGoalDraft] = useState("");
@@ -194,13 +201,19 @@ export function Profile() {
   useEffect(() => {
     const refresh = () => {
       const saved = loadPracticeProfile();
+      setRecords(loadHistory());
       setProfile(saved);
       setNameDraft(saved?.name ?? "");
       setGoalDraft(saved ? String(saved.questionGoal) : "100");
+      setIsLoading(false);
     };
     refresh();
     window.addEventListener("cbt-profile-updated", refresh);
-    return () => window.removeEventListener("cbt-profile-updated", refresh);
+    window.addEventListener("storage", refresh);
+    return () => {
+      window.removeEventListener("cbt-profile-updated", refresh);
+      window.removeEventListener("storage", refresh);
+    };
   }, []);
 
   const totals = useMemo(() => aggregateRecords(records), [records]);
@@ -218,6 +231,17 @@ export function Profile() {
   };
   const displayName = profile?.name ?? "Your profile";
   const questionGoal = profile?.questionGoal ?? 100;
+
+  if (isLoading) {
+    return (
+      <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[#121212] text-zinc-300 backdrop-blur-xl">
+        <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-[#1d1d1d] px-4 py-3 shadow-2xl">
+          <LoaderCircle className="h-4 w-4 animate-spin text-emerald-400" />
+          <span className="text-sm font-medium">Loading profile</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <AppShell title="Your Profile">
