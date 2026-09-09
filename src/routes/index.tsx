@@ -35,6 +35,8 @@ const title = "Performance Dashboard — CBT MCQ Practice";
 const description =
   "Track questions attempted, accuracy, scores, strong chapters and improvement across CBT practice tests.";
 const ALL = "__all__";
+const CONSISTENCY_ANIMATION_KEY = "cbt-consistency-animation-at";
+const CONSISTENCY_ANIMATION_INTERVAL = 60 * 60 * 1000;
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -107,6 +109,7 @@ function Dashboard() {
   const [range, setRange] = useState<TimeRange>("all");
   const [subject, setSubject] = useState(ALL);
   const [chapter, setChapter] = useState(ALL);
+  const [isConsistencyAnimating, setIsConsistencyAnimating] = useState(false);
 
   useEffect(() => {
     const refresh = () => {
@@ -119,6 +122,39 @@ function Dashboard() {
     };
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
+  useEffect(() => {
+    let stopAnimationTimer: ReturnType<typeof setTimeout> | undefined;
+    let nextAnimationTimer: ReturnType<typeof setTimeout> | undefined;
+    let repeatAnimationTimer: ReturnType<typeof setInterval> | undefined;
+
+    const playAnimation = () => {
+      setIsConsistencyAnimating(true);
+      localStorage.setItem(CONSISTENCY_ANIMATION_KEY, String(Date.now()));
+      stopAnimationTimer = setTimeout(() => setIsConsistencyAnimating(false), 2000);
+    };
+    const scheduleHourlyAnimation = () => {
+      playAnimation();
+      repeatAnimationTimer = setInterval(playAnimation, CONSISTENCY_ANIMATION_INTERVAL);
+    };
+
+    const lastAnimationAt = Number(localStorage.getItem(CONSISTENCY_ANIMATION_KEY));
+    const elapsed = Date.now() - lastAnimationAt;
+    if (!lastAnimationAt || elapsed >= CONSISTENCY_ANIMATION_INTERVAL) {
+      scheduleHourlyAnimation();
+    } else {
+      nextAnimationTimer = setTimeout(
+        scheduleHourlyAnimation,
+        CONSISTENCY_ANIMATION_INTERVAL - elapsed,
+      );
+    }
+
+    return () => {
+      if (stopAnimationTimer) clearTimeout(stopAnimationTimer);
+      if (nextAnimationTimer) clearTimeout(nextAnimationTimer);
+      if (repeatAnimationTimer) clearInterval(repeatAnimationTimer);
+    };
   }, []);
 
   const timeRecords = useMemo(() => filterByTime(records, range), [records, range]);
@@ -320,7 +356,12 @@ function Dashboard() {
               <article className="card-surface p-5">
                 <div className="flex items-center justify-between">
                   <h2 className="text-sm font-semibold">Practice Consistency</h2>
-                  <Flame className="animate-consistency-flame h-5 w-5 fill-amber-400 text-amber-500" />
+                  <Flame
+                    className={cn(
+                      "h-5 w-5 fill-amber-400 text-amber-500",
+                      isConsistencyAnimating && "animate-consistency-flame",
+                    )}
+                  />
                 </div>
                 <div className="mt-5 grid grid-cols-3 gap-3 text-center">
                   <div className="rounded-lg bg-muted/60 p-3">
