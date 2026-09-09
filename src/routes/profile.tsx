@@ -71,7 +71,7 @@ function ActivityHeatmap({ records, maxStreak }: { records: TestRecord[]; maxStr
         <p className="text-zinc-400">{totalActivity} questions practiced in the last year</p>
         <p className="text-zinc-400">
           <span className="font-semibold text-zinc-100">{activeDays}</span> active days
-          <span className="mx-3 text-zinc-600">·</span>
+          <span className="mx-6 text-zinc-600 sm:mx-8">·</span>
           <span className="font-semibold text-zinc-100">{maxStreak}</span> max streak
         </p>
       </div>
@@ -256,7 +256,7 @@ export function Profile() {
 
           <section className="border-t border-white/10 pt-5 sm:pt-6">
             <h2 className="text-base font-semibold">Recent activity</h2>
-          <div className="mt-3">
+            <div className="mt-3">
               {recent.length ? (
                 recent.map((record) => {
                   const metrics = metricsForRecord(record);
@@ -265,7 +265,7 @@ export function Profile() {
                       key={record.id}
                       to="/history/$id"
                       params={{ id: record.id }}
-                    className="flex items-center justify-between gap-3 border-b border-white/10 py-3 hover:text-primary last:border-b-0"
+                      className="flex items-center justify-between gap-3 border-b border-white/10 py-3 hover:text-primary last:border-b-0"
                     >
                       <div className="min-w-0">
                         <p className="truncate text-sm font-semibold">

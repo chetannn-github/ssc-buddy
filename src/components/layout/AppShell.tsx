@@ -146,7 +146,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
             className={cn(
               "ml-1 flex h-9 min-w-12 items-center justify-center gap-1.5 rounded-full px-3 text-xs font-semibold transition-all",
               currentStreak > 0
-                ? "bg-amber-400/20 text-amber-200 shadow-[0_0_18px_oklch(0.82_0.17_85_/_0.48)] hover:bg-amber-400/30"
+                ? "bg-amber-400/20 text-amber-200 hover:bg-amber-400/30"
                 : "bg-white/10 text-white/75 hover:bg-white/15 hover:text-white",
             )}
           >
