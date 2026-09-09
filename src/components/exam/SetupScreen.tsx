@@ -99,7 +99,7 @@ export function SetupScreen({
     } else {
       setEditingMarking(true);
     }
-    const timer = window.setTimeout(() => setIsLoading(false), 350);
+    const timer = window.setTimeout(() => setIsLoading(false), 700);
     return () => window.clearTimeout(timer);
   }, []);
 

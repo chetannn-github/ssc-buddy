@@ -56,7 +56,7 @@ function HistoryPage() {
 
   useEffect(() => {
     setRecords(loadHistory());
-    const timer = window.setTimeout(() => setIsLoading(false), 350);
+    const timer = window.setTimeout(() => setIsLoading(false), 700);
     return () => window.clearTimeout(timer);
   }, []);
 
