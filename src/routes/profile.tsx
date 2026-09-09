@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { LoaderCircle, RefreshCw, Save } from "lucide-react";
+import { LoaderCircle, Pencil, RefreshCw, Save } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
@@ -139,17 +139,10 @@ function ActivityHeatmap({ records, maxStreak }: { records: TestRecord[]; maxStr
   );
 }
 
-const AVATAR_FILES = [
-  "1.jpg",
-  "babe get up i believe in you_.jpg",
-  "download (1).jpg",
-  "download (2).jpg",
-  "pain is  fuel 🦅🟥.jpg",
-];
-
-function defaultAvatar(name: string) {
+function defaultAvatar(name: string, files: string[]) {
+  if (!files.length) return undefined;
   const hash = Array.from(name).reduce((sum, character) => sum + character.charCodeAt(0), 0);
-  return AVATAR_FILES[hash % AVATAR_FILES.length] ?? "1.jpg";
+  return files[hash % files.length];
 }
 
 function avatarUrl(file: string) {
@@ -197,17 +190,29 @@ export function Profile() {
   const [isLoading, setIsLoading] = useState(true);
   const [editingProfile, setEditingProfile] = useState(false);
   const [previewingAvatar, setPreviewingAvatar] = useState(false);
+  const [avatarFiles, setAvatarFiles] = useState<string[]>([]);
   const [nameDraft, setNameDraft] = useState("");
   const [goalDraft, setGoalDraft] = useState("");
 
   useEffect(() => {
     let loaderTimer: ReturnType<typeof setTimeout> | undefined;
-    const refresh = () => {
+    const refresh = async () => {
       const saved = loadPracticeProfile();
       setRecords(loadHistory());
       setProfile(saved);
       setNameDraft(saved?.name ?? "");
       setGoalDraft(saved ? String(saved.questionGoal) : "100");
+      try {
+        const response = await fetch("/avatars/manifest.json", { cache: "no-store" });
+        if (response.ok) {
+          const files = (await response.json()) as unknown;
+          if (Array.isArray(files)) {
+            setAvatarFiles(files.filter((file): file is string => typeof file === "string"));
+          }
+        }
+      } catch {
+        setAvatarFiles([]);
+      }
       loaderTimer = setTimeout(() => setIsLoading(false), 700);
     };
     refresh();
@@ -239,10 +244,11 @@ export function Profile() {
   };
   const displayName = profile?.name ?? "Your profile";
   const questionGoal = profile?.questionGoal ?? 100;
-  const avatar = profile?.avatar ?? defaultAvatar(displayName);
+  const avatar = profile?.avatar ?? defaultAvatar(displayName, avatarFiles);
   const updateAvatar = () => {
-    const options = AVATAR_FILES.filter((file) => file !== avatar);
+    const options = avatarFiles.filter((file) => file !== avatar);
     const nextAvatar = options[Math.floor(Math.random() * options.length)] ?? avatar;
+    if (!nextAvatar) return;
     const next = { name: displayName, questionGoal, avatar: nextAvatar };
     savePracticeProfile(next);
     setProfile(next);
@@ -265,31 +271,48 @@ export function Profile() {
         <div className="mx-auto max-w-4xl space-y-7">
           <section className="flex flex-col items-center text-center">
             <div className="flex min-w-0 flex-col items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setPreviewingAvatar(true)}
-                className="group relative h-20 w-20 shrink-0 overflow-hidden rounded-full ring-2 ring-white/10 transition-transform hover:scale-105 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
-                aria-label="Preview profile image"
-              >
-                <img
-                  src={avatarUrl(avatar)}
-                  alt="Profile avatar"
-                  className="h-full w-full object-cover"
-                />
-                <span className="absolute inset-0 bg-black/0 transition-colors group-hover:bg-black/20" />
-              </button>
+              {avatar ? (
+                <button
+                  type="button"
+                  onClick={() => setPreviewingAvatar(true)}
+                  className="group relative h-20 w-20 shrink-0 overflow-hidden rounded-full ring-2 ring-white/10 transition-transform hover:scale-105 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+                  aria-label="Preview profile image"
+                >
+                  <img
+                    src={avatarUrl(avatar)}
+                    alt="Profile avatar"
+                    className="h-full w-full object-cover"
+                  />
+                  <span className="absolute inset-0 bg-black/0 transition-colors group-hover:bg-black/20" />
+                </button>
+              ) : (
+                <div className="h-20 w-20 rounded-full bg-white/10" />
+              )}
               <div className="min-w-0">
                 <h2 className="truncate text-2xl font-semibold text-zinc-50">{displayName}</h2>
               </div>
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                className="h-8 gap-1.5 text-xs text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
-                onClick={updateAvatar}
-              >
-                <RefreshCw className="h-3.5 w-3.5" /> Update avatar
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 gap-1.5 text-xs text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
+                  onClick={() => setEditingProfile(true)}
+                >
+                  <Pencil className="h-3.5 w-3.5" /> Edit profile
+                </Button>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  className="h-8 w-8 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
+                  onClick={updateAvatar}
+                  disabled={avatarFiles.length < 2}
+                  aria-label="Change profile image"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                </Button>
+              </div>
             </div>
           </section>
 
@@ -340,7 +363,7 @@ export function Profile() {
           </section>
         </div>
       </div>
-      {previewingAvatar && (
+      {previewingAvatar && avatar && (
         <button
           type="button"
           className="fixed inset-0 z-50 flex cursor-zoom-out items-center justify-center bg-black/80 p-6 backdrop-blur-md"
