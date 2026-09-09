@@ -174,7 +174,7 @@ function ResultDetail() {
       )}
 
       {record ? (
-        <ResultScreen key={record.id} record={record} />
+        <ResultScreen key={record.id} record={record} attempts={attempts} />
       ) : loaded ? (
         <div className="card-surface p-10 text-center">
           <p className="text-sm text-muted-foreground">This test result was not found.</p>

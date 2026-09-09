@@ -7,11 +7,90 @@ import { computeScore, type Option, type TestRecord, type Verdict } from "@/lib/
 type Props = {
   record: TestRecord;
   onRestart?: () => void;
+  attempts?: TestRecord[];
 };
 
 type AnswerFilter = "all" | "correct" | "incorrect" | "unattempted";
 
-export function ResultScreen({ record, onRestart }: Props) {
+function AttemptMarksChart({ attempts, activeId }: { attempts: TestRecord[]; activeId: string }) {
+  const scores = attempts.map((attempt) => attempt.score ?? 0);
+  const low = Math.min(0, ...scores);
+  const high = Math.max(0, ...scores);
+  const range = Math.max(1, high - low);
+  const width = 248;
+  const height = 72;
+  const pointX = (index: number) => 8 + (index / Math.max(1, attempts.length - 1)) * 232;
+  const pointY = (score: number) => 10 + ((high - score) / range) * 48;
+  const points = scores.map((score, index) => `${pointX(index)},${pointY(score)}`).join(" ");
+  const currentScore = attempts.find((attempt) => attempt.id === activeId)?.score ?? "—";
+
+  return (
+    <div className="mt-3 w-full border-t border-border pt-3">
+      <div className="mb-1.5 flex items-center justify-between">
+        <p className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+          Marks by attempt
+        </p>
+        <span className="text-[10px] text-muted-foreground">
+          {low} to {high}
+        </span>
+      </div>
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        className="h-[72px] w-full"
+        role="img"
+        aria-label="Marks across attempts"
+      >
+        <line
+          x1="8"
+          x2="240"
+          y1={pointY(0)}
+          y2={pointY(0)}
+          stroke="var(--color-border)"
+          strokeDasharray="3 3"
+        />
+        <polyline
+          points={points}
+          fill="none"
+          stroke="var(--color-primary)"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="2.5"
+        />
+        {attempts.map((attempt, index) => {
+          const score = scores[index] ?? 0;
+          const isActive = attempt.id === activeId;
+          return (
+            <g key={attempt.id}>
+              <circle
+                cx={pointX(index)}
+                cy={pointY(score)}
+                r={isActive ? 4.5 : 3}
+                fill={isActive ? "var(--color-primary)" : "var(--color-surface)"}
+                stroke="var(--color-primary)"
+                strokeWidth="2"
+              />
+              <text
+                x={pointX(index)}
+                y="70"
+                fill="var(--color-muted-foreground)"
+                fontSize="9"
+                textAnchor="middle"
+              >
+                {index + 1}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+      <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+        <span>Attempt 1</span>
+        <span>Current: {currentScore}</span>
+      </div>
+    </div>
+  );
+}
+
+export function ResultScreen({ record, onRestart, attempts = [] }: Props) {
   const [answerFilter, setAnswerFilter] = useState<AnswerFilter>("all");
   const total = record.answers.length;
   const verdicts = useMemo<Verdict[]>(
@@ -125,6 +204,7 @@ export function ResultScreen({ record, onRestart }: Props) {
               {checked > 0 && `(${c}/${checked} checked)`}
             </span>
           </div>
+          {attempts.length > 1 && <AttemptMarksChart attempts={attempts} activeId={record.id} />}
         </div>
       </div>
 
