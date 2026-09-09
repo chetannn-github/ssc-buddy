@@ -46,7 +46,6 @@ export type Subject = { name: string; chapters: Chapter[] };
 
 export const DEFAULT_EXERCISE = "Exercise 1";
 
-
 const HISTORY_KEY = "cbt-history";
 const SUBJECTS_KEY = "cbt-subjects";
 const MARKING_KEY = "cbt-marking";
@@ -150,9 +149,7 @@ export function upsertExercise(
   const subject = subjects.find((s) => s.name === subjectName);
   if (!subject) return subjects;
 
-  let chapter = subject.chapters.find(
-    (c) => c.name.toLowerCase() === chapterName.toLowerCase(),
-  );
+  let chapter = subject.chapters.find((c) => c.name.toLowerCase() === chapterName.toLowerCase());
   if (!chapter) {
     chapter = { name: chapterName, questionCount: null, answerKey: null, exercises: [] };
     subject.chapters.push(chapter);
@@ -198,11 +195,8 @@ export function getExercise(
   const chapter = getChapter(subjectName, chapterName);
   if (!chapter) return null;
   if (!exerciseName) return chapter.exercises[0] ?? null;
-  return (
-    chapter.exercises.find((e) => e.name === exerciseName) ?? chapter.exercises[0] ?? null
-  );
+  return chapter.exercises.find((e) => e.name === exerciseName) ?? chapter.exercises[0] ?? null;
 }
-
 
 /* ---------- History ---------- */
 
@@ -216,6 +210,10 @@ export function saveRecord(record: TestRecord) {
   if (index >= 0) history[index] = record;
   else history.unshift(record);
   write(HISTORY_KEY, history);
+}
+
+export function saveHistory(records: TestRecord[]) {
+  write(HISTORY_KEY, records);
 }
 
 export function getRecord(id: string): TestRecord | null {

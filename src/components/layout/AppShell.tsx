@@ -1,13 +1,14 @@
 import type { MouseEvent, ReactNode } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { Flame, GraduationCap, History, PenSquare } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Flame, GraduationCap, History, PenSquare, Upload } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getStreaks } from "@/lib/analytics";
 import { loadHistory, type TestRecord } from "@/lib/exam";
 import { loadPracticeProfile, savePracticeProfile, type PracticeProfile } from "@/lib/profile";
 import { requestLightPageLoader } from "@/lib/navigation";
+import { restorePracticeBackup } from "@/lib/backup";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -33,12 +34,27 @@ function ProfileOnboarding({ onComplete }: { onComplete: (profile: PracticeProfi
   const [goal, setGoal] = useState("100");
   const parsedGoal = Math.max(1, Math.min(100000, Number(goal) || 0));
   const canContinue = name.trim().length > 0 && Number(goal) >= 1;
+  const importInput = useRef<HTMLInputElement>(null);
+  const [importError, setImportError] = useState("");
 
   const submit = () => {
     if (!canContinue) return;
     const profile = { name: name.trim(), questionGoal: parsedGoal };
     savePracticeProfile(profile);
     onComplete(profile);
+  };
+
+  const importBackup = async (file: File | undefined) => {
+    if (!file) return;
+    try {
+      const restored = await restorePracticeBackup(file);
+      if (restored) onComplete(restored);
+      else setImportError("Backup restored. Please finish your profile setup.");
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : "Could not restore this backup.");
+    } finally {
+      if (importInput.current) importInput.current.value = "";
+    }
   };
 
   return (
@@ -77,6 +93,25 @@ function ProfileOnboarding({ onComplete }: { onComplete: (profile: PracticeProfi
         >
           Create my profile
         </Button>
+        <div className="mt-4 border-t border-white/10 pt-4 text-center">
+          <p className="mb-2 text-xs text-zinc-400">Already have a backup?</p>
+          <Button
+            type="button"
+            variant="ghost"
+            className="text-zinc-300 hover:bg-white/10 hover:text-white"
+            onClick={() => importInput.current?.click()}
+          >
+            <Upload className="h-4 w-4" /> Import backup
+          </Button>
+          <input
+            ref={importInput}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={(event) => void importBackup(event.target.files?.[0])}
+          />
+          {importError && <p className="mt-2 text-xs text-amber-300">{importError}</p>}
+        </div>
       </section>
     </div>
   );

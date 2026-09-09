@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { LoaderCircle, Pencil, RefreshCw, Save } from "lucide-react";
+import { Download, LoaderCircle, Pencil, RefreshCw, Save } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { aggregateRecords, getStreaks, metricsForRecord } from "@/lib/analytics";
 import { loadHistory, type TestRecord } from "@/lib/exam";
 import { loadPracticeProfile, savePracticeProfile, type PracticeProfile } from "@/lib/profile";
+import { downloadPracticeBackup } from "@/lib/backup";
 import { cn } from "@/lib/utils";
 
 const title = "Profile";
@@ -312,6 +313,15 @@ export function Profile() {
               <div className="min-w-0 pt-1">
                 <h2 className="truncate text-2xl font-semibold text-zinc-50">{displayName}</h2>
               </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-8 gap-1.5 text-xs text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
+                onClick={downloadPracticeBackup}
+              >
+                <Download className="h-3.5 w-3.5" /> Export backup
+              </Button>
             </div>
           </section>
 
