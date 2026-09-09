@@ -85,7 +85,7 @@ export function SolutionScreen({ record, onExit }: Props) {
     if (!active) return "border-border text-muted-foreground";
     if (
       showCorrectAfterWrongRetry ||
-      (reattempt && retry === correctOpt) ||
+      (reattempt && retry === correctOpt && opt === correctOpt) ||
       (!reattempt && correctOpt && opt === correctOpt)
     ) {
       return "border-answered bg-answered text-answered-foreground";
@@ -96,10 +96,10 @@ export function SolutionScreen({ record, onExit }: Props) {
   return (
     <div className="min-h-screen bg-background">
       <header
-        className="sticky top-0 z-20 text-exam-header-foreground shadow-[var(--shadow-card)]"
+        className="sticky top-0 z-20 h-16 text-exam-header-foreground shadow-[var(--shadow-card)]"
         style={{ backgroundImage: "var(--gradient-header)" }}
       >
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4">
           <div className="min-w-0">
             <h1 className="text-xs font-semibold tracking-[0.14em] uppercase opacity-80">
               Solution

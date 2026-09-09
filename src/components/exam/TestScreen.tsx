@@ -74,8 +74,7 @@ export function TestScreen({
       if (questionCount) return;
       if (maxQuestions && states.length >= maxQuestions) return;
       setStates((prev) => [...prev, blank(true)]);
-    }
-    else update(index, { visited: true });
+    } else update(index, { visited: true });
     setCurrent(index);
   };
 
@@ -111,10 +110,10 @@ export function TestScreen({
   return (
     <div className="min-h-screen bg-background">
       <header
-        className="sticky top-0 z-20 text-exam-header-foreground shadow-[var(--shadow-card)]"
+        className="sticky top-0 z-20 h-16 text-exam-header-foreground shadow-[var(--shadow-card)]"
         style={{ backgroundImage: "var(--gradient-header)" }}
       >
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4">
           <div className="min-w-0">
             <h1 className="text-xs font-semibold tracking-[0.14em] uppercase opacity-80">
               Mock Test
@@ -203,8 +202,7 @@ export function TestScreen({
               onClick={() => goTo(current + 1)}
               disabled={
                 current === states.length - 1 &&
-                (Boolean(questionCount) ||
-                  Boolean(maxQuestions && states.length >= maxQuestions))
+                (Boolean(questionCount) || Boolean(maxQuestions && states.length >= maxQuestions))
               }
             >
               Save &amp; Next

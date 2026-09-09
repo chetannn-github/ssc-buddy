@@ -22,10 +22,10 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
   return (
     <div className="flex min-h-screen w-full flex-col bg-background">
       <header
-        className="text-exam-header-foreground"
+        className="h-16 text-exam-header-foreground"
         style={{ backgroundImage: "var(--gradient-header)" }}
       >
-        <div className="mx-auto flex w-full max-w-5xl items-center gap-4 px-4 py-4 sm:px-6">
+        <div className="mx-auto flex h-16 w-full max-w-5xl items-center gap-4 px-4 sm:px-6">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10">
             <GraduationCap className="h-5 w-5" />
           </span>
