@@ -36,33 +36,27 @@ function ProfileOnboarding({ onComplete }: { onComplete: (profile: PracticeProfi
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/35 p-4 backdrop-blur-sm">
-      <section className="w-full max-w-md rounded-3xl border border-border bg-surface p-6 shadow-[0_24px_70px_-24px_oklch(0.24_0.05_259_/_0.55)] sm:p-8">
-        <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4 backdrop-blur-md">
+      <section className="w-full max-w-md rounded-3xl border border-white/10 bg-[#202020] p-6 text-zinc-100 shadow-[0_24px_70px_-24px_black] sm:p-8">
+        <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-400/15 text-emerald-300">
           <GraduationCap className="h-6 w-6" />
         </span>
-        <p className="mt-5 text-xs font-semibold tracking-[0.14em] text-primary uppercase">
-          Welcome
-        </p>
-        <h2 className="mt-1 text-2xl font-semibold">Let’s set your practice goal</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          We’ll use this to personalise your profile and track your progress.
-        </p>
+        <h2 className="mt-5 text-2xl font-semibold">Setup your profile</h2>
         <div className="mt-6 space-y-4">
-          <label className="block text-sm font-medium">
+          <label className="block text-sm font-medium text-zinc-200">
             Your name
             <Input
-              className="mt-2 h-11"
+              className="mt-2 h-11 border-white/10 bg-zinc-900 text-zinc-100"
               value={name}
               onChange={(event) => setName(event.target.value)}
               placeholder="Enter your name"
               autoFocus
             />
           </label>
-          <label className="block text-sm font-medium">
+          <label className="block text-sm font-medium text-zinc-200">
             Questions you want to complete
             <Input
-              className="mt-2 h-11"
+              className="mt-2 h-11 border-white/10 bg-zinc-900 text-zinc-100"
               inputMode="numeric"
               value={goal}
               onChange={(event) => setGoal(event.target.value.replace(/\D/g, ""))}
@@ -70,7 +64,11 @@ function ProfileOnboarding({ onComplete }: { onComplete: (profile: PracticeProfi
             />
           </label>
         </div>
-        <Button className="mt-6 h-11 w-full" disabled={!canContinue} onClick={submit}>
+        <Button
+          className="mt-6 h-11 w-full bg-emerald-600 hover:bg-emerald-500"
+          disabled={!canContinue}
+          onClick={submit}
+        >
           Create my profile
         </Button>
       </section>
@@ -100,7 +98,12 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
   const currentStreak = getStreaks(records).current;
 
   return (
-    <div className="flex min-h-screen w-full flex-col bg-background">
+    <div
+      className={cn(
+        "flex min-h-screen w-full flex-col",
+        path === "/profile" ? "bg-[#121212]" : "bg-background",
+      )}
+    >
       <header
         className="h-16 border-0 text-exam-header-foreground shadow-none"
         style={{ backgroundImage: "var(--gradient-header)" }}
@@ -140,7 +143,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
             className={cn(
               "ml-1 flex h-9 min-w-12 items-center justify-center gap-1.5 rounded-full px-3 text-xs font-semibold transition-all",
               currentStreak > 0
-                ? "bg-amber-400/20 text-amber-200 shadow-[0_0_18px_oklch(0.82_0.17_85_/_0.48)] ring-1 ring-amber-300/35 hover:bg-amber-400/30"
+                ? "bg-amber-400/20 text-amber-200 shadow-[0_0_18px_oklch(0.82_0.17_85_/_0.48)] hover:bg-amber-400/30"
                 : "bg-white/10 text-white/75 hover:bg-white/15 hover:text-white",
             )}
           >

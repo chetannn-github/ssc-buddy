@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { BarChart3, CheckCircle2, Pencil, Save, Target, XCircle } from "lucide-react";
+import { Pencil, Save } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ import { loadPracticeProfile, savePracticeProfile, type PracticeProfile } from "
 import { cn } from "@/lib/utils";
 
 const title = "Practice Profile — MCQ Practice";
-const description = "Yearly practice activity, streaks and performance summary.";
+const description = "Your yearly practice activity and progress.";
 
 export const Route = createFileRoute("/profile")({
   head: () => ({ meta: [{ title }, { name: "description", content: description }] }),
@@ -26,48 +26,6 @@ function localDay(date: Date) {
 
 function formatDate(date: string) {
   return new Date(date).toLocaleDateString(undefined, { day: "numeric", month: "short" });
-}
-
-function SummaryCard({
-  label,
-  value,
-  icon: Icon,
-  tone = "default",
-}: {
-  label: string;
-  value: number;
-  icon: typeof BarChart3;
-  tone?: "default" | "good" | "bad";
-}) {
-  return (
-    <article className="card-surface p-4">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-            {label}
-          </p>
-          <p
-            className={cn(
-              "mt-1 text-2xl font-semibold",
-              tone === "good" && "text-answered",
-              tone === "bad" && "text-destructive",
-            )}
-          >
-            {value}
-          </p>
-        </div>
-        <span
-          className={cn(
-            "flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary",
-            tone === "good" && "bg-answered/10 text-answered",
-            tone === "bad" && "bg-destructive/10 text-destructive",
-          )}
-        >
-          <Icon className="h-4 w-4" />
-        </span>
-      </div>
-    </article>
-  );
 }
 
 function ActivityHeatmap({ records, maxStreak }: { records: TestRecord[]; maxStreak: number }) {
@@ -142,14 +100,16 @@ function ActivityHeatmap({ records, maxStreak }: { records: TestRecord[]; maxStr
             ))}
           </div>
           <div className="grid grid-flow-col grid-rows-7 gap-1">
-            {days.map(({ date, value, maximum }) => {
+            {days.map(({ date, value, maximum }, index) => {
               const intensity = value === 0 ? 0 : Math.min(4, Math.ceil((value / maximum) * 4));
+              const startsMonth = index > 0 && date.getMonth() !== days[index - 1]?.date.getMonth();
               return (
                 <span
                   key={localDay(date)}
                   title={`${formatDate(localDay(date))}: ${value} question${value === 1 ? "" : "s"}`}
                   className={cn(
                     "h-3 w-3 rounded-[3px] ring-1 ring-inset ring-white/5",
+                    startsMonth && "ml-2",
                     intensity === 0 && "bg-zinc-700",
                     intensity === 1 && "bg-emerald-200",
                     intensity === 2 && "bg-emerald-300",
@@ -203,15 +163,21 @@ function TargetProgress({
   attempted,
   goal,
   subjectStats,
+  tests,
+  correct,
+  wrong,
 }: {
   attempted: number;
   goal: number;
   subjectStats: Array<{ subject: string; attempted: number }>;
+  tests: number;
+  correct: number;
+  wrong: number;
 }) {
   const progress = Math.min(100, Math.round((attempted / Math.max(1, goal)) * 100));
 
   return (
-    <section className="card-surface p-5 sm:p-6">
+    <section className="rounded-2xl border border-white/10 bg-[#202020] p-5 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h2 className="text-lg font-semibold">Target progress</h2>
@@ -230,7 +196,7 @@ function TargetProgress({
             background: `conic-gradient(var(--color-primary) 0 ${progress}%, var(--color-muted) ${progress}% 100%)`,
           }}
         >
-          <div className="flex h-[104px] w-[104px] flex-col items-center justify-center rounded-full bg-surface">
+          <div className="flex h-[104px] w-[104px] flex-col items-center justify-center rounded-full bg-[#202020]">
             <span className="text-2xl font-semibold">{attempted}</span>
             <span className="text-[10px] text-muted-foreground">/ {goal} target</span>
           </div>
@@ -250,6 +216,19 @@ function TargetProgress({
             </p>
           )}
         </div>
+      </div>
+      <div className="mt-5 grid grid-cols-2 gap-2 border-t border-border pt-4 sm:grid-cols-4">
+        {[
+          ["Tests", tests],
+          ["Attempted", attempted],
+          ["Correct", correct],
+          ["Wrong", wrong],
+        ].map(([label, value]) => (
+          <div key={String(label)} className="text-center">
+            <p className="text-lg font-semibold">{value}</p>
+            <p className="text-[10px] text-muted-foreground">{label}</p>
+          </div>
+        ))}
       </div>
     </section>
   );
@@ -300,79 +279,42 @@ function Profile() {
 
   return (
     <AppShell title="Your Profile">
-      <div className="space-y-5">
-        <section className="card-surface p-5 sm:p-6">
+      <div className="profile-dark -mx-4 -my-6 min-h-[calc(100vh-4rem)] space-y-5 bg-[#121212] px-4 py-6 text-zinc-100 sm:-mx-6 sm:px-6">
+        <section className="rounded-2xl border border-white/10 bg-[#202020] p-5 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-5">
             <div className="flex min-w-0 items-center gap-4">
-              <span
+              <button
+                type="button"
+                onClick={() => setEditingProfile(true)}
                 className={cn(
-                  "flex h-16 w-16 shrink-0 items-center justify-center rounded-full text-xl font-semibold text-white",
+                  "group relative flex h-16 w-16 shrink-0 cursor-pointer items-center justify-center rounded-full text-xl font-semibold text-white",
                   avatarColor(displayName),
                 )}
               >
-                {initials(displayName)}
-              </span>
+                <span className="transition-opacity group-hover:opacity-0">
+                  {initials(displayName)}
+                </span>
+                <Pencil className="absolute h-5 w-5 opacity-0 transition-opacity group-hover:opacity-100" />
+              </button>
               <div className="min-w-0">
-                {editingProfile ? (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Input
-                      className="h-9 w-44"
-                      value={nameDraft}
-                      onChange={(event) => setNameDraft(event.target.value)}
-                      aria-label="Your name"
-                    />
-                    <Input
-                      className="h-9 w-28"
-                      inputMode="numeric"
-                      value={goalDraft}
-                      onChange={(event) => setGoalDraft(event.target.value.replace(/\D/g, ""))}
-                      aria-label="Question goal"
-                    />
-                    <Button size="sm" onClick={saveProfile}>
-                      <Save className="h-3.5 w-3.5" /> Save
-                    </Button>
-                  </div>
-                ) : (
-                  <>
-                    <h2 className="truncate text-2xl font-semibold">{displayName}</h2>
-                  </>
-                )}
+                <h2 className="truncate text-2xl font-semibold">{displayName}</h2>
               </div>
             </div>
           </div>
-          {!editingProfile && (
-            <Button
-              className="mt-4"
-              size="sm"
-              variant="outline"
-              onClick={() => setEditingProfile(true)}
-            >
-              <Pencil className="h-3.5 w-3.5" /> Edit profile & goal
-            </Button>
-          )}
         </section>
 
         <TargetProgress
           attempted={totals.attempted}
           goal={questionGoal}
           subjectStats={subjectStats.map(({ subject, attempted }) => ({ subject, attempted }))}
+          tests={totals.tests}
+          correct={totals.correct}
+          wrong={totals.wrong}
         />
 
         <ActivityHeatmap records={records} maxStreak={streaks.longest} />
 
-        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <SummaryCard label="Total tests" value={totals.tests} icon={BarChart3} />
-          <SummaryCard label="Questions attempted" value={totals.attempted} icon={Target} />
-          <SummaryCard
-            label="Correct answers"
-            value={totals.correct}
-            icon={CheckCircle2}
-            tone="good"
-          />
-          <SummaryCard label="Wrong answers" value={totals.wrong} icon={XCircle} tone="bad" />
-        </section>
-
-        <section className="card-surface p-5 sm:p-6">
+        <section className="rounded-2xl border border-white/10 bg-[#202020] p-5 sm:p-6">
           <h2 className="text-base font-semibold">Recent activity</h2>
           <div className="mt-3 divide-y divide-border">
             {recent.length ? (
@@ -408,6 +350,41 @@ function Profile() {
           </div>
         </section>
       </div>
+      {editingProfile && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-md">
+          <section className="w-full max-w-md rounded-3xl border border-white/10 bg-[#202020] p-6 shadow-[0_24px_70px_-24px_black] sm:p-8">
+            <h2 className="text-2xl font-semibold">Setup your profile</h2>
+            <div className="mt-6 space-y-4">
+              <label className="block text-sm font-medium text-zinc-200">
+                Your name
+                <Input
+                  className="mt-2 h-11 border-white/10 bg-zinc-900 text-zinc-100"
+                  value={nameDraft}
+                  onChange={(event) => setNameDraft(event.target.value)}
+                  autoFocus
+                />
+              </label>
+              <label className="block text-sm font-medium text-zinc-200">
+                Question goal
+                <Input
+                  className="mt-2 h-11 border-white/10 bg-zinc-900 text-zinc-100"
+                  inputMode="numeric"
+                  value={goalDraft}
+                  onChange={(event) => setGoalDraft(event.target.value.replace(/\D/g, ""))}
+                />
+              </label>
+            </div>
+            <div className="mt-6 flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setEditingProfile(false)}>
+                Cancel
+              </Button>
+              <Button className="bg-emerald-600 hover:bg-emerald-500" onClick={saveProfile}>
+                <Save className="h-4 w-4" /> Save profile
+              </Button>
+            </div>
+          </section>
+        </div>
+      )}
     </AppShell>
   );
 }
