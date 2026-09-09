@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { SetupScreen, type TestConfig } from "@/components/exam/SetupScreen";
+import { InstructionsScreen } from "@/components/exam/InstructionsScreen";
 import { TestScreen } from "@/components/exam/TestScreen";
 import { AnswerKeyScreen } from "@/components/exam/AnswerKeyScreen";
 import { computeScore, saveRecord, type Option, type TestRecord } from "@/lib/exam";
@@ -44,7 +45,7 @@ export const Route = createFileRoute("/test")({
   component: TestPage,
 });
 
-type Phase = "setup" | "key" | "test";
+type Phase = "setup" | "key" | "instructions" | "test";
 
 function TestPage() {
   const search = Route.useSearch();
@@ -103,7 +104,11 @@ function TestPage() {
   }
 
   return (
-    <AppShell title={phase === "key" ? "Answer key" : "New test"}>
+    <AppShell
+      title={
+        phase === "key" ? "Answer key" : phase === "instructions" ? "Test instructions" : "New test"
+      }
+    >
       {phase === "key" && config && config.questionCount ? (
         <AnswerKeyScreen
           count={config.questionCount}
@@ -113,8 +118,21 @@ function TestPage() {
           onBack={() => setPhase("setup")}
           onConfirm={(key) => {
             setAnswerKey(key.some(Boolean) ? key : null);
-            setPhase("test");
+            setPhase("instructions");
           }}
+        />
+      ) : phase === "instructions" && config ? (
+        <InstructionsScreen
+          subject={config.subject}
+          chapter={config.chapter}
+          exercise={config.exercise}
+          minutes={config.minutes}
+          questionCount={config.questionCount}
+          marking={config.marking}
+          onBack={() =>
+            setPhase(config.answerKey ? "setup" : config.questionCount ? "key" : "setup")
+          }
+          onStart={() => setPhase("test")}
         />
       ) : (
         <SetupScreen
@@ -129,7 +147,13 @@ function TestPage() {
           onStart={(nextConfig) => {
             setConfig(nextConfig);
             setAnswerKey(nextConfig.answerKey);
-            setPhase(nextConfig.answerKey ? "test" : nextConfig.questionCount ? "key" : "test");
+            setPhase(
+              nextConfig.answerKey
+                ? "instructions"
+                : nextConfig.questionCount
+                  ? "key"
+                  : "instructions",
+            );
           }}
         />
       )}

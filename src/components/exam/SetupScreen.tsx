@@ -466,7 +466,7 @@ export function SetupScreen({
           })
         }
       >
-        Start Test
+        Continue to instructions
       </Button>
 
       <Dialog open={chapterDraft !== null} onOpenChange={(o) => !o && setChapterDraft(null)}>
