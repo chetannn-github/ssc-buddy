@@ -117,6 +117,8 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
       return;
     }
 
+    if (!isProfilePage && to !== "/") return;
+
     event.preventDefault();
     requestLightPageLoader(isProfilePage && to !== "/");
     const viewDocument = document as ViewTransitionDocument;
@@ -167,9 +169,9 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
                   to={item.url}
                   onClick={(event) => navigateWithThemeTransition(event, item.url)}
                   className={cn(
-                    "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors sm:text-sm",
+                    "app-nav-link flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors sm:text-sm",
                     active
-                      ? "bg-white/15 text-white"
+                      ? "is-active bg-white/15 text-white"
                       : "text-white/70 hover:bg-white/10 hover:text-white",
                   )}
                 >
