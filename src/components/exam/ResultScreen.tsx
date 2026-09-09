@@ -56,7 +56,7 @@ export function ResultScreen({ record, onRestart }: Props) {
 
   const filterClass = (filter: AnswerFilter, tone: "good" | "bad" | "neutral") =>
     cn(
-      "rounded-full px-2 py-0.5 transition-all",
+      "cursor-pointer rounded-full px-2 py-0.5 transition-all",
       tone === "good" && "bg-answered/15 text-answered",
       tone === "bad" && "bg-destructive/15 text-destructive",
       tone === "neutral" && "bg-muted text-muted-foreground",
