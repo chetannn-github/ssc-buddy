@@ -282,7 +282,7 @@ export function SetupScreen({
 
         {chapter && (
           <div className="space-y-2 rounded-lg border border-border bg-background/50 p-3">
-            <Label className="text-xs text-muted-foreground">Exercise (optional)</Label>
+            <Label className="text-xs text-muted-foreground">Exercise</Label>
             <div className="flex flex-wrap gap-2">
               {exercises.map((ex) => (
                 <Button
@@ -354,7 +354,7 @@ export function SetupScreen({
               className={cn("text-xs", startTooHigh ? "text-destructive" : "text-muted-foreground")}
             >
               {startTooHigh
-                ? `Is chapter me sirf ${chapterTotal} questions hain.`
+                ? `This chapter has only ${chapterTotal} questions.`
                 : `Numbering begins at Q${parsedStart}.` +
                   (chapterTotal ? ` Chapter total ${chapterTotal}.` : "")}
             </p>
@@ -398,7 +398,7 @@ export function SetupScreen({
               className={cn("text-xs", countTooHigh ? "text-destructive" : "text-muted-foreground")}
             >
               {countTooHigh
-                ? `Sirf ${available} questions bache hain (Q${parsedStart}–Q${chapterTotal}).`
+                ? `Only ${available} questions remain (Q${parsedStart}–Q${chapterTotal}).`
                 : `Q${parsedStart}–${parsedStart + parsedCount - 1}.`}
             </p>
           </div>
@@ -487,7 +487,7 @@ export function SetupScreen({
           {draftStep === "count" ? (
             <div className="space-y-3">
               <Label htmlFor="draft-exercise" className="text-xs text-muted-foreground">
-                Exercise ka naam
+                Exercise name
               </Label>
               <Input
                 id="draft-exercise"
@@ -497,7 +497,7 @@ export function SetupScreen({
                 disabled={isEditing}
               />
               <Label htmlFor="draft-count" className="text-xs text-muted-foreground">
-                Is exercise me kitne questions hain?
+                How many questions are in this exercise?
               </Label>
               <Input
                 id="draft-count"

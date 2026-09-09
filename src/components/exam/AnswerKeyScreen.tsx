@@ -52,8 +52,7 @@ export function AnswerKeyScreen({
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Saare {count} answers bharna zaroori hai — tabhi chapter save hoga aur result apne aap
-        ban jayega.
+        Fill all {count} answers to save this exercise and calculate results automatically.
       </p>
 
       <div className="grid max-h-[26rem] gap-1.5 overflow-y-auto pr-1 sm:grid-cols-2">
