@@ -301,9 +301,14 @@ function Dashboard() {
                         </div>
                         <strong>{formatPercent(item.accuracy)}</strong>
                       </div>
-                      <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-muted">
+                      <div
+                        className={cn(
+                          "mt-1.5 h-2 overflow-hidden rounded-full",
+                          item.accuracy === null ? "bg-muted" : "bg-destructive",
+                        )}
+                      >
                         <div
-                          className="h-full rounded-full bg-answered"
+                          className="h-full rounded-l-full bg-answered"
                           style={{ width: `${item.accuracy ?? 0}%` }}
                         />
                       </div>
