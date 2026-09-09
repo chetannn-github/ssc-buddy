@@ -82,7 +82,9 @@ export function ResultScreen({ record, onRestart }: Props) {
             <button
               type="button"
               className={filterClass("correct", "good")}
-              onClick={() => setAnswerFilter((current) => (current === "correct" ? "all" : "correct"))}
+              onClick={() =>
+                setAnswerFilter((current) => (current === "correct" ? "all" : "correct"))
+              }
             >
               ✓ {c}
             </button>
@@ -99,9 +101,7 @@ export function ResultScreen({ record, onRestart }: Props) {
               type="button"
               className={filterClass("unattempted", "neutral")}
               onClick={() =>
-                setAnswerFilter((current) =>
-                  current === "unattempted" ? "all" : "unattempted",
-                )
+                setAnswerFilter((current) => (current === "unattempted" ? "all" : "unattempted"))
               }
             >
               {unattempted} skip
@@ -125,7 +125,6 @@ export function ResultScreen({ record, onRestart }: Props) {
               {checked > 0 && `(${c}/${checked} checked)`}
             </span>
           </div>
-
         </div>
       </div>
 
@@ -140,7 +139,10 @@ export function ResultScreen({ record, onRestart }: Props) {
           <div className="mb-3 flex flex-wrap items-center gap-1.5 rounded-lg border border-dashed border-border bg-muted/40 p-2">
             <span className="text-[10px] font-medium text-muted-foreground">Unattempted:</span>
             {unattemptedNumbers.map((n) => (
-              <span key={n} className="rounded bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground shadow-sm">
+              <span
+                key={n}
+                className="rounded bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground shadow-sm"
+              >
                 Q{n}
               </span>
             ))}

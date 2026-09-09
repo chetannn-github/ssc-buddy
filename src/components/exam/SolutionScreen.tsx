@@ -102,10 +102,10 @@ export function SolutionScreen({ record, onExit }: Props) {
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4">
           <div className="min-w-0">
             <h1 className="text-xs font-semibold tracking-[0.14em] uppercase opacity-80">
-              Solution
+              Solutions
             </h1>
             <p className="truncate text-sm font-medium">
-              {record.subject} · {record.chapter}
+              {record.chapter}
               {record.exercise ? ` · ${record.exercise}` : ""}
             </p>
           </div>
