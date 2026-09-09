@@ -107,7 +107,6 @@ function Dashboard() {
   const [range, setRange] = useState<TimeRange>("all");
   const [subject, setSubject] = useState(ALL);
   const [chapter, setChapter] = useState(ALL);
-  const [exercise, setExercise] = useState(ALL);
 
   useEffect(() => {
     const refresh = () => {
@@ -138,31 +137,14 @@ function Dashboard() {
       ).sort(),
     [timeRecords, subject],
   );
-  const exercises = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          timeRecords
-            .filter(
-              (record) =>
-                (subject === ALL || record.subject === subject) &&
-                (chapter === ALL || record.chapter === chapter),
-            )
-            .map((record) => record.exercise ?? "Exercise 1"),
-        ),
-      ).sort(),
-    [timeRecords, subject, chapter],
-  );
-
   const filtered = useMemo(
     () =>
       timeRecords.filter(
         (record) =>
           (subject === ALL || record.subject === subject) &&
-          (chapter === ALL || record.chapter === chapter) &&
-          (exercise === ALL || (record.exercise ?? "Exercise 1") === exercise),
+          (chapter === ALL || record.chapter === chapter),
       ),
-    [timeRecords, subject, chapter, exercise],
+    [timeRecords, subject, chapter],
   );
 
   const totals = useMemo(() => aggregateRecords(filtered), [filtered]);
@@ -188,7 +170,6 @@ function Dashboard() {
     setRange("all");
     setSubject(ALL);
     setChapter(ALL);
-    setExercise(ALL);
   };
 
   if (loaded && records.length === 0) {
@@ -216,7 +197,7 @@ function Dashboard() {
     <AppShell title="Performance Dashboard">
       <div className="space-y-5">
         <section
-          className="card-surface grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4"
+          className="card-surface grid gap-3 p-4 sm:grid-cols-3"
           aria-label="Dashboard filters"
         >
           <Select value={range} onValueChange={(value) => setRange(value as TimeRange)}>
@@ -235,7 +216,6 @@ function Dashboard() {
             onValueChange={(value) => {
               setSubject(value);
               setChapter(ALL);
-              setExercise(ALL);
             }}
           >
             <SelectTrigger>
@@ -250,32 +230,13 @@ function Dashboard() {
               ))}
             </SelectContent>
           </Select>
-          <Select
-            value={chapter}
-            onValueChange={(value) => {
-              setChapter(value);
-              setExercise(ALL);
-            }}
-          >
+          <Select value={chapter} onValueChange={setChapter}>
             <SelectTrigger>
               <SelectValue placeholder="All chapters" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={ALL}>All chapters</SelectItem>
               {chapters.map((name) => (
-                <SelectItem key={name} value={name}>
-                  {name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={exercise} onValueChange={setExercise}>
-            <SelectTrigger>
-              <SelectValue placeholder="All exercises" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>All exercises</SelectItem>
-              {exercises.map((name) => (
                 <SelectItem key={name} value={name}>
                   {name}
                 </SelectItem>
