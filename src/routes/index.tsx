@@ -6,18 +6,15 @@ import {
   BarChart3,
   BookOpen,
   CheckCircle2,
-  Clock3,
   Flame,
   History as HistoryIcon,
   ListChecks,
   PlayCircle,
   Target,
-  TrendingUp,
   Trophy,
   XCircle,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
-import { DonutChart } from "@/components/exam/DonutChart";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -30,9 +27,7 @@ import {
   aggregateRecords,
   filterByTime,
   getDailyActivity,
-  getImprovements,
   getStreaks,
-  groupPerformance,
   metricsForRecord,
   type TimeRange,
 } from "@/lib/analytics";
@@ -62,13 +57,6 @@ function formatNumber(value: number, maximumFractionDigits = 0) {
 
 function formatPercent(value: number | null) {
   return value === null ? "—" : `${Math.round(value)}%`;
-}
-
-function formatDuration(seconds: number) {
-  if (seconds < 60) return `${Math.round(seconds)} sec`;
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.round((seconds % 3600) / 60);
-  return hours > 0 ? `${hours}h ${minutes}m` : `${minutes} min`;
 }
 
 function friendlyDate(iso: string) {
@@ -183,8 +171,6 @@ function Dashboard() {
   );
 
   const totals = useMemo(() => aggregateRecords(filtered), [filtered]);
-  const groups = useMemo(() => groupPerformance(filtered), [filtered]);
-  const improvements = useMemo(() => getImprovements(filtered), [filtered]);
   const streaks = useMemo(() => getStreaks(filtered), [filtered]);
   const daily = useMemo(() => getDailyActivity(filtered), [filtered]);
   const recent = useMemo(
@@ -204,9 +190,6 @@ function Dashboard() {
         .sort((a, b) => b.attempted - a.attempted),
     [filtered],
   );
-  const rankedGroups = groups.filter((group) => group.evaluated >= 5 && group.accuracy !== null);
-  const strongest = [...rankedGroups].sort((a, b) => (b.accuracy ?? 0) - (a.accuracy ?? 0))[0];
-  const weakest = [...rankedGroups].sort((a, b) => (a.accuracy ?? 0) - (b.accuracy ?? 0))[0];
   const maxDailyAttempted = Math.max(1, ...daily.map((item) => item.attempted));
 
   const clearFilters = () => {
@@ -241,13 +224,6 @@ function Dashboard() {
     <AppShell
       title="Performance Dashboard"
       subtitle="Track your practice, accuracy and improvement"
-      actions={
-        <Button size="sm" variant="secondary" className="hidden gap-1.5 sm:flex" asChild>
-          <Link to="/test" search={{}}>
-            <PlayCircle className="h-4 w-4" /> Start Test
-          </Link>
-        </Button>
-      }
     >
       <div className="space-y-5">
         <section
@@ -366,99 +342,39 @@ function Dashboard() {
                 icon={Trophy}
                 tone="good"
               />
-              <MetricCard
-                label="Total Score"
-                value={totals.scoredTests ? formatNumber(totals.totalScore, 2) : "—"}
-                helper={`${totals.scoredTests} scored tests`}
-                icon={BarChart3}
-              />
-              <MetricCard
-                label="Study Time"
-                value={formatDuration(totals.studySeconds)}
-                helper={
-                  totals.secondsPerAttempt
-                    ? `${formatDuration(totals.secondsPerAttempt)} per answer`
-                    : "No attempted answers"
-                }
-                icon={Clock3}
-              />
-              <MetricCard
-                label="Unevaluated"
-                value={formatNumber(totals.unevaluatedTests)}
-                helper="Tests without an answer key"
-                icon={AlertCircle}
-              />
             </section>
 
-            <section className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
-              <article className="card-surface flex items-center gap-5 p-5 lg:flex-col lg:items-start">
-                <DonutChart
-                  size={112}
-                  segments={[
-                    { label: "Correct", value: totals.correct, color: "var(--color-answered)" },
-                    { label: "Wrong", value: totals.wrong, color: "var(--color-destructive)" },
-                    {
-                      label: "Unattempted",
-                      value: totals.unattempted,
-                      color: "var(--color-unvisited)",
-                    },
-                  ]}
-                  centerValue={formatPercent(totals.accuracy)}
-                  centerLabel="accuracy"
-                />
-                <div className="min-w-0 flex-1">
-                  <h2 className="text-sm font-semibold">Performance Summary</h2>
-                  <div className="mt-3 space-y-2 text-xs">
-                    <div className="flex justify-between gap-3">
-                      <span className="text-muted-foreground">Attempt rate</span>
-                      <strong>{formatPercent(totals.attemptRate)}</strong>
+            <section className="card-surface p-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-sm font-semibold">Last 7 Days</h2>
+                  <p className="text-xs text-muted-foreground">Questions attempted each day</p>
+                </div>
+                <Activity className="h-5 w-5 text-primary" />
+              </div>
+              <div
+                className="mt-5 flex h-40 items-end gap-2"
+                role="img"
+                aria-label="Questions attempted during the last seven days"
+              >
+                {daily.map((item) => (
+                  <div
+                    key={item.day}
+                    className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1.5"
+                  >
+                    <span className="text-[10px] font-semibold">{item.attempted || ""}</span>
+                    <div className="flex h-28 w-full items-end rounded-md bg-muted/60 px-1">
+                      <div
+                        className="w-full rounded-sm bg-primary transition-all"
+                        style={{
+                          height: `${item.attempted ? Math.max(8, (item.attempted / maxDailyAttempted) * 100) : 0}%`,
+                        }}
+                      />
                     </div>
-                    <div className="flex justify-between gap-3">
-                      <span className="text-muted-foreground">Average score</span>
-                      <strong>
-                        {totals.averageScore === null ? "—" : formatNumber(totals.averageScore, 2)}
-                      </strong>
-                    </div>
-                    <div className="flex justify-between gap-3">
-                      <span className="text-muted-foreground">Max marks</span>
-                      <strong>{formatNumber(totals.maxMarks, 2)}</strong>
-                    </div>
+                    <span className="text-[10px] text-muted-foreground">{item.label}</span>
                   </div>
-                </div>
-              </article>
-
-              <article className="card-surface p-5">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-sm font-semibold">Last 7 Days</h2>
-                    <p className="text-xs text-muted-foreground">Questions attempted each day</p>
-                  </div>
-                  <Activity className="h-5 w-5 text-primary" />
-                </div>
-                <div
-                  className="mt-5 flex h-40 items-end gap-2"
-                  role="img"
-                  aria-label="Questions attempted during the last seven days"
-                >
-                  {daily.map((item) => (
-                    <div
-                      key={item.day}
-                      className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1.5"
-                    >
-                      <span className="text-[10px] font-semibold">{item.attempted || ""}</span>
-                      <div className="flex h-28 w-full items-end rounded-md bg-muted/60 px-1">
-                        <div
-                          className="w-full rounded-sm bg-primary transition-all"
-                          style={{
-                            height: `${item.attempted ? Math.max(8, (item.attempted / maxDailyAttempted) * 100) : 0}%`,
-                          }}
-                        />
-                      </div>
-                      <span className="text-[10px] text-muted-foreground">{item.label}</span>
-                    </div>
-                  ))}
-                </div>
-              </article>
+                ))}
+              </div>
             </section>
 
             <section className="grid gap-4 lg:grid-cols-2">
@@ -509,168 +425,8 @@ function Dashboard() {
                     <p className="mt-1 text-[10px] text-muted-foreground">Active days</p>
                   </div>
                 </div>
-                <div className="mt-4 rounded-lg border border-border p-3 text-xs text-muted-foreground">
-                  {strongest
-                    ? `Strongest: ${strongest.chapter} · ${strongest.exercise} at ${formatPercent(strongest.accuracy)} accuracy.`
-                    : "Complete at least 5 evaluated questions in a chapter to unlock insights."}
-                </div>
               </article>
             </section>
-
-            <section className="grid gap-4 lg:grid-cols-2">
-              <article className="card-surface p-5">
-                <h2 className="text-sm font-semibold text-answered">Strong Area</h2>
-                {strongest ? (
-                  <div className="mt-3">
-                    <p className="font-semibold">{strongest.chapter}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {strongest.subject} · {strongest.exercise}
-                    </p>
-                    <p className="mt-2 text-2xl font-semibold text-answered">
-                      {formatPercent(strongest.accuracy)}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {strongest.evaluated} evaluated answers
-                    </p>
-                  </div>
-                ) : (
-                  <p className="mt-3 text-xs text-muted-foreground">
-                    Not enough evaluated data yet.
-                  </p>
-                )}
-              </article>
-              <article className="card-surface p-5">
-                <h2 className="text-sm font-semibold text-destructive">Needs Improvement</h2>
-                {weakest ? (
-                  <div className="mt-3 flex items-end justify-between gap-3">
-                    <div>
-                      <p className="font-semibold">{weakest.chapter}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {weakest.subject} · {weakest.exercise}
-                      </p>
-                      <p className="mt-2 text-2xl font-semibold text-destructive">
-                        {formatPercent(weakest.accuracy)}
-                      </p>
-                      <p className="text-xs text-muted-foreground">{weakest.wrong} wrong answers</p>
-                    </div>
-                    <Button size="sm" variant="outline" asChild>
-                      <Link
-                        to="/test"
-                        search={{
-                          subject: weakest.subject,
-                          chapter: weakest.chapter,
-                          exercise: weakest.exercise,
-                          count: weakest.latest.answers.length,
-                          start: weakest.latest.startNumber,
-                          minutes: weakest.latest.durationMinutes ?? undefined,
-                        }}
-                      >
-                        Practice Again
-                      </Link>
-                    </Button>
-                  </div>
-                ) : (
-                  <p className="mt-3 text-xs text-muted-foreground">
-                    Not enough evaluated data yet.
-                  </p>
-                )}
-              </article>
-            </section>
-
-            <section className="card-surface overflow-hidden">
-              <div className="flex items-center justify-between border-b border-border px-5 py-4">
-                <div>
-                  <h2 className="text-sm font-semibold">Chapter & Exercise Stats</h2>
-                  <p className="text-xs text-muted-foreground">
-                    Detailed performance by practice area
-                  </p>
-                </div>
-                <BarChart3 className="h-5 w-5 text-primary" />
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[720px] text-left text-xs">
-                  <thead className="bg-muted/50 text-muted-foreground">
-                    <tr>
-                      <th className="px-5 py-3 font-medium">Topic</th>
-                      <th className="px-3 py-3 font-medium">Tests</th>
-                      <th className="px-3 py-3 font-medium">Attempted</th>
-                      <th className="px-3 py-3 font-medium">Correct</th>
-                      <th className="px-3 py-3 font-medium">Wrong</th>
-                      <th className="px-3 py-3 font-medium">Accuracy</th>
-                      <th className="px-3 py-3 font-medium">Last practiced</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {groups.map((group) => (
-                      <tr key={group.key} className="border-t border-border hover:bg-muted/30">
-                        <td className="px-5 py-3">
-                          <Link
-                            to="/history/$id"
-                            params={{ id: group.latest.id }}
-                            className="font-semibold hover:text-primary"
-                          >
-                            {group.chapter}
-                          </Link>
-                          <p className="text-[10px] text-muted-foreground">
-                            {group.subject} · {group.exercise}
-                          </p>
-                        </td>
-                        <td className="px-3 py-3">{group.tests}</td>
-                        <td className="px-3 py-3">{group.attempted}</td>
-                        <td className="px-3 py-3 text-answered">{group.correct}</td>
-                        <td className="px-3 py-3 text-destructive">{group.wrong}</td>
-                        <td className="px-3 py-3 font-semibold">{formatPercent(group.accuracy)}</td>
-                        <td className="px-3 py-3 text-muted-foreground">
-                          {friendlyDate(group.latest.date)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-
-            {improvements.length > 0 && (
-              <section className="card-surface p-5">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-sm font-semibold">Reattempt Improvement</h2>
-                    <p className="text-xs text-muted-foreground">
-                      First attempt compared with latest
-                    </p>
-                  </div>
-                  <TrendingUp className="h-5 w-5 text-primary" />
-                </div>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {improvements.slice(0, 3).map((item) => (
-                    <Link
-                      key={item.key}
-                      to="/history/$id"
-                      params={{ id: item.latest.id }}
-                      className="rounded-lg border border-border p-3 transition-colors hover:border-primary/50"
-                    >
-                      <p className="truncate text-xs font-semibold">
-                        {item.chapter} · {item.exercise}
-                      </p>
-                      <p className="mt-1 text-[10px] text-muted-foreground">
-                        {item.attempts} attempts
-                      </p>
-                      <p
-                        className={cn(
-                          "mt-3 text-lg font-semibold",
-                          (item.accuracyChange ?? 0) >= 0 ? "text-answered" : "text-destructive",
-                        )}
-                      >
-                        {item.accuracyChange === null
-                          ? "—"
-                          : `${item.accuracyChange >= 0 ? "+" : ""}${Math.round(item.accuracyChange)} pp`}
-                      </p>
-                      <p className="text-[10px] text-muted-foreground">accuracy change</p>
-                    </Link>
-                  ))}
-                </div>
-              </section>
-            )}
 
             <section className="card-surface p-5">
               <div className="flex items-center justify-between">
