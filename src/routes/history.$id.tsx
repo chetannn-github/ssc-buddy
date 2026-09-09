@@ -1,12 +1,19 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { ArrowLeft, BookOpenCheck, RotateCcw } from "lucide-react";
+import { ArrowLeft, BookOpenCheck, RefreshCw, RotateCcw } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { ResultScreen } from "@/components/exam/ResultScreen";
 import { SolutionScreen } from "@/components/exam/SolutionScreen";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { getAttemptGroup, getRecord, type TestRecord } from "@/lib/exam";
+import {
+  computeScore,
+  getAttemptGroup,
+  getExercise,
+  getRecord,
+  saveRecord,
+  type TestRecord,
+} from "@/lib/exam";
 
 const title = "Test Result Details — MCQ Practice";
 const description =
@@ -30,14 +37,52 @@ function ResultDetail() {
   const [loaded, setLoaded] = useState(false);
   const [attempts, setAttempts] = useState<TestRecord[]>([]);
   const [solution, setSolution] = useState(false);
+  const [reevaluationNotice, setReevaluationNotice] = useState<string | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     setRecord(getRecord(id));
     setAttempts(getAttemptGroup(id));
     setSolution(false);
+    setReevaluationNotice(null);
     setLoaded(true);
   }, [id]);
+
+  const reevaluate = () => {
+    if (!record) return;
+
+    const exercise = getExercise(record.subject, record.chapter, record.exercise);
+    const fullAnswerKey = exercise?.answerKey;
+    if (!fullAnswerKey) {
+      setReevaluationNotice("No current answer key is saved for this exercise.");
+      return;
+    }
+
+    const answerKey = fullAnswerKey.slice(
+      record.startNumber - 1,
+      record.startNumber - 1 + record.answers.length,
+    );
+    const evaluations = record.answers.map((answer, index) => {
+      const correctAnswer = answerKey[index];
+      if (!answer || !correctAnswer) return null;
+      return answer === correctAnswer ? "correct" : "incorrect";
+    });
+    const correct = evaluations.filter((verdict) => verdict === "correct").length;
+    const wrong = evaluations.filter((verdict) => verdict === "incorrect").length;
+    const updatedRecord: TestRecord = {
+      ...record,
+      answerKey,
+      evaluations,
+      correct,
+      wrong,
+      score: computeScore(correct, wrong, record.marking),
+    };
+
+    saveRecord(updatedRecord);
+    setRecord(updatedRecord);
+    setAttempts(getAttemptGroup(updatedRecord.id));
+    setReevaluationNotice("Marks updated using the latest answer key.");
+  };
 
   if (solution && record) {
     return <SolutionScreen key={record.id} record={record} onExit={() => setSolution(false)} />;
@@ -66,6 +111,15 @@ function ResultDetail() {
               <BookOpenCheck className="h-4 w-4" />
               View Solution
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5 px-3 text-xs"
+              onClick={reevaluate}
+            >
+              <RefreshCw className="h-4 w-4" />
+              Reevaluate
+            </Button>
             <Button variant="outline" size="sm" className="h-8 gap-1.5 px-3 text-xs" asChild>
               <Link
                 to="/"
@@ -85,6 +139,12 @@ function ResultDetail() {
           </div>
         ) : null}
       </div>
+
+      {reevaluationNotice && (
+        <p className="mb-3 text-xs text-muted-foreground" role="status">
+          {reevaluationNotice}
+        </p>
+      )}
 
       {attempts.length > 1 && (
         <div className="card-surface mb-3 flex flex-wrap items-center gap-1.5 p-3">
