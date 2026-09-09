@@ -67,27 +67,17 @@ function ActivityHeatmap({ records, maxStreak }: { records: TestRecord[]; maxStr
 
   return (
     <section className="overflow-hidden py-5 text-zinc-100 sm:py-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold text-zinc-50">Yearly activity</h2>
-          <p className="mt-1 text-sm text-zinc-400">
-            {totalActivity} questions practiced in the last year
-          </p>
-        </div>
-        <div className="flex gap-5 text-right text-xs">
-          <div>
-            <p className="font-semibold text-zinc-100">{activeDays}</p>
-            <p className="text-zinc-400">Active days</p>
-          </div>
-          <div>
-            <p className="font-semibold text-zinc-100">{maxStreak}</p>
-            <p className="text-zinc-400">Max streak</p>
-          </div>
-        </div>
+      <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-2 text-sm">
+        <p className="text-zinc-400">{totalActivity} questions practiced in the last year</p>
+        <p className="text-zinc-400">
+          <span className="font-semibold text-zinc-100">{activeDays}</span> active days
+          <span className="mx-3 text-zinc-600">·</span>
+          <span className="font-semibold text-zinc-100">{maxStreak}</span> max streak
+        </p>
       </div>
 
-      <div className="mt-5 overflow-x-auto pb-2">
-        <div className="min-w-[720px]">
+      <div className="mt-5">
+        <div>
           <div className="relative mb-2 h-4 text-[10px] text-zinc-400">
             {monthLabels.map(({ label, index }) => (
               <span
@@ -99,7 +89,7 @@ function ActivityHeatmap({ records, maxStreak }: { records: TestRecord[]; maxStr
               </span>
             ))}
           </div>
-          <div className="grid grid-flow-col grid-rows-7 gap-1">
+          <div className="grid grid-flow-col grid-rows-7 gap-[3px] [grid-auto-columns:minmax(0,1fr)]">
             {days.map(({ date, value, maximum }, index) => {
               const intensity = value === 0 ? 0 : Math.min(4, Math.ceil((value / maximum) * 4));
               const startsMonth = index > 0 && date.getMonth() !== days[index - 1]?.date.getMonth();
@@ -108,8 +98,8 @@ function ActivityHeatmap({ records, maxStreak }: { records: TestRecord[]; maxStr
                   key={localDay(date)}
                   title={`${formatDate(localDay(date))}: ${value} question${value === 1 ? "" : "s"}`}
                   className={cn(
-                    "h-3 w-3 rounded-[3px] ring-1 ring-inset ring-white/5",
-                    startsMonth && "ml-2",
+                    "aspect-square w-full rounded-[3px] ring-1 ring-inset ring-white/5",
+                    startsMonth && "ml-px",
                     intensity === 0 && "bg-zinc-700",
                     intensity === 1 && "bg-emerald-200",
                     intensity === 2 && "bg-emerald-300",
@@ -266,7 +256,7 @@ export function Profile() {
 
           <section className="border-t border-white/10 pt-5 sm:pt-6">
             <h2 className="text-base font-semibold">Recent activity</h2>
-            <div className="mt-3 divide-y divide-border">
+          <div className="mt-3">
               {recent.length ? (
                 recent.map((record) => {
                   const metrics = metricsForRecord(record);
@@ -275,7 +265,7 @@ export function Profile() {
                       key={record.id}
                       to="/history/$id"
                       params={{ id: record.id }}
-                      className="flex items-center justify-between gap-3 py-3 hover:text-primary"
+                    className="flex items-center justify-between gap-3 border-b border-white/10 py-3 hover:text-primary last:border-b-0"
                     >
                       <div className="min-w-0">
                         <p className="truncate text-sm font-semibold">
