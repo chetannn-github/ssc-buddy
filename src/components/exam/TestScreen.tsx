@@ -233,7 +233,7 @@ export function TestScreen({
             ) : null}
           </ul>
 
-          <div className="mt-4 grid max-h-[420px] grid-cols-5 gap-2 overflow-y-auto pt-2 pr-1 pl-2">
+          <div className="mt-4 grid max-h-[420px] grid-cols-5 gap-2 overflow-y-auto pt-2 pr-1 pb-2 pl-2">
             {states.map((s, i) => (
               <button key={i} type="button" className={paletteClass(s, i)} onClick={() => goTo(i)}>
                 {startNumber + i}

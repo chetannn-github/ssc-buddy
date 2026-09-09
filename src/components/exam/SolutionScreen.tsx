@@ -224,7 +224,7 @@ export function SolutionScreen({ record, onExit }: Props) {
             </li>
           </ul>
 
-          <div className="mt-4 grid max-h-[420px] grid-cols-5 gap-2 overflow-y-auto pt-2 pr-1 pl-2">
+          <div className="mt-4 grid max-h-[420px] grid-cols-5 gap-2 overflow-y-auto pt-2 pr-1 pb-2 pl-2">
             {record.answers.map((_, i) => (
               <button
                 key={i}
