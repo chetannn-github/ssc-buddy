@@ -55,7 +55,7 @@ export function AnswerKeyScreen({
         Fill all {count} answers to save this exercise and calculate results automatically.
       </p>
 
-      <div className="grid max-h-[26rem] gap-1.5 overflow-y-auto pr-1 sm:grid-cols-2">
+      <div className="grid max-h-[26rem] grid-cols-1 gap-1.5 overflow-y-auto pr-1">
         {key.map((v, i) => (
           <div
             key={i}
