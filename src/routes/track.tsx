@@ -12,6 +12,9 @@ const TABS = ["Syllabus", "Revision", "Mock Test"] as const;
 type Tab = (typeof TABS)[number];
 
 export const Route = createFileRoute("/track")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    tab: TABS.includes(search["tab"] as Tab) ? (search["tab"] as Tab) : undefined,
+  }),
   head: () => ({ meta: [{ title: "Tracker" }] }),
   component: () => (
     <TrackerProvider>
@@ -97,7 +100,8 @@ function TrackerHeader() {
 }
 
 function TrackPage() {
-  const [tab, setTab] = useState<Tab>("Syllabus");
+  const search = Route.useSearch();
+  const [tab, setTab] = useState<Tab>(search.tab ?? "Syllabus");
   return (
     <AppShell title="Tracker">
       <div className="tracker-theme -mx-4 -my-6 min-h-[calc(100vh-4rem)] bg-[#f2efe8] px-3 py-5 text-[#474239] sm:-mx-6 sm:px-5 sm:py-6">

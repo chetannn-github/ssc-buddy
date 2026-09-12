@@ -377,7 +377,11 @@ function StudyTrackerOverview({ tracker }: { tracker: TrackerData | null }) {
       </div>
 
       <div className="mt-4 grid gap-3 md:grid-cols-3">
-        <div className="rounded-xl border border-white/10 bg-white/[0.025] p-3 sm:p-4">
+        <Link
+          to="/track"
+          search={{ tab: "Syllabus" }}
+          className="rounded-xl border border-white/10 bg-white/[0.025] p-3 transition-colors hover:bg-white/[0.06] sm:p-4"
+        >
           <p className="text-xs font-medium text-zinc-400">Syllabus</p>
           <p className="mt-1 text-lg font-semibold text-zinc-100">
             {pct(syllabus.done, syllabus.total)}%
@@ -395,9 +399,13 @@ function StudyTrackerOverview({ tracker }: { tracker: TrackerData | null }) {
               );
             })}
           </div>
-        </div>
+        </Link>
 
-        <div className="rounded-xl border border-white/10 bg-white/[0.025] p-3 sm:p-4">
+        <Link
+          to="/track"
+          search={{ tab: "Revision" }}
+          className="rounded-xl border border-white/10 bg-white/[0.025] p-3 transition-colors hover:bg-white/[0.06] sm:p-4"
+        >
           <p className="text-xs font-medium text-zinc-400">Revision</p>
           <p className="mt-1 text-lg font-semibold text-zinc-100">By subject</p>
           <div className="mt-3 divide-y divide-white/5">
@@ -414,9 +422,13 @@ function StudyTrackerOverview({ tracker }: { tracker: TrackerData | null }) {
               );
             })}
           </div>
-        </div>
+        </Link>
 
-        <div className="rounded-xl border border-white/10 bg-white/[0.025] p-3 sm:p-4">
+        <Link
+          to="/track"
+          search={{ tab: "Mock Test" }}
+          className="rounded-xl border border-white/10 bg-white/[0.025] p-3 transition-colors hover:bg-white/[0.06] sm:p-4"
+        >
           <p className="text-xs font-medium text-zinc-400">Mock tests</p>
           <p className="mt-1 text-lg font-semibold text-zinc-100">Practice progress</p>
           <div className="mt-3 divide-y divide-white/5">
@@ -436,7 +448,7 @@ function StudyTrackerOverview({ tracker }: { tracker: TrackerData | null }) {
               tone="bg-violet-500"
             />
           </div>
-        </div>
+        </Link>
       </div>
     </section>
   );
