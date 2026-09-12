@@ -499,7 +499,7 @@ function StudyTrackerOverview({ tracker }: { tracker: TrackerData | null }) {
 export function Profile() {
   const [records, setRecords] = useState<TestRecord[]>([]);
   const [tracker, setTracker] = useState<TrackerData | null>(null);
-  const [range, setRange] = useState<ActivityRange>("year");
+  const [range, setRange] = useState<ActivityRange>("today");
   const [profile, setProfile] = useState<PracticeProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [editingProfile, setEditingProfile] = useState(false);
