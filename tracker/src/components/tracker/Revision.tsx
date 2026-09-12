@@ -70,8 +70,8 @@ function SubjectRevision({ subject }: { subject: Subject }) {
     });
 
   return (
-    <Card>
-      <div className="flex flex-wrap items-center gap-3">
+    <Card className="!p-2.5 sm:!p-3">
+      <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
@@ -104,19 +104,19 @@ function SubjectRevision({ subject }: { subject: Subject }) {
           + Revision type
         </GhostButton>
       </div>
-      <div className="mt-3">
+      <div className="mt-2">
         <Bar value={pct(x.done, x.total)} tone="green" />
       </div>
 
       {open && (
-        <div className="mt-4">
+        <div className="mt-3">
           {subject.chapters.length === 0 && (
             <p className="text-sm text-muted-foreground">Add chapters in the Syllabus tab first.</p>
           )}
           {subject.chapters.map((c) => (
-            <div key={c.id} className="border-b border-border py-3 last:border-0">
+            <div key={c.id} className="border-b border-border py-2 last:border-0">
               <div className="text-[15px]">{c.name}</div>
-              <div className="mt-2 space-y-2">
+              <div className="mt-1.5 space-y-1.5">
                 {rev.types.map((t) => {
                   const target = revTarget(data, subject.id, c.id, t);
                   const done = revDone(data, subject.id, c.id, t.id);
@@ -165,7 +165,7 @@ function SubjectRevision({ subject }: { subject: Subject }) {
 export function Revision() {
   const { data } = useTracker();
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {data.subjects.map((s) => (
         <SubjectRevision key={s.id} subject={s} />
       ))}

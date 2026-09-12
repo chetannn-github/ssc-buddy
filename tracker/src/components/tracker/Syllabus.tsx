@@ -51,8 +51,8 @@ function ChapterRow({ subjectId, chapter }: { subjectId: string; chapter: Chapte
   };
 
   return (
-    <div className="border-b border-border py-3 last:border-0">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+    <div className="border-b border-border py-2 last:border-0">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <div className="min-w-[10rem] flex-1">
           <div className="flex flex-wrap items-baseline gap-2">
             <span className="text-[15px]">{chapter.name}</span>
@@ -60,7 +60,7 @@ function ChapterRow({ subjectId, chapter }: { subjectId: string; chapter: Chapte
               {status}
             </span>
           </div>
-          <div className="mt-2 max-w-md">
+          <div className="mt-1.5 max-w-md">
             <Bar value={pct(chapter.completed, chapter.total)} />
           </div>
         </div>
@@ -125,15 +125,15 @@ export function Syllabus() {
   };
 
   return (
-    <div className="space-y-4">
-      <Card>
+    <div className="space-y-3">
+      <Card className="!p-2.5 sm:!p-3">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-lg font-semibold">Overall syllabus</h2>
           <span className="font-mono text-[13px] text-muted-foreground">
             {overall.done} / {overall.total} · {pct(overall.done, overall.total)}%
           </span>
         </div>
-        <div className="mt-3">
+        <div className="mt-2">
           <Bar value={pct(overall.done, overall.total)} />
         </div>
       </Card>
@@ -142,7 +142,7 @@ export function Syllabus() {
         const x = subjectSyllabus(s);
         const isOpen = !!open[s.id];
         return (
-          <Card key={s.id}>
+          <Card key={s.id} className="!p-2.5 sm:!p-3">
             <div className="flex items-center gap-3">
               <button
                 type="button"
@@ -186,13 +186,13 @@ export function Syllabus() {
                 <TrashIcon />
               </IconButton>
             </div>
-            <div className="mt-3">
+            <div className="mt-2">
               <Bar value={pct(x.done, x.total)} />
             </div>
 
             {isOpen && (
               <>
-                <div className="mt-4 flex justify-end">
+                <div className="mt-3 flex justify-end">
                   <GhostButton
                     tone="blue"
                     onClick={() => {
@@ -216,7 +216,7 @@ export function Syllabus() {
                 </div>
                 <div className="mt-2">
                   {s.chapters.length === 0 ? (
-                    <p className="py-3 text-sm text-muted-foreground">No chapters yet.</p>
+                    <p className="py-2 text-sm text-muted-foreground">No chapters yet.</p>
                   ) : (
                     s.chapters.map((c) => <ChapterRow key={c.id} subjectId={s.id} chapter={c} />)
                   )}
@@ -230,7 +230,7 @@ export function Syllabus() {
       <button
         type="button"
         onClick={addSubject}
-        className="w-full rounded-2xl border border-dashed border-border py-4 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        className="w-full rounded-xl border border-dashed border-border py-3 text-sm text-muted-foreground transition-colors hover:text-foreground"
       >
         + Add subject
       </button>
