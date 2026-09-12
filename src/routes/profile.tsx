@@ -19,6 +19,8 @@ import { loadPracticeProfile, savePracticeProfile, type PracticeProfile } from "
 import { downloadPracticeBackup, restorePracticeBackup } from "@/lib/backup";
 import {
   overallSyllabus,
+  daysLeft,
+  fmtDate,
   pct,
   subjectRevision,
   subjectSyllabus,
@@ -26,7 +28,7 @@ import {
   type TrackerData,
 } from "@/lib/tracker";
 import { IMPORT_PROMPT } from "@/lib/tracker";
-import { loadTrackerData } from "@/lib/tracker-store";
+import { loadTrackerData, saveTrackerData } from "@/lib/tracker-store";
 import { cn } from "@/lib/utils";
 
 const title = "Profile";
@@ -379,10 +381,17 @@ function StudyTrackerOverview({ tracker }: { tracker: TrackerData | null }) {
       <div className="flex items-baseline justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold">Study tracker</h2>
+          <p className="mt-1 text-sm text-zinc-400">{tracker.meta.examName}</p>
         </div>
         <span className="font-mono text-xs text-zinc-400">
           {syllabus.done}/{syllabus.total} Lectures
         </span>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 font-mono text-xs text-zinc-500">
+        <span>Syllabus · {fmtDate(tracker.meta.syllabusDeadline)}</span>
+        <span>{daysLeft(tracker.meta.syllabusDeadline)} days left</span>
+        <span>Target · {fmtDate(tracker.meta.targetDate)}</span>
+        <span>{daysLeft(tracker.meta.targetDate)} days left</span>
       </div>
 
       <div className="mt-4 grid gap-3 md:grid-cols-3">
@@ -475,6 +484,9 @@ export function Profile() {
   const [avatarFiles, setAvatarFiles] = useState<string[]>([]);
   const [nameDraft, setNameDraft] = useState("");
   const [goalDraft, setGoalDraft] = useState("");
+  const [examNameDraft, setExamNameDraft] = useState("");
+  const [syllabusDeadlineDraft, setSyllabusDeadlineDraft] = useState("");
+  const [targetDateDraft, setTargetDateDraft] = useState("");
   const [importMessage, setImportMessage] = useState("");
   const [promptCopied, setPromptCopied] = useState(false);
   const importFileRef = useRef<HTMLInputElement>(null);
@@ -486,7 +498,11 @@ export function Profile() {
       const startedAt = Date.now();
       const saved = loadPracticeProfile();
       setRecords(loadHistory());
-      setTracker(loadTrackerData());
+      const trackerData = loadTrackerData();
+      setTracker(trackerData);
+      setExamNameDraft(trackerData.meta.examName);
+      setSyllabusDeadlineDraft(trackerData.meta.syllabusDeadline);
+      setTargetDateDraft(trackerData.meta.targetDate);
       setProfile(saved);
       setNameDraft(saved?.name ?? "");
       setGoalDraft(saved ? String(saved.questionGoal) : "100");
@@ -557,6 +573,18 @@ export function Profile() {
       ...(profile?.avatar ? { avatar: profile.avatar } : {}),
     };
     savePracticeProfile(next);
+    if (tracker) {
+      const nextTracker = saveTrackerData({
+        ...tracker,
+        meta: {
+          ...tracker.meta,
+          examName: examNameDraft.trim() || tracker.meta.examName,
+          syllabusDeadline: syllabusDeadlineDraft || tracker.meta.syllabusDeadline,
+          targetDate: targetDateDraft || tracker.meta.targetDate,
+        },
+      });
+      setTracker(nextTracker);
+    }
     setProfile(next);
     setEditingProfile(false);
   };
@@ -763,6 +791,35 @@ export function Profile() {
                   onChange={(event) => setGoalDraft(event.target.value.replace(/\D/g, ""))}
                 />
               </label>
+              <label className="block text-sm font-medium text-zinc-200">
+                Exam name
+                <Input
+                  className="mt-2 h-11 border-white/10 bg-[#151515] text-zinc-100 placeholder:text-zinc-500 focus-visible:border-zinc-500"
+                  value={examNameDraft}
+                  onChange={(event) => setExamNameDraft(event.target.value)}
+                  placeholder="e.g. SSC CGL 2027"
+                />
+              </label>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="block text-sm font-medium text-zinc-200">
+                  Syllabus deadline
+                  <Input
+                    className="mt-2 h-11 border-white/10 bg-[#151515] text-zinc-100 focus-visible:border-zinc-500"
+                    type="date"
+                    value={syllabusDeadlineDraft}
+                    onChange={(event) => setSyllabusDeadlineDraft(event.target.value)}
+                  />
+                </label>
+                <label className="block text-sm font-medium text-zinc-200">
+                  Target date
+                  <Input
+                    className="mt-2 h-11 border-white/10 bg-[#151515] text-zinc-100 focus-visible:border-zinc-500"
+                    type="date"
+                    value={targetDateDraft}
+                    onChange={(event) => setTargetDateDraft(event.target.value)}
+                  />
+                </label>
+              </div>
             </div>
             <div className="mt-6 flex justify-end gap-2">
               <Button

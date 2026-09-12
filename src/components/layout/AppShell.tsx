@@ -11,6 +11,7 @@ import { loadTrackerData } from "@/lib/tracker-store";
 import { loadPracticeProfile, savePracticeProfile, type PracticeProfile } from "@/lib/profile";
 import { requestLightPageLoader } from "@/lib/navigation";
 import { restorePracticeBackup } from "@/lib/backup";
+import { loadTrackerData, saveTrackerData } from "@/lib/tracker-store";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -35,6 +36,9 @@ type ViewTransitionDocument = Document & {
 function ProfileOnboarding({ onComplete }: { onComplete: (profile: PracticeProfile) => void }) {
   const [name, setName] = useState("");
   const [goal, setGoal] = useState("100");
+  const [examName, setExamName] = useState("SSC CGL 2027");
+  const [syllabusDeadline, setSyllabusDeadline] = useState("2026-11-15");
+  const [targetDate, setTargetDate] = useState("2027-02-01");
   const parsedGoal = Math.max(1, Math.min(100000, Number(goal) || 0));
   const canContinue = name.trim().length > 0 && Number(goal) >= 1;
   const importInput = useRef<HTMLInputElement>(null);
@@ -44,6 +48,16 @@ function ProfileOnboarding({ onComplete }: { onComplete: (profile: PracticeProfi
     if (!canContinue) return;
     const profile = { name: name.trim(), questionGoal: parsedGoal };
     savePracticeProfile(profile);
+    const tracker = loadTrackerData();
+    saveTrackerData({
+      ...tracker,
+      meta: {
+        ...tracker.meta,
+        examName: examName.trim() || tracker.meta.examName,
+        syllabusDeadline: syllabusDeadline || tracker.meta.syllabusDeadline,
+        targetDate: targetDate || tracker.meta.targetDate,
+      },
+    });
     onComplete(profile);
   };
 
@@ -88,6 +102,35 @@ function ProfileOnboarding({ onComplete }: { onComplete: (profile: PracticeProfi
               placeholder="e.g. 500"
             />
           </label>
+          <label className="block text-sm font-medium text-zinc-200">
+            Exam name
+            <Input
+              className="mt-2 h-11 border-white/10 bg-zinc-900 text-zinc-100"
+              value={examName}
+              onChange={(event) => setExamName(event.target.value)}
+              placeholder="e.g. SSC CGL 2027"
+            />
+          </label>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block text-sm font-medium text-zinc-200">
+              Syllabus deadline
+              <Input
+                className="mt-2 h-11 border-white/10 bg-zinc-900 text-zinc-100"
+                type="date"
+                value={syllabusDeadline}
+                onChange={(event) => setSyllabusDeadline(event.target.value)}
+              />
+            </label>
+            <label className="block text-sm font-medium text-zinc-200">
+              Target date
+              <Input
+                className="mt-2 h-11 border-white/10 bg-zinc-900 text-zinc-100"
+                type="date"
+                value={targetDate}
+                onChange={(event) => setTargetDate(event.target.value)}
+              />
+            </label>
+          </div>
         </div>
         <Button
           className="mt-6 h-11 w-full bg-emerald-600 hover:bg-emerald-500"
