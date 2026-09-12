@@ -499,8 +499,8 @@ export function Profile() {
     return { lectures, revisions, mockTests };
   }, [range, tracker]);
   const recent = useMemo(
-    () => [...filteredRecords].sort((a, b) => b.date.localeCompare(a.date)),
-    [filteredRecords],
+    () => [...records].sort((a, b) => b.date.localeCompare(a.date)),
+    [records],
   );
   const saveProfile = () => {
     if (!nameDraft.trim() || Number(goalDraft) < 1) return;
@@ -608,7 +608,7 @@ export function Profile() {
             onRangeChange={setRange}
           />
 
-          <ActivityHeatmap records={filteredRecords} tracker={tracker} range={range} />
+          <ActivityHeatmap records={records} tracker={tracker} range="year" />
 
           <StudyTrackerOverview tracker={tracker} />
 
