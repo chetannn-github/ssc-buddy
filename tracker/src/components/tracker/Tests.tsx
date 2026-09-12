@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTracker } from "@/lib/tracker-store";
-import { pct, recordActivity, testsDone, todayISO, uid, type MockKind } from "@/lib/tracker";
+import { pct, testsDone, todayISO, uid } from "@/lib/tracker";
 import { Bar, Card, GhostButton, IconButton, Label, Num, TrashIcon } from "./ui";
 
 function AddTestForm({ onDone }: { onDone: () => void }) {
@@ -11,7 +11,8 @@ function AddTestForm({ onDone }: { onDone: () => void }) {
   const [score, setScore] = useState("");
   const [total, setTotal] = useState("");
   const [accuracy, setAccuracy] = useState("");
-  const [notes, setNotes] = useState("");
+  const [error, setError] = useState("");
+  const isSectional = type === "Sectional";
 
   const field =
     "h-9 w-full rounded-full bg-track px-4 font-mono text-[13px] text-foreground outline-none focus:ring-2 focus:ring-accent-blue/40";
@@ -23,28 +24,64 @@ function AddTestForm({ onDone }: { onDone: () => void }) {
         className="mt-3 grid gap-3 sm:grid-cols-3"
         onSubmit={(e) => {
           e.preventDefault();
-          if (!subjectId) return;
+          const numericScore = Number(score);
+          const numericTotal = Number(total);
+          const numericAccuracy = Number(accuracy);
+          if (!date || (isSectional && !subjectId) || !score || !total || !accuracy) {
+            setError("Fill all required fields.");
+            return;
+          }
+          if (
+            !Number.isFinite(numericScore) ||
+            !Number.isFinite(numericTotal) ||
+            !Number.isFinite(numericAccuracy) ||
+            numericTotal <= 0 ||
+            numericScore < 0 ||
+            numericScore > numericTotal ||
+            numericAccuracy < 0 ||
+            numericAccuracy > 100
+          ) {
+            setError("Score must be within total marks, and accuracy must be between 0% and 100%.");
+            return;
+          }
           update((d) => {
             d.tests.log.unshift({
               id: uid(),
               date,
-              subjectId,
-              type: type.trim() || "Sectional",
-              score: score === "" ? null : Number(score),
-              total: total === "" ? null : Number(total),
-              accuracy: accuracy === "" ? null : Number(accuracy),
-              notes: notes.trim(),
+              subjectId: isSectional ? subjectId : "__all__",
+              type,
+              score: numericScore,
+              total: numericTotal,
+              accuracy: numericAccuracy,
+              notes: "",
             });
           });
           onDone();
         }}
       >
         <select
-          aria-label="Subject"
+          aria-label="Test type"
           className={field}
-          value={subjectId}
-          onChange={(e) => setSubjectId(e.target.value)}
+          value={type}
+          onChange={(e) => {
+            const nextType = e.target.value;
+            setType(nextType);
+            if (nextType === "Sectional") setSubjectId(data.subjects[0]?.id ?? "");
+          }}
         >
+          <option>Sectional</option>
+          <option>Pre</option>
+          <option>Mains</option>
+        </select>
+        <select
+          aria-label="Subject"
+          className={`${field} disabled:cursor-not-allowed disabled:opacity-40`}
+          value={isSectional ? subjectId : "__all__"}
+          onChange={(e) => setSubjectId(e.target.value)}
+          disabled={!isSectional}
+          required={isSectional}
+        >
+          {!isSectional && <option value="__all__">All subjects</option>}
           {data.subjects.map((s) => (
             <option key={s.id} value={s.id}>
               {s.name}
@@ -52,51 +89,48 @@ function AddTestForm({ onDone }: { onDone: () => void }) {
           ))}
         </select>
         <input
-          aria-label="Test type"
-          className={field}
-          placeholder="Test type"
-          value={type}
-          onChange={(e) => setType(e.target.value)}
-        />
-        <input
           aria-label="Date"
           type="date"
           className={field}
           value={date}
           onChange={(e) => setDate(e.target.value)}
+          required
         />
         <input
           aria-label="Score"
           className={field}
           placeholder="Score"
           inputMode="decimal"
+          type="number"
+          min="0"
           value={score}
           onChange={(e) => setScore(e.target.value)}
+          required
         />
         <input
           aria-label="Total marks"
           className={field}
           placeholder="Total marks"
           inputMode="decimal"
+          type="number"
+          min="1"
           value={total}
           onChange={(e) => setTotal(e.target.value)}
+          required
         />
         <input
           aria-label="Accuracy"
           className={field}
-          placeholder="Accuracy % (optional)"
+          placeholder="Accuracy %"
           inputMode="decimal"
+          type="number"
+          min="0"
+          max="100"
           value={accuracy}
           onChange={(e) => setAccuracy(e.target.value)}
+          required
         />
-        <input
-          aria-label="Notes"
-          className={`${field} sm:col-span-2`}
-          placeholder="Notes (optional)"
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-        />
-        <div className="flex gap-2">
+        <div className="flex gap-2 sm:col-span-3">
           <GhostButton type="submit" tone="blue" className="flex-1">
             Save test
           </GhostButton>
@@ -104,6 +138,7 @@ function AddTestForm({ onDone }: { onDone: () => void }) {
             Cancel
           </GhostButton>
         </div>
+        {error && <p className="sm:col-span-3 text-sm text-destructive">{error}</p>}
       </form>
     </Card>
   );
@@ -112,16 +147,8 @@ function AddTestForm({ onDone }: { onDone: () => void }) {
 export function Tests() {
   const { data, update } = useTracker();
   const [adding, setAdding] = useState(false);
-  const totalDone = data.tests.log.length;
+  const totalDone = data.tests.log.filter((test) => test.type === "Sectional").length;
   const totalTarget = data.subjects.reduce((a, s) => a + (data.tests.targets[s.id] ?? 0), 0);
-
-  const setMock = (kind: MockKind, key: "done" | "target", n: number) =>
-    update((d) => {
-      const previous = d.tests.mocks[kind][key];
-      const next = Math.max(0, n);
-      if (key === "done") recordActivity(d, "mock-test", next - previous);
-      d.tests.mocks[kind][key] = next;
-    });
 
   return (
     <div className="space-y-4">
@@ -153,51 +180,6 @@ export function Tests() {
                       d.tests.targets[s.id] = n;
                     })
                   }
-                />
-              </div>
-            );
-          })}
-        </div>
-      </Card>
-
-      <Card>
-        <Label>Full mocks</Label>
-        <div className="mt-3">
-          {(["pre", "mains"] as MockKind[]).map((kind) => {
-            const m = data.tests.mocks[kind];
-            return (
-              <div key={kind} className="flex items-center gap-3 py-2 sm:gap-5">
-                <div className="w-24 shrink-0 text-[15px] sm:w-32">
-                  {kind === "pre" ? "Pre" : "Mains"}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <Bar value={pct(m.done, m.target)} tone="green" />
-                </div>
-                <span className="shrink-0 font-mono text-[13px] text-muted-foreground">
-                  {m.done} / {m.target}
-                </span>
-                <IconButton
-                  label={`Decrease ${kind} mocks`}
-                  onClick={() => setMock(kind, "done", m.done - 1)}
-                >
-                  <span className="text-base leading-none">−</span>
-                </IconButton>
-                <Num
-                  ariaLabel={`${kind} mocks done`}
-                  value={m.done}
-                  onChange={(n) => setMock(kind, "done", n)}
-                />
-                <IconButton
-                  label={`Increase ${kind} mocks`}
-                  variant="solid"
-                  onClick={() => setMock(kind, "done", m.done + 1)}
-                >
-                  <span className="text-base leading-none">+</span>
-                </IconButton>
-                <Num
-                  ariaLabel={`${kind} mocks target`}
-                  value={m.target}
-                  onChange={(n) => setMock(kind, "target", n)}
                 />
               </div>
             );
