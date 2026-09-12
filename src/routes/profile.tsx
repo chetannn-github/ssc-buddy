@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Download, LoaderCircle, Pencil, RefreshCw, Save } from "lucide-react";
+import { ChevronDown, Download, LoaderCircle, Pencil, RefreshCw, Save } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
@@ -253,6 +253,7 @@ function TargetProgress({
   range: ActivityRange;
   onRangeChange: (range: ActivityRange) => void;
 }) {
+  const [rangeOpen, setRangeOpen] = useState(false);
   const progress = Math.min(100, Math.round((attempted / Math.max(1, goal)) * 100));
   const practiceStats = [
     ["Question goal", goal],
@@ -273,18 +274,39 @@ function TargetProgress({
         <span className="text-[11px] font-semibold tracking-[0.16em] text-zinc-500 uppercase">
           Practice
         </span>
-        <select
-          value={range}
-          onChange={(event) => onRangeChange(event.target.value as ActivityRange)}
-          aria-label="Activity range"
-          className="h-7 rounded-md border border-white/10 bg-white/5 px-2 text-xs text-zinc-300 outline-none hover:bg-white/10 focus:border-zinc-500"
-        >
-          {(Object.keys(rangeLabels) as ActivityRange[]).map((option) => (
-            <option key={option} value={option} className="bg-[#1a1a1a]">
-              {rangeLabels[option]}
-            </option>
-          ))}
-        </select>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setRangeOpen((open) => !open)}
+            className="flex h-7 items-center gap-1 rounded-md bg-white/5 px-2 text-xs text-zinc-300 transition-colors hover:bg-white/10"
+            aria-haspopup="listbox"
+            aria-expanded={rangeOpen}
+          >
+            {rangeLabels[range]} <ChevronDown className="h-3.5 w-3.5 text-zinc-500" />
+          </button>
+          {rangeOpen && (
+            <div
+              role="listbox"
+              className="absolute top-8 right-0 z-20 min-w-28 overflow-hidden rounded-md bg-[#202020] py-1 shadow-lg ring-1 ring-white/5"
+            >
+              {(Object.keys(rangeLabels) as ActivityRange[]).map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  role="option"
+                  aria-selected={option === range}
+                  onClick={() => {
+                    onRangeChange(option);
+                    setRangeOpen(false);
+                  }}
+                  className="w-full px-3 py-1.5 text-left text-xs text-zinc-300 transition-colors hover:bg-white/10 hover:text-white"
+                >
+                  {rangeLabels[option]}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
       <div className="grid grid-cols-2 divide-x-0 divide-y divide-white/10 px-2 py-2 sm:grid-cols-5 sm:divide-x sm:divide-y-0 sm:px-3">
         {practiceStats.map(([label, value]) => (
