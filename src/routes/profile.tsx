@@ -302,10 +302,26 @@ export function Profile() {
       tracker.tests.log.length + tracker.tests.mocks.pre.done + tracker.tests.mocks.mains.done;
     return { lectures, revisions, mockTests };
   }, [tracker]);
-  const recent = useMemo(
-    () => [...records].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5),
-    [records],
-  );
+  const recent = useMemo(() => {
+    const practice = records.map((record) => ({
+      kind: "practice" as const,
+      date: record.date,
+      record,
+    }));
+    const trackerTests = (tracker?.tests.log ?? []).map((test) => ({
+      kind: "mock-test" as const,
+      date: test.date,
+      test,
+    }));
+    const trackerActivity = (tracker?.activity ?? []).map((activity) => ({
+      kind: "tracker" as const,
+      date: activity.date,
+      activity,
+    }));
+    return [...practice, ...trackerTests, ...trackerActivity].sort((a, b) =>
+      b.date.localeCompare(a.date),
+    );
+  }, [records, tracker]);
   const saveProfile = () => {
     if (!nameDraft.trim() || Number(goalDraft) < 1) return;
     const next = {
@@ -416,34 +432,87 @@ export function Profile() {
             <h2 className="text-base font-semibold">Recent activity</h2>
             <div className="mt-3">
               {recent.length ? (
-                recent.map((record) => {
-                  const metrics = metricsForRecord(record);
+                recent.map((item) => {
+                  if (item.kind === "practice") {
+                    const { record } = item;
+                    const metrics = metricsForRecord(record);
+                    return (
+                      <Link
+                        key={`practice-${record.id}`}
+                        to="/history/$id"
+                        params={{ id: record.id }}
+                        className="flex items-center justify-between gap-3 border-b border-white/10 py-3 hover:text-primary last:border-b-0"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold">
+                            {record.subject} · {record.chapter}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Practice session · {record.exercise ?? "Exercise 1"} ·{" "}
+                            {formatDate(record.date)}
+                          </p>
+                        </div>
+                        <div className="text-right text-xs">
+                          <p className="font-semibold">{record.score ?? "—"} marks</p>
+                          <p className="text-muted-foreground">
+                            {metrics.accuracy === null ? "—" : `${Math.round(metrics.accuracy)}%`}
+                          </p>
+                        </div>
+                      </Link>
+                    );
+                  }
+
+                  if (item.kind === "mock-test") {
+                    const subject = tracker?.subjects.find(
+                      (entry) => entry.id === item.test.subjectId,
+                    );
+                    return (
+                      <div
+                        key={`mock-test-${item.test.id}`}
+                        className="flex items-center justify-between gap-3 border-b border-white/10 py-3 last:border-b-0"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold">
+                            {subject?.name ?? "Mock test"}
+                          </p>
+                          <p className="text-xs text-zinc-500">
+                            Mock test · {item.test.type} · {formatDate(item.test.date)}
+                          </p>
+                        </div>
+                        <div className="text-right text-xs text-zinc-400">
+                          <p className="font-semibold text-zinc-200">
+                            {item.test.score ?? "—"} / {item.test.total ?? "—"}
+                          </p>
+                          <p>{item.test.accuracy == null ? "—" : `${item.test.accuracy}%`}</p>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  const labels = {
+                    lecture: "Lectures completed",
+                    revision: "Revisions completed",
+                    "mock-test": "Mock tests completed",
+                  };
                   return (
-                    <Link
-                      key={record.id}
-                      to="/history/$id"
-                      params={{ id: record.id }}
-                      className="flex items-center justify-between gap-3 border-b border-white/10 py-3 hover:text-primary last:border-b-0"
+                    <div
+                      key={`tracker-${item.activity.id}`}
+                      className="flex items-center justify-between gap-3 border-b border-white/10 py-3 last:border-b-0"
                     >
                       <div className="min-w-0">
                         <p className="truncate text-sm font-semibold">
-                          {record.subject} · {record.chapter}
+                          {labels[item.activity.type]}
                         </p>
-                        <p className="text-xs text-muted-foreground">
-                          {record.exercise ?? "Exercise 1"} · {formatDate(record.date)}
-                        </p>
-                      </div>
-                      <div className="text-right text-xs">
-                        <p className="font-semibold">{record.score ?? "—"} marks</p>
-                        <p className="text-muted-foreground">
-                          {metrics.accuracy === null ? "—" : `${Math.round(metrics.accuracy)}%`}
+                        <p className="text-xs text-zinc-500">
+                          Study tracker · {formatDate(item.activity.date)}
                         </p>
                       </div>
-                    </Link>
+                      <p className="text-sm font-semibold text-zinc-200">+{item.activity.count}</p>
+                    </div>
                   );
                 })
               ) : (
-                <p className="py-4 text-sm text-muted-foreground">No practice recorded yet.</p>
+                <p className="py-4 text-sm text-muted-foreground">No activity recorded yet.</p>
               )}
             </div>
           </section>
