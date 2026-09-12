@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getStreaks } from "@/lib/analytics";
 import { loadHistory, type TestRecord } from "@/lib/exam";
+import { trackerActiveDates } from "@/lib/tracker";
 import { loadTrackerData } from "@/lib/tracker-store";
 import { loadPracticeProfile, savePracticeProfile, type PracticeProfile } from "@/lib/profile";
 import { requestLightPageLoader } from "@/lib/navigation";
@@ -130,10 +131,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
     const refresh = () => {
       setRecords(loadHistory());
       const tracker = loadTrackerData();
-      setTrackerActivityDates([
-        ...tracker.tests.log.map((test) => test.date),
-        ...tracker.activity.map((activity) => activity.date),
-      ]);
+      setTrackerActivityDates(trackerActiveDates(tracker));
     };
     refresh();
     window.addEventListener("storage", refresh);

@@ -69,7 +69,7 @@ function ActivityHeatmap({
       if (!entry.date) return;
       activity.set(entry.date, (activity.get(entry.date) ?? 0) + entry.count);
     });
-    const values = entries.map((date) => activity.get(localDay(date)) ?? 0);
+    const values = entries.map((date) => Math.max(0, activity.get(localDay(date)) ?? 0));
     const maximum = Math.max(...values, 1);
     const labels = entries
       .map((date, index) => ({ date, index }))

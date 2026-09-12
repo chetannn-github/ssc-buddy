@@ -67,7 +67,7 @@ function migrate(raw: unknown): TrackerData {
         id: String(entry.id ?? Math.random()),
         date: String(entry.date ?? ""),
         type: entry.type,
-        count: Math.max(1, Number(entry.count) || 1),
+        count: Number(entry.count) || 1,
       })),
   };
   for (const s of out.subjects) {

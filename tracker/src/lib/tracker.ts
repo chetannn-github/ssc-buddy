@@ -201,15 +201,29 @@ export function todayISO() {
   return `${year}-${month}-${day}`;
 }
 
-/** Keep non-test tracker work date-aware so the profile heatmap can include it. */
+/** Keep tracker work date-aware so an undo can cancel the original completion. */
 export function recordActivity(
   data: TrackerData,
   type: TrackerActivityType,
   count: number,
   date = todayISO(),
 ) {
-  if (count <= 0) return;
+  if (count === 0) return;
   data.activity.unshift({ id: uid(), date, type, count });
+}
+
+/** Dates with a net-positive tracker contribution, used for the shared streak. */
+export function trackerActiveDates(data: TrackerData) {
+  const byDay = new Map<string, number>();
+  data.tests.log.forEach((test) => {
+    if (test.date) byDay.set(test.date, (byDay.get(test.date) ?? 0) + 1);
+  });
+  data.activity.forEach((entry) => {
+    if (entry.date) byDay.set(entry.date, (byDay.get(entry.date) ?? 0) + entry.count);
+  });
+  return Array.from(byDay.entries())
+    .filter(([, count]) => count > 0)
+    .map(([date]) => date);
 }
 
 export const IMPORT_PROMPT = `I am preparing for SSC CGL 2027 and I use a personal tracker website.
