@@ -48,6 +48,7 @@ function migrate(raw: unknown): TrackerData {
       log: (d.tests?.log ?? []).map((t) => ({
         id: String(t.id ?? Math.random()),
         date: String(t.date ?? ""),
+        createdAt: String(t.createdAt ?? t.date ?? ""),
         subjectId: String(t.subjectId ?? ""),
         type: String(t.type ?? ""),
         score: t.score ?? null,

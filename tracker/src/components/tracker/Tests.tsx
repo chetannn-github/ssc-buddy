@@ -48,6 +48,7 @@ function AddTestForm({ onDone }: { onDone: () => void }) {
             d.tests.log.unshift({
               id: uid(),
               date,
+              createdAt: new Date().toISOString(),
               subjectId: isSectional ? subjectId : "__all__",
               type,
               score: numericScore,

@@ -10,6 +10,7 @@ export type RevisionSubject = {
 export type TestEntry = {
   id: string;
   date: string;
+  createdAt: string;
   subjectId: string;
   type: string;
   score: number | null;

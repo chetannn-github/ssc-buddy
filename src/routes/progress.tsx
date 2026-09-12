@@ -125,8 +125,12 @@ function Progress() {
           } =>
             entry.test.score !== null && entry.test.total !== null && entry.test.accuracy !== null,
         )
-        // The log stores newest entries first. Reverse same-day order so the latest point is last.
-        .sort((a, b) => a.test.date.localeCompare(b.test.date) || b.index - a.index)
+        // Saved time is the stable source of truth for latest test ordering.
+        .sort(
+          (a, b) =>
+            (a.test.createdAt || a.test.date).localeCompare(b.test.createdAt || b.test.date) ||
+            b.index - a.index,
+        )
         .map(({ test }) => test)
     );
   }, [category, subjectId, tracker.tests.log]);
@@ -240,6 +244,13 @@ function Progress() {
                               month: "short",
                               year: "numeric",
                             })}
+                            <span className="mt-0.5 block text-[11px] text-zinc-600">
+                              Saved{" "}
+                              {new Date(test.createdAt || test.date).toLocaleTimeString(undefined, {
+                                hour: "numeric",
+                                minute: "2-digit",
+                              })}
+                            </span>
                           </td>
                           <td className="px-4 py-3">
                             {category === "Sectional"
