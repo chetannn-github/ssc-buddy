@@ -189,7 +189,7 @@ function localDayKey(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
-export function getStreaks(records: TestRecord[], now = new Date()) {
+export function getStreaks(records: Array<Pick<TestRecord, "date">>, now = new Date()) {
   const days = new Set(records.map((record) => localDayKey(new Date(record.date))));
   let current = 0;
   const cursor = new Date(now);

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getStreaks } from "@/lib/analytics";
 import { loadHistory, type TestRecord } from "@/lib/exam";
+import { loadTrackerData } from "@/lib/tracker-store";
 import { loadPracticeProfile, savePracticeProfile, type PracticeProfile } from "@/lib/profile";
 import { requestLightPageLoader } from "@/lib/navigation";
 import { restorePracticeBackup } from "@/lib/backup";
@@ -122,13 +123,25 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
   const path = useRouterState({ select: (r) => r.location.pathname });
   const navigate = useNavigate();
   const [records, setRecords] = useState<TestRecord[]>([]);
+  const [trackerActivityDates, setTrackerActivityDates] = useState<string[]>([]);
   const [profile, setProfile] = useState<PracticeProfile | null | undefined>(undefined);
 
   useEffect(() => {
-    const refresh = () => setRecords(loadHistory());
+    const refresh = () => {
+      setRecords(loadHistory());
+      const tracker = loadTrackerData();
+      setTrackerActivityDates([
+        ...tracker.tests.log.map((test) => test.date),
+        ...tracker.activity.map((activity) => activity.date),
+      ]);
+    };
     refresh();
     window.addEventListener("storage", refresh);
-    return () => window.removeEventListener("storage", refresh);
+    window.addEventListener("cbt-tracker-updated", refresh);
+    return () => {
+      window.removeEventListener("storage", refresh);
+      window.removeEventListener("cbt-tracker-updated", refresh);
+    };
   }, []);
 
   useEffect(() => {
@@ -138,7 +151,10 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
     return () => window.removeEventListener("cbt-profile-updated", refresh);
   }, []);
 
-  const currentStreak = getStreaks(records).current;
+  const currentStreak = getStreaks([
+    ...records,
+    ...trackerActivityDates.map((date) => ({ date })),
+  ]).current;
   const isProfilePage = path === "/" || path === "/profile";
   const navigateWithThemeTransition = (event: MouseEvent<HTMLAnchorElement>, to: AppPath) => {
     if (
