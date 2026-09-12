@@ -8,7 +8,14 @@ import { aggregateRecords, metricsForRecord } from "@/lib/analytics";
 import { loadHistory, type TestRecord } from "@/lib/exam";
 import { loadPracticeProfile, savePracticeProfile, type PracticeProfile } from "@/lib/profile";
 import { downloadPracticeBackup } from "@/lib/backup";
-import { overallSyllabus, subjectRevision, type TrackerData } from "@/lib/tracker";
+import {
+  overallSyllabus,
+  pct,
+  subjectRevision,
+  subjectSyllabus,
+  testsDone,
+  type TrackerData,
+} from "@/lib/tracker";
 import { loadTrackerData } from "@/lib/tracker-store";
 import { cn } from "@/lib/utils";
 
@@ -235,6 +242,117 @@ function TargetProgress({
   );
 }
 
+function TrackerRow({
+  label,
+  done,
+  total,
+  tone = "bg-blue-500",
+}: {
+  label: string;
+  done: number;
+  total: number;
+  tone?: string;
+}) {
+  return (
+    <div className="grid grid-cols-[5.5rem_minmax(0,1fr)_auto] items-center gap-3 py-2 text-sm sm:grid-cols-[7rem_minmax(0,1fr)_auto]">
+      <span className="truncate text-zinc-300">{label}</span>
+      <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+        <div
+          className={`h-full rounded-full ${tone}`}
+          style={{ width: `${Math.min(100, pct(done, total))}%` }}
+        />
+      </div>
+      <span className="font-mono text-xs text-zinc-500">
+        {done}/{total}
+      </span>
+    </div>
+  );
+}
+
+function StudyTrackerOverview({ tracker }: { tracker: TrackerData | null }) {
+  if (!tracker) return null;
+  const syllabus = overallSyllabus(tracker);
+  const mockDone = tracker.tests.mocks.pre.done + tracker.tests.mocks.mains.done;
+  const mockTarget = tracker.tests.mocks.pre.target + tracker.tests.mocks.mains.target;
+
+  return (
+    <section className="border-t border-white/10 pt-5 sm:pt-6">
+      <div className="flex items-baseline justify-between gap-3">
+        <div>
+          <h2 className="text-base font-semibold">Study tracker</h2>
+          <p className="mt-0.5 text-xs text-zinc-500">Lectures, revision and mock-test progress</p>
+        </div>
+        <span className="font-mono text-xs text-zinc-400">
+          {syllabus.done}/{syllabus.total} syllabus
+        </span>
+      </div>
+
+      <div className="mt-4 grid gap-3 md:grid-cols-3">
+        <div className="rounded-xl border border-white/10 bg-white/[0.025] p-3 sm:p-4">
+          <p className="text-xs font-medium text-zinc-400">Syllabus</p>
+          <p className="mt-1 text-lg font-semibold text-zinc-100">
+            {pct(syllabus.done, syllabus.total)}%
+          </p>
+          <div className="mt-3 divide-y divide-white/5">
+            {tracker.subjects.map((subject) => {
+              const progress = subjectSyllabus(subject);
+              return (
+                <TrackerRow
+                  key={subject.id}
+                  label={subject.name}
+                  done={progress.done}
+                  total={progress.total}
+                />
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-white/10 bg-white/[0.025] p-3 sm:p-4">
+          <p className="text-xs font-medium text-zinc-400">Revision</p>
+          <p className="mt-1 text-lg font-semibold text-zinc-100">By subject</p>
+          <div className="mt-3 divide-y divide-white/5">
+            {tracker.subjects.map((subject) => {
+              const progress = subjectRevision(tracker, subject);
+              return (
+                <TrackerRow
+                  key={subject.id}
+                  label={subject.name}
+                  done={progress.done}
+                  total={progress.total}
+                  tone="bg-emerald-500"
+                />
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-white/10 bg-white/[0.025] p-3 sm:p-4">
+          <p className="text-xs font-medium text-zinc-400">Mock tests</p>
+          <p className="mt-1 text-lg font-semibold text-zinc-100">Practice progress</p>
+          <div className="mt-3 divide-y divide-white/5">
+            {tracker.subjects.map((subject) => (
+              <TrackerRow
+                key={subject.id}
+                label={subject.name}
+                done={testsDone(tracker, subject.id)}
+                total={tracker.tests.targets[subject.id] ?? 0}
+                tone="bg-violet-500"
+              />
+            ))}
+            <TrackerRow
+              label="Full mocks"
+              done={mockDone}
+              total={mockTarget}
+              tone="bg-violet-500"
+            />
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export function Profile() {
   const [records, setRecords] = useState<TestRecord[]>([]);
   const [tracker, setTracker] = useState<TrackerData | null>(null);
@@ -427,6 +545,8 @@ export function Profile() {
           />
 
           <ActivityHeatmap records={records} tracker={tracker} />
+
+          <StudyTrackerOverview tracker={tracker} />
 
           <section className="border-t border-white/10 pt-5 sm:pt-6">
             <h2 className="text-base font-semibold">Recent activity</h2>

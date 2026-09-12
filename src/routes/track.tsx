@@ -3,13 +3,12 @@ import { useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { daysLeft, fmtDate, fmtMonth, overallSyllabus, pct } from "@/lib/tracker";
 import { TrackerProvider, useTracker } from "@/lib/tracker-store";
-import { Dashboard } from "../../tracker/src/components/tracker/Dashboard";
 import { DataPanel } from "../../tracker/src/components/tracker/DataPanel";
 import { Revision } from "../../tracker/src/components/tracker/Revision";
 import { Syllabus } from "../../tracker/src/components/tracker/Syllabus";
 import { Tests } from "../../tracker/src/components/tracker/Tests";
 
-const TABS = ["Dashboard", "Syllabus", "Revision", "Mock Test"] as const;
+const TABS = ["Syllabus", "Revision", "Mock Test"] as const;
 type Tab = (typeof TABS)[number];
 
 export const Route = createFileRoute("/track")({
@@ -98,13 +97,13 @@ function TrackerHeader() {
 }
 
 function TrackPage() {
-  const [tab, setTab] = useState<Tab>("Dashboard");
+  const [tab, setTab] = useState<Tab>("Syllabus");
   return (
     <AppShell title="Tracker">
       <div className="tracker-theme -mx-4 -my-6 min-h-[calc(100vh-4rem)] bg-[#f2efe8] px-3 py-5 text-[#474239] sm:-mx-6 sm:px-5 sm:py-6">
         <main className="mx-auto w-full max-w-3xl">
           <TrackerHeader />
-          <nav className="mt-4 grid grid-cols-2 gap-0.5 rounded-full bg-card p-0.5 sm:grid-cols-4">
+          <nav className="mt-4 grid grid-cols-3 gap-0.5 rounded-full bg-card p-0.5">
             {TABS.map((item) => (
               <button
                 key={item}
@@ -121,7 +120,6 @@ function TrackPage() {
             ))}
           </nav>
           <div className="mt-3">
-            {tab === "Dashboard" && <Dashboard />}
             {tab === "Syllabus" && <Syllabus />}
             {tab === "Revision" && <Revision />}
             {tab === "Mock Test" && <Tests />}
