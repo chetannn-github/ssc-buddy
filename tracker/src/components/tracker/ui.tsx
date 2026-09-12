@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
-    <section className={`rounded-2xl bg-card px-4 py-4 sm:px-6 sm:py-5 ${className}`}>
+    <section className={`rounded-xl bg-card px-3 py-3 sm:px-4 sm:py-4 ${className}`}>
       {children}
     </section>
   );
@@ -16,7 +16,13 @@ export function Label({ children }: { children: ReactNode }) {
   );
 }
 
-export function Bar({ value, tone = "blue" }: { value: number; tone?: "blue" | "green" | undefined }) {
+export function Bar({
+  value,
+  tone = "blue",
+}: {
+  value: number;
+  tone?: "blue" | "green" | undefined;
+}) {
   return (
     <div className="h-[6px] w-full overflow-hidden rounded-full bg-track">
       <div
@@ -47,14 +53,14 @@ export function Num({
       aria-label={ariaLabel}
       value={value}
       onChange={(e) => onChange(Math.max(min, Number(e.target.value) || 0))}
-      className={`h-8 w-16 rounded-full bg-track px-3 text-center font-mono text-sm text-foreground outline-none focus:ring-2 focus:ring-accent-blue/40 ${className}`}
+      className={`h-7 w-14 rounded-full bg-track px-2 text-center font-mono text-[13px] text-foreground outline-none focus:ring-2 focus:ring-accent-blue/40 ${className}`}
     />
   );
 }
 
 export function Pill({ children }: { children: ReactNode }) {
   return (
-    <span className="inline-flex items-center gap-2 rounded-full bg-card px-4 py-2 font-mono text-[13px] text-muted-foreground">
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-card px-3 py-1.5 font-mono text-xs text-muted-foreground">
       {children}
     </span>
   );
@@ -83,7 +89,7 @@ export function GhostButton({
     <button
       type={type}
       onClick={onClick}
-      className={`inline-flex items-center justify-center rounded-full border bg-card px-4 py-2 text-sm transition-colors ${toneClass} ${className}`}
+      className={`inline-flex items-center justify-center rounded-full border bg-card px-3 py-1.5 text-[13px] transition-colors ${toneClass} ${className}`}
     >
       {children}
     </button>
@@ -109,8 +115,8 @@ export function IconButton({
       onClick={onClick}
       className={
         variant === "solid"
-          ? "grid h-8 w-8 place-items-center rounded-full bg-accent-blue text-card transition-opacity hover:opacity-85"
-          : "grid h-8 w-8 place-items-center rounded-full bg-track text-muted-foreground transition-colors hover:text-foreground"
+          ? "grid h-7 w-7 place-items-center rounded-full bg-accent-blue text-card transition-opacity hover:opacity-85"
+          : "grid h-7 w-7 place-items-center rounded-full bg-track text-muted-foreground transition-colors hover:text-foreground"
       }
     >
       {children}

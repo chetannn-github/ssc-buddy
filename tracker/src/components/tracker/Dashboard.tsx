@@ -30,7 +30,7 @@ function TodayCard({
   ];
   return (
     <section
-      className="rounded-2xl px-4 py-4 sm:px-6 sm:py-5"
+      className="rounded-xl px-3 py-3 sm:px-4 sm:py-4"
       style={{ backgroundColor: "#2d2a26" }}
     >
       <div className="flex items-center justify-between">
@@ -41,16 +41,16 @@ function TodayCard({
           {dateLabel}
         </span>
       </div>
-      <div className="mt-4 grid grid-cols-3 gap-2">
+      <div className="mt-3 grid grid-cols-3 gap-2">
         {items.map((it) => (
           <div key={it.label} className="flex flex-col items-center text-center">
             <span
-              className="font-mono text-3xl leading-none sm:text-4xl"
+              className="font-mono text-2xl leading-none sm:text-3xl"
               style={{ color: "#fcf8ec" }}
             >
               {it.n}
             </span>
-            <span className="mt-2 font-mono text-[11px] tracking-[0.18em] text-[#8a867e] uppercase">
+            <span className="mt-1.5 font-mono text-[10px] tracking-[0.14em] text-[#8a867e] uppercase">
               {it.label}
             </span>
           </div>
@@ -74,8 +74,8 @@ function Row({
   right?: string | undefined;
 }) {
   return (
-    <div className="flex items-center gap-3 py-2 sm:gap-5">
-      <div className="w-24 shrink-0 text-[15px] sm:w-32">{name}</div>
+    <div className="flex items-center gap-2 py-1.5 sm:gap-3">
+      <div className="w-20 shrink-0 text-sm sm:w-28">{name}</div>
       <div className="min-w-0 flex-1">
         <Bar value={pct(done, total)} tone={tone} />
       </div>
