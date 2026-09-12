@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { ChevronDown } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
   CartesianGrid,
@@ -92,6 +93,57 @@ function ChartCard({
   );
 }
 
+function FilterMenu<T extends string>({
+  value,
+  options,
+  onChange,
+  disabled = false,
+}: {
+  value: T;
+  options: Array<{ value: T; label: string }>;
+  onChange: (value: T) => void;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const label = options.find((option) => option.value === value)?.label ?? value;
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen((current) => !current)}
+        className="flex h-9 items-center gap-2 rounded-lg bg-white/5 px-3 text-sm text-zinc-200 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+      >
+        {label} <ChevronDown className="h-4 w-4 text-zinc-500" />
+      </button>
+      {open && (
+        <div
+          role="listbox"
+          className="absolute top-10 right-0 z-20 min-w-full overflow-hidden rounded-lg bg-[#202020] py-1 shadow-xl ring-1 ring-white/5"
+        >
+          {options.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              role="option"
+              aria-selected={option.value === value}
+              onClick={() => {
+                onChange(option.value);
+                setOpen(false);
+              }}
+              className="w-full px-3 py-2 text-left text-sm text-zinc-300 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Progress() {
   const [tracker, setTracker] = useState<TrackerData>(() => loadTrackerData());
   const [category, setCategory] = useState<TestCategory>("Sectional");
@@ -128,8 +180,8 @@ function Progress() {
         // Saved time is the stable source of truth for latest test ordering.
         .sort(
           (a, b) =>
-            (a.test.createdAt || a.test.date).localeCompare(b.test.createdAt || b.test.date) ||
-            b.index - a.index,
+            (b.test.createdAt || b.test.date).localeCompare(a.test.createdAt || a.test.date) ||
+            a.index - b.index,
         )
         .map(({ test }) => test)
     );
@@ -150,7 +202,7 @@ function Progress() {
     };
   }, [tests]);
 
-  const chartData = tests.map((test, index) => ({
+  const chartData = [...tests].reverse().map((test, index) => ({
     label: `${index + 1}`,
     marks: test.score,
     accuracy: test.accuracy,
@@ -168,30 +220,27 @@ function Progress() {
               <h1 className="mt-1 text-2xl font-semibold">Progress</h1>
             </div>
             <div className="flex gap-2">
-              <select
+              <FilterMenu
                 value={category}
-                onChange={(event) => setCategory(event.target.value as TestCategory)}
-                className="h-9 rounded-lg border border-white/10 bg-white/5 px-3 text-sm text-zinc-200 outline-none"
-              >
-                <option className="bg-[#202020]">Sectional</option>
-                <option className="bg-[#202020]">Pre</option>
-                <option className="bg-[#202020]">Mains</option>
-              </select>
-              <select
+                options={[
+                  { value: "Sectional", label: "Sectional" },
+                  { value: "Pre", label: "Pre" },
+                  { value: "Mains", label: "Mains" },
+                ]}
+                onChange={setCategory}
+              />
+              <FilterMenu
                 value={subjectId}
-                onChange={(event) => setSubjectId(event.target.value)}
+                options={[
+                  { value: "all", label: "All subjects" },
+                  ...tracker.subjects.map((subject) => ({
+                    value: subject.id,
+                    label: subject.name,
+                  })),
+                ]}
+                onChange={setSubjectId}
                 disabled={category !== "Sectional"}
-                className="h-9 rounded-lg border border-white/10 bg-white/5 px-3 text-sm text-zinc-200 outline-none disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <option value="all" className="bg-[#202020]">
-                  All subjects
-                </option>
-                {tracker.subjects.map((subject) => (
-                  <option key={subject.id} value={subject.id} className="bg-[#202020]">
-                    {subject.name}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
           </div>
 
@@ -244,13 +293,6 @@ function Progress() {
                               month: "short",
                               year: "numeric",
                             })}
-                            <span className="mt-0.5 block text-[11px] text-zinc-600">
-                              Saved{" "}
-                              {new Date(test.createdAt || test.date).toLocaleTimeString(undefined, {
-                                hour: "numeric",
-                                minute: "2-digit",
-                              })}
-                            </span>
                           </td>
                           <td className="px-4 py-3">
                             {category === "Sectional"
