@@ -7,11 +7,10 @@ import { Input } from "@/components/ui/input";
 import { getStreaks } from "@/lib/analytics";
 import { loadHistory, type TestRecord } from "@/lib/exam";
 import { trackerActiveDates } from "@/lib/tracker";
-import { loadTrackerData } from "@/lib/tracker-store";
+import { loadTrackerData, saveTrackerData } from "@/lib/tracker-store";
 import { loadPracticeProfile, savePracticeProfile, type PracticeProfile } from "@/lib/profile";
 import { requestLightPageLoader } from "@/lib/navigation";
 import { restorePracticeBackup } from "@/lib/backup";
-import { loadTrackerData, saveTrackerData } from "@/lib/tracker-store";
 import { cn } from "@/lib/utils";
 
 type Props = {
