@@ -66,6 +66,13 @@ function localDay(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
+function activityDay(value: string) {
+  const dateOnly = /^(\d{4}-\d{2}-\d{2})/.exec(value)?.[1];
+  if (dateOnly) return dateOnly;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : localDay(date);
+}
+
 function formatDate(date: string) {
   return new Date(date).toLocaleDateString(undefined, { day: "numeric", month: "short" });
 }
@@ -83,9 +90,9 @@ function ActivityHeatmap({
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const datedActivity = [
-      ...records.map((record) => record.date),
-      ...(tracker?.tests.log ?? []).map((test) => test.date),
-      ...(tracker?.activity ?? []).map((entry) => entry.date),
+      ...records.map((record) => activityDay(record.date)),
+      ...(tracker?.tests.log ?? []).map((test) => activityDay(test.date)),
+      ...(tracker?.activity ?? []).map((entry) => activityDay(entry.date)),
     ].filter(Boolean);
     const dayCount =
       range === "today"
@@ -100,7 +107,7 @@ function ActivityHeatmap({
                   (today.getTime() -
                     Math.min(
                       ...datedActivity
-                        .map((date) => new Date(date).getTime())
+                        .map((date) => new Date(`${date}T00:00:00`).getTime())
                         .filter(Number.isFinite),
                       today.getTime(),
                     )) /
@@ -114,19 +121,22 @@ function ActivityHeatmap({
     });
     const activity = new Map<string, number>();
     records.forEach((record) => {
-      const key = localDay(new Date(record.date));
+      const key = activityDay(record.date);
+      if (!key) return;
       activity.set(
         key,
         (activity.get(key) ?? 0) + Math.max(1, record.answers.filter(Boolean).length),
       );
     });
     tracker?.tests.log.forEach((test) => {
-      if (!test.date) return;
-      activity.set(test.date, (activity.get(test.date) ?? 0) + 1);
+      const key = activityDay(test.date);
+      if (!key) return;
+      activity.set(key, (activity.get(key) ?? 0) + 1);
     });
     tracker?.activity.forEach((entry) => {
-      if (!entry.date) return;
-      activity.set(entry.date, (activity.get(entry.date) ?? 0) + entry.count);
+      const key = activityDay(entry.date);
+      if (!key) return;
+      activity.set(key, (activity.get(key) ?? 0) + entry.count);
     });
     const values = entries.map((date) => Math.max(0, activity.get(localDay(date)) ?? 0));
     const maximum = Math.max(...values, 1);
