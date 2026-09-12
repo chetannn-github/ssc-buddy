@@ -1,6 +1,6 @@
 import type { MouseEvent, ReactNode } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { Flame, GraduationCap, History, PenSquare, Upload } from "lucide-react";
+import { Flame, GraduationCap, History, PenSquare, Route as RouteIcon, Upload } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,11 +19,12 @@ type Props = {
 };
 
 const nav = [
+  { title: "Track", url: "/track", icon: RouteIcon },
   { title: "New test", url: "/test", icon: PenSquare },
   { title: "History", url: "/history", icon: History },
 ] as const;
 
-type AppPath = "/" | "/test" | "/history";
+type AppPath = "/" | "/track" | "/test" | "/history";
 
 type ViewTransitionDocument = Document & {
   startViewTransition?: (callback: () => Promise<unknown>) => { finished: Promise<void> };

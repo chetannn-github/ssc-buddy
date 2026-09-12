@@ -1,5 +1,6 @@
 @import "tailwindcss" source(none);
 @source "../src";
+@source "../tracker/src";
 @import "tw-animate-css";
 
 @keyframes consistency-flame {
@@ -100,8 +101,23 @@
   --color-exam-header: var(--exam-header);
   --color-exam-header-foreground: var(--exam-header-foreground);
   --color-surface: var(--surface);
+  --color-track: var(--track);
+  --color-accent-blue: var(--accent-blue);
+  --color-accent-green: var(--accent-green);
   --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Sora", ui-sans-serif, system-ui, sans-serif;
+}
+
+.tracker-theme {
+  --background: oklch(0.925 0.008 85);
+  --foreground: oklch(0.28 0.012 70);
+  --card: oklch(0.965 0.006 85);
+  --card-foreground: oklch(0.28 0.012 70);
+  --muted-foreground: oklch(0.52 0.015 80);
+  --border: oklch(0.87 0.012 88);
+  --track: oklch(0.885 0.018 95);
+  --accent-blue: oklch(0.6 0.09 253);
+  --accent-green: oklch(0.79 0.075 150);
 }
 
 :root {

@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as TrackRouteImport } from './routes/track'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as TestRouteImport } from './routes/test'
 import { Route as HistoryIndexRouteImport } from './routes/history.index'
@@ -18,6 +19,11 @@ import { Route as HistoryIdRouteImport } from './routes/history.$id'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TrackRoute = TrackRouteImport.update({
+  id: '/track',
+  path: '/track',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProfileRoute = ProfileRouteImport.update({
@@ -43,6 +49,7 @@ const HistoryIdRoute = HistoryIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/track': typeof TrackRoute
   '/profile': typeof ProfileRoute
   '/test': typeof TestRoute
   '/history/$id': typeof HistoryIdRoute
@@ -50,6 +57,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/track': typeof TrackRoute
   '/profile': typeof ProfileRoute
   '/test': typeof TestRoute
   '/history/$id': typeof HistoryIdRoute
@@ -58,6 +66,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/track': typeof TrackRoute
   '/profile': typeof ProfileRoute
   '/test': typeof TestRoute
   '/history/$id': typeof HistoryIdRoute
@@ -65,14 +74,15 @@ export interface FileRoutesById {
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/profile' | '/test' | '/history/$id' | '/history/'
+  fullPaths: '/' | '/track' | '/profile' | '/test' | '/history/$id' | '/history/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/profile' | '/test' | '/history/$id' | '/history'
-  id: '__root__' | '/' | '/profile' | '/test' | '/history/$id' | '/history/'
+  to: '/' | '/track' | '/profile' | '/test' | '/history/$id' | '/history'
+  id: '__root__' | '/' | '/track' | '/profile' | '/test' | '/history/$id' | '/history/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  TrackRoute: typeof TrackRoute
   ProfileRoute: typeof ProfileRoute
   TestRoute: typeof TestRoute
   HistoryIdRoute: typeof HistoryIdRoute
@@ -86,6 +96,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/track': {
+      id: '/track'
+      path: '/track'
+      fullPath: '/track'
+      preLoaderRoute: typeof TrackRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/profile': {
@@ -121,6 +138,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  TrackRoute: TrackRoute,
   ProfileRoute: ProfileRoute,
   TestRoute: TestRoute,
   HistoryIdRoute: HistoryIdRoute,
