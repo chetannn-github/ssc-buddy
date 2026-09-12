@@ -104,6 +104,13 @@ export function loadTrackerData() {
   }
 }
 
+export function saveTrackerData(data: TrackerData) {
+  const next = migrate(data);
+  localStorage.setItem(TRACKER_STORAGE_KEY, JSON.stringify(next));
+  window.dispatchEvent(new Event("cbt-tracker-updated"));
+  return next;
+}
+
 export function TrackerProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<TrackerData>(() => defaultData());
   const [ready, setReady] = useState(false);

@@ -3,7 +3,6 @@ import { useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { daysLeft, fmtDate, fmtMonth, overallSyllabus, pct } from "@/lib/tracker";
 import { TrackerProvider, useTracker } from "@/lib/tracker-store";
-import { DataPanel } from "../../tracker/src/components/tracker/DataPanel";
 import { Revision } from "../../tracker/src/components/tracker/Revision";
 import { Syllabus } from "../../tracker/src/components/tracker/Syllabus";
 import { Tests } from "../../tracker/src/components/tracker/Tests";
@@ -128,7 +127,6 @@ function TrackPage() {
             {tab === "Revision" && <Revision />}
             {tab === "Mock Test" && <Tests />}
           </div>
-          <DataPanel />
         </main>
       </div>
     </AppShell>

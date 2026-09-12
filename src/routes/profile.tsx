@@ -1,13 +1,22 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ChevronDown, Download, LoaderCircle, Pencil, RefreshCw, Save } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import {
+  ChevronDown,
+  Copy,
+  Download,
+  LoaderCircle,
+  Pencil,
+  RefreshCw,
+  Save,
+  Upload,
+} from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { aggregateRecords, metricsForRecord } from "@/lib/analytics";
 import { loadHistory, type TestRecord } from "@/lib/exam";
 import { loadPracticeProfile, savePracticeProfile, type PracticeProfile } from "@/lib/profile";
-import { downloadPracticeBackup } from "@/lib/backup";
+import { downloadPracticeBackup, restorePracticeBackup } from "@/lib/backup";
 import {
   overallSyllabus,
   pct,
@@ -16,6 +25,7 @@ import {
   testsDone,
   type TrackerData,
 } from "@/lib/tracker";
+import { IMPORT_PROMPT } from "@/lib/tracker";
 import { loadTrackerData } from "@/lib/tracker-store";
 import { cn } from "@/lib/utils";
 
@@ -460,10 +470,14 @@ export function Profile() {
   const [profile, setProfile] = useState<PracticeProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [editingProfile, setEditingProfile] = useState(false);
+  const [importingData, setImportingData] = useState(false);
   const [previewingAvatar, setPreviewingAvatar] = useState(false);
   const [avatarFiles, setAvatarFiles] = useState<string[]>([]);
   const [nameDraft, setNameDraft] = useState("");
   const [goalDraft, setGoalDraft] = useState("");
+  const [importMessage, setImportMessage] = useState("");
+  const [promptCopied, setPromptCopied] = useState(false);
+  const importFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let loaderTimer: ReturnType<typeof setTimeout> | undefined;
@@ -557,6 +571,20 @@ export function Profile() {
     savePracticeProfile(next);
     setProfile(next);
   };
+  const importJson = async (file: File) => {
+    try {
+      await restorePracticeBackup(file);
+      const saved = loadPracticeProfile();
+      setRecords(loadHistory());
+      setTracker(loadTrackerData());
+      setProfile(saved);
+      setNameDraft(saved?.name ?? "");
+      setGoalDraft(saved ? String(saved.questionGoal) : "100");
+      setImportMessage("Data imported successfully.");
+    } catch {
+      setImportMessage("Choose a valid full backup or Tracker JSON file.");
+    }
+  };
 
   if (isLoading) {
     return (
@@ -624,6 +652,18 @@ export function Profile() {
                 onClick={downloadPracticeBackup}
               >
                 <Download className="h-3.5 w-3.5" /> Export backup
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-8 gap-1.5 text-xs text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
+                onClick={() => {
+                  setImportMessage("");
+                  setImportingData(true);
+                }}
+              >
+                <Upload className="h-3.5 w-3.5" /> Import JSON
               </Button>
             </div>
           </section>
@@ -735,6 +775,82 @@ export function Profile() {
               <Button className="bg-emerald-600 hover:bg-emerald-500" onClick={saveProfile}>
                 <Save className="h-4 w-4" /> Save profile
               </Button>
+            </div>
+          </section>
+        </div>
+      )}
+      {importingData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-md">
+          <section className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#1e1e1e] p-6 text-zinc-100 shadow-2xl sm:p-7">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-semibold tracking-tight text-zinc-50">Import data</h2>
+                <p className="mt-1 text-sm text-zinc-400">
+                  Upload a complete Profile backup or a Tracker JSON file.
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-zinc-400 hover:bg-white/10 hover:text-white"
+                onClick={() => setImportingData(false)}
+              >
+                Close
+              </Button>
+            </div>
+            <div className="mt-6 space-y-5">
+              <div className="rounded-xl bg-white/[0.04] p-4">
+                <p className="text-sm font-medium">1. Choose a JSON file</p>
+                <p className="mt-1 text-xs text-zinc-400">
+                  Full backups restore Profile, Practice Sessions, and Study Tracker data.
+                  Tracker-only JSON updates only the Study Tracker.
+                </p>
+                <input
+                  ref={importFileRef}
+                  type="file"
+                  accept="application/json,.json"
+                  className="hidden"
+                  onChange={async (event) => {
+                    const file = event.target.files?.[0];
+                    if (file) await importJson(file);
+                    event.target.value = "";
+                  }}
+                />
+                <Button
+                  className="mt-3 bg-emerald-600 hover:bg-emerald-500"
+                  onClick={() => importFileRef.current?.click()}
+                >
+                  <Upload className="h-4 w-4" /> Choose JSON file
+                </Button>
+              </div>
+              <div className="rounded-xl bg-white/[0.04] p-4">
+                <p className="text-sm font-medium">2. Create Tracker JSON with ChatGPT</p>
+                <p className="mt-1 text-xs text-zinc-400">
+                  Copy this prompt, add your chapter or lecture screenshots in ChatGPT, then save
+                  its raw JSON response and upload it above.
+                </p>
+                <Button
+                  variant="outline"
+                  className="mt-3 border-white/10 bg-white/5 text-zinc-200 hover:bg-white/10 hover:text-white"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(IMPORT_PROMPT);
+                      setPromptCopied(true);
+                      window.setTimeout(() => setPromptCopied(false), 2000);
+                    } catch {
+                      setImportMessage(
+                        "Copy failed. Select the prompt below and copy it manually.",
+                      );
+                    }
+                  }}
+                >
+                  <Copy className="h-4 w-4" /> {promptCopied ? "Prompt copied" : "Copy prompt"}
+                </Button>
+                <pre className="mt-3 max-h-40 overflow-auto rounded-lg bg-black/25 p-3 text-left font-mono text-[11px] whitespace-pre-wrap text-zinc-400">
+                  {IMPORT_PROMPT}
+                </pre>
+              </div>
+              {importMessage && <p className="text-sm text-emerald-300">{importMessage}</p>}
             </div>
           </section>
         </div>

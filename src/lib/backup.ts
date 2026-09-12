@@ -10,6 +10,8 @@ import {
   type TestRecord,
 } from "@/lib/exam";
 import { loadPracticeProfile, savePracticeProfile, type PracticeProfile } from "@/lib/profile";
+import { loadTrackerData, saveTrackerData } from "@/lib/tracker-store";
+import type { TrackerData } from "@/lib/tracker";
 
 type PracticeBackup = {
   format: "mcq-practice-backup";
@@ -19,6 +21,7 @@ type PracticeBackup = {
   subjects: Subject[];
   marking: MarkingScheme | null;
   history: TestRecord[];
+  tracker: TrackerData;
 };
 
 function isProfile(value: unknown): value is PracticeProfile {
@@ -42,6 +45,7 @@ export function downloadPracticeBackup() {
     subjects: loadSubjects(),
     marking: loadMarking(),
     history: loadHistory(),
+    tracker: loadTrackerData(),
   };
   const url = URL.createObjectURL(
     new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" }),
@@ -55,6 +59,11 @@ export function downloadPracticeBackup() {
 
 export async function restorePracticeBackup(file: File) {
   const parsed = JSON.parse(await file.text()) as Partial<PracticeBackup>;
+  const trackerOnly = parsed as unknown as Partial<TrackerData>;
+  if (!parsed.format && Array.isArray(trackerOnly.subjects)) {
+    saveTrackerData(trackerOnly as TrackerData);
+    return loadPracticeProfile();
+  }
   if (
     parsed.format !== "mcq-practice-backup" ||
     parsed.version !== 1 ||
@@ -70,6 +79,7 @@ export async function restorePracticeBackup(file: File) {
   if (parsed.marking && typeof parsed.marking === "object")
     saveMarking(parsed.marking as MarkingScheme);
   if (parsed.profile) savePracticeProfile(parsed.profile);
+  if (parsed.tracker && typeof parsed.tracker === "object") saveTrackerData(parsed.tracker);
   window.dispatchEvent(new Event("cbt-backup-restored"));
   return parsed.profile ?? null;
 }
