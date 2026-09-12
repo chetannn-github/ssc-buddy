@@ -108,16 +108,27 @@ function Progress() {
   }, []);
 
   const tests = useMemo(() => {
-    return tracker.tests.log
-      .filter((test) => test.type === category)
-      .filter(
-        (test) => category !== "Sectional" || subjectId === "all" || test.subjectId === subjectId,
-      )
-      .filter(
-        (test): test is TestEntry & { score: number; total: number; accuracy: number } =>
-          test.score !== null && test.total !== null && test.accuracy !== null,
-      )
-      .sort((a, b) => a.date.localeCompare(b.date));
+    return (
+      tracker.tests.log
+        .map((test, index) => ({ test, index }))
+        .filter(({ test }) => test.type === category)
+        .filter(
+          ({ test }) =>
+            category !== "Sectional" || subjectId === "all" || test.subjectId === subjectId,
+        )
+        .filter(
+          (
+            entry,
+          ): entry is {
+            test: TestEntry & { score: number; total: number; accuracy: number };
+            index: number;
+          } =>
+            entry.test.score !== null && entry.test.total !== null && entry.test.accuracy !== null,
+        )
+        // The log stores newest entries first. Reverse same-day order so the latest point is last.
+        .sort((a, b) => a.test.date.localeCompare(b.test.date) || b.index - a.index)
+        .map(({ test }) => test)
+    );
   }, [category, subjectId, tracker.tests.log]);
 
   const summary = useMemo(() => {
@@ -221,7 +232,7 @@ function Progress() {
                       </tr>
                     </thead>
                     <tbody>
-                      {[...tests].reverse().map((test) => (
+                      {tests.map((test) => (
                         <tr key={test.id} className="border-t border-white/5">
                           <td className="px-4 py-3 text-zinc-400">
                             {new Date(test.date).toLocaleDateString(undefined, {
