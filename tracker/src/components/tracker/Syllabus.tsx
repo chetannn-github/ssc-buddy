@@ -161,7 +161,7 @@ export function Syllabus() {
               <button
                 type="button"
                 onClick={() => setOpenSubjectId((current) => (current === s.id ? "" : s.id))}
-                className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-left"
                 aria-expanded={isOpen}
               >
                 <span className="text-muted-foreground">

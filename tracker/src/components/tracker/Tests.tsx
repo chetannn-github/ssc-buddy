@@ -18,10 +18,10 @@ function AddTestForm({ onDone }: { onDone: () => void }) {
     "h-9 w-full rounded-full bg-track px-4 font-mono text-[13px] text-foreground outline-none focus:ring-2 focus:ring-accent-blue/40";
 
   return (
-    <Card>
+    <Card className="!p-2.5 sm:!p-3">
       <Label>Add test</Label>
       <form
-        className="mt-3 grid gap-3 sm:grid-cols-3"
+        className="mt-2 grid gap-2 sm:grid-cols-3"
         onSubmit={(e) => {
           e.preventDefault();
           const numericScore = Number(score);
@@ -156,20 +156,20 @@ export function Tests() {
   ];
 
   return (
-    <div className="space-y-4">
-      <Card>
+    <div className="space-y-3">
+      <Card className="!p-2.5 sm:!p-3">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <Label>Sectional tests</Label>
           <span className="font-mono text-[13px] text-muted-foreground">
             {totalDone} / {totalTarget} total
           </span>
         </div>
-        <div className="mt-3">
+        <div className="mt-2">
           {data.subjects.map((s) => {
             const done = testsDone(data, s.id);
             const target = data.tests.targets[s.id] ?? 0;
             return (
-              <div key={s.id} className="flex items-center gap-3 py-2 sm:gap-5">
+              <div key={s.id} className="flex items-center gap-2 py-1.5 sm:gap-4">
                 <div className="w-24 shrink-0 text-[15px] sm:w-32">{s.name}</div>
                 <div className="min-w-0 flex-1">
                   <Bar value={pct(done, target)} />
@@ -192,14 +192,14 @@ export function Tests() {
         </div>
       </Card>
 
-      <Card>
+      <Card className="!p-2.5 sm:!p-3">
         <Label>Full mock targets</Label>
-        <div className="mt-3">
+        <div className="mt-2">
           {fullMockTargets.map(({ key, label }) => {
             const done = data.tests.log.filter((test) => test.type === label).length;
             const target = data.tests.mocks[key].target;
             return (
-              <div key={key} className="flex items-center gap-3 py-2 sm:gap-5">
+              <div key={key} className="flex items-center gap-2 py-1.5 sm:gap-4">
                 <div className="w-24 shrink-0 text-[15px] sm:w-32">{label}</div>
                 <div className="min-w-0 flex-1">
                   <Bar value={pct(done, target)} tone="green" />
@@ -228,15 +228,15 @@ export function Tests() {
         <button
           type="button"
           onClick={() => setAdding(true)}
-          className="w-full rounded-2xl border border-dashed border-border py-4 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          className="w-full rounded-xl border border-dashed border-border py-3 text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
           + Add test
         </button>
       )}
 
-      <Card>
+      <Card className="!p-2.5 sm:!p-3">
         <Label>Test log</Label>
-        <div className="mt-3 overflow-x-auto">
+        <div className="mt-2 overflow-x-auto">
           <table className="w-full min-w-[34rem] text-left">
             <thead>
               <tr className="font-mono text-[11px] tracking-[0.14em] text-muted-foreground uppercase">

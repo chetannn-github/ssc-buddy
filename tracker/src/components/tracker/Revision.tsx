@@ -82,7 +82,7 @@ function SubjectRevision({
         <button
           type="button"
           onClick={onOpenChange}
-          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+          className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-left"
           aria-expanded={open}
         >
           <span className="text-muted-foreground">
