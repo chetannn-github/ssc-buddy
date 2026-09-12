@@ -1,6 +1,14 @@
 import type { MouseEvent, ReactNode } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { Flame, GraduationCap, History, PenSquare, Route as RouteIcon, Upload } from "lucide-react";
+import {
+  BarChart3,
+  Flame,
+  GraduationCap,
+  History,
+  PenSquare,
+  Route as RouteIcon,
+  Upload,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,11 +30,12 @@ type Props = {
 
 const nav = [
   { title: "Track", url: "/track", icon: RouteIcon },
+  { title: "Progress", url: "/progress", icon: BarChart3 },
   { title: "New test", url: "/test", icon: PenSquare },
   { title: "History", url: "/history", icon: History },
 ] as const;
 
-type AppPath = "/" | "/track" | "/test" | "/history";
+type AppPath = "/" | "/track" | "/progress" | "/test" | "/history";
 
 type ViewTransitionDocument = Document & {
   startViewTransition?: (callback: () => Promise<unknown>) => { finished: Promise<void> };
@@ -195,7 +204,8 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
     ...records,
     ...trackerActivityDates.map((date) => ({ date })),
   ]).current;
-  const isDarkPage = path === "/" || path === "/profile" || path === "/track";
+  const isDarkPage =
+    path === "/" || path === "/profile" || path === "/track" || path === "/progress";
   const navigateWithThemeTransition = (event: MouseEvent<HTMLAnchorElement>, to: AppPath) => {
     if (
       event.defaultPrevented ||
@@ -209,7 +219,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
       return;
     }
 
-    const isDarkDestination = to === "/" || to === "/track";
+    const isDarkDestination = to === "/" || to === "/track" || to === "/progress";
     if (!isDarkPage && !isDarkDestination) return;
 
     event.preventDefault();

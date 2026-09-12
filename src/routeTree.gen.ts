@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TrackRouteImport } from './routes/track'
+import { Route as ProgressRouteImport } from './routes/progress'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as TestRouteImport } from './routes/test'
 import { Route as HistoryIndexRouteImport } from './routes/history.index'
@@ -24,6 +25,11 @@ const IndexRoute = IndexRouteImport.update({
 const TrackRoute = TrackRouteImport.update({
   id: '/track',
   path: '/track',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProgressRoute = ProgressRouteImport.update({
+  id: '/progress',
+  path: '/progress',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProfileRoute = ProfileRouteImport.update({
@@ -50,6 +56,7 @@ const HistoryIdRoute = HistoryIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/track': typeof TrackRoute
+  '/progress': typeof ProgressRoute
   '/profile': typeof ProfileRoute
   '/test': typeof TestRoute
   '/history/$id': typeof HistoryIdRoute
@@ -58,6 +65,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/track': typeof TrackRoute
+  '/progress': typeof ProgressRoute
   '/profile': typeof ProfileRoute
   '/test': typeof TestRoute
   '/history/$id': typeof HistoryIdRoute
@@ -67,6 +75,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/track': typeof TrackRoute
+  '/progress': typeof ProgressRoute
   '/profile': typeof ProfileRoute
   '/test': typeof TestRoute
   '/history/$id': typeof HistoryIdRoute
@@ -74,15 +83,16 @@ export interface FileRoutesById {
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/track' | '/profile' | '/test' | '/history/$id' | '/history/'
+  fullPaths: '/' | '/track' | '/progress' | '/profile' | '/test' | '/history/$id' | '/history/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/track' | '/profile' | '/test' | '/history/$id' | '/history'
-  id: '__root__' | '/' | '/track' | '/profile' | '/test' | '/history/$id' | '/history/'
+  to: '/' | '/track' | '/progress' | '/profile' | '/test' | '/history/$id' | '/history'
+  id: '__root__' | '/' | '/track' | '/progress' | '/profile' | '/test' | '/history/$id' | '/history/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   TrackRoute: typeof TrackRoute
+  ProgressRoute: typeof ProgressRoute
   ProfileRoute: typeof ProfileRoute
   TestRoute: typeof TestRoute
   HistoryIdRoute: typeof HistoryIdRoute
@@ -103,6 +113,13 @@ declare module '@tanstack/react-router' {
       path: '/track'
       fullPath: '/track'
       preLoaderRoute: typeof TrackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/progress': {
+      id: '/progress'
+      path: '/progress'
+      fullPath: '/progress'
+      preLoaderRoute: typeof ProgressRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/profile': {
@@ -139,6 +156,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   TrackRoute: TrackRoute,
+  ProgressRoute: ProgressRoute,
   ProfileRoute: ProfileRoute,
   TestRoute: TestRoute,
   HistoryIdRoute: HistoryIdRoute,
