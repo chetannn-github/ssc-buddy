@@ -21,6 +21,26 @@ import { cn } from "@/lib/utils";
 
 const title = "Profile";
 const description = "Your yearly practice activity and progress.";
+type ActivityRange = "today" | "week" | "year" | "all";
+
+const rangeLabels: Record<ActivityRange, string> = {
+  today: "Today",
+  week: "This week",
+  year: "This year",
+  all: "All time",
+};
+
+function isInRange(dateValue: string, range: ActivityRange) {
+  if (range === "all") return true;
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return false;
+  date.setHours(0, 0, 0, 0);
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  if (range === "week") start.setDate(start.getDate() - 6);
+  if (range === "year") start.setDate(start.getDate() - 364);
+  return date >= start;
+}
 
 export const Route = createFileRoute("/profile")({
   head: () => ({ meta: [{ title }, { name: "description", content: description }] }),
@@ -41,16 +61,43 @@ function formatDate(date: string) {
 function ActivityHeatmap({
   records,
   tracker,
+  range,
 }: {
   records: TestRecord[];
   tracker: TrackerData | null;
+  range: ActivityRange;
 }) {
   const { days, monthLabels, totalActivity, activeDays, maxStreak } = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const entries = Array.from({ length: 365 }, (_, index) => {
+    const datedActivity = [
+      ...records.map((record) => record.date),
+      ...(tracker?.tests.log ?? []).map((test) => test.date),
+      ...(tracker?.activity ?? []).map((entry) => entry.date),
+    ].filter(Boolean);
+    const dayCount =
+      range === "today"
+        ? 1
+        : range === "week"
+          ? 7
+          : range === "year"
+            ? 365
+            : Math.max(
+                1,
+                Math.ceil(
+                  (today.getTime() -
+                    Math.min(
+                      ...datedActivity
+                        .map((date) => new Date(date).getTime())
+                        .filter(Number.isFinite),
+                      today.getTime(),
+                    )) /
+                    86400000,
+                ) + 1,
+              );
+    const entries = Array.from({ length: dayCount }, (_, index) => {
       const date = new Date(today);
-      date.setDate(today.getDate() - (364 - index));
+      date.setDate(today.getDate() - (dayCount - 1 - index));
       return date;
     });
     const activity = new Map<string, number>();
@@ -95,12 +142,14 @@ function ActivityHeatmap({
       activeDays: values.filter(Boolean).length,
       maxStreak: longest,
     };
-  }, [records, tracker]);
+  }, [records, tracker, range]);
 
   return (
     <section className="overflow-hidden py-5 text-zinc-100 sm:py-6">
       <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-2 text-sm">
-        <p className="text-zinc-400">{totalActivity} activities in the last year</p>
+        <p className="text-zinc-400">
+          {totalActivity} activities · {rangeLabels[range].toLowerCase()}
+        </p>
         <p className="text-zinc-400">
           <span className="inline-flex items-center gap-2">
             <span className="font-semibold text-zinc-100">{activeDays}</span>
@@ -121,7 +170,7 @@ function ActivityHeatmap({
               <span
                 key={`${label}-${index}`}
                 className="absolute"
-                style={{ left: `${(index / 364) * 100}%` }}
+                style={{ left: `${(index / Math.max(1, days.length - 1)) * 100}%` }}
               >
                 {label}
               </span>
@@ -190,6 +239,8 @@ function TargetProgress({
   lectures,
   revisions,
   mockTests,
+  range,
+  onRangeChange,
 }: {
   attempted: number;
   goal: number;
@@ -199,6 +250,8 @@ function TargetProgress({
   lectures: number;
   revisions: number;
   mockTests: number;
+  range: ActivityRange;
+  onRangeChange: (range: ActivityRange) => void;
 }) {
   const progress = Math.min(100, Math.round((attempted / Math.max(1, goal)) * 100));
   const practiceStats = [
@@ -216,8 +269,22 @@ function TargetProgress({
 
   return (
     <section className="overflow-hidden rounded-2xl border border-white/10 bg-[#1a1a1a]">
-      <div className="px-4 pt-3 text-[11px] font-semibold tracking-[0.16em] text-zinc-500 uppercase sm:px-5">
-        Practice
+      <div className="flex items-center justify-between gap-3 px-4 pt-3 sm:px-5">
+        <span className="text-[11px] font-semibold tracking-[0.16em] text-zinc-500 uppercase">
+          Practice
+        </span>
+        <select
+          value={range}
+          onChange={(event) => onRangeChange(event.target.value as ActivityRange)}
+          aria-label="Activity range"
+          className="h-7 rounded-md border border-white/10 bg-white/5 px-2 text-xs text-zinc-300 outline-none hover:bg-white/10 focus:border-zinc-500"
+        >
+          {(Object.keys(rangeLabels) as ActivityRange[]).map((option) => (
+            <option key={option} value={option} className="bg-[#1a1a1a]">
+              {rangeLabels[option]}
+            </option>
+          ))}
+        </select>
       </div>
       <div className="grid grid-cols-2 divide-x-0 divide-y divide-white/10 px-2 py-2 sm:grid-cols-5 sm:divide-x sm:divide-y-0 sm:px-3">
         {practiceStats.map(([label, value]) => (
@@ -356,6 +423,7 @@ function StudyTrackerOverview({ tracker }: { tracker: TrackerData | null }) {
 export function Profile() {
   const [records, setRecords] = useState<TestRecord[]>([]);
   const [tracker, setTracker] = useState<TrackerData | null>(null);
+  const [range, setRange] = useState<ActivityRange>("year");
   const [profile, setProfile] = useState<PracticeProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [editingProfile, setEditingProfile] = useState(false);
@@ -408,21 +476,31 @@ export function Profile() {
     };
   }, []);
 
-  const totals = useMemo(() => aggregateRecords(records), [records]);
+  const filteredRecords = useMemo(
+    () => records.filter((record) => isInRange(record.date, range)),
+    [records, range],
+  );
+  const totals = useMemo(() => aggregateRecords(filteredRecords), [filteredRecords]);
   const trackerTotals = useMemo(() => {
     if (!tracker) return { lectures: 0, revisions: 0, mockTests: 0 };
-    const lectures = overallSyllabus(tracker).done;
-    const revisions = tracker.subjects.reduce(
-      (total, subject) => total + subjectRevision(tracker, subject).done,
-      0,
-    );
+    const activity = tracker.activity.filter((entry) => isInRange(entry.date, range));
+    const totalFor = (type: "lecture" | "revision" | "mock-test") =>
+      Math.max(
+        0,
+        activity
+          .filter((entry) => entry.type === type)
+          .reduce((total, entry) => total + entry.count, 0),
+      );
+    const lectures = totalFor("lecture");
+    const revisions = totalFor("revision");
     const mockTests =
-      tracker.tests.log.length + tracker.tests.mocks.pre.done + tracker.tests.mocks.mains.done;
+      totalFor("mock-test") +
+      tracker.tests.log.filter((test) => isInRange(test.date, range)).length;
     return { lectures, revisions, mockTests };
-  }, [tracker]);
+  }, [range, tracker]);
   const recent = useMemo(
-    () => [...records].sort((a, b) => b.date.localeCompare(a.date)),
-    [records],
+    () => [...filteredRecords].sort((a, b) => b.date.localeCompare(a.date)),
+    [filteredRecords],
   );
   const saveProfile = () => {
     if (!nameDraft.trim() || Number(goalDraft) < 1) return;
@@ -526,9 +604,11 @@ export function Profile() {
             lectures={trackerTotals.lectures}
             revisions={trackerTotals.revisions}
             mockTests={trackerTotals.mockTests}
+            range={range}
+            onRangeChange={setRange}
           />
 
-          <ActivityHeatmap records={records} tracker={tracker} />
+          <ActivityHeatmap records={filteredRecords} tracker={tracker} range={range} />
 
           <StudyTrackerOverview tracker={tracker} />
 
