@@ -369,10 +369,9 @@ function StudyTrackerOverview({ tracker }: { tracker: TrackerData | null }) {
       <div className="flex items-baseline justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold">Study tracker</h2>
-          <p className="mt-0.5 text-xs text-zinc-500">Lectures, revision and mock-test progress</p>
         </div>
         <span className="font-mono text-xs text-zinc-400">
-          {syllabus.done}/{syllabus.total} syllabus
+          {syllabus.done}/{syllabus.total} Lectures
         </span>
       </div>
 
@@ -533,7 +532,7 @@ export function Profile() {
     return { lectures, revisions, mockTests };
   }, [range, tracker]);
   const recent = useMemo(
-    () => [...records].sort((a, b) => b.date.localeCompare(a.date)),
+    () => [...records].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5),
     [records],
   );
   const saveProfile = () => {
