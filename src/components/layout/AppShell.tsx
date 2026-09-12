@@ -153,7 +153,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
     ...records,
     ...trackerActivityDates.map((date) => ({ date })),
   ]).current;
-  const isProfilePage = path === "/" || path === "/profile";
+  const isDarkPage = path === "/" || path === "/profile" || path === "/track";
   const navigateWithThemeTransition = (event: MouseEvent<HTMLAnchorElement>, to: AppPath) => {
     if (
       event.defaultPrevented ||
@@ -167,12 +167,13 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
       return;
     }
 
-    if (!isProfilePage && to !== "/") return;
+    const isDarkDestination = to === "/" || to === "/track";
+    if (!isDarkPage && !isDarkDestination) return;
 
     event.preventDefault();
-    requestLightPageLoader(isProfilePage && to !== "/");
+    requestLightPageLoader(isDarkPage && !isDarkDestination);
     const viewDocument = document as ViewTransitionDocument;
-    const transitionName = isProfilePage && to !== "/" ? "to-light" : "to-profile";
+    const transitionName = isDarkPage && !isDarkDestination ? "to-light" : "to-profile";
     if (!viewDocument.startViewTransition) {
       void navigate({ to });
       return;
@@ -191,15 +192,15 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
     <div
       className={cn(
         "flex min-h-screen w-full flex-col",
-        isProfilePage ? "bg-[#121212]" : "bg-background",
+        isDarkPage ? "bg-[#121212]" : "bg-background",
       )}
     >
       <header
         className={cn(
           "h-16 border-0 shadow-none",
-          isProfilePage ? "bg-[#1b1b1b] text-zinc-100" : "text-exam-header-foreground",
+          isDarkPage ? "bg-[#1b1b1b] text-zinc-100" : "text-exam-header-foreground",
         )}
-        style={isProfilePage ? undefined : { backgroundImage: "var(--gradient-header)" }}
+        style={isDarkPage ? undefined : { backgroundImage: "var(--gradient-header)" }}
       >
         <div className="mx-auto flex h-16 w-full max-w-5xl items-center gap-4 px-4 sm:px-6">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10">

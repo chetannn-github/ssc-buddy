@@ -109,15 +109,15 @@
 }
 
 .tracker-theme {
-  --background: oklch(0.925 0.008 85);
-  --foreground: oklch(0.28 0.012 70);
-  --card: oklch(0.965 0.006 85);
-  --card-foreground: oklch(0.28 0.012 70);
-  --muted-foreground: oklch(0.52 0.015 80);
-  --border: oklch(0.87 0.012 88);
-  --track: oklch(0.885 0.018 95);
-  --accent-blue: oklch(0.6 0.09 253);
-  --accent-green: oklch(0.79 0.075 150);
+  --background: oklch(0.15 0 0);
+  --foreground: oklch(0.92 0 0);
+  --card: oklch(0.18 0 0);
+  --card-foreground: oklch(0.92 0 0);
+  --muted-foreground: oklch(0.63 0 0);
+  --border: oklch(1 0 0 / 10%);
+  --track: oklch(0.25 0 0);
+  --accent-blue: oklch(0.68 0.13 250);
+  --accent-green: oklch(0.75 0.15 160);
 }
 
 :root {

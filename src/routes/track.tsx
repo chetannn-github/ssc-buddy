@@ -103,7 +103,7 @@ function TrackPage() {
   const [tab, setTab] = useState<Tab>(search.tab ?? "Syllabus");
   return (
     <AppShell title="Tracker">
-      <div className="tracker-theme -mx-4 -my-6 min-h-[calc(100vh-4rem)] bg-[#f2efe8] px-3 py-5 text-[#474239] sm:-mx-6 sm:px-5 sm:py-6">
+      <div className="tracker-theme -mx-4 -my-6 min-h-[calc(100vh-4rem)] bg-[#121212] px-3 py-5 text-zinc-100 sm:-mx-6 sm:px-5 sm:py-6">
         <main className="mx-auto w-full max-w-3xl">
           <TrackerHeader />
           <nav className="mt-4 grid grid-cols-3 gap-0.5 rounded-full bg-card p-0.5">
