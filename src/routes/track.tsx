@@ -9,7 +9,7 @@ import { Revision } from "../../tracker/src/components/tracker/Revision";
 import { Syllabus } from "../../tracker/src/components/tracker/Syllabus";
 import { Tests } from "../../tracker/src/components/tracker/Tests";
 
-const TABS = ["Dashboard", "Syllabus", "Revision", "Tests"] as const;
+const TABS = ["Dashboard", "Syllabus", "Revision", "Mock Test"] as const;
 type Tab = (typeof TABS)[number];
 
 export const Route = createFileRoute("/track")({
@@ -122,7 +122,7 @@ function TrackPage() {
             {tab === "Dashboard" && <Dashboard />}
             {tab === "Syllabus" && <Syllabus />}
             {tab === "Revision" && <Revision />}
-            {tab === "Tests" && <Tests />}
+            {tab === "Mock Test" && <Tests />}
           </div>
           <DataPanel />
         </main>

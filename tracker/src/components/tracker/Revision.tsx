@@ -1,6 +1,14 @@
 import { useState } from "react";
 import { useTracker } from "@/lib/tracker-store";
-import { pct, revDone, revTarget, subjectRevision, uid, type Subject } from "@/lib/tracker";
+import {
+  pct,
+  recordActivity,
+  revDone,
+  revTarget,
+  subjectRevision,
+  uid,
+  type Subject,
+} from "@/lib/tracker";
 import { Bar, Card, ChevronIcon, GhostButton, Num } from "./ui";
 
 function Dots({
@@ -48,7 +56,9 @@ function SubjectRevision({ subject }: { subject: Subject }) {
       const r = d.revision[subject.id];
       if (!r) return;
       r.done[chapterId] = r.done[chapterId] ?? {};
-      r.done[chapterId]![typeId] = Math.max(0, n);
+      const next = Math.max(0, n);
+      recordActivity(d, "revision", next - (r.done[chapterId]![typeId] ?? 0));
+      r.done[chapterId]![typeId] = next;
     });
 
   const setTarget = (chapterId: string, typeId: string, n: number) =>
@@ -115,11 +125,7 @@ function SubjectRevision({ subject }: { subject: Subject }) {
                       <span className="w-40 shrink-0 font-mono text-[13px] text-muted-foreground">
                         {t.name}
                       </span>
-                      <Dots
-                        done={done}
-                        target={target}
-                        onSet={(n) => setDone(c.id, t.id, n)}
-                      />
+                      <Dots done={done} target={target} onSet={(n) => setDone(c.id, t.id, n)} />
                       <span className="ml-auto font-mono text-[13px] text-muted-foreground">
                         {Math.min(done, target)} / {target}
                       </span>

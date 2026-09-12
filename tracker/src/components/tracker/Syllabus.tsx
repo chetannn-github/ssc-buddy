@@ -4,20 +4,12 @@ import {
   chapterStatus,
   overallSyllabus,
   pct,
+  recordActivity,
   subjectSyllabus,
   uid,
   type Chapter,
 } from "@/lib/tracker";
-import {
-  Bar,
-  Card,
-  ChevronIcon,
-  GhostButton,
-  IconButton,
-  Num,
-  PencilIcon,
-  TrashIcon,
-} from "./ui";
+import { Bar, Card, ChevronIcon, GhostButton, IconButton, Num, PencilIcon, TrashIcon } from "./ui";
 
 function ChapterRow({ subjectId, chapter }: { subjectId: string; chapter: Chapter }) {
   const { update } = useTracker();
@@ -25,8 +17,13 @@ function ChapterRow({ subjectId, chapter }: { subjectId: string; chapter: Chapte
 
   const setCompleted = (n: number) =>
     update((d) => {
-      const c = d.subjects.find((s) => s.id === subjectId)?.chapters.find((x) => x.id === chapter.id);
-      if (c) c.completed = Math.max(0, Math.min(n, c.total));
+      const c = d.subjects
+        .find((s) => s.id === subjectId)
+        ?.chapters.find((x) => x.id === chapter.id);
+      if (!c) return;
+      const next = Math.max(0, Math.min(n, c.total));
+      recordActivity(d, "lecture", next - c.completed);
+      c.completed = next;
     });
 
   const editChapter = () => {
@@ -221,9 +218,7 @@ export function Syllabus() {
                   {s.chapters.length === 0 ? (
                     <p className="py-3 text-sm text-muted-foreground">No chapters yet.</p>
                   ) : (
-                    s.chapters.map((c) => (
-                      <ChapterRow key={c.id} subjectId={s.id} chapter={c} />
-                    ))
+                    s.chapters.map((c) => <ChapterRow key={c.id} subjectId={s.id} chapter={c} />)
                   )}
                 </div>
               </>

@@ -8,9 +8,9 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { defaultData, type TrackerData } from "./tracker";
+import { defaultData, type TrackerActivity, type TrackerData } from "./tracker";
 
-const KEY = "ssc-cgl-2027-tracker-v1";
+export const TRACKER_STORAGE_KEY = "ssc-cgl-2027-tracker-v1";
 
 type Ctx = {
   data: TrackerData;
@@ -56,6 +56,19 @@ function migrate(raw: unknown): TrackerData {
         notes: String(t.notes ?? ""),
       })),
     },
+    activity: (d.activity ?? [])
+      .filter(
+        (entry): entry is TrackerActivity =>
+          !!entry &&
+          typeof entry === "object" &&
+          (entry.type === "lecture" || entry.type === "revision" || entry.type === "mock-test"),
+      )
+      .map((entry) => ({
+        id: String(entry.id ?? Math.random()),
+        date: String(entry.date ?? ""),
+        type: entry.type,
+        count: Math.max(1, Number(entry.count) || 1),
+      })),
   };
   for (const s of out.subjects) {
     const r = d.revision?.[s.id];
@@ -82,6 +95,15 @@ function migrate(raw: unknown): TrackerData {
   return out;
 }
 
+export function loadTrackerData() {
+  try {
+    const raw = localStorage.getItem(TRACKER_STORAGE_KEY);
+    return raw ? migrate(JSON.parse(raw)) : defaultData();
+  } catch {
+    return defaultData();
+  }
+}
+
 export function TrackerProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<TrackerData>(() => defaultData());
   const [ready, setReady] = useState(false);
@@ -89,8 +111,7 @@ export function TrackerProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(KEY);
-      if (raw) setData(migrate(JSON.parse(raw)));
+      setData(loadTrackerData());
     } catch {
       /* ignore corrupt storage */
     }
@@ -99,13 +120,14 @@ export function TrackerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!loaded.current) return;
+    if (!loaded.current || !ready) return;
     try {
-      localStorage.setItem(KEY, JSON.stringify(data));
+      localStorage.setItem(TRACKER_STORAGE_KEY, JSON.stringify(data));
+      window.dispatchEvent(new Event("cbt-tracker-updated"));
     } catch {
       /* storage full */
     }
-  }, [data]);
+  }, [data, ready]);
 
   const update = useCallback((fn: (d: TrackerData) => void) => {
     setData((prev) => {

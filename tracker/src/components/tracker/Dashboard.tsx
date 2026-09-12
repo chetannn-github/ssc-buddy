@@ -26,7 +26,7 @@ function TodayCard({
   const items = [
     { n: lectures, label: "Lectures" },
     { n: revisions, label: "Revisions" },
-    { n: tests, label: "Tests" },
+    { n: tests, label: "Mock tests" },
   ];
   return (
     <section
@@ -152,7 +152,7 @@ export function Dashboard() {
 
       <Card>
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <Label>Tests</Label>
+          <Label>Mock tests</Label>
           <span className="font-mono text-[13px] text-muted-foreground">
             {totalTests} / {totalTestTarget} total
           </span>

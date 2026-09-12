@@ -18,6 +18,13 @@ export type TestEntry = {
   notes: string;
 };
 export type MockKind = "pre" | "mains";
+export type TrackerActivityType = "lecture" | "revision" | "mock-test";
+export type TrackerActivity = {
+  id: string;
+  date: string;
+  type: TrackerActivityType;
+  count: number;
+};
 export type TrackerData = {
   version: 1;
   meta: { examName: string; syllabusDeadline: string; targetDate: string };
@@ -28,6 +35,7 @@ export type TrackerData = {
     mocks: Record<MockKind, { target: number; done: number }>;
     log: TestEntry[];
   };
+  activity: TrackerActivity[];
 };
 
 export const uid = () => Math.random().toString(36).slice(2, 9);
@@ -109,6 +117,7 @@ export function defaultData(): TrackerData {
       mocks: { pre: { target: 20, done: 0 }, mains: { target: 20, done: 0 } },
       log: [],
     },
+    activity: [],
   };
 }
 
@@ -185,6 +194,17 @@ export function fmtMonth(iso: string) {
 }
 
 export const todayISO = () => new Date().toISOString().slice(0, 10);
+
+/** Keep non-test tracker work date-aware so the profile heatmap can include it. */
+export function recordActivity(
+  data: TrackerData,
+  type: TrackerActivityType,
+  count: number,
+  date = todayISO(),
+) {
+  if (count <= 0) return;
+  data.activity.unshift({ id: uid(), date, type, count });
+}
 
 export const IMPORT_PROMPT = `I am preparing for SSC CGL 2027 and I use a personal tracker website.
 I will upload photos / screenshots of my syllabus (chapter names) and the number of lectures or questions in each chapter.

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTracker } from "@/lib/tracker-store";
-import { pct, testsDone, todayISO, uid, type MockKind } from "@/lib/tracker";
+import { pct, recordActivity, testsDone, todayISO, uid, type MockKind } from "@/lib/tracker";
 import { Bar, Card, GhostButton, IconButton, Label, Num, TrashIcon } from "./ui";
 
 function AddTestForm({ onDone }: { onDone: () => void }) {
@@ -117,7 +117,10 @@ export function Tests() {
 
   const setMock = (kind: MockKind, key: "done" | "target", n: number) =>
     update((d) => {
-      d.tests.mocks[kind][key] = Math.max(0, n);
+      const previous = d.tests.mocks[kind][key];
+      const next = Math.max(0, n);
+      if (key === "done") recordActivity(d, "mock-test", next - previous);
+      d.tests.mocks[kind][key] = next;
     });
 
   return (
@@ -173,7 +176,10 @@ export function Tests() {
                 <span className="shrink-0 font-mono text-[13px] text-muted-foreground">
                   {m.done} / {m.target}
                 </span>
-                <IconButton label={`Decrease ${kind} mocks`} onClick={() => setMock(kind, "done", m.done - 1)}>
+                <IconButton
+                  label={`Decrease ${kind} mocks`}
+                  onClick={() => setMock(kind, "done", m.done - 1)}
+                >
                   <span className="text-base leading-none">−</span>
                 </IconButton>
                 <Num

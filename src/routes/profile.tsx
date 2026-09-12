@@ -4,10 +4,12 @@ import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { aggregateRecords, getStreaks, metricsForRecord } from "@/lib/analytics";
+import { aggregateRecords, metricsForRecord } from "@/lib/analytics";
 import { loadHistory, type TestRecord } from "@/lib/exam";
 import { loadPracticeProfile, savePracticeProfile, type PracticeProfile } from "@/lib/profile";
 import { downloadPracticeBackup } from "@/lib/backup";
+import { overallSyllabus, subjectRevision, type TrackerData } from "@/lib/tracker";
+import { loadTrackerData } from "@/lib/tracker-store";
 import { cn } from "@/lib/utils";
 
 const title = "Profile";
@@ -29,8 +31,14 @@ function formatDate(date: string) {
   return new Date(date).toLocaleDateString(undefined, { day: "numeric", month: "short" });
 }
 
-function ActivityHeatmap({ records, maxStreak }: { records: TestRecord[]; maxStreak: number }) {
-  const { days, monthLabels, totalActivity, activeDays } = useMemo(() => {
+function ActivityHeatmap({
+  records,
+  tracker,
+}: {
+  records: TestRecord[];
+  tracker: TrackerData | null;
+}) {
+  const { days, monthLabels, totalActivity, activeDays, maxStreak } = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const entries = Array.from({ length: 365 }, (_, index) => {
@@ -46,6 +54,14 @@ function ActivityHeatmap({ records, maxStreak }: { records: TestRecord[]; maxStr
         (activity.get(key) ?? 0) + Math.max(1, record.answers.filter(Boolean).length),
       );
     });
+    tracker?.tests.log.forEach((test) => {
+      if (!test.date) return;
+      activity.set(test.date, (activity.get(test.date) ?? 0) + 1);
+    });
+    tracker?.activity.forEach((entry) => {
+      if (!entry.date) return;
+      activity.set(entry.date, (activity.get(entry.date) ?? 0) + entry.count);
+    });
     const values = entries.map((date) => activity.get(localDay(date)) ?? 0);
     const maximum = Math.max(...values, 1);
     const labels = entries
@@ -58,18 +74,26 @@ function ActivityHeatmap({ records, maxStreak }: { records: TestRecord[]; maxStr
         index,
       }));
 
+    let longest = 0;
+    let current = 0;
+    values.forEach((value) => {
+      current = value > 0 ? current + 1 : 0;
+      longest = Math.max(longest, current);
+    });
+
     return {
       days: entries.map((date, index) => ({ date, value: values[index] ?? 0, maximum })),
       monthLabels: labels,
       totalActivity: values.reduce((sum, value) => sum + value, 0),
       activeDays: values.filter(Boolean).length,
+      maxStreak: longest,
     };
-  }, [records]);
+  }, [records, tracker]);
 
   return (
     <section className="overflow-hidden py-5 text-zinc-100 sm:py-6">
       <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-2 text-sm">
-        <p className="text-zinc-400">{totalActivity} questions practiced in the last year</p>
+        <p className="text-zinc-400">{totalActivity} activities in the last year</p>
         <p className="text-zinc-400">
           <span className="inline-flex items-center gap-2">
             <span className="font-semibold text-zinc-100">{activeDays}</span>
@@ -103,7 +127,7 @@ function ActivityHeatmap({ records, maxStreak }: { records: TestRecord[]; maxStr
               return (
                 <span
                   key={localDay(date)}
-                  title={`${formatDate(localDay(date))}: ${value} question${value === 1 ? "" : "s"}`}
+                  title={`${formatDate(localDay(date))}: ${value} activit${value === 1 ? "y" : "ies"}`}
                   className={cn(
                     "aspect-square w-full rounded-[3px] ring-1 ring-inset ring-white/5",
                     startsMonth && "ml-px",
@@ -156,24 +180,33 @@ function TargetProgress({
   tests,
   correct,
   wrong,
+  lectures,
+  revisions,
+  mockTests,
 }: {
   attempted: number;
   goal: number;
   tests: number;
   correct: number;
   wrong: number;
+  lectures: number;
+  revisions: number;
+  mockTests: number;
 }) {
   const progress = Math.min(100, Math.round((attempted / Math.max(1, goal)) * 100));
 
   return (
     <section className="rounded-2xl border border-white/10 bg-[#1a1a1a] px-2 py-4 sm:px-4">
-      <div className="grid grid-cols-2 divide-x-0 divide-y divide-white/10 sm:grid-cols-5 sm:divide-x sm:divide-y-0">
+      <div className="grid grid-cols-2 divide-x-0 divide-y divide-white/10 sm:grid-cols-4 sm:divide-x sm:divide-y-0 lg:grid-cols-8">
         {[
           ["Question goal", goal],
           ["Completed", `${attempted} · ${progress}%`],
-          ["Total tests", tests],
+          ["Practice sessions", tests],
           ["Correct", correct],
           ["Wrong", wrong],
+          ["Lectures", lectures],
+          ["Revisions", revisions],
+          ["Mock tests", mockTests],
         ].map(([label, value]) => (
           <div key={String(label)} className="px-3 py-2 text-center sm:px-4">
             <p className="text-base font-semibold text-zinc-100">{value}</p>
@@ -187,6 +220,7 @@ function TargetProgress({
 
 export function Profile() {
   const [records, setRecords] = useState<TestRecord[]>([]);
+  const [tracker, setTracker] = useState<TrackerData | null>(null);
   const [profile, setProfile] = useState<PracticeProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [editingProfile, setEditingProfile] = useState(false);
@@ -202,6 +236,7 @@ export function Profile() {
       const startedAt = Date.now();
       const saved = loadPracticeProfile();
       setRecords(loadHistory());
+      setTracker(loadTrackerData());
       setProfile(saved);
       setNameDraft(saved?.name ?? "");
       setGoalDraft(saved ? String(saved.questionGoal) : "100");
@@ -227,17 +262,29 @@ export function Profile() {
     };
     refresh();
     window.addEventListener("cbt-profile-updated", refresh);
+    window.addEventListener("cbt-tracker-updated", refresh);
     window.addEventListener("storage", refresh);
     return () => {
       if (loaderTimer) clearTimeout(loaderTimer);
       if (loaderFailSafe) clearTimeout(loaderFailSafe);
       window.removeEventListener("cbt-profile-updated", refresh);
+      window.removeEventListener("cbt-tracker-updated", refresh);
       window.removeEventListener("storage", refresh);
     };
   }, []);
 
   const totals = useMemo(() => aggregateRecords(records), [records]);
-  const streaks = useMemo(() => getStreaks(records), [records]);
+  const trackerTotals = useMemo(() => {
+    if (!tracker) return { lectures: 0, revisions: 0, mockTests: 0 };
+    const lectures = overallSyllabus(tracker).done;
+    const revisions = tracker.subjects.reduce(
+      (total, subject) => total + subjectRevision(tracker, subject).done,
+      0,
+    );
+    const mockTests =
+      tracker.tests.log.length + tracker.tests.mocks.pre.done + tracker.tests.mocks.mains.done;
+    return { lectures, revisions, mockTests };
+  }, [tracker]);
   const recent = useMemo(
     () => [...records].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5),
     [records],
@@ -341,9 +388,12 @@ export function Profile() {
             tests={totals.tests}
             correct={totals.correct}
             wrong={totals.wrong}
+            lectures={trackerTotals.lectures}
+            revisions={trackerTotals.revisions}
+            mockTests={trackerTotals.mockTests}
           />
 
-          <ActivityHeatmap records={records} maxStreak={streaks.longest} />
+          <ActivityHeatmap records={records} tracker={tracker} />
 
           <section className="border-t border-white/10 pt-5 sm:pt-6">
             <h2 className="text-base font-semibold">Recent activity</h2>
