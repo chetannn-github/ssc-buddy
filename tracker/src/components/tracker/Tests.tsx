@@ -149,6 +149,10 @@ export function Tests() {
   const [adding, setAdding] = useState(false);
   const totalDone = data.tests.log.filter((test) => test.type === "Sectional").length;
   const totalTarget = data.subjects.reduce((a, s) => a + (data.tests.targets[s.id] ?? 0), 0);
+  const fullMockTargets = [
+    { key: "pre" as const, label: "Pre" },
+    { key: "mains" as const, label: "Mains" },
+  ];
 
   return (
     <div className="space-y-4">
@@ -178,6 +182,36 @@ export function Tests() {
                   onChange={(n) =>
                     update((d) => {
                       d.tests.targets[s.id] = n;
+                    })
+                  }
+                />
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+
+      <Card>
+        <Label>Full mock targets</Label>
+        <div className="mt-3">
+          {fullMockTargets.map(({ key, label }) => {
+            const done = data.tests.log.filter((test) => test.type === label).length;
+            const target = data.tests.mocks[key].target;
+            return (
+              <div key={key} className="flex items-center gap-3 py-2 sm:gap-5">
+                <div className="w-24 shrink-0 text-[15px] sm:w-32">{label}</div>
+                <div className="min-w-0 flex-1">
+                  <Bar value={pct(done, target)} tone="green" />
+                </div>
+                <span className="shrink-0 font-mono text-[13px] text-muted-foreground">
+                  {done} / {target}
+                </span>
+                <Num
+                  ariaLabel={`${label} mock target`}
+                  value={target}
+                  onChange={(value) =>
+                    update((next) => {
+                      next.tests.mocks[key].target = value;
                     })
                   }
                 />
