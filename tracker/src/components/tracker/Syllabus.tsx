@@ -101,9 +101,23 @@ function ChapterRow({ subjectId, chapter }: { subjectId: string; chapter: Chapte
 export function Syllabus() {
   const { data, update } = useTracker();
   const overall = overallSyllabus(data);
-  const [open, setOpen] = useState<Record<string, boolean>>(() => ({
-    [data.subjects[0]?.id ?? ""]: true,
-  }));
+  const [openSubjectId, setOpenSubjectId] = useState(data.subjects[0]?.id ?? "");
+
+  const addChapter = (subjectId: string) => {
+    const name = window.prompt("Chapter name");
+    if (!name?.trim()) return;
+    const total = window.prompt("Total lectures / questions", "10");
+    update((d) => {
+      d.subjects
+        .find((subject) => subject.id === subjectId)
+        ?.chapters.push({
+          id: uid(),
+          name: name.trim(),
+          total: Math.max(0, Number(total) || 0),
+          completed: 0,
+        });
+    });
+  };
 
   const addSubject = () => {
     const name = window.prompt("Subject name");
@@ -121,11 +135,11 @@ export function Syllabus() {
       };
       d.tests.targets[id] = 50;
     });
-    setOpen((o) => ({ ...o, [id]: true }));
+    setOpenSubjectId(id);
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       <Card className="!p-2.5 sm:!p-3">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-lg font-semibold">Overall syllabus</h2>
@@ -140,14 +154,14 @@ export function Syllabus() {
 
       {data.subjects.map((s) => {
         const x = subjectSyllabus(s);
-        const isOpen = !!open[s.id];
+        const isOpen = openSubjectId === s.id;
         return (
           <Card key={s.id} className="!p-2.5 sm:!p-3">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => setOpen((o) => ({ ...o, [s.id]: !o[s.id] }))}
-                className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                onClick={() => setOpenSubjectId((current) => (current === s.id ? "" : s.id))}
+                className="flex min-w-0 flex-1 items-center gap-2 text-left"
                 aria-expanded={isOpen}
               >
                 <span className="text-muted-foreground">
@@ -158,33 +172,42 @@ export function Syllabus() {
                   {x.done} / {x.total} · {pct(x.done, x.total)}%
                 </span>
               </button>
-              <IconButton
-                label="Rename subject"
-                onClick={() => {
-                  const name = window.prompt("Subject name", s.name);
-                  if (!name?.trim()) return;
-                  update((d) => {
-                    const t = d.subjects.find((y) => y.id === s.id);
-                    if (t) t.name = name.trim();
-                  });
-                }}
-              >
-                <PencilIcon />
-              </IconButton>
-              <IconButton
-                label="Delete subject"
-                onClick={() => {
-                  if (!window.confirm(`Delete subject "${s.name}" and all its chapters?`)) return;
-                  update((d) => {
-                    d.subjects = d.subjects.filter((y) => y.id !== s.id);
-                    delete d.revision[s.id];
-                    delete d.tests.targets[s.id];
-                    d.tests.log = d.tests.log.filter((t) => t.subjectId !== s.id);
-                  });
-                }}
-              >
-                <TrashIcon />
-              </IconButton>
+              <div className="flex shrink-0 items-center gap-1">
+                <GhostButton
+                  tone="blue"
+                  className="!px-2 !py-1 text-xs"
+                  onClick={() => addChapter(s.id)}
+                >
+                  + Chapter
+                </GhostButton>
+                <IconButton
+                  label="Rename subject"
+                  onClick={() => {
+                    const name = window.prompt("Subject name", s.name);
+                    if (!name?.trim()) return;
+                    update((d) => {
+                      const t = d.subjects.find((y) => y.id === s.id);
+                      if (t) t.name = name.trim();
+                    });
+                  }}
+                >
+                  <PencilIcon />
+                </IconButton>
+                <IconButton
+                  label="Delete subject"
+                  onClick={() => {
+                    if (!window.confirm(`Delete subject "${s.name}" and all its chapters?`)) return;
+                    update((d) => {
+                      d.subjects = d.subjects.filter((y) => y.id !== s.id);
+                      delete d.revision[s.id];
+                      delete d.tests.targets[s.id];
+                      d.tests.log = d.tests.log.filter((t) => t.subjectId !== s.id);
+                    });
+                  }}
+                >
+                  <TrashIcon />
+                </IconButton>
+              </div>
             </div>
             <div className="mt-2">
               <Bar value={pct(x.done, x.total)} />
@@ -192,28 +215,6 @@ export function Syllabus() {
 
             {isOpen && (
               <>
-                <div className="mt-3 flex justify-end">
-                  <GhostButton
-                    tone="blue"
-                    onClick={() => {
-                      const name = window.prompt("Chapter name");
-                      if (!name?.trim()) return;
-                      const total = window.prompt("Total lectures / questions", "10");
-                      update((d) => {
-                        d.subjects
-                          .find((y) => y.id === s.id)
-                          ?.chapters.push({
-                            id: uid(),
-                            name: name.trim(),
-                            total: Math.max(0, Number(total) || 0),
-                            completed: 0,
-                          });
-                      });
-                    }}
-                  >
-                    + Chapter
-                  </GhostButton>
-                </div>
                 <div className="mt-2">
                   {s.chapters.length === 0 ? (
                     <p className="py-2 text-sm text-muted-foreground">No chapters yet.</p>

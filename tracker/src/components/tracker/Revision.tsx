@@ -44,10 +44,17 @@ function Dots({
   );
 }
 
-function SubjectRevision({ subject }: { subject: Subject }) {
+function SubjectRevision({
+  subject,
+  open,
+  onOpenChange,
+}: {
+  subject: Subject;
+  open: boolean;
+  onOpenChange: () => void;
+}) {
   const { data, update } = useTracker();
   const rev = data.revision[subject.id];
-  const [open, setOpen] = useState(true);
   if (!rev) return null;
   const x = subjectRevision(data, subject);
 
@@ -74,8 +81,8 @@ function SubjectRevision({ subject }: { subject: Subject }) {
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
-          onClick={() => setOpen((o) => !o)}
-          className="flex min-w-0 flex-1 items-center gap-3 text-left"
+          onClick={onOpenChange}
+          className="flex min-w-0 flex-1 items-center gap-2 text-left"
           aria-expanded={open}
         >
           <span className="text-muted-foreground">
@@ -164,10 +171,17 @@ function SubjectRevision({ subject }: { subject: Subject }) {
 
 export function Revision() {
   const { data } = useTracker();
+  const [openSubjectId, setOpenSubjectId] = useState(data.subjects[0]?.id ?? "");
+
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       {data.subjects.map((s) => (
-        <SubjectRevision key={s.id} subject={s} />
+        <SubjectRevision
+          key={s.id}
+          subject={s}
+          open={openSubjectId === s.id}
+          onOpenChange={() => setOpenSubjectId((current) => (current === s.id ? "" : s.id))}
+        />
       ))}
     </div>
   );
