@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
 import { todayISO, uid, type TrackerData } from "@/lib/tracker";
 
+const totalMarksByType: Record<string, string> = {
+  Sectional: "25",
+  Pre: "200",
+  Mains: "390",
+};
+
 function DarkDropdown({
   value,
   options,
@@ -75,7 +81,7 @@ export function MockTestLogDialog({
     setType("Sectional");
     setDate(todayISO());
     setScore("");
-    setTotal("");
+    setTotal(totalMarksByType["Sectional"] ?? "25");
     setAccuracy("");
     setError("");
   }, [data.subjects, open]);
@@ -150,6 +156,7 @@ export function MockTestLogDialog({
               }))}
               onChange={(nextType) => {
                 setType(nextType);
+                setTotal(totalMarksByType[nextType] ?? "");
                 if (nextType === "Sectional") setSubjectId(data.subjects[0]?.id ?? "");
               }}
             />
