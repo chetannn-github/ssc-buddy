@@ -142,12 +142,12 @@ function TestPage() {
         ) : (
           <SetupScreen
             prefill={{
-              subject: search.subject,
-              chapter: search.chapter,
-              exercise: search.exercise,
-              minutes: search.minutes,
-              startNumber: search.start,
-              questionCount: search.count ?? null,
+              subject: config?.subject ?? search.subject,
+              chapter: config?.chapter ?? search.chapter,
+              exercise: config?.exercise ?? search.exercise,
+              minutes: config?.minutes ?? search.minutes,
+              startNumber: config?.startNumber ?? search.start,
+              questionCount: config?.questionCount ?? search.count ?? null,
             }}
             onStart={(nextConfig) => {
               setConfig(nextConfig);

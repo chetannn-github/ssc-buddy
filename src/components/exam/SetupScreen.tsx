@@ -150,6 +150,18 @@ export function SetupScreen({
     }
   };
 
+  const selectSubject = (name: string) => {
+    const firstChapter = subjects.find((item) => item.name === name)?.chapters[0];
+    setSubject(name);
+    setChapter(firstChapter?.name ?? "");
+    const firstExercise = firstChapter?.exercises[0];
+    setExercise(firstExercise?.name ?? "");
+    if (firstExercise?.questionCount) {
+      setCountMode("fixed");
+      setQuestionCount(String(firstExercise.questionCount));
+    }
+  };
+
   const createChapter = () => {
     const name = newChapter.trim();
     if (!name || !subject) return;
@@ -225,8 +237,7 @@ export function SetupScreen({
             <Select
               value={subject}
               onValueChange={(v) => {
-                setSubject(v);
-                setChapter("");
+                selectSubject(v);
               }}
             >
               <SelectTrigger>
