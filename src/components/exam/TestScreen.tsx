@@ -114,7 +114,7 @@ export function TestScreen({
   return (
     <div
       className={cn(
-        "min-h-screen",
+        "app-page-enter min-h-screen",
         darkMode ? "exam-dark bg-[#121212] text-zinc-100" : "bg-background",
       )}
     >

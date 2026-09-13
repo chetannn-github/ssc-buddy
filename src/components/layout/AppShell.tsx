@@ -254,7 +254,15 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
           </Link>
         </div>
       </header>
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 sm:px-6">{children}</main>
+      <main
+        className={cn(
+          "mx-auto w-full max-w-5xl flex-1 px-4 py-6 sm:px-6",
+          (path === "/progress" || path === "/test" || path.startsWith("/history")) &&
+            "app-page-enter",
+        )}
+      >
+        {children}
+      </main>
       {profile === null && <ProfileOnboarding onComplete={setProfile} />}
     </div>
   );

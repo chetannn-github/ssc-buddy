@@ -300,6 +300,10 @@
   animation: tracker-tab-enter 240ms ease-out;
 }
 
+.app-page-enter {
+  animation: tracker-tab-enter 280ms ease-out;
+}
+
 .tracker-theme select,
 .mock-test-dialog select {
   border: 0 !important;

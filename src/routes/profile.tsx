@@ -514,7 +514,7 @@ export function Profile() {
   const [tracker, setTracker] = useState<TrackerData | null>(null);
   const [range, setRange] = useState<ActivityRange>("today");
   const [profile, setProfile] = useState<PracticeProfile | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
   const [importingData, setImportingData] = useState(false);
   const [previewingAvatar, setPreviewingAvatar] = useState(false);
