@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTracker } from "@/lib/tracker-store";
 import { pct, testsDone } from "@/lib/tracker";
-import { Bar, Card, GhostButton, IconButton, Label, Num, TrashIcon } from "./ui";
+import { Bar, Card, Label, Num } from "./ui";
 import { MockTestLogDialog } from "./MockTestLogDialog";
 
 export function Tests() {
@@ -94,59 +94,6 @@ export function Tests() {
         onClose={() => setAdding(false)}
         onSave={(next) => update((current) => Object.assign(current, next))}
       />
-
-      <Card className="!p-2.5 sm:!p-3">
-        <Label>Test log</Label>
-        <div className="mt-2 overflow-x-auto">
-          <table className="w-full min-w-[34rem] text-left">
-            <thead>
-              <tr className="font-mono text-[11px] tracking-[0.14em] text-muted-foreground uppercase">
-                <th className="py-2 font-normal">Date</th>
-                <th className="py-2 font-normal">Subject</th>
-                <th className="py-2 font-normal">Type</th>
-                <th className="py-2 font-normal">Score</th>
-                <th className="py-2 font-normal">Acc.</th>
-                <th className="py-2" />
-              </tr>
-            </thead>
-            <tbody>
-              {data.tests.log.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="py-3 text-sm text-muted-foreground">
-                    No tests recorded yet.
-                  </td>
-                </tr>
-              ) : (
-                data.tests.log.map((t) => (
-                  <tr key={t.id} className="border-t border-border font-mono text-[13px]">
-                    <td className="py-2">{t.date}</td>
-                    <td className="py-2">
-                      {data.subjects.find((s) => s.id === t.subjectId)?.name ?? "—"}
-                    </td>
-                    <td className="py-2">{t.type}</td>
-                    <td className="py-2">
-                      {t.score ?? "—"} / {t.total ?? "—"}
-                    </td>
-                    <td className="py-2">{t.accuracy != null ? `${t.accuracy}%` : "—"}</td>
-                    <td className="py-2 text-right">
-                      <IconButton
-                        label="Delete test"
-                        onClick={() =>
-                          update((d) => {
-                            d.tests.log = d.tests.log.filter((x) => x.id !== t.id);
-                          })
-                        }
-                      >
-                        <TrashIcon />
-                      </IconButton>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
     </div>
   );
 }

@@ -192,6 +192,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
     path === "/profile" ||
     path === "/track" ||
     path === "/progress" ||
+    path === "/mock-tests" ||
     path === "/test" ||
     path.startsWith("/history");
   return (
@@ -260,6 +261,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
           (path === "/" ||
             path === "/profile" ||
             path === "/progress" ||
+            path === "/mock-tests" ||
             path === "/test" ||
             path.startsWith("/history")) &&
             "app-page-enter",

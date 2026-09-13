@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { ChevronDown } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -271,8 +271,14 @@ function Progress() {
                 />
               </div>
               <section className="mt-6 overflow-hidden rounded-xl border border-white/10 bg-white/[0.025]">
-                <div className="border-b border-white/10 px-4 py-3 text-sm font-semibold">
-                  Test history
+                <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+                  <span className="text-sm font-semibold">Test history</span>
+                  <Link
+                    to="/mock-tests"
+                    className="text-xs font-medium text-blue-300 transition-colors hover:text-blue-200"
+                  >
+                    View all
+                  </Link>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[36rem] text-left text-sm">
@@ -285,7 +291,7 @@ function Progress() {
                       </tr>
                     </thead>
                     <tbody>
-                      {tests.map((test) => (
+                      {tests.slice(0, 10).map((test) => (
                         <tr key={test.id} className="border-t border-white/5">
                           <td className="px-4 py-3 text-zinc-400">
                             {new Date(test.date).toLocaleDateString(undefined, {
