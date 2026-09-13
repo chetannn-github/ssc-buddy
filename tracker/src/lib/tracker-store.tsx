@@ -21,6 +21,21 @@ type Ctx = {
 
 const TrackerCtx = createContext<Ctx | null>(null);
 
+const LEGACY_SEED_CHAPTERS: Record<string, string[]> = {
+  Maths: [
+    "Number System",
+    "Percentage",
+    "Ratio & Proportion",
+    "Time, Speed & Distance",
+    "Algebra",
+    "Geometry",
+    "Trigonometry",
+  ],
+  GS: ["History", "Geography", "Polity", "Economy", "Science"],
+  Reasoning: ["Verbal Reasoning", "Non-Verbal Reasoning"],
+  English: ["Grammar", "Vocabulary"],
+};
+
 function migrate(raw: unknown): TrackerData {
   const base = defaultData();
   const d = raw as Partial<TrackerData>;
@@ -94,15 +109,28 @@ function migrate(raw: unknown): TrackerData {
     if (out.tests.targets[s.id] == null) out.tests.targets[s.id] = 50;
   }
 
-  // Earlier versions shipped with some chapters already marked complete. Keep
-  // the chapters, but do not show progress until the learner records it.
+  // Earlier versions shipped a full sample syllabus. Remove it when the user
+  // has not yet recorded any work, while preserving any chapters they added.
   const hasRecordedProgress = out.tests.log.length > 0 || out.activity.length > 0;
   if (!hasRecordedProgress) {
-    out.subjects.forEach((subject) => {
-      subject.chapters.forEach((chapter) => {
-        chapter.completed = 0;
-      });
-    });
+    out.subjects = out.subjects
+      .map((subject) => {
+        const seedChapters = LEGACY_SEED_CHAPTERS[subject.name];
+        if (!seedChapters) return subject;
+        return {
+          ...subject,
+          chapters: subject.chapters.filter((chapter) => !seedChapters.includes(chapter.name)),
+        };
+      })
+      .filter((subject) => subject.chapters.length > 0 || !LEGACY_SEED_CHAPTERS[subject.name]);
+    const subjectIds = new Set(out.subjects.map((subject) => subject.id));
+    out.revision = Object.fromEntries(
+      Object.entries(out.revision).filter(([subjectId]) => subjectIds.has(subjectId)),
+    );
+    out.tests.targets = Object.fromEntries(
+      Object.entries(out.tests.targets).filter(([subjectId]) => subjectIds.has(subjectId)),
+    );
+    out.tests.mocks = { pre: { target: 0, done: 0 }, mains: { target: 0, done: 0 } };
   }
   return out;
 }

@@ -41,69 +41,7 @@ export type TrackerData = {
 
 export const uid = () => Math.random().toString(36).slice(2, 9);
 
-const ch = (name: string, total: number, completed = 0): Chapter => ({
-  id: uid(),
-  name,
-  total,
-  completed,
-});
-
 export function defaultData(): TrackerData {
-  const subjects: Subject[] = [
-    {
-      id: uid(),
-      name: "Maths",
-      chapters: [
-        ch("Number System", 12),
-        ch("Percentage", 13),
-        ch("Ratio & Proportion", 10),
-        ch("Time, Speed & Distance", 20),
-        ch("Algebra", 24),
-        ch("Geometry", 30),
-        ch("Trigonometry", 18),
-      ],
-    },
-    {
-      id: uid(),
-      name: "GS",
-      chapters: [
-        ch("History", 25),
-        ch("Geography", 20),
-        ch("Polity", 18),
-        ch("Economy", 15),
-        ch("Science", 30),
-      ],
-    },
-    {
-      id: uid(),
-      name: "Reasoning",
-      chapters: [ch("Verbal Reasoning", 25), ch("Non-Verbal Reasoning", 20)],
-    },
-    {
-      id: uid(),
-      name: "English",
-      chapters: [ch("Grammar", 28), ch("Vocabulary", 25)],
-    },
-  ];
-
-  const revision: TrackerData["revision"] = {};
-  for (const s of subjects) {
-    const types: RevType[] =
-      s.name === "GS"
-        ? [
-            { id: uid(), name: "Notes", target: 5 },
-            { id: uid(), name: "Little Book", target: 5 },
-          ]
-        : [
-            { id: uid(), name: "Teacher Questions", target: 5 },
-            { id: uid(), name: "Concept Notes", target: 5 },
-          ];
-    revision[s.id] = { types, done: {}, targets: {} };
-  }
-
-  const targets: Record<string, number> = {};
-  for (const s of subjects) targets[s.id] = 50;
-
   return {
     version: 1,
     meta: {
@@ -111,11 +49,11 @@ export function defaultData(): TrackerData {
       syllabusDeadline: "2026-11-15",
       targetDate: "2027-02-01",
     },
-    subjects,
-    revision,
+    subjects: [],
+    revision: {},
     tests: {
-      targets,
-      mocks: { pre: { target: 20, done: 0 }, mains: { target: 20, done: 0 } },
+      targets: {},
+      mocks: { pre: { target: 0, done: 0 }, mains: { target: 0, done: 0 } },
       log: [],
     },
     activity: [],
