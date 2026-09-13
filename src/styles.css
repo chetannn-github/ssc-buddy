@@ -142,8 +142,24 @@
 }
 
 .exam-dark .card-surface {
-  background-color: #1c1c1c;
-  border-color: rgb(255 255 255 / 10%);
+  background-color: #1d1d1d;
+  border-color: rgb(255 255 255 / 13%);
+  box-shadow: 0 12px 28px rgb(0 0 0 / 18%);
+}
+
+.exam-dark .card-surface:hover {
+  border-color: rgb(255 255 255 / 20%);
+}
+
+.exam-dark .text-muted-foreground {
+  color: #a1a1aa;
+}
+
+.exam-dark button[class*="variant-outline"],
+.exam-dark button.border {
+  background-color: #171717;
+  border-color: rgb(255 255 255 / 14%);
+  color: #e4e4e7;
 }
 
 .exam-dark input,

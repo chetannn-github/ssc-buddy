@@ -1,5 +1,5 @@
-import type { MouseEvent, ReactNode } from "react";
-import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import type { ReactNode } from "react";
+import { Link, useRouterState } from "@tanstack/react-router";
 import { BarChart3, Flame, GraduationCap, History, Route as RouteIcon, Upload } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,6 @@ import { loadHistory, type TestRecord } from "@/lib/exam";
 import { trackerActiveDates } from "@/lib/tracker";
 import { loadTrackerData, saveTrackerData } from "@/lib/tracker-store";
 import { loadPracticeProfile, savePracticeProfile, type PracticeProfile } from "@/lib/profile";
-import { requestLightPageLoader } from "@/lib/navigation";
 import { restorePracticeBackup } from "@/lib/backup";
 import { cn } from "@/lib/utils";
 
@@ -25,17 +24,6 @@ const nav = [
   { title: "Progress", url: "/progress", icon: BarChart3 },
   { title: "History", url: "/history", icon: History },
 ] as const;
-
-type AppPath = "/" | "/profile" | "/track" | "/progress" | "/test" | "/history";
-const noAnimationDarkPaths = new Set<AppPath>(["/", "/profile", "/track", "/progress", "/test"]);
-
-function skipsThemeTransition(from: string, to: AppPath) {
-  return noAnimationDarkPaths.has(from as AppPath) && noAnimationDarkPaths.has(to);
-}
-
-type ViewTransitionDocument = Document & {
-  startViewTransition?: (callback: () => Promise<unknown>) => { finished: Promise<void> };
-};
 
 function ProfileOnboarding({ onComplete }: { onComplete: (profile: PracticeProfile) => void }) {
   const [name, setName] = useState("");
@@ -169,7 +157,6 @@ function ProfileOnboarding({ onComplete }: { onComplete: (profile: PracticeProfi
 
 export function AppShell({ title, subtitle, actions, children }: Props) {
   const path = useRouterState({ select: (r) => r.location.pathname });
-  const navigate = useNavigate();
   const [records, setRecords] = useState<TestRecord[]>([]);
   const [trackerActivityDates, setTrackerActivityDates] = useState<string[]>([]);
   const [profile, setProfile] = useState<PracticeProfile | null | undefined>(undefined);
@@ -207,43 +194,6 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
     path === "/progress" ||
     path === "/test" ||
     path.startsWith("/history");
-  const navigateWithThemeTransition = (event: MouseEvent<HTMLAnchorElement>, to: AppPath) => {
-    if (skipsThemeTransition(path, to)) return;
-
-    if (
-      event.defaultPrevented ||
-      event.button !== 0 ||
-      event.metaKey ||
-      event.ctrlKey ||
-      event.shiftKey ||
-      event.altKey ||
-      path === to
-    ) {
-      return;
-    }
-
-    const isDarkDestination =
-      to === "/" || to === "/track" || to === "/progress" || to === "/test" || to === "/history";
-    if (!isDarkPage && !isDarkDestination) return;
-
-    event.preventDefault();
-    requestLightPageLoader(isDarkPage && !isDarkDestination);
-    const viewDocument = document as ViewTransitionDocument;
-    const transitionName = isDarkPage && !isDarkDestination ? "to-light" : "to-profile";
-    if (!viewDocument.startViewTransition) {
-      void navigate({ to });
-      return;
-    }
-
-    const transition = viewDocument.startViewTransition(() => {
-      document.documentElement.dataset["profileTransition"] = transitionName;
-      return navigate({ to });
-    });
-    void transition.finished.finally(() => {
-      delete document.documentElement.dataset["profileTransition"];
-    });
-  };
-
   return (
     <div
       className={cn(
@@ -274,7 +224,6 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
                 <Link
                   key={item.url}
                   to={item.url}
-                  onClick={(event) => navigateWithThemeTransition(event, item.url)}
                   className={cn(
                     "app-nav-link flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors sm:text-sm",
                     active
@@ -290,7 +239,6 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
           </nav>
           <Link
             to="/"
-            onClick={(event) => navigateWithThemeTransition(event, "/")}
             aria-label={`Practice streak: ${currentStreak} days`}
             className={cn(
               "ml-1 flex h-9 min-w-12 items-center justify-center gap-1.5 rounded-full px-3 text-xs font-semibold transition-all",
