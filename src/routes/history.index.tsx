@@ -120,7 +120,7 @@ function HistoryPage() {
                 <SelectTrigger>
                   <SelectValue placeholder="All subjects" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="history-select-content">
                   <SelectItem value={ALL}>All subjects</SelectItem>
                   {subjects.map((s) => (
                     <SelectItem key={s} value={s}>
@@ -133,7 +133,7 @@ function HistoryPage() {
                 <SelectTrigger>
                   <SelectValue placeholder="All chapters" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="history-select-content">
                   <SelectItem value={ALL}>All chapters</SelectItem>
                   {chapters.map((c) => (
                     <SelectItem key={c} value={c}>

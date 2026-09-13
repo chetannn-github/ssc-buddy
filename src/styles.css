@@ -239,6 +239,22 @@
   color: #e4e4e7;
 }
 
+.history-select-content {
+  background-color: #1c1c1c !important;
+  border: 0 !important;
+  box-shadow: 0 12px 28px rgb(0 0 0 / 45%) !important;
+  color: #e4e4e7 !important;
+}
+
+.history-select-content [data-slot="select-item"] {
+  color: #e4e4e7 !important;
+}
+
+.history-select-content [data-slot="select-item"][data-highlighted] {
+  background-color: #303030 !important;
+  color: #fff !important;
+}
+
 .tracker-theme input[type="number"] {
   appearance: textfield;
   -moz-appearance: textfield;
