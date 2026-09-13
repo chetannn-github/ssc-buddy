@@ -36,12 +36,13 @@ import { MockTestLogDialog } from "../../tracker/src/components/tracker/MockTest
 
 const title = "Profile";
 const description = "Your yearly practice activity and progress.";
-type ActivityRange = "today" | "week" | "year" | "all";
+type ActivityRange = "today" | "week" | "month" | "year" | "all";
 let hasShownProfileLoader = false;
 
 const rangeLabels: Record<ActivityRange, string> = {
   today: "Today",
   week: "This week",
+  month: "Last month",
   year: "This year",
   all: "All time",
 };
@@ -54,6 +55,7 @@ function isInRange(dateValue: string, range: ActivityRange) {
   const start = new Date();
   start.setHours(0, 0, 0, 0);
   if (range === "week") start.setDate(start.getDate() - 6);
+  if (range === "month") start.setMonth(start.getMonth() - 1);
   if (range === "year") start.setDate(start.getDate() - 364);
   return date >= start;
 }
