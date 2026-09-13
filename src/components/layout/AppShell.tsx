@@ -36,7 +36,7 @@ const nav = [
 ] as const;
 
 type AppPath = "/" | "/profile" | "/track" | "/progress" | "/test" | "/history";
-const noAnimationDarkPaths = new Set<AppPath>(["/", "/profile", "/track"]);
+const noAnimationDarkPaths = new Set<AppPath>(["/", "/profile", "/track", "/progress"]);
 
 function skipsThemeTransition(from: string, to: AppPath) {
   return noAnimationDarkPaths.has(from as AppPath) && noAnimationDarkPaths.has(to);
