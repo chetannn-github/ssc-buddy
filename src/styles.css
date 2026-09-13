@@ -132,6 +132,21 @@
   -webkit-appearance: none;
 }
 
+@keyframes tracker-tab-enter {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tracker-tab-panel {
+  animation: tracker-tab-enter 240ms ease-out;
+}
+
 .tracker-theme select,
 .mock-test-dialog select {
   border: 0 !important;

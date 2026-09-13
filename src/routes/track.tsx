@@ -39,15 +39,15 @@ function TrackPage() {
                 onClick={() => setTab(item)}
                 className={
                   tab === item
-                    ? "rounded-full bg-accent-blue py-2 text-[13px] font-medium text-card"
-                    : "rounded-full py-2 text-[13px] text-muted-foreground transition-colors hover:text-foreground"
+                    ? "rounded-full bg-accent-blue py-2 text-[13px] font-medium text-card transition-all duration-300"
+                    : "rounded-full py-2 text-[13px] text-muted-foreground transition-all duration-300 hover:text-foreground"
                 }
               >
                 {item}
               </button>
             ))}
           </nav>
-          <div className="mt-2">
+          <div key={tab} className="tracker-tab-panel mt-2">
             {tab === "Syllabus" && <Syllabus />}
             {tab === "Revision" && <Revision />}
             {tab === "Mock Test" && <Tests />}
