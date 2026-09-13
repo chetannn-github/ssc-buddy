@@ -126,14 +126,11 @@ export function Syllabus() {
     update((d) => {
       d.subjects.push({ id, name: name.trim(), chapters: [] });
       d.revision[id] = {
-        types: [
-          { id: uid(), name: "Teacher Questions", target: 5 },
-          { id: uid(), name: "Concept Notes", target: 5 },
-        ],
+        types: [],
         done: {},
         targets: {},
       };
-      d.tests.targets[id] = 50;
+      d.tests.targets[id] = 0;
     });
     setOpenSubjectId(id);
   };

@@ -73,25 +73,13 @@ function migrate(raw: unknown): TrackerData {
   };
   for (const s of out.subjects) {
     const r = d.revision?.[s.id];
-    let types = (r?.types ?? []).map((t) => ({
+    const types = (r?.types ?? []).map((t) => ({
       id: String(t.id ?? Math.random()),
       name: String(t.name ?? "Revision"),
       target: Number(t.target) || 5,
     }));
-    if (types.length === 0) {
-      types =
-        s.name.toUpperCase() === "GS"
-          ? [
-              { id: s.id + "-notes", name: "Notes", target: 5 },
-              { id: s.id + "-lb", name: "Little Book", target: 5 },
-            ]
-          : [
-              { id: s.id + "-tq", name: "Teacher Questions", target: 5 },
-              { id: s.id + "-cn", name: "Concept Notes", target: 5 },
-            ];
-    }
     out.revision[s.id] = { types, done: r?.done ?? {}, targets: r?.targets ?? {} };
-    if (out.tests.targets[s.id] == null) out.tests.targets[s.id] = 50;
+    if (out.tests.targets[s.id] == null) out.tests.targets[s.id] = 0;
   }
   return out;
 }
