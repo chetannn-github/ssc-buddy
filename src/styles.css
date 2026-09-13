@@ -347,8 +347,8 @@
   --marked-foreground: oklch(0.99 0.005 300);
   --unanswered: oklch(1 0 0);
   --unanswered-foreground: oklch(0.25 0.03 256);
-  --unvisited: oklch(0.86 0.008 255);
-  --unvisited-foreground: oklch(0.35 0.02 256);
+  --unvisited: oklch(0.78 0.018 250);
+  --unvisited-foreground: oklch(0.31 0.028 256);
   --exam-header: oklch(0.27 0.07 262);
   --exam-header-foreground: oklch(0.98 0.005 250);
   --gradient-header: linear-gradient(120deg, oklch(0.24 0.07 264), oklch(0.36 0.08 252));
