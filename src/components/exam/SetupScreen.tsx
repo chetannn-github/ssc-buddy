@@ -227,9 +227,9 @@ export function SetupScreen({
   if (isLoading) return <PageLoader label="Preparing your test" />;
 
   return (
-    <div className="card-surface space-y-4 p-4 sm:p-5">
+    <div className="card-surface space-y-3.5 p-3.5 sm:p-4">
       {/* Subject & chapter */}
-      <section className="space-y-2">
+      <section className="space-y-1.5">
         <Label className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">
           Topic
         </Label>
@@ -293,9 +293,8 @@ export function SetupScreen({
         </div>
 
         {chapter && (
-          <div className="space-y-1.5 rounded-lg border border-border bg-background/50 p-2.5">
-            <Label className="text-xs text-muted-foreground">Exercise</Label>
-            <div className="flex flex-wrap gap-2">
+          <div className="space-y-1.5 rounded-lg border border-border bg-background/50 p-2">
+            <div className="flex flex-wrap gap-1.5">
               {exercises.map((ex) => (
                 <Button
                   key={ex.name}
@@ -324,7 +323,7 @@ export function SetupScreen({
       </section>
 
       {/* Duration & start number */}
-      <section className="space-y-2">
+      <section className="space-y-1.5">
         <Label className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">
           Timing
         </Label>
@@ -375,7 +374,7 @@ export function SetupScreen({
       </section>
 
       {/* Number of questions */}
-      <section className="space-y-2">
+      <section className="space-y-1.5">
         <Label className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">
           Questions
         </Label>
