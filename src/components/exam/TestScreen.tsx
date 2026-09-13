@@ -49,7 +49,9 @@ export function TestScreen({
   const [seconds, setSeconds] = useState(total);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(initialDarkMode);
+  const [isThemeSwitching, setIsThemeSwitching] = useState(false);
   const submitted = useRef(false);
+  const themeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const answers = useMemo(() => states.map((s) => s.answer), [states]);
 
@@ -57,6 +59,13 @@ export function TestScreen({
     const id = setInterval(() => setSeconds((s) => Math.max(0, s - 1)), 1000);
     return () => clearInterval(id);
   }, []);
+
+  useEffect(
+    () => () => {
+      if (themeTimer.current) clearTimeout(themeTimer.current);
+    },
+    [],
+  );
 
   const submit = (list: (Option | null)[], remaining: number) => {
     if (submitted.current) return;
@@ -80,6 +89,13 @@ export function TestScreen({
       setStates((prev) => [...prev, blank(true)]);
     } else update(index, { visited: true });
     setCurrent(index);
+  };
+
+  const toggleTheme = () => {
+    if (themeTimer.current) clearTimeout(themeTimer.current);
+    setIsThemeSwitching(true);
+    setDarkMode((current) => !current);
+    themeTimer.current = setTimeout(() => setIsThemeSwitching(false), 360);
   };
 
   const counts = useMemo(() => {
@@ -114,7 +130,8 @@ export function TestScreen({
   return (
     <div
       className={cn(
-        "app-page-enter min-h-screen",
+        "app-page-enter min-h-screen transition-colors duration-300",
+        isThemeSwitching && "test-theme-switch",
         darkMode ? "exam-dark bg-[#121212] text-zinc-100" : "bg-background",
       )}
     >
@@ -139,8 +156,11 @@ export function TestScreen({
               type="button"
               aria-label={`Switch to ${darkMode ? "light" : "dark"} mode`}
               title={`Switch to ${darkMode ? "light" : "dark"} mode`}
-              onClick={() => setDarkMode((current) => !current)}
-              className="grid h-8 w-8 place-items-center rounded-full border border-white/15 bg-white/10 text-current backdrop-blur-sm"
+              onClick={toggleTheme}
+              className={cn(
+                "grid h-8 w-8 place-items-center rounded-full border border-white/15 bg-white/10 text-current backdrop-blur-sm transition-transform duration-300",
+                isThemeSwitching && "rotate-180",
+              )}
             >
               {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>

@@ -304,6 +304,21 @@
   animation: tracker-tab-enter 280ms ease-out;
 }
 
+.test-theme-switch {
+  animation: test-theme-switch 360ms ease-out;
+}
+
+@keyframes test-theme-switch {
+  from {
+    opacity: 0.72;
+    transform: scale(0.992);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 .tracker-theme select,
 .mock-test-dialog select {
   border: 0 !important;
