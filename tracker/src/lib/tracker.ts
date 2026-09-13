@@ -54,7 +54,7 @@ export function defaultData(): TrackerData {
       id: uid(),
       name: "Maths",
       chapters: [
-        ch("Number System", 12, 12),
+        ch("Number System", 12),
         ch("Percentage", 13),
         ch("Ratio & Proportion", 10),
         ch("Time, Speed & Distance", 20),
@@ -67,7 +67,7 @@ export function defaultData(): TrackerData {
       id: uid(),
       name: "GS",
       chapters: [
-        ch("History", 25, 25),
+        ch("History", 25),
         ch("Geography", 20),
         ch("Polity", 18),
         ch("Economy", 15),

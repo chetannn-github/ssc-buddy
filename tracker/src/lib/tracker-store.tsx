@@ -93,6 +93,17 @@ function migrate(raw: unknown): TrackerData {
     out.revision[s.id] = { types, done: r?.done ?? {}, targets: r?.targets ?? {} };
     if (out.tests.targets[s.id] == null) out.tests.targets[s.id] = 50;
   }
+
+  // Earlier versions shipped with some chapters already marked complete. Keep
+  // the chapters, but do not show progress until the learner records it.
+  const hasRecordedProgress = out.tests.log.length > 0 || out.activity.length > 0;
+  if (!hasRecordedProgress) {
+    out.subjects.forEach((subject) => {
+      subject.chapters.forEach((chapter) => {
+        chapter.completed = 0;
+      });
+    });
+  }
   return out;
 }
 
