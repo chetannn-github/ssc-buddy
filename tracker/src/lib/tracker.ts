@@ -34,6 +34,7 @@ export type TrackerData = {
     targetDate: string;
     countdowns: Array<{ id: string; name: string; date: string }>;
   };
+  pinnedChapterIds: string[];
   subjects: Subject[];
   revision: Record<string, RevisionSubject>;
   tests: {
@@ -55,6 +56,7 @@ export function defaultData(): TrackerData {
       targetDate: "",
       countdowns: [],
     },
+    pinnedChapterIds: [],
     subjects: [],
     revision: {},
     tests: {

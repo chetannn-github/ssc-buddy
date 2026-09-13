@@ -47,6 +47,9 @@ function migrate(raw: unknown): TrackerData {
             (countdown): countdown is { id: string; name: string; date: string } => !!countdown,
           ),
     },
+    pinnedChapterIds: Array.isArray(d.pinnedChapterIds)
+      ? d.pinnedChapterIds.map((id) => String(id))
+      : [],
     subjects: d.subjects.map((s) => ({
       id: String(s.id ?? Math.random()),
       name: String(s.name ?? "Subject"),
