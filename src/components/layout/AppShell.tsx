@@ -205,7 +205,8 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
     path === "/profile" ||
     path === "/track" ||
     path === "/progress" ||
-    path === "/test";
+    path === "/test" ||
+    path.startsWith("/history");
   const navigateWithThemeTransition = (event: MouseEvent<HTMLAnchorElement>, to: AppPath) => {
     if (skipsThemeTransition(path, to)) return;
 
@@ -221,7 +222,8 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
       return;
     }
 
-    const isDarkDestination = to === "/" || to === "/track" || to === "/progress" || to === "/test";
+    const isDarkDestination =
+      to === "/" || to === "/track" || to === "/progress" || to === "/test" || to === "/history";
     if (!isDarkPage && !isDarkDestination) return;
 
     event.preventDefault();
