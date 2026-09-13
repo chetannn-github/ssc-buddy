@@ -35,6 +35,8 @@ export function MockTestLogDialog({
   if (!open) return null;
   const field =
     "h-10 w-full appearance-none rounded-xl border border-white/10 bg-black/20 px-3 text-sm text-white outline-none transition focus:border-blue-400/70 disabled:cursor-not-allowed disabled:opacity-40 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
+  const selectField =
+    "h-10 w-full appearance-none rounded-xl bg-black/20 px-3 text-sm text-white outline-none transition focus:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40";
 
   const submit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -55,7 +57,7 @@ export function MockTestLogDialog({
       numericAccuracy < 0 ||
       numericAccuracy > 100
     ) {
-      setError("Score must be within total marks, and accuracy must be between 0% and 100%.");
+      setError("Enter a valid score and accuracy.");
       return;
     }
     const next = structuredClone(data);
@@ -91,14 +93,11 @@ export function MockTestLogDialog({
         <h2 id="log-mock-test-title" className="mt-1 text-xl font-semibold">
           Log mock test
         </h2>
-        <p className="mt-1 text-sm text-zinc-400">
-          Add the result to track your marks and accuracy.
-        </p>
         <form className="mt-5 grid gap-3 sm:grid-cols-2" onSubmit={submit}>
           <label className="text-sm text-zinc-300">
             Test type
             <select
-              className={`${field} mt-1.5`}
+              className={`${selectField} mt-1.5`}
               value={type}
               onChange={(event) => {
                 const nextType = event.target.value;
@@ -114,7 +113,7 @@ export function MockTestLogDialog({
           <label className="text-sm text-zinc-300">
             Subject
             <select
-              className={`${field} mt-1.5`}
+              className={`${selectField} mt-1.5`}
               value={isSectional ? subjectId : "__all__"}
               onChange={(event) => setSubjectId(event.target.value)}
               disabled={!isSectional}
@@ -172,7 +171,7 @@ export function MockTestLogDialog({
               required
             />
           </label>
-          {error && <p className="sm:col-span-2 text-sm text-red-400">{error}</p>}
+          {error && <p className="sm:col-span-2 text-xs text-red-400">{error}</p>}
           <div className="flex justify-end gap-2 pt-2 sm:col-span-2">
             <button
               type="button"

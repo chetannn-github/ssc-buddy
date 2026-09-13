@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
   ChevronDown,
   Copy,
@@ -32,11 +32,16 @@ import {
 import { IMPORT_PROMPT } from "@/lib/tracker";
 import { loadTrackerData, saveTrackerData } from "@/lib/tracker-store";
 import { cn } from "@/lib/utils";
+import { requestLightPageLoader } from "@/lib/navigation";
 import { MockTestLogDialog } from "../../tracker/src/components/tracker/MockTestLogDialog";
 
 const title = "Profile";
 const description = "Your yearly practice activity and progress.";
 type ActivityRange = "today" | "week" | "year" | "all";
+
+type ViewTransitionDocument = Document & {
+  startViewTransition?: (callback: () => Promise<unknown>) => { finished: Promise<void> };
+};
 
 const rangeLabels: Record<ActivityRange, string> = {
   today: "Today",
@@ -510,6 +515,7 @@ function StudyTrackerOverview({ tracker }: { tracker: TrackerData | null }) {
 }
 
 export function Profile() {
+  const navigate = useNavigate();
   const [records, setRecords] = useState<TestRecord[]>([]);
   const [tracker, setTracker] = useState<TrackerData | null>(null);
   const [range, setRange] = useState<ActivityRange>("today");
@@ -651,6 +657,23 @@ export function Profile() {
       setImportMessage("Choose a valid full backup or Tracker JSON file.");
     }
   };
+  const startPracticeSession = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey) return;
+    event.preventDefault();
+    requestLightPageLoader(true);
+    const viewDocument = document as ViewTransitionDocument;
+    if (!viewDocument.startViewTransition) {
+      void navigate({ to: "/test" });
+      return;
+    }
+    const transition = viewDocument.startViewTransition(() => {
+      document.documentElement.dataset["profileTransition"] = "to-light";
+      return navigate({ to: "/test" });
+    });
+    void transition.finished.finally(() => {
+      delete document.documentElement.dataset["profileTransition"];
+    });
+  };
 
   if (isLoading) {
     return (
@@ -690,17 +713,7 @@ export function Profile() {
                 type="button"
                 size="icon"
                 variant="ghost"
-                className="absolute top-28 left-2 h-8 w-8 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
-                onClick={() => setEditingProfile(true)}
-                aria-label="Edit profile"
-              >
-                <Pencil className="h-3.5 w-3.5" />
-              </Button>
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                className="absolute top-28 right-2 h-8 w-8 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
+                className="absolute right-0 bottom-7 h-8 w-8 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
                 onClick={updateAvatar}
                 disabled={avatarFiles.length < 2}
                 aria-label="Change profile image"
@@ -715,12 +728,10 @@ export function Profile() {
                 </p>
               )}
               <h2 className="mt-1 truncate text-2xl font-semibold text-zinc-50">{displayName}</h2>
-              <p className="mt-1 text-sm text-zinc-400">
-                Keep the streak going. Practise questions, log mocks, and track progress.
-              </p>
               <div className="mt-4 flex flex-wrap items-center justify-center gap-2 sm:justify-start">
                 <Link
                   to="/test"
+                  onClick={startPracticeSession}
                   className="inline-flex h-10 items-center gap-2 rounded-xl bg-emerald-500 px-4 text-sm font-semibold text-white transition-colors hover:bg-emerald-400"
                 >
                   <Plus className="h-4 w-4" /> New practice session
