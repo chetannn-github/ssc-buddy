@@ -251,8 +251,12 @@ export function Syllabus() {
               <Bar value={pct(x.done, x.total)} />
             </div>
 
-            {isOpen && (
-              <>
+            <div
+              className={`grid transition-[grid-template-rows] duration-300 ease-out ${
+                isOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+              }`}
+            >
+              <div className="min-h-0 overflow-hidden">
                 <div className="mt-2 space-y-1.5">
                   {s.chapters.length === 0 ? (
                     <p className="py-2 text-sm text-muted-foreground">No chapters yet.</p>
@@ -260,8 +264,8 @@ export function Syllabus() {
                     s.chapters.map((c) => <ChapterRow key={c.id} subjectId={s.id} chapter={c} />)
                   )}
                 </div>
-              </>
-            )}
+              </div>
+            </div>
           </Card>
         );
       })}

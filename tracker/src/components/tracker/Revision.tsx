@@ -129,62 +129,70 @@ function SubjectRevision({
         <Bar value={pct(x.done, x.total)} tone="green" />
       </div>
 
-      {open && (
-        <div className="mt-2 space-y-1.5">
-          {subject.chapters.length === 0 && (
-            <p className="text-sm text-muted-foreground">Add chapters in the Syllabus tab first.</p>
-          )}
-          {subject.chapters.map((c) => (
-            <div key={c.id} className="rounded-lg bg-white/[0.025] px-3 py-2.5">
-              <div className="text-sm font-medium">{c.name}</div>
-              <div className="mt-2 space-y-1.5">
-                {rev.types.map((t) => {
-                  const target = revTarget(data, subject.id, c.id, t);
-                  const done = revDone(data, subject.id, c.id, t.id);
-                  return (
-                    <div key={t.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                      <span className="w-36 shrink-0 font-mono text-[12px] text-muted-foreground">
-                        {t.name}
-                      </span>
-                      <Dots done={done} target={target} onSet={(n) => setDone(c.id, t.id, n)} />
-                      <span className="ml-auto font-mono text-[13px] text-muted-foreground">
-                        {Math.min(done, target)} / {target}
-                      </span>
-                      <Num
-                        ariaLabel={`${t.name} target for ${c.name}`}
-                        value={target}
-                        onChange={(n) => setTarget(c.id, t.id, n)}
-                      />
-                      <button
-                        type="button"
-                        aria-label={`Remove ${t.name}`}
-                        title={`Remove ${t.name} from ${subject.name}`}
-                        onClick={() => {
-                          confirm({
-                            title: "Remove revision type?",
-                            description: `“${t.name}” will be removed from ${subject.name}.`,
-                            confirmLabel: "Remove type",
-                            danger: true,
-                            onConfirm: () =>
-                              update((d) => {
-                                const r = d.revision[subject.id];
-                                if (!r) return;
-                                r.types = r.types.filter((y) => y.id !== t.id);
-                              }),
-                          });
-                        }}
-                        className="text-muted-foreground transition-colors hover:text-destructive"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  );
-                })}
+      <div
+        className={`grid transition-[grid-template-rows] duration-300 ease-out ${
+          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+        }`}
+      >
+        <div className="min-h-0 overflow-hidden">
+          <div className="mt-2 space-y-1.5">
+            {subject.chapters.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                Add chapters in the Syllabus tab first.
+              </p>
+            )}
+            {subject.chapters.map((c) => (
+              <div key={c.id} className="rounded-lg bg-white/[0.025] px-3 py-2.5">
+                <div className="text-sm font-medium">{c.name}</div>
+                <div className="mt-2 space-y-1.5">
+                  {rev.types.map((t) => {
+                    const target = revTarget(data, subject.id, c.id, t);
+                    const done = revDone(data, subject.id, c.id, t.id);
+                    return (
+                      <div key={t.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                        <span className="w-36 shrink-0 font-mono text-[12px] text-muted-foreground">
+                          {t.name}
+                        </span>
+                        <Dots done={done} target={target} onSet={(n) => setDone(c.id, t.id, n)} />
+                        <span className="ml-auto font-mono text-[13px] text-muted-foreground">
+                          {Math.min(done, target)} / {target}
+                        </span>
+                        <Num
+                          ariaLabel={`${t.name} target for ${c.name}`}
+                          value={target}
+                          onChange={(n) => setTarget(c.id, t.id, n)}
+                        />
+                        <button
+                          type="button"
+                          aria-label={`Remove ${t.name}`}
+                          title={`Remove ${t.name} from ${subject.name}`}
+                          onClick={() => {
+                            confirm({
+                              title: "Remove revision type?",
+                              description: `“${t.name}” will be removed from ${subject.name}.`,
+                              confirmLabel: "Remove type",
+                              danger: true,
+                              onConfirm: () =>
+                                update((d) => {
+                                  const r = d.revision[subject.id];
+                                  if (!r) return;
+                                  r.types = r.types.filter((y) => y.id !== t.id);
+                                }),
+                            });
+                          }}
+                          className="text-muted-foreground transition-colors hover:text-destructive"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-      )}
+      </div>
     </Card>
   );
 }

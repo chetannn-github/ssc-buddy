@@ -145,6 +145,7 @@ export const ChevronIcon = ({ open }: { open: boolean }) => (
     fill="none"
     stroke="currentColor"
     strokeWidth="2"
+    className="transition-transform duration-300 ease-out"
     style={{ transform: open ? "rotate(90deg)" : "none" }}
   >
     <path d="M9 6l6 6-6 6" />
