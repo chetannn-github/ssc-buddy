@@ -141,6 +141,39 @@
   --ring: oklch(0.68 0.13 250);
 }
 
+.exam-dark .card-surface {
+  background-color: #1c1c1c;
+  border-color: rgb(255 255 255 / 10%);
+}
+
+.exam-dark input,
+.exam-dark textarea,
+.exam-dark [data-slot="select-trigger"] {
+  background-color: #181818;
+  border-color: rgb(255 255 255 / 10%);
+  color: #f4f4f5;
+}
+
+.exam-dark button[data-state="on"],
+.exam-dark button[data-state="checked"] {
+  background-color: #3b82f6;
+  color: #fff;
+}
+
+.exam-select-content,
+.exam-dialog-content {
+  --background: oklch(0.18 0 0);
+  --foreground: oklch(0.92 0 0);
+  --popover: oklch(0.18 0 0);
+  --popover-foreground: oklch(0.92 0 0);
+  --border: oklch(1 0 0 / 10%);
+  --accent: oklch(0.25 0 0);
+  --accent-foreground: oklch(0.92 0 0);
+  --muted: oklch(0.23 0 0);
+  --muted-foreground: oklch(0.63 0 0);
+  color-scheme: dark;
+}
+
 .tracker-theme input[type="number"] {
   appearance: textfield;
   -moz-appearance: textfield;

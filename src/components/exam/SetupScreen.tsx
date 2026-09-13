@@ -232,7 +232,7 @@ export function SetupScreen({
               <SelectTrigger>
                 <SelectValue placeholder="Select subject" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="exam-select-content">
                 {subjects.map((s) => (
                   <SelectItem key={s.name} value={s.name}>
                     {s.name}
@@ -257,7 +257,7 @@ export function SetupScreen({
               <SelectTrigger>
                 <SelectValue placeholder={subject ? "Select chapter" : "Select a subject first"} />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="exam-select-content">
                 {chapters.map((c) => (
                   <SelectItem key={c.name} value={c.name}>
                     {c.name}
@@ -478,7 +478,7 @@ export function SetupScreen({
       </Button>
 
       <Dialog open={chapterDraft !== null} onOpenChange={(o) => !o && setChapterDraft(null)}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="exam-dialog-content max-w-2xl">
           <DialogHeader>
             <DialogTitle>
               {chapterDraft} — {isEditing ? "edit exercise" : "exercise setup"}
