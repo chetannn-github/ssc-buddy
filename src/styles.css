@@ -278,6 +278,10 @@
   animation: nav-icon-pop 360ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+.app-bottom-nav {
+  padding-bottom: max(0.4rem, env(safe-area-inset-bottom));
+}
+
 :root[data-profile-transition]::view-transition-old(root),
 :root[data-profile-transition]::view-transition-new(root) {
   animation-duration: 520ms;

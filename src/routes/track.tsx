@@ -25,10 +25,16 @@ function TrackPage() {
   const search = Route.useSearch();
   const [tab, setTab] = useState<Tab>(search.tab ?? "Syllabus");
   return (
-    <AppShell title="Tracker">
-      <div className="tracker-theme -mx-4 -my-6 min-h-[calc(100vh-4rem)] bg-[#121212] px-3 py-5 text-zinc-100 sm:-mx-6 sm:px-5 sm:py-6">
+    <AppShell title="Tracker" fullBleed>
+      <div className="tracker-theme min-h-[calc(100vh-3.5rem)] bg-[#121212] px-3 py-5 text-zinc-100 sm:px-5 sm:py-6 md:min-h-[calc(100vh-4rem)]">
         <main className="mx-auto w-full max-w-3xl">
-          <nav className="grid grid-cols-3 gap-0.5 rounded-full bg-card p-0.5">
+          <div className="mb-4 px-1">
+            <p className="text-[11px] font-semibold tracking-[0.16em] text-zinc-500 uppercase">
+              Study plan
+            </p>
+            <h1 className="mt-1 text-2xl font-semibold">Tracker</h1>
+          </div>
+          <nav className="grid grid-cols-3 gap-0.5 rounded-full bg-card p-1">
             {TABS.map((item) => (
               <button
                 key={item}

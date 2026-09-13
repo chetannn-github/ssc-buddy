@@ -209,8 +209,8 @@ function Progress() {
   }));
 
   return (
-    <AppShell title="Progress">
-      <div className="-mx-4 -my-6 min-h-[calc(100vh-4rem)] bg-[#121212] px-4 py-7 text-zinc-100 sm:-mx-6 sm:px-6">
+    <AppShell title="Progress" fullBleed>
+      <div className="min-h-[calc(100vh-3.5rem)] bg-[#121212] px-4 py-7 text-zinc-100 sm:px-6 md:min-h-[calc(100vh-4rem)]">
         <main className="mx-auto max-w-4xl">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>

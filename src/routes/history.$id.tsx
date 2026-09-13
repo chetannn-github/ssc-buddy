@@ -105,15 +105,15 @@ function ResultDetail() {
           : undefined
       }
     >
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2 text-xs" asChild>
+      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <Button variant="ghost" size="sm" className="h-8 w-fit gap-1.5 px-2 text-xs" asChild>
           <Link to="/history">
             <ArrowLeft className="h-4 w-4" />
             Back to history
           </Link>
         </Button>
         {record ? (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
               size="sm"

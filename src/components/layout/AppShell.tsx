@@ -2,11 +2,12 @@ import type { MouseEvent, ReactNode } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   BarChart3,
+  BookOpen,
   Flame,
   GraduationCap,
   History,
+  Home,
   PenSquare,
-  Route as RouteIcon,
   Upload,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -26,12 +27,14 @@ type Props = {
   subtitle?: string | undefined;
   actions?: ReactNode | undefined;
   children: ReactNode;
+  fullBleed?: boolean | undefined;
 };
 
 const nav = [
-  { title: "Track", url: "/track", icon: RouteIcon },
+  { title: "Home", url: "/", icon: Home },
+  { title: "Track", url: "/track", icon: BookOpen },
   { title: "Progress", url: "/progress", icon: BarChart3 },
-  { title: "New test", url: "/test", icon: PenSquare },
+  { title: "Test", url: "/test", icon: PenSquare },
   { title: "History", url: "/history", icon: History },
 ] as const;
 
@@ -40,6 +43,15 @@ type AppPath = "/" | "/track" | "/progress" | "/test" | "/history";
 type ViewTransitionDocument = Document & {
   startViewTransition?: (callback: () => Promise<unknown>) => { finished: Promise<void> };
 };
+
+function isNavActive(path: string, url: AppPath) {
+  if (url === "/") return path === "/" || path === "/profile";
+  return path === url || path.startsWith(`${url}/`);
+}
+
+function isDarkPath(path: string) {
+  return path === "/" || path === "/profile" || path === "/track" || path === "/progress";
+}
 
 function ProfileOnboarding({ onComplete }: { onComplete: (profile: PracticeProfile) => void }) {
   const [name, setName] = useState("");
@@ -88,7 +100,10 @@ function ProfileOnboarding({ onComplete }: { onComplete: (profile: PracticeProfi
         <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-400/15 text-emerald-300">
           <GraduationCap className="h-6 w-6" />
         </span>
-        <h2 className="mt-5 text-2xl font-semibold">Setup your profile</h2>
+        <h2 className="mt-5 text-2xl font-semibold">Set up your profile</h2>
+        <p className="mt-2 text-sm text-zinc-400">
+          Name, goal, and exam dates so Home, Track, and Progress stay aligned.
+        </p>
         <div className="mt-6 space-y-4">
           <label className="block text-sm font-medium text-zinc-200">
             Your name
@@ -171,7 +186,7 @@ function ProfileOnboarding({ onComplete }: { onComplete: (profile: PracticeProfi
   );
 }
 
-export function AppShell({ title, subtitle, actions, children }: Props) {
+export function AppShell({ title, subtitle, actions, children, fullBleed }: Props) {
   const path = useRouterState({ select: (r) => r.location.pathname });
   const navigate = useNavigate();
   const [records, setRecords] = useState<TestRecord[]>([]);
@@ -204,8 +219,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
     ...records,
     ...trackerActivityDates.map((date) => ({ date })),
   ]).current;
-  const isDarkPage =
-    path === "/" || path === "/profile" || path === "/track" || path === "/progress";
+  const isDarkPage = isDarkPath(path);
   const navigateWithThemeTransition = (event: MouseEvent<HTMLAnchorElement>, to: AppPath) => {
     if (
       event.defaultPrevented ||
@@ -219,7 +233,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
       return;
     }
 
-    const isDarkDestination = to === "/" || to === "/track" || to === "/progress";
+    const isDarkDestination = isDarkPath(to);
     if (!isDarkPage && !isDarkDestination) return;
 
     event.preventDefault();
@@ -249,60 +263,135 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
     >
       <header
         className={cn(
-          "h-16 border-0 shadow-none",
-          isDarkPage ? "bg-[#1b1b1b] text-zinc-100" : "text-exam-header-foreground",
+          "sticky top-0 z-30 h-14 border-0 shadow-none md:h-16",
+          isDarkPage ? "bg-[#1b1b1b]/95 text-zinc-100 backdrop-blur-md" : "text-exam-header-foreground",
         )}
         style={isDarkPage ? undefined : { backgroundImage: "var(--gradient-header)" }}
       >
-        <div className="mx-auto flex h-16 w-full max-w-5xl items-center gap-4 px-4 sm:px-6">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10">
-            <GraduationCap className="h-5 w-5" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-base font-semibold sm:text-lg">{title}</h1>
-            {subtitle && <p className="truncate text-xs opacity-75 sm:text-sm">{subtitle}</p>}
+        <div className="mx-auto flex h-full w-full max-w-6xl items-center gap-3 px-4 sm:px-6">
+          <Link
+            to="/"
+            onClick={(event) => navigateWithThemeTransition(event, "/")}
+            className="flex min-w-0 shrink-0 items-center gap-2.5"
+            aria-label="Go to home"
+          >
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10">
+              <GraduationCap className="h-5 w-5" />
+            </span>
+            <span className="hidden min-w-0 sm:block">
+              <span className="block truncate text-sm font-semibold tracking-tight">Practice</span>
+              <span className="hidden truncate text-[11px] opacity-70 md:block">{title}</span>
+            </span>
+          </Link>
+          <div className="min-w-0 flex-1 md:hidden">
+            <h1 className="truncate text-sm font-semibold">{title}</h1>
+            {subtitle && <p className="truncate text-[11px] opacity-70">{subtitle}</p>}
           </div>
-          {actions}
-          <nav className="flex shrink-0 items-center gap-1">
+          <nav className="hidden min-w-0 flex-1 items-center justify-center gap-1 md:flex">
             {nav.map((item) => {
-              const active = path.startsWith(item.url);
+              const active = isNavActive(path, item.url);
+              const isTest = item.url === "/test";
               return (
                 <Link
                   key={item.url}
                   to={item.url}
                   onClick={(event) => navigateWithThemeTransition(event, item.url)}
                   className={cn(
-                    "app-nav-link flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors sm:text-sm",
+                    "app-nav-link flex items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors",
+                    isTest && !active && "bg-emerald-600 text-white hover:bg-emerald-500",
                     active
                       ? "is-active bg-white/15 text-white"
-                      : "text-white/70 hover:bg-white/10 hover:text-white",
+                      : isTest
+                        ? ""
+                        : "text-white/70 hover:bg-white/10 hover:text-white",
                   )}
                 >
                   <item.icon className="h-4 w-4" />
-                  <span className="hidden sm:inline">{item.title}</span>
+                  {item.title}
                 </Link>
               );
             })}
           </nav>
-          <Link
-            to="/"
-            onClick={(event) => navigateWithThemeTransition(event, "/")}
-            aria-label={`Practice streak: ${currentStreak} days`}
-            className={cn(
-              "ml-1 flex h-9 min-w-12 items-center justify-center gap-1.5 rounded-full px-3 text-xs font-semibold transition-all",
-              currentStreak > 0
-                ? "bg-amber-400/20 text-amber-200 hover:bg-amber-400/30"
-                : "bg-white/10 text-white/75 hover:bg-white/15 hover:text-white",
-            )}
-          >
-            <Flame
-              className={cn("h-4 w-4", currentStreak > 0 && "fill-amber-300 text-amber-300")}
-            />
-            <span>{currentStreak}</span>
-          </Link>
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            {actions}
+            <Link
+              to="/"
+              onClick={(event) => navigateWithThemeTransition(event, "/")}
+              aria-label={`Practice streak: ${currentStreak} days`}
+              className={cn(
+                "flex h-9 min-w-12 items-center justify-center gap-1.5 rounded-full px-3 text-xs font-semibold transition-all",
+                currentStreak > 0
+                  ? "bg-amber-400/20 text-amber-200 hover:bg-amber-400/30"
+                  : "bg-white/10 text-white/75 hover:bg-white/15 hover:text-white",
+              )}
+            >
+              <Flame
+                className={cn("h-4 w-4", currentStreak > 0 && "fill-amber-300 text-amber-300")}
+              />
+              <span>{currentStreak}</span>
+            </Link>
+          </div>
         </div>
       </header>
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 sm:px-6">{children}</main>
+      <main
+        className={cn(
+          "mx-auto w-full flex-1",
+          fullBleed
+            ? "max-w-none pb-[calc(5.25rem+env(safe-area-inset-bottom))] md:pb-0"
+            : "max-w-6xl px-4 py-6 pb-[calc(5.5rem+env(safe-area-inset-bottom))] sm:px-6 md:pb-8",
+        )}
+      >
+        {children}
+      </main>
+      <nav
+        className={cn(
+          "app-bottom-nav fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t px-1 pt-1 md:hidden",
+          isDarkPage
+            ? "border-white/10 bg-[#161616]/95 text-zinc-100 backdrop-blur-md"
+            : "border-border bg-background/95 text-foreground backdrop-blur-md",
+        )}
+        style={{ paddingBottom: "max(0.4rem, env(safe-area-inset-bottom))" }}
+        aria-label="Primary"
+      >
+        {nav.map((item) => {
+          const active = isNavActive(path, item.url);
+          const isTest = item.url === "/test";
+          return (
+            <Link
+              key={item.url}
+              to={item.url}
+              onClick={(event) => navigateWithThemeTransition(event, item.url)}
+              className={cn(
+                "app-nav-link flex min-h-12 flex-col items-center justify-center gap-0.5 text-[10px] font-medium",
+                isTest && "-mt-3",
+                active && "is-active",
+                isDarkPage
+                  ? active
+                    ? "text-emerald-300"
+                    : "text-white/55"
+                  : active
+                    ? "text-primary"
+                    : "text-muted-foreground",
+              )}
+            >
+              <span
+                className={cn(
+                  "flex items-center justify-center rounded-2xl transition-colors",
+                  isTest
+                    ? cn(
+                        "h-12 w-12 text-white shadow-lg",
+                        isDarkPage ? "bg-emerald-600" : "bg-primary",
+                      )
+                    : "h-7 w-7",
+                )}
+              >
+                <item.icon className={cn(isTest ? "h-5 w-5" : "h-4 w-4")} />
+              </span>
+              {item.title}
+            </Link>
+          );
+        })}
+      </nav>
       {profile === null && <ProfileOnboarding onComplete={setProfile} />}
     </div>
   );

@@ -660,16 +660,16 @@ export function Profile() {
   }
 
   return (
-    <AppShell title="Your Profile">
-      <div className="profile-dark -mx-4 -my-6 min-h-[calc(100vh-4rem)] bg-[#121212] px-4 pt-6 pb-10 text-zinc-100 sm:-mx-6 sm:px-6 sm:pt-8 sm:pb-14">
+    <AppShell title="Home" fullBleed>
+      <div className="profile-dark min-h-[calc(100vh-3.5rem)] bg-[#121212] px-4 pt-6 text-zinc-100 sm:px-6 sm:pt-8 md:min-h-[calc(100vh-4rem)]">
         <div className="mx-auto max-w-4xl space-y-7">
-          <section className="flex flex-col items-center text-center">
-            <div className="relative flex w-40 min-w-0 flex-col items-center gap-3">
+          <section className="flex flex-col items-center gap-5 sm:flex-row sm:items-center sm:text-left">
+            <div className="relative shrink-0">
               {avatar ? (
                 <button
                   type="button"
                   onClick={() => setPreviewingAvatar(true)}
-                  className="group relative h-32 w-32 shrink-0 overflow-hidden rounded-full ring-2 ring-white/10 transition-transform hover:scale-105 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+                  className="group relative h-24 w-24 overflow-hidden rounded-full ring-2 ring-white/10 transition-transform hover:scale-105 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 sm:h-28 sm:w-28"
                   aria-label="Preview profile image"
                 >
                   <img
@@ -680,53 +680,65 @@ export function Profile() {
                   <span className="absolute inset-0 bg-black/0 transition-colors group-hover:bg-black/20" />
                 </button>
               ) : (
-                <div className="h-20 w-20 rounded-full bg-white/10" />
+                <div className="h-24 w-24 rounded-full bg-white/10 sm:h-28 sm:w-28" />
               )}
               <Button
                 type="button"
                 size="icon"
                 variant="ghost"
-                className="absolute top-28 left-2 h-8 w-8 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
-                onClick={() => setEditingProfile(true)}
-                aria-label="Edit profile"
-              >
-                <Pencil className="h-3.5 w-3.5" />
-              </Button>
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                className="absolute top-28 right-2 h-8 w-8 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
+                className="absolute -right-1 -bottom-1 h-8 w-8 rounded-full bg-[#1b1b1b] text-zinc-300 ring-1 ring-white/10 hover:bg-white/10 hover:text-zinc-100"
                 onClick={updateAvatar}
                 disabled={avatarFiles.length < 2}
                 aria-label="Change profile image"
               >
                 <RefreshCw className="h-3.5 w-3.5" />
               </Button>
-              <div className="min-w-0 pt-1">
-                <h2 className="truncate text-2xl font-semibold text-zinc-50">{displayName}</h2>
+            </div>
+            <div className="min-w-0 flex-1 text-center sm:text-left">
+              <p className="text-[11px] font-semibold tracking-[0.16em] text-zinc-500 uppercase">
+                {tracker?.meta.examName || "Your exam"}
+              </p>
+              <h2 className="mt-1 truncate text-2xl font-semibold text-zinc-50">{displayName}</h2>
+              <p className="mt-1 text-sm text-zinc-400">
+                Keep the streak going. Track syllabus, sit a mock, or review recent scores.
+              </p>
+              <div className="mt-4 flex flex-wrap items-center justify-center gap-2 sm:justify-start">
+                <Button className="h-9 bg-emerald-600 hover:bg-emerald-500" asChild>
+                  <Link to="/test" search={{}}>
+                    Start a test
+                  </Link>
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-9 gap-1.5 text-zinc-300 hover:bg-white/10 hover:text-white"
+                  onClick={() => setEditingProfile(true)}
+                >
+                  <Pencil className="h-3.5 w-3.5" /> Edit
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-9 gap-1.5 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
+                  onClick={downloadPracticeBackup}
+                >
+                  <Download className="h-3.5 w-3.5" /> Export
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-9 gap-1.5 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
+                  onClick={() => {
+                    setImportMessage("");
+                    setImportingData(true);
+                  }}
+                >
+                  <Upload className="h-3.5 w-3.5" /> Import
+                </Button>
               </div>
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                className="h-8 gap-1.5 text-xs text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
-                onClick={downloadPracticeBackup}
-              >
-                <Download className="h-3.5 w-3.5" /> Export backup
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                className="h-8 gap-1.5 text-xs text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
-                onClick={() => {
-                  setImportMessage("");
-                  setImportingData(true);
-                }}
-              >
-                <Upload className="h-3.5 w-3.5" /> Import JSON
-              </Button>
             </div>
           </section>
 
@@ -748,7 +760,15 @@ export function Profile() {
           <StudyTrackerOverview tracker={tracker} />
 
           <section className="border-t border-white/10 pt-5 sm:pt-6">
-            <h2 className="text-base font-semibold">Recent practice sessions</h2>
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-base font-semibold">Recent practice</h2>
+              <Link
+                to="/history"
+                className="text-xs font-medium text-emerald-300 hover:text-emerald-200"
+              >
+                View all
+              </Link>
+            </div>
             <div className="mt-3">
               {recent.length ? (
                 recent.map((record) => {

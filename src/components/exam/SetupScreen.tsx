@@ -214,11 +214,22 @@ export function SetupScreen({
   if (isLoading) return <PageLoader label="Preparing your test" />;
 
   return (
-    <div className="card-surface space-y-7 p-6 sm:p-8">
+    <div className="space-y-5">
+      <div>
+        <p className="text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
+          New practice test
+        </p>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight">Set up your paper</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Pick a topic, timer, and marking scheme. Continue when the paper matches what you want to
+          attempt.
+        </p>
+      </div>
+      <div className="card-surface space-y-7 p-5 sm:p-8">
       {/* Subject & chapter */}
       <section className="space-y-3">
         <Label className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">
-          Topic
+          1. Topic
         </Label>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
@@ -314,7 +325,7 @@ export function SetupScreen({
       {/* Duration & start number */}
       <section className="space-y-3">
         <Label className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">
-          Timing
+          2. Timing
         </Label>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
@@ -365,7 +376,7 @@ export function SetupScreen({
       {/* Number of questions */}
       <section className="space-y-2">
         <Label className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">
-          Questions
+          3. Questions
         </Label>
         <div className="flex flex-wrap gap-2">
           <Button
@@ -411,6 +422,9 @@ export function SetupScreen({
 
       {/* Marking scheme — compact inline */}
       <section className="space-y-2 border-t border-border pt-4">
+        <Label className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+          4. Marking
+        </Label>
         {editingMarking ? (
           <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
             <div className="space-y-1">
@@ -453,7 +467,7 @@ export function SetupScreen({
 
       <Button
         size="lg"
-        className="w-full sm:w-auto"
+        className="sticky bottom-20 z-10 w-full shadow-lg md:static md:w-auto md:shadow-none"
         disabled={!valid}
         onClick={() =>
           onStart({
@@ -476,6 +490,7 @@ export function SetupScreen({
       >
         Continue to instructions
       </Button>
+      </div>
 
       <Dialog open={chapterDraft !== null} onOpenChange={(o) => !o && setChapterDraft(null)}>
         <DialogContent className="max-w-2xl">

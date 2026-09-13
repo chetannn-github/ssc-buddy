@@ -1,8 +1,10 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { DonutChart } from "@/components/exam/DonutChart";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { PageLoader } from "@/components/ui/page-loader";
 import { consumeLightPageLoader } from "@/lib/navigation";
 import {
@@ -53,6 +55,7 @@ function HistoryPage() {
   const [records, setRecords] = useState<TestRecord[]>([]);
   const [subject, setSubject] = useState(ALL);
   const [chapter, setChapter] = useState(ALL);
+  const [query, setQuery] = useState("");
   const [isLoading, setIsLoading] = useState(consumeLightPageLoader);
 
   useEffect(() => {
@@ -77,10 +80,14 @@ function HistoryPage() {
   );
 
   const visible = useMemo(() => {
-    const list = records.filter(
-      (r) =>
-        (subject === ALL || r.subject === subject) && (chapter === ALL || r.chapter === chapter),
-    );
+    const list = records.filter((r) => {
+      const matchesFilters =
+        (subject === ALL || r.subject === subject) && (chapter === ALL || r.chapter === chapter);
+      if (!matchesFilters) return false;
+      const needle = query.trim().toLowerCase();
+      if (!needle) return true;
+      return [r.subject, r.chapter, r.exercise ?? ""].join(" ").toLowerCase().includes(needle);
+    });
     const groups = new Map<string, TestRecord[]>();
     for (const r of list) {
       const key = attemptKey(r);
@@ -100,15 +107,38 @@ function HistoryPage() {
         };
       })
       .sort((a, b) => new Date(b.latest.date).getTime() - new Date(a.latest.date).getTime());
-  }, [records, subject, chapter]);
+  }, [records, subject, chapter, query]);
 
   return (
-    <AppShell title="Test History">
+    <AppShell title="History">
       {isLoading ? (
         <PageLoader label="Loading test history" />
       ) : (
         <div className="space-y-4">
-          <div className="card-surface grid gap-3 p-4 sm:grid-cols-2">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
+                Practice sessions
+              </p>
+              <h1 className="text-2xl font-semibold tracking-tight">History</h1>
+            </div>
+            <Button asChild>
+              <Link to="/test" search={{}}>
+                New test
+              </Link>
+            </Button>
+          </div>
+          <div className="card-surface grid gap-3 p-4 sm:grid-cols-3">
+            <div className="relative sm:col-span-1">
+              <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search subject or chapter"
+                className="pl-9"
+                aria-label="Search history"
+              />
+            </div>
             <Select
               value={subject}
               onValueChange={(v) => {
@@ -145,7 +175,12 @@ function HistoryPage() {
 
           {visible.length === 0 ? (
             <div className="card-surface p-10 text-center">
-              <p className="text-sm text-muted-foreground">No tests match your filters yet.</p>
+              <p className="text-base font-semibold">No matching tests</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {records.length
+                  ? "Try a different subject, chapter, or search."
+                  : "Your saved CBT attempts will show up here."}
+              </p>
               <Button className="mt-4" asChild>
                 <Link to="/test" search={{}}>
                   Start a test
