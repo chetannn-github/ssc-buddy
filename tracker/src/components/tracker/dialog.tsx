@@ -100,7 +100,7 @@ export function TrackerDialogProvider({ children }: { children: ReactNode }) {
                       onChange={(event) =>
                         setValues((current) => ({ ...current, [field.name]: event.target.value }))
                       }
-                      className="mt-1.5 h-10 w-full rounded-xl border border-white/10 bg-black/20 px-3 text-sm text-white outline-none transition focus:border-blue-400/70"
+                      className="mt-1.5 h-10 w-full appearance-none rounded-xl border border-white/10 bg-black/20 px-3 text-sm text-white outline-none transition focus:border-blue-400/70 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                     />
                   </label>
                 ))}

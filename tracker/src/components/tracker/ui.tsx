@@ -53,7 +53,7 @@ export function Num({
       aria-label={ariaLabel}
       value={value}
       onChange={(e) => onChange(Math.max(min, Number(e.target.value) || 0))}
-      className={`h-7 w-14 rounded-full bg-track px-2 text-center font-mono text-[13px] text-foreground outline-none focus:ring-2 focus:ring-accent-blue/40 ${className}`}
+      className={`h-7 w-14 appearance-none rounded-full bg-track px-2 text-center font-mono text-[13px] text-foreground outline-none focus:ring-2 focus:ring-accent-blue/40 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${className}`}
     />
   );
 }

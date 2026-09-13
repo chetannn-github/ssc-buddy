@@ -120,6 +120,18 @@
   --accent-green: oklch(0.75 0.15 160);
 }
 
+.tracker-theme input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.tracker-theme input[type="number"]::-webkit-inner-spin-button,
+.tracker-theme input[type="number"]::-webkit-outer-spin-button {
+  margin: 0;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
 :root {
   --radius: 0.75rem;
   --background: oklch(0.972 0.008 250);
