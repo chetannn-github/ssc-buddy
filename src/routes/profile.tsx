@@ -6,7 +6,6 @@ import {
   FilePenLine,
   LoaderCircle,
   Pencil,
-  Plus,
   RefreshCw,
   Save,
   Upload,
@@ -719,12 +718,6 @@ export function Profile() {
               )}
               <h2 className="mt-0.5 truncate text-xl font-semibold text-zinc-50">{displayName}</h2>
               <div className="mt-3 flex flex-wrap items-center justify-center gap-1.5 sm:justify-start">
-                <Link
-                  to="/test"
-                  className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-[#00b878] px-3 text-sm font-semibold text-white transition-colors hover:bg-[#00a66c]"
-                >
-                  <Plus className="h-4 w-4" /> Practice session
-                </Link>
                 <Button
                   type="button"
                   variant="ghost"
