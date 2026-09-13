@@ -162,6 +162,44 @@
 
 .exam-select-content,
 .exam-dialog-content {
+  background-color: #181818 !important;
+  border-color: rgb(255 255 255 / 14%) !important;
+  color: #f4f4f5 !important;
+}
+
+.exam-dialog-content .card-surface {
+  background-color: #1c1c1c !important;
+  border-color: rgb(255 255 255 / 10%) !important;
+  color: #f4f4f5 !important;
+}
+
+.exam-dialog-content input,
+.exam-dialog-content textarea,
+.exam-dialog-content [data-slot="select-trigger"] {
+  background-color: #121212 !important;
+  border-color: rgb(255 255 255 / 14%) !important;
+  color: #f4f4f5 !important;
+}
+
+.exam-dialog-content input::placeholder,
+.exam-dialog-content textarea::placeholder {
+  color: #71717a !important;
+}
+
+.exam-dialog-content [class*="text-muted-foreground"] {
+  color: #a1a1aa !important;
+}
+
+.exam-dialog-content [class*="bg-background"],
+.exam-dialog-content [class*="bg-muted"] {
+  background-color: #121212 !important;
+}
+
+.exam-dialog-content [class*="border-border"] {
+  border-color: rgb(255 255 255 / 10%) !important;
+}
+
+.exam-dialog-content {
   --background: oklch(0.18 0 0);
   --foreground: oklch(0.92 0 0);
   --popover: oklch(0.18 0 0);
