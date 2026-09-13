@@ -1,6 +1,13 @@
 import type { ReactNode } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { BarChart3, Flame, GraduationCap, History, Route as RouteIcon, Upload } from "lucide-react";
+import {
+  BarChart3,
+  FilePenLine,
+  Flame,
+  GraduationCap,
+  Route as RouteIcon,
+  Upload,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,7 +29,7 @@ type Props = {
 const nav = [
   { title: "Track", url: "/track", icon: RouteIcon },
   { title: "Progress", url: "/progress", icon: BarChart3 },
-  { title: "History", url: "/history", icon: History },
+  { title: "Practice session", url: "/test", icon: FilePenLine },
 ] as const;
 
 function ProfileOnboarding({ onComplete }: { onComplete: (profile: PracticeProfile) => void }) {

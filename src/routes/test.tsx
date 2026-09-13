@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { SetupScreen, type TestConfig } from "@/components/exam/SetupScreen";
@@ -112,6 +112,16 @@ function TestPage() {
           : phase === "instructions"
             ? "Test instructions"
             : "New practice session"
+      }
+      actions={
+        phase === "setup" ? (
+          <Link
+            to="/history"
+            className="hidden rounded-md px-2 py-1.5 text-xs font-medium text-zinc-400 transition-colors hover:bg-white/10 hover:text-zinc-100 sm:inline-flex"
+          >
+            Previous sessions
+          </Link>
+        ) : undefined
       }
     >
       <div
