@@ -162,6 +162,10 @@
   color: #e4e4e7;
 }
 
+.exam-dark select {
+  color-scheme: dark;
+}
+
 .exam-dark input,
 .exam-dark textarea,
 .exam-dark [data-slot="select-trigger"] {

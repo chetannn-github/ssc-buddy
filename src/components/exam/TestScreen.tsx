@@ -45,6 +45,7 @@ export function TestScreen({
   const [current, setCurrent] = useState(0);
   const [seconds, setSeconds] = useState(total);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
   const submitted = useRef(false);
 
   const answers = useMemo(() => states.map((s) => s.answer), [states]);
@@ -108,10 +109,18 @@ export function TestScreen({
   const q: QuestionState = states[current] ?? blank(true);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div
+      className={cn(
+        "min-h-screen",
+        darkMode ? "exam-dark bg-[#121212] text-zinc-100" : "bg-background",
+      )}
+    >
       <header
-        className="sticky top-0 z-20 h-16 text-exam-header-foreground shadow-[var(--shadow-card)]"
-        style={{ backgroundImage: "var(--gradient-header)" }}
+        className={cn(
+          "sticky top-0 z-20 h-16 shadow-[var(--shadow-card)]",
+          darkMode ? "bg-[#1b1b1b] text-zinc-100" : "text-exam-header-foreground",
+        )}
+        style={darkMode ? undefined : { backgroundImage: "var(--gradient-header)" }}
       >
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4">
           <div className="min-w-0">
@@ -122,16 +131,27 @@ export function TestScreen({
               {subject} · {chapter}
             </p>
           </div>
-          <div
-            className={cn(
-              "flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-1.5 backdrop-blur-sm",
-              seconds <= 60 && "animate-pulse border-destructive/50 bg-destructive/25",
-            )}
-          >
-            <span className="text-[11px] tracking-wide uppercase opacity-70">Time left</span>
-            <span className="font-mono text-base font-semibold tabular-nums">
-              {formatClock(seconds)}
-            </span>
+          <div className="flex items-center gap-2">
+            <select
+              aria-label="Test appearance"
+              value={darkMode ? "dark" : "light"}
+              onChange={(event) => setDarkMode(event.target.value === "dark")}
+              className="h-8 rounded-full border border-white/15 bg-white/10 px-3 text-xs text-current outline-none backdrop-blur-sm"
+            >
+              <option value="light">Light mode</option>
+              <option value="dark">Dark mode</option>
+            </select>
+            <div
+              className={cn(
+                "flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-1.5 backdrop-blur-sm",
+                seconds <= 60 && "animate-pulse border-destructive/50 bg-destructive/25",
+              )}
+            >
+              <span className="text-[11px] tracking-wide uppercase opacity-70">Time left</span>
+              <span className="font-mono text-base font-semibold tabular-nums">
+                {formatClock(seconds)}
+              </span>
+            </div>
           </div>
         </div>
       </header>
