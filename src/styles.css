@@ -165,6 +165,21 @@
   color-scheme: dark;
 }
 
+.test-dark-dialog {
+  --background: oklch(0.18 0 0);
+  --foreground: oklch(0.92 0 0);
+  --popover: oklch(0.18 0 0);
+  --popover-foreground: oklch(0.92 0 0);
+  --muted: oklch(0.23 0 0);
+  --muted-foreground: oklch(0.63 0 0);
+  --border: oklch(1 0 0 / 12%);
+  --primary: oklch(0.68 0.13 250);
+  --primary-foreground: oklch(0.18 0 0);
+  background-color: #1c1c1c !important;
+  border-color: rgb(255 255 255 / 12%) !important;
+  color: #f4f4f5 !important;
+}
+
 .exam-dark input,
 .exam-dark textarea,
 .exam-dark [data-slot="select-trigger"] {

@@ -264,7 +264,7 @@ export function TestScreen({
       </main>
 
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <AlertDialogContent>
+        <AlertDialogContent className={darkMode ? "test-dark-dialog" : undefined}>
           <AlertDialogHeader>
             <AlertDialogTitle>Submit the test?</AlertDialogTitle>
             <AlertDialogDescription>
