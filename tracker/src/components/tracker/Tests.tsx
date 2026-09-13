@@ -1,149 +1,8 @@
 import { useState } from "react";
 import { useTracker } from "@/lib/tracker-store";
-import { pct, testsDone, todayISO, uid } from "@/lib/tracker";
+import { pct, testsDone } from "@/lib/tracker";
 import { Bar, Card, GhostButton, IconButton, Label, Num, TrashIcon } from "./ui";
-
-function AddTestForm({ onDone }: { onDone: () => void }) {
-  const { data, update } = useTracker();
-  const [subjectId, setSubjectId] = useState(data.subjects[0]?.id ?? "");
-  const [type, setType] = useState("Sectional");
-  const [date, setDate] = useState(todayISO());
-  const [score, setScore] = useState("");
-  const [total, setTotal] = useState("");
-  const [accuracy, setAccuracy] = useState("");
-  const [error, setError] = useState("");
-  const isSectional = type === "Sectional";
-
-  const field =
-    "h-9 w-full rounded-full bg-track px-4 font-mono text-[13px] text-foreground outline-none focus:ring-2 focus:ring-accent-blue/40";
-
-  return (
-    <Card className="!p-2.5 sm:!p-3">
-      <Label>Add test</Label>
-      <form
-        className="mt-2 grid gap-2 sm:grid-cols-3"
-        onSubmit={(e) => {
-          e.preventDefault();
-          const numericScore = Number(score);
-          const numericTotal = Number(total);
-          const numericAccuracy = Number(accuracy);
-          if (!date || (isSectional && !subjectId) || !score || !total || !accuracy) {
-            setError("Fill all required fields.");
-            return;
-          }
-          if (
-            !Number.isFinite(numericScore) ||
-            !Number.isFinite(numericTotal) ||
-            !Number.isFinite(numericAccuracy) ||
-            numericTotal <= 0 ||
-            numericScore < 0 ||
-            numericScore > numericTotal ||
-            numericAccuracy < 0 ||
-            numericAccuracy > 100
-          ) {
-            setError("Score must be within total marks, and accuracy must be between 0% and 100%.");
-            return;
-          }
-          update((d) => {
-            d.tests.log.unshift({
-              id: uid(),
-              date,
-              createdAt: new Date().toISOString(),
-              subjectId: isSectional ? subjectId : "__all__",
-              type,
-              score: numericScore,
-              total: numericTotal,
-              accuracy: numericAccuracy,
-              notes: "",
-            });
-          });
-          onDone();
-        }}
-      >
-        <select
-          aria-label="Test type"
-          className={field}
-          value={type}
-          onChange={(e) => {
-            const nextType = e.target.value;
-            setType(nextType);
-            if (nextType === "Sectional") setSubjectId(data.subjects[0]?.id ?? "");
-          }}
-        >
-          <option>Sectional</option>
-          <option>Pre</option>
-          <option>Mains</option>
-        </select>
-        <select
-          aria-label="Subject"
-          className={`${field} disabled:cursor-not-allowed disabled:opacity-40`}
-          value={isSectional ? subjectId : "__all__"}
-          onChange={(e) => setSubjectId(e.target.value)}
-          disabled={!isSectional}
-          required={isSectional}
-        >
-          {!isSectional && <option value="__all__">All subjects</option>}
-          {data.subjects.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </select>
-        <input
-          aria-label="Date"
-          type="date"
-          className={field}
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          required
-        />
-        <input
-          aria-label="Score"
-          className={field}
-          placeholder="Score"
-          inputMode="decimal"
-          type="number"
-          min="0"
-          value={score}
-          onChange={(e) => setScore(e.target.value)}
-          required
-        />
-        <input
-          aria-label="Total marks"
-          className={field}
-          placeholder="Total marks"
-          inputMode="decimal"
-          type="number"
-          min="1"
-          value={total}
-          onChange={(e) => setTotal(e.target.value)}
-          required
-        />
-        <input
-          aria-label="Accuracy"
-          className={field}
-          placeholder="Accuracy %"
-          inputMode="decimal"
-          type="number"
-          min="0"
-          max="100"
-          value={accuracy}
-          onChange={(e) => setAccuracy(e.target.value)}
-          required
-        />
-        <div className="flex gap-2 sm:col-span-3">
-          <GhostButton type="submit" tone="blue" className="flex-1">
-            Save test
-          </GhostButton>
-          <GhostButton onClick={onDone} className="flex-1">
-            Cancel
-          </GhostButton>
-        </div>
-        {error && <p className="sm:col-span-3 text-sm text-destructive">{error}</p>}
-      </form>
-    </Card>
-  );
-}
+import { MockTestLogDialog } from "./MockTestLogDialog";
 
 export function Tests() {
   const { data, update } = useTracker();
@@ -221,17 +80,20 @@ export function Tests() {
         </div>
       </Card>
 
-      {adding ? (
-        <AddTestForm onDone={() => setAdding(false)} />
-      ) : (
-        <button
-          type="button"
-          onClick={() => setAdding(true)}
-          className="w-full rounded-xl border border-dashed border-border py-2.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-        >
-          + Add test
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={() => setAdding(true)}
+        className="w-full rounded-xl border border-dashed border-border py-2.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+      >
+        + Log mock test
+      </button>
+
+      <MockTestLogDialog
+        open={adding}
+        data={data}
+        onClose={() => setAdding(false)}
+        onSave={(next) => update((current) => Object.assign(current, next))}
+      />
 
       <Card className="!p-2.5 sm:!p-3">
         <Label>Test log</Label>

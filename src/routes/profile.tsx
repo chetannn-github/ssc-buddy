@@ -3,8 +3,10 @@ import {
   ChevronDown,
   Copy,
   Download,
+  FilePenLine,
   LoaderCircle,
   Pencil,
+  Plus,
   RefreshCw,
   Save,
   Upload,
@@ -30,6 +32,7 @@ import {
 import { IMPORT_PROMPT } from "@/lib/tracker";
 import { loadTrackerData, saveTrackerData } from "@/lib/tracker-store";
 import { cn } from "@/lib/utils";
+import { MockTestLogDialog } from "../../tracker/src/components/tracker/MockTestLogDialog";
 
 const title = "Profile";
 const description = "Your yearly practice activity and progress.";
@@ -515,6 +518,7 @@ export function Profile() {
   const [editingProfile, setEditingProfile] = useState(false);
   const [importingData, setImportingData] = useState(false);
   const [previewingAvatar, setPreviewingAvatar] = useState(false);
+  const [loggingMockTest, setLoggingMockTest] = useState(false);
   const [avatarFiles, setAvatarFiles] = useState<string[]>([]);
   const [nameDraft, setNameDraft] = useState("");
   const [goalDraft, setGoalDraft] = useState("");
@@ -663,7 +667,7 @@ export function Profile() {
     <AppShell title="Your Profile">
       <div className="profile-dark -mx-4 -my-6 min-h-[calc(100vh-4rem)] bg-[#121212] px-4 pt-6 pb-10 text-zinc-100 sm:-mx-6 sm:px-6 sm:pt-8 sm:pb-14">
         <div className="mx-auto max-w-4xl space-y-7">
-          <section className="flex flex-col items-center text-center">
+          <section className="flex flex-col items-center gap-5 text-center sm:flex-row sm:items-center sm:text-left">
             <div className="relative flex w-40 min-w-0 flex-col items-center gap-3">
               {avatar ? (
                 <button
@@ -703,32 +707,71 @@ export function Profile() {
               >
                 <RefreshCw className="h-3.5 w-3.5" />
               </Button>
-              <div className="min-w-0 pt-1">
-                <h2 className="truncate text-2xl font-semibold text-zinc-50">{displayName}</h2>
+            </div>
+            <div className="min-w-0 flex-1">
+              {tracker?.meta.examName && (
+                <p className="font-mono text-[11px] tracking-[0.18em] text-zinc-500 uppercase">
+                  {tracker.meta.examName}
+                </p>
+              )}
+              <h2 className="mt-1 truncate text-2xl font-semibold text-zinc-50">{displayName}</h2>
+              <p className="mt-1 text-sm text-zinc-400">
+                Keep the streak going. Practise questions, log mocks, and track progress.
+              </p>
+              <div className="mt-4 flex flex-wrap items-center justify-center gap-2 sm:justify-start">
+                <Link
+                  to="/test"
+                  className="inline-flex h-10 items-center gap-2 rounded-xl bg-emerald-500 px-4 text-sm font-semibold text-white transition-colors hover:bg-emerald-400"
+                >
+                  <Plus className="h-4 w-4" /> New practice session
+                </Link>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-10 gap-2 text-zinc-300 hover:bg-white/10 hover:text-white"
+                  onClick={() => setLoggingMockTest(true)}
+                >
+                  <FilePenLine className="h-4 w-4" /> Log mock test
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-10 gap-2 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
+                  onClick={() => setEditingProfile(true)}
+                >
+                  <Pencil className="h-3.5 w-3.5" /> Edit
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-10 gap-2 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
+                  onClick={downloadPracticeBackup}
+                >
+                  <Download className="h-3.5 w-3.5" /> Export
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-10 gap-2 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
+                  onClick={() => {
+                    setImportMessage("");
+                    setImportingData(true);
+                  }}
+                >
+                  <Upload className="h-3.5 w-3.5" /> Import
+                </Button>
               </div>
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                className="h-8 gap-1.5 text-xs text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
-                onClick={downloadPracticeBackup}
-              >
-                <Download className="h-3.5 w-3.5" /> Export backup
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                className="h-8 gap-1.5 text-xs text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
-                onClick={() => {
-                  setImportMessage("");
-                  setImportingData(true);
-                }}
-              >
-                <Upload className="h-3.5 w-3.5" /> Import JSON
-              </Button>
             </div>
           </section>
+
+          {tracker && (
+            <MockTestLogDialog
+              open={loggingMockTest}
+              data={tracker}
+              onClose={() => setLoggingMockTest(false)}
+              onSave={(next) => setTracker(saveTrackerData(next))}
+            />
+          )}
 
           <TargetProgress
             attempted={totals.attempted}
