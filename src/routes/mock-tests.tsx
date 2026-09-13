@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
-import { loadTrackerData } from "@/lib/tracker-store";
+import { loadTrackerData, saveTrackerData } from "@/lib/tracker-store";
 import type { TrackerData } from "@/lib/tracker";
 
 type TestType = "all" | "Sectional" | "Pre" | "Mains";
@@ -96,6 +96,17 @@ function MockTests() {
     [subjectId, tracker.tests.log, type],
   );
 
+  const deleteTest = (id: string) => {
+    const next = saveTrackerData({
+      ...tracker,
+      tests: {
+        ...tracker.tests,
+        log: tracker.tests.log.filter((test) => test.id !== id),
+      },
+    });
+    setTracker(next);
+  };
+
   return (
     <AppShell title="Mock Tests">
       <div className="-mx-4 -my-6 min-h-[calc(100vh-4rem)] bg-[#121212] px-4 py-7 text-zinc-100 sm:-mx-6 sm:px-6">
@@ -142,7 +153,7 @@ function MockTests() {
             </div>
             {tests.length ? (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[42rem] text-left text-sm">
+                <table className="w-full min-w-[46rem] text-left text-sm">
                   <thead className="text-xs text-zinc-500">
                     <tr>
                       <th className="px-4 py-3 font-medium">Date</th>
@@ -150,6 +161,7 @@ function MockTests() {
                       <th className="px-4 py-3 font-medium">Subject</th>
                       <th className="px-4 py-3 font-medium">Marks</th>
                       <th className="px-4 py-3 font-medium">Accuracy</th>
+                      <th className="px-4 py-3" aria-label="Actions" />
                     </tr>
                   </thead>
                   <tbody>
@@ -174,6 +186,17 @@ function MockTests() {
                         </td>
                         <td className="px-4 py-3 text-emerald-300">
                           {test.accuracy != null ? `${test.accuracy}%` : "—"}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => deleteTest(test.id)}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-red-500/10 hover:text-red-300"
+                            aria-label="Delete mock test"
+                            title="Delete mock test"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
                         </td>
                       </tr>
                     ))}
