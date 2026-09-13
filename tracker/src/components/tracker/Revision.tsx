@@ -130,20 +130,20 @@ function SubjectRevision({
       </div>
 
       {open && (
-        <div className="mt-3">
+        <div className="mt-2 space-y-1.5">
           {subject.chapters.length === 0 && (
             <p className="text-sm text-muted-foreground">Add chapters in the Syllabus tab first.</p>
           )}
           {subject.chapters.map((c) => (
-            <div key={c.id} className="border-b border-border py-2 last:border-0">
-              <div className="text-[15px]">{c.name}</div>
-              <div className="mt-1.5 space-y-1.5">
+            <div key={c.id} className="rounded-lg bg-white/[0.025] px-3 py-2.5">
+              <div className="text-sm font-medium">{c.name}</div>
+              <div className="mt-2 space-y-1.5">
                 {rev.types.map((t) => {
                   const target = revTarget(data, subject.id, c.id, t);
                   const done = revDone(data, subject.id, c.id, t.id);
                   return (
-                    <div key={t.id} className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                      <span className="w-40 shrink-0 font-mono text-[13px] text-muted-foreground">
+                    <div key={t.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                      <span className="w-36 shrink-0 font-mono text-[12px] text-muted-foreground">
                         {t.name}
                       </span>
                       <Dots done={done} target={target} onSet={(n) => setDone(c.id, t.id, n)} />
