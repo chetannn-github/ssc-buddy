@@ -37,6 +37,7 @@ import { MockTestLogDialog } from "../../tracker/src/components/tracker/MockTest
 const title = "Profile";
 const description = "Your yearly practice activity and progress.";
 type ActivityRange = "today" | "week" | "year" | "all";
+let hasShownProfileLoader = false;
 
 const rangeLabels: Record<ActivityRange, string> = {
   today: "Today",
@@ -518,7 +519,9 @@ export function Profile() {
     if (typeof window === "undefined") return false;
     const navigation = window.performance.getEntriesByType("navigation")[0] as
       PerformanceNavigationTiming | undefined;
-    return navigation?.type === "reload";
+    const shouldShow = navigation?.type === "reload" && !hasShownProfileLoader;
+    hasShownProfileLoader = true;
+    return shouldShow;
   });
   const [editingProfile, setEditingProfile] = useState(false);
   const [importingData, setImportingData] = useState(false);
