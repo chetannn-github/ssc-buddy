@@ -26,8 +26,8 @@ function TrackPage() {
   const [tab, setTab] = useState<Tab>(search.tab ?? "Syllabus");
   return (
     <AppShell title="Tracker">
-      <div className="tracker-theme -mx-4 -my-6 min-h-[calc(100vh-4rem)] bg-[#121212] px-3 py-5 text-zinc-100 sm:-mx-6 sm:px-5 sm:py-6">
-        <main className="mx-auto w-full max-w-3xl">
+      <div className="tracker-theme -mx-4 -my-6 min-h-[calc(100vh-4rem)] bg-[#121212] px-3 py-4 text-zinc-100 sm:-mx-6 sm:px-4 sm:py-5">
+        <main className="mx-auto w-full max-w-2xl">
           <nav className="grid grid-cols-3 gap-0.5 rounded-full bg-card p-0.5">
             {TABS.map((item) => (
               <button
@@ -44,7 +44,7 @@ function TrackPage() {
               </button>
             ))}
           </nav>
-          <div className="mt-3">
+          <div className="mt-2">
             {tab === "Syllabus" && <Syllabus />}
             {tab === "Revision" && <Revision />}
             {tab === "Mock Test" && <Tests />}
