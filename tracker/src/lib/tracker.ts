@@ -165,43 +165,37 @@ export function trackerActiveDates(data: TrackerData) {
     .map(([date]) => date);
 }
 
-export const IMPORT_PROMPT = `I am preparing for SSC CGL 2027 and I use a personal tracker website.
-I will upload photos / screenshots of my syllabus (chapter names) and the number of lectures or questions in each chapter.
+export const IMPORT_PROMPT = `I use a personal Study Tracker website. I will provide a list or screenshots of my syllabus chapters along with the total number of lectures for each chapter.
 
-Read them carefully and give me ONLY a valid JSON file (no explanation, no markdown fences) in exactly this format so I can import it into my tracker:
+Create ONLY the syllabus data for my tracker. Return one valid raw JSON object only: no explanation, no markdown fences, and no text before or after the JSON.
+
+Use this exact data shape:
 
 {
   "version": 1,
-  "meta": { "examName": "SSC CGL 2027", "syllabusDeadline": "2026-11-15", "targetDate": "2027-02-01" },
+  "meta": { "examName": "", "syllabusDeadline": "", "targetDate": "" },
   "subjects": [
     {
       "id": "maths",
       "name": "Maths",
       "chapters": [
-        { "id": "maths-1", "name": "Number System", "total": 12, "completed": 0 }
+        { "id": "maths-number-system", "name": "Number System", "total": 12, "completed": 0 }
       ]
     }
   ],
-  "revision": {
-    "maths": {
-      "types": [
-        { "id": "maths-tq", "name": "Teacher Questions", "target": 5 },
-        { "id": "maths-cn", "name": "Concept Notes", "target": 5 }
-      ],
-      "done": {},
-      "targets": {}
-    }
-  },
+  "revision": {},
   "tests": {
-    "targets": { "maths": 50 },
-    "mocks": { "pre": { "target": 20, "done": 0 }, "mains": { "target": 20, "done": 0 } },
+    "targets": {},
+    "mocks": { "pre": { "target": 0, "done": 0 }, "mains": { "target": 0, "done": 0 } },
     "log": []
-  }
+  },
+  "activity": []
 }
 
 Rules:
-- Subjects must be: Maths, GS, Reasoning, English (use the same subject "id" strings in "revision" and "tests.targets").
-- "total" = number of lectures/questions in that chapter from my photos. "completed" = 0 unless I say otherwise.
-- For GS use revision types "Notes" and "Little Book". For all other subjects use "Teacher Questions" and "Concept Notes", target 5 each.
-- Keep every id unique and lowercase with hyphens.
+- Make one subject object for every subject I provide. Do not invent subjects or chapters.
+- "total" is the number of lectures I provide for that chapter. "completed" must always be 0.
+- Use unique lowercase hyphenated ids. A chapter id should include its subject id, for example "maths-number-system".
+- Keep revision, mock tests, practice sessions, activity, and all targets empty exactly as shown. I will add those myself in the website.
+- If a lecture total is missing or unclear, ask me for it instead of guessing.
 - Output raw JSON only.`;

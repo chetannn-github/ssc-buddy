@@ -958,10 +958,11 @@ export function Profile() {
                 </Button>
               </div>
               <div className="rounded-xl bg-white/[0.04] p-4">
-                <p className="text-sm font-medium">2. Create Tracker JSON with ChatGPT</p>
+                <p className="text-sm font-medium">2. Create syllabus JSON with ChatGPT</p>
                 <p className="mt-1 text-xs text-zinc-400">
-                  Copy this prompt, add your chapter or lecture screenshots in ChatGPT, then save
-                  its raw JSON response and upload it above.
+                  Copy the prompt, share your chapter list or lecture screenshots with ChatGPT, then
+                  save its raw JSON response and upload it above. Revision, mock tests, and practice
+                  sessions can be added directly in the website later.
                 </p>
                 <Button
                   variant="outline"
@@ -972,17 +973,12 @@ export function Profile() {
                       setPromptCopied(true);
                       window.setTimeout(() => setPromptCopied(false), 2000);
                     } catch {
-                      setImportMessage(
-                        "Copy failed. Select the prompt below and copy it manually.",
-                      );
+                      setImportMessage("Copy failed. Please allow clipboard access and try again.");
                     }
                   }}
                 >
                   <Copy className="h-4 w-4" /> {promptCopied ? "Prompt copied" : "Copy prompt"}
                 </Button>
-                <pre className="mt-3 max-h-40 overflow-auto rounded-lg bg-black/25 p-3 text-left font-mono text-[11px] whitespace-pre-wrap text-zinc-400">
-                  {IMPORT_PROMPT}
-                </pre>
               </div>
               {importMessage && <p className="text-sm text-emerald-300">{importMessage}</p>}
             </div>
