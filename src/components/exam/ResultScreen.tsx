@@ -139,7 +139,8 @@ export function ResultScreen({ record, onRestart, attempts = [] }: Props) {
       tone === "good" && "border-answered/35 bg-answered/15 text-answered",
       tone === "bad" && "border-destructive/35 bg-destructive/15 text-destructive",
       tone === "neutral" && "border-white/12 bg-white/5 text-muted-foreground",
-      answerFilter === filter && "border-[#60a5fa] bg-[#2563eb] text-white shadow-sm",
+      answerFilter === filter &&
+        "!border-[#60a5fa] bg-blue-500/20 text-blue-100 ring-1 ring-[#60a5fa]/45",
     );
 
   return (
