@@ -85,7 +85,7 @@ export function MockTestLogDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="log-mock-test-title"
-        className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#1c1c1c] p-5 text-zinc-100 shadow-2xl"
+        className="mock-test-dialog w-full max-w-lg rounded-2xl border border-white/10 bg-[#1c1c1c] p-5 text-zinc-100 shadow-2xl"
       >
         <p className="font-mono text-[11px] tracking-[0.18em] text-blue-300 uppercase">Mock test</p>
         <h2 id="log-mock-test-title" className="mt-1 text-xl font-semibold">

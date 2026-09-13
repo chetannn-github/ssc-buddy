@@ -132,6 +132,17 @@
   -webkit-appearance: none;
 }
 
+.tracker-theme select,
+.mock-test-dialog select {
+  color-scheme: dark;
+}
+
+.tracker-theme select option,
+.mock-test-dialog select option {
+  background-color: #1c1c1c;
+  color: #f4f4f5;
+}
+
 :root {
   --radius: 0.75rem;
   --background: oklch(0.972 0.008 250);
