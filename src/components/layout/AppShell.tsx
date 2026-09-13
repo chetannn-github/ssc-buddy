@@ -1,14 +1,6 @@
 import type { MouseEvent, ReactNode } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import {
-  BarChart3,
-  Flame,
-  GraduationCap,
-  History,
-  PenSquare,
-  Route as RouteIcon,
-  Upload,
-} from "lucide-react";
+import { BarChart3, Flame, GraduationCap, History, Route as RouteIcon, Upload } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,7 +23,6 @@ type Props = {
 const nav = [
   { title: "Track", url: "/track", icon: RouteIcon },
   { title: "Progress", url: "/progress", icon: BarChart3 },
-  { title: "New test", url: "/test", icon: PenSquare },
   { title: "History", url: "/history", icon: History },
 ] as const;
 
