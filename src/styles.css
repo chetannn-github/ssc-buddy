@@ -220,12 +220,16 @@
 }
 
 @layer base {
+  html {
+    background-color: #121212;
+  }
+
   * {
     border-color: var(--color-border);
   }
 
   body {
-    background-color: var(--color-background);
+    background-color: #121212;
     color: var(--color-foreground);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
