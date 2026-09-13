@@ -389,9 +389,14 @@ function ChapterDrawer({
   confirm: ReturnType<typeof useTrackerDialog>["confirm"];
 }) {
   const { data, update } = useTracker();
-  const { subject, chapter } = selected;
+  const { subject, chapter: initialChapter } = selected;
+  const chapter =
+    data.subjects
+      .find((item) => item.id === subject.id)
+      ?.chapters.find((item) => item.id === initialChapter.id) ?? initialChapter;
   const [name, setName] = useState(chapter.name);
   const [total, setTotal] = useState(String(chapter.total));
+  const [editing, setEditing] = useState(false);
   const pinned = data.pinnedChapterIds.includes(chapter.id);
   const revision = data.revision[subject.id];
   const save = () =>
@@ -425,7 +430,7 @@ function ChapterDrawer({
       onClick={onClose}
     >
       <aside
-        className="h-full w-full max-w-md overflow-y-auto border-l border-white/10 bg-[#1c1c1c] p-5 text-zinc-100 shadow-2xl"
+        className="chapter-drawer h-full w-full max-w-md overflow-y-auto border-l border-white/10 bg-[#1c1c1c] p-5 text-zinc-100 shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex justify-between gap-3">
@@ -490,7 +495,7 @@ function ChapterDrawer({
             {pinned ? "★ Unpin" : "☆ Pin"}
           </button>
         </div>
-        {mode === "revision" && revision && (
+        {revision && (
           <section className="mt-5 rounded-xl bg-card p-4">
             <Label>Revision</Label>
             <div className="mt-3 space-y-4">
@@ -517,40 +522,54 @@ function ChapterDrawer({
           </section>
         )}
         <section className="mt-5 rounded-xl bg-card p-4">
-          <Label>Chapter details</Label>
-          <label className="mt-3 block text-sm text-zinc-400">
-            Chapter name
-            <input
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              className="mt-1.5 h-10 w-full rounded-lg border border-white/10 bg-[#151515] px-3 text-zinc-100 outline-none focus:border-accent-blue"
-            />
-          </label>
-          <label className="mt-3 block text-sm text-zinc-400">
-            Total lectures
-            <input
-              value={total}
-              onChange={(event) => setTotal(event.target.value.replace(/\D/g, ""))}
-              className="mt-1.5 h-10 w-full rounded-lg border border-white/10 bg-[#151515] px-3 text-zinc-100 outline-none focus:border-accent-blue"
-              inputMode="numeric"
-            />
-          </label>
-          <div className="mt-4 flex justify-between gap-2">
-            <button
-              type="button"
-              onClick={save}
-              className="rounded-lg bg-accent-blue px-4 py-2 text-sm font-medium text-card"
-            >
-              Save changes
-            </button>
-            <button
-              type="button"
-              onClick={remove}
-              className="px-2 text-sm font-medium text-destructive"
-            >
-              Delete
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => setEditing((value) => !value)}
+            className="flex w-full items-center justify-between text-left"
+          >
+            <Label>Edit chapter</Label>
+            <span className="text-xs text-zinc-400">{editing ? "Close" : "Open"}</span>
+          </button>
+          {editing && (
+            <div className="mt-3">
+              <label className="block text-sm text-zinc-400">
+                Chapter name
+                <input
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  className="mt-1.5 h-10 w-full rounded-lg border border-white/10 bg-[#151515] px-3 text-zinc-100 outline-none focus:border-accent-blue"
+                />
+              </label>
+              <label className="mt-3 block text-sm text-zinc-400">
+                Total lectures
+                <input
+                  value={total}
+                  onChange={(event) => setTotal(event.target.value.replace(/\D/g, ""))}
+                  className="mt-1.5 h-10 w-full rounded-lg border border-white/10 bg-[#151515] px-3 text-zinc-100 outline-none focus:border-accent-blue"
+                  inputMode="numeric"
+                />
+              </label>
+              <div className="mt-4 flex justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    save();
+                    setEditing(false);
+                  }}
+                  className="rounded-lg bg-accent-blue px-4 py-2 text-sm font-medium text-card"
+                >
+                  Save changes
+                </button>
+                <button
+                  type="button"
+                  onClick={remove}
+                  className="px-2 text-sm font-medium text-destructive"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          )}
         </section>
       </aside>
     </div>
