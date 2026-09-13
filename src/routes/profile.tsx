@@ -385,14 +385,62 @@ function TrackerRow({
   );
 }
 
+function CountdownSummary({ tracker }: { tracker: TrackerData | null }) {
+  const countdowns = (tracker?.meta.countdowns ?? []).filter(
+    (countdown) => countdown.name && countdown.date,
+  );
+  if (!countdowns.length) return null;
+
+  return (
+    <div className="grid w-full max-w-md grid-cols-1 gap-2 sm:grid-cols-2 lg:w-[22rem] lg:grid-cols-1">
+      {countdowns.map((countdown, index) => {
+        const tone = index === 0 ? "amber" : "sky";
+        return (
+          <div
+            key={countdown.id}
+            className={cn(
+              "rounded-xl px-3 py-2.5 text-left",
+              tone === "amber"
+                ? "border border-amber-300/15 bg-amber-300/[0.05]"
+                : "border border-sky-300/15 bg-sky-300/[0.05]",
+            )}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate text-xs font-medium text-zinc-300">{countdown.name}</p>
+                <p className="mt-0.5 text-[11px] text-zinc-500">{fmtDate(countdown.date)}</p>
+              </div>
+              <p className="shrink-0 text-right leading-none">
+                <span
+                  className={cn(
+                    "text-xl font-semibold",
+                    tone === "amber" ? "text-amber-200" : "text-sky-200",
+                  )}
+                >
+                  {Math.max(0, daysLeft(countdown.date))}
+                </span>
+                <span
+                  className={cn(
+                    "ml-1 text-[10px]",
+                    tone === "amber" ? "text-amber-100/70" : "text-sky-100/70",
+                  )}
+                >
+                  days
+                </span>
+              </p>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function StudyTrackerOverview({ tracker }: { tracker: TrackerData | null }) {
   if (!tracker) return null;
   const syllabus = overallSyllabus(tracker);
   const mockDone = tracker.tests.mocks.pre.done + tracker.tests.mocks.mains.done;
   const mockTarget = tracker.tests.mocks.pre.target + tracker.tests.mocks.mains.target;
-  const countdowns = tracker.meta.countdowns.filter(
-    (countdown) => countdown.name && countdown.date,
-  );
 
   return (
     <section className="border-t border-white/10 pt-5 sm:pt-6">
@@ -407,48 +455,6 @@ function StudyTrackerOverview({ tracker }: { tracker: TrackerData | null }) {
           {syllabus.done}/{syllabus.total} Lectures
         </span>
       </div>
-      {countdowns.length > 0 && (
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          {countdowns.map((countdown, index) => {
-            const tone = index === 0 ? "amber" : "sky";
-            return (
-              <div
-                key={countdown.id}
-                className={cn(
-                  "rounded-xl px-4 py-3",
-                  tone === "amber"
-                    ? "border border-amber-300/15 bg-amber-300/[0.05]"
-                    : "border border-sky-300/15 bg-sky-300/[0.05]",
-                )}
-              >
-                <p className="text-xs font-medium text-zinc-400">{countdown.name}</p>
-                <div className="mt-2 flex items-end justify-between gap-3">
-                  <p className="text-sm font-medium text-zinc-200">{fmtDate(countdown.date)}</p>
-                  <p className="text-right leading-none">
-                    <span
-                      className={cn(
-                        "text-2xl font-semibold",
-                        tone === "amber" ? "text-amber-200" : "text-sky-200",
-                      )}
-                    >
-                      {Math.max(0, daysLeft(countdown.date))}
-                    </span>
-                    <span
-                      className={cn(
-                        "ml-1 text-xs",
-                        tone === "amber" ? "text-amber-100/70" : "text-sky-100/70",
-                      )}
-                    >
-                      days left
-                    </span>
-                  </p>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
       <div className="mt-4 grid gap-3 md:grid-cols-3">
         <Link
           to="/track"
@@ -772,6 +778,7 @@ export function Profile() {
                 </Button>
               </div>
             </div>
+            <CountdownSummary tracker={tracker} />
           </section>
 
           {tracker && (
