@@ -108,8 +108,11 @@ export function TestScreen({
   const q: QuestionState = states[current] ?? blank(true);
 
   return (
-    <div className="exam-dark min-h-screen bg-[#121212] text-zinc-100">
-      <header className="sticky top-0 z-20 h-16 bg-[#1b1b1b] text-zinc-100 shadow-[var(--shadow-card)]">
+    <div className="min-h-screen bg-background">
+      <header
+        className="sticky top-0 z-20 h-16 text-exam-header-foreground shadow-[var(--shadow-card)]"
+        style={{ backgroundImage: "var(--gradient-header)" }}
+      >
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4">
           <div className="min-w-0">
             <h1 className="text-xs font-semibold tracking-[0.14em] uppercase opacity-80">
