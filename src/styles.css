@@ -134,7 +134,15 @@
 
 .tracker-theme select,
 .mock-test-dialog select {
+  border: 0 !important;
+  box-shadow: none;
   color-scheme: dark;
+}
+
+.tracker-theme select:focus,
+.mock-test-dialog select:focus {
+  border: 0 !important;
+  box-shadow: none;
 }
 
 .tracker-theme select option,
