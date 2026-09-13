@@ -113,21 +113,21 @@ function TestPage() {
             ? "Test instructions"
             : "New practice session"
       }
-      actions={
-        phase === "setup" ? (
-          <Link
-            to="/history"
-            className="hidden rounded-md px-2 py-1.5 text-xs font-medium text-zinc-400 transition-colors hover:bg-white/10 hover:text-zinc-100 sm:inline-flex"
-          >
-            Previous sessions
-          </Link>
-        ) : undefined
-      }
     >
       <div
         key={phase}
         className="app-page-enter exam-dark -mx-4 -my-6 min-h-[calc(100vh-4rem)] bg-[#121212] px-4 py-6 text-zinc-100 sm:-mx-6 sm:px-6"
       >
+        {phase === "setup" && (
+          <div className="mx-auto mb-2 flex max-w-5xl justify-end">
+            <Link
+              to="/history"
+              className="rounded-md px-2 py-1.5 text-xs font-medium text-zinc-400 transition-colors hover:bg-white/10 hover:text-zinc-100"
+            >
+              Previous sessions
+            </Link>
+          </div>
+        )}
         {phase === "key" && config && config.questionCount ? (
           <AnswerKeyScreen
             count={config.questionCount}

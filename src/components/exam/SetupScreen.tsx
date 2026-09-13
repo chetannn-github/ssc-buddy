@@ -227,13 +227,13 @@ export function SetupScreen({
   if (isLoading) return <PageLoader label="Preparing your test" />;
 
   return (
-    <div className="card-surface space-y-5 p-5 sm:p-6">
+    <div className="card-surface space-y-4 p-4 sm:p-5">
       {/* Subject & chapter */}
       <section className="space-y-2">
         <Label className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">
           Topic
         </Label>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-2.5 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Select
               value={subject}
@@ -328,7 +328,7 @@ export function SetupScreen({
         <Label className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">
           Timing
         </Label>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-2.5 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Input
               inputMode="numeric"
@@ -422,7 +422,7 @@ export function SetupScreen({
       </section>
 
       {/* Marking scheme — compact inline */}
-      <section className="space-y-1.5 border-t border-border pt-3">
+      <section className="space-y-1.5 border-t border-border pt-2.5">
         {editingMarking ? (
           <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
             <div className="space-y-1">
