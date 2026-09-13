@@ -69,20 +69,20 @@ function ChapterRow({ subjectId, chapter }: { subjectId: string; chapter: Chapte
   };
 
   return (
-    <div className="border-b border-border py-2 last:border-0">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+    <div className="rounded-lg bg-white/[0.025] px-3 py-2">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
         <div className="min-w-[10rem] flex-1">
           <div className="flex flex-wrap items-baseline gap-2">
-            <span className="text-[15px]">{chapter.name}</span>
+            <span className="text-sm font-medium">{chapter.name}</span>
             <span className="font-mono text-[11px] tracking-[0.14em] text-muted-foreground">
               {status}
             </span>
           </div>
-          <div className="mt-1.5 max-w-md">
+          <div className="mt-1 max-w-md">
             <Bar value={pct(chapter.completed, chapter.total)} />
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <span className="w-16 text-right font-mono text-[13px] text-muted-foreground">
             {chapter.completed} / {chapter.total}
           </span>
@@ -171,12 +171,12 @@ export function Syllabus() {
     <div className="space-y-2">
       <Card className="!p-2.5 sm:!p-3">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-lg font-semibold">Overall syllabus</h2>
+          <h2 className="text-base font-semibold">Overall syllabus</h2>
           <span className="font-mono text-[13px] text-muted-foreground">
             {overall.done} / {overall.total} · {pct(overall.done, overall.total)}%
           </span>
         </div>
-        <div className="mt-2">
+        <div className="mt-1.5">
           <Bar value={pct(overall.done, overall.total)} />
         </div>
       </Card>
@@ -247,13 +247,13 @@ export function Syllabus() {
                 </IconButton>
               </div>
             </div>
-            <div className="mt-2">
+            <div className="mt-1.5">
               <Bar value={pct(x.done, x.total)} />
             </div>
 
             {isOpen && (
               <>
-                <div className="mt-2">
+                <div className="mt-2 space-y-1.5">
                   {s.chapters.length === 0 ? (
                     <p className="py-2 text-sm text-muted-foreground">No chapters yet.</p>
                   ) : (
@@ -269,7 +269,7 @@ export function Syllabus() {
       <button
         type="button"
         onClick={addSubject}
-        className="w-full rounded-xl border border-dashed border-border py-3 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        className="w-full rounded-xl border border-dashed border-border py-2.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
       >
         + Add subject
       </button>
