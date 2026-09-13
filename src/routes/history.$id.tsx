@@ -164,8 +164,8 @@ function ResultDetail() {
                 className={cn(
                   "rounded-md border px-2.5 py-1 text-[11px] transition-colors",
                   a.id === id
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border bg-background hover:border-primary hover:text-primary",
+                    ? "border-[#60a5fa] bg-[#2563eb] text-white shadow-sm"
+                    : "border-white/10 bg-[#171717] text-zinc-300 hover:border-white/25 hover:text-white",
                 )}
               >
                 Attempt {i + 1} · {a.score ?? "—"}

@@ -135,11 +135,11 @@ export function ResultScreen({ record, onRestart, attempts = [] }: Props) {
 
   const filterClass = (filter: AnswerFilter, tone: "good" | "bad" | "neutral") =>
     cn(
-      "cursor-pointer rounded-full px-2 py-0.5 transition-all",
-      tone === "good" && "bg-answered/15 text-answered",
-      tone === "bad" && "bg-destructive/15 text-destructive",
-      tone === "neutral" && "bg-muted text-muted-foreground",
-      answerFilter === filter && "ring-2 ring-ring ring-offset-1",
+      "cursor-pointer rounded-full border px-2 py-0.5 transition-all",
+      tone === "good" && "border-answered/35 bg-answered/15 text-answered",
+      tone === "bad" && "border-destructive/35 bg-destructive/15 text-destructive",
+      tone === "neutral" && "border-white/12 bg-white/5 text-muted-foreground",
+      answerFilter === filter && "border-[#60a5fa] bg-[#2563eb] text-white shadow-sm",
     );
 
   return (
@@ -158,6 +158,13 @@ export function ResultScreen({ record, onRestart, attempts = [] }: Props) {
         />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2 text-xs">
+            <button
+              type="button"
+              className={filterClass("all", "neutral")}
+              onClick={() => setAnswerFilter("all")}
+            >
+              All {total}
+            </button>
             <button
               type="button"
               className={filterClass("correct", "good")}
