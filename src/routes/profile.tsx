@@ -519,9 +519,11 @@ export function Profile() {
     if (typeof window === "undefined") return false;
     const navigation = window.performance.getEntriesByType("navigation")[0] as
       PerformanceNavigationTiming | undefined;
-    const shouldShow = navigation?.type === "reload" && !hasShownProfileLoader;
-    hasShownProfileLoader = true;
-    return shouldShow;
+    const legacyNavigation = window.performance.navigation;
+    return (
+      !hasShownProfileLoader &&
+      (navigation?.type === "reload" || legacyNavigation?.type === legacyNavigation.TYPE_RELOAD)
+    );
   });
   const [editingProfile, setEditingProfile] = useState(false);
   const [importingData, setImportingData] = useState(false);
@@ -538,6 +540,7 @@ export function Profile() {
   const importFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    hasShownProfileLoader = true;
     let loaderTimer: ReturnType<typeof setTimeout> | undefined;
     let loaderFailSafe: ReturnType<typeof setTimeout> | undefined;
     const refresh = async () => {
