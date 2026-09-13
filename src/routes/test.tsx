@@ -7,7 +7,7 @@ import { TestScreen } from "@/components/exam/TestScreen";
 import { AnswerKeyScreen } from "@/components/exam/AnswerKeyScreen";
 import { computeScore, saveRecord, type Option, type TestRecord } from "@/lib/exam";
 
-const title = "New Test";
+const title = "New practice session";
 const description =
   "Create an offline OMR-style CBT test, mark A/B/C/D answers and track your score.";
 
@@ -106,7 +106,11 @@ function TestPage() {
   return (
     <AppShell
       title={
-        phase === "key" ? "Answer key" : phase === "instructions" ? "Test instructions" : "New test"
+        phase === "key"
+          ? "Answer key"
+          : phase === "instructions"
+            ? "Test instructions"
+            : "New practice session"
       }
     >
       <div className="exam-dark -mx-4 -my-6 min-h-[calc(100vh-4rem)] bg-[#121212] px-4 py-6 text-zinc-100 sm:-mx-6 sm:px-6">

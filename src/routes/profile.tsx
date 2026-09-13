@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   ChevronDown,
   Copy,
@@ -32,16 +32,11 @@ import {
 import { IMPORT_PROMPT } from "@/lib/tracker";
 import { loadTrackerData, saveTrackerData } from "@/lib/tracker-store";
 import { cn } from "@/lib/utils";
-import { requestLightPageLoader } from "@/lib/navigation";
 import { MockTestLogDialog } from "../../tracker/src/components/tracker/MockTestLogDialog";
 
 const title = "Profile";
 const description = "Your yearly practice activity and progress.";
 type ActivityRange = "today" | "week" | "year" | "all";
-
-type ViewTransitionDocument = Document & {
-  startViewTransition?: (callback: () => Promise<unknown>) => { finished: Promise<void> };
-};
 
 const rangeLabels: Record<ActivityRange, string> = {
   today: "Today",
@@ -515,7 +510,6 @@ function StudyTrackerOverview({ tracker }: { tracker: TrackerData | null }) {
 }
 
 export function Profile() {
-  const navigate = useNavigate();
   const [records, setRecords] = useState<TestRecord[]>([]);
   const [tracker, setTracker] = useState<TrackerData | null>(null);
   const [range, setRange] = useState<ActivityRange>("today");
@@ -657,23 +651,6 @@ export function Profile() {
       setImportMessage("Choose a valid full backup or Tracker JSON file.");
     }
   };
-  const startPracticeSession = (event: React.MouseEvent<HTMLAnchorElement>) => {
-    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey) return;
-    event.preventDefault();
-    requestLightPageLoader(true);
-    const viewDocument = document as ViewTransitionDocument;
-    if (!viewDocument.startViewTransition) {
-      void navigate({ to: "/test" });
-      return;
-    }
-    const transition = viewDocument.startViewTransition(() => {
-      document.documentElement.dataset["profileTransition"] = "to-light";
-      return navigate({ to: "/test" });
-    });
-    void transition.finished.finally(() => {
-      delete document.documentElement.dataset["profileTransition"];
-    });
-  };
 
   if (isLoading) {
     return (
@@ -731,7 +708,6 @@ export function Profile() {
               <div className="mt-3 flex flex-wrap items-center justify-center gap-1.5 sm:justify-start">
                 <Link
                   to="/test"
-                  onClick={startPracticeSession}
                   className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-[#00b878] px-3 text-sm font-semibold text-white transition-colors hover:bg-[#00a66c]"
                 >
                   <Plus className="h-4 w-4" /> Practice session
