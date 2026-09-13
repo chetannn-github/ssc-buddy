@@ -98,6 +98,7 @@ function TestPage() {
         chapter={config.exercise ? `${config.chapter} · ${config.exercise}` : config.chapter}
         questionCount={config.questionCount}
         maxQuestions={config.maxQuestions}
+        initialDarkMode={config.darkMode ?? false}
         onSubmit={handleSubmit}
       />
     );
@@ -137,7 +138,10 @@ function TestPage() {
             onBack={() =>
               setPhase(config.answerKey ? "setup" : config.questionCount ? "key" : "setup")
             }
-            onStart={() => setPhase("test")}
+            onStart={(darkMode) => {
+              setConfig((current) => (current ? { ...current, darkMode } : current));
+              setPhase("test");
+            }}
           />
         ) : (
           <SetupScreen

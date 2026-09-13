@@ -1,4 +1,6 @@
-import { ArrowLeft, CheckCircle2, Clock3, ListChecks, Play } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Clock3, ListChecks, Moon, Play, Sun } from "lucide-react";
+import { useState } from "react";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { formatMarking, type MarkingScheme } from "@/lib/exam";
 
@@ -10,7 +12,7 @@ type Props = {
   questionCount: number | null;
   marking: MarkingScheme;
   onBack: () => void;
-  onStart: () => void;
+  onStart: (darkMode: boolean) => void;
 };
 
 export function InstructionsScreen({
@@ -23,6 +25,7 @@ export function InstructionsScreen({
   onBack,
   onStart,
 }: Props) {
+  const [darkMode, setDarkMode] = useState<boolean | null>(null);
   const testTitle = [subject, chapter, exercise].filter(Boolean).join(" · ");
 
   return (
@@ -78,6 +81,36 @@ export function InstructionsScreen({
           </ul>
         </section>
         <section>
+          <h3 className="font-semibold">Test appearance</h3>
+          <p className="mt-1 text-sm text-muted-foreground">Choose a mode before you start.</p>
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              onClick={() => setDarkMode(false)}
+              className={cn(
+                "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors",
+                darkMode === false
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border text-muted-foreground hover:bg-accent/50",
+              )}
+            >
+              <Sun className="h-4 w-4" /> Light
+            </button>
+            <button
+              type="button"
+              onClick={() => setDarkMode(true)}
+              className={cn(
+                "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors",
+                darkMode === true
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border text-muted-foreground hover:bg-accent/50",
+              )}
+            >
+              <Moon className="h-4 w-4" /> Dark
+            </button>
+          </div>
+        </section>
+        <section>
           <h3 className="font-semibold">Before submitting</h3>
           <p className="mt-2 text-muted-foreground">
             Review marked and unanswered questions from the palette. You can submit anytime; when
@@ -90,7 +123,7 @@ export function InstructionsScreen({
         <Button variant="ghost" onClick={onBack}>
           <ArrowLeft className="h-4 w-4" /> Back to setup
         </Button>
-        <Button onClick={onStart}>
+        <Button onClick={() => darkMode !== null && onStart(darkMode)} disabled={darkMode === null}>
           <Play className="h-4 w-4" /> Start test
         </Button>
       </div>

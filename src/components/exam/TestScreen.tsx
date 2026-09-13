@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -22,6 +23,7 @@ type Props = {
   chapter: string;
   questionCount?: number | null;
   maxQuestions?: number | null;
+  initialDarkMode: boolean;
   onSubmit: (answers: (Option | null)[], timeTakenSeconds: number) => void;
 };
 
@@ -34,6 +36,7 @@ export function TestScreen({
   chapter,
   questionCount = null,
   maxQuestions = null,
+  initialDarkMode,
   onSubmit,
 }: Props) {
   const total = minutes * 60;
@@ -45,7 +48,7 @@ export function TestScreen({
   const [current, setCurrent] = useState(0);
   const [seconds, setSeconds] = useState(total);
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [darkMode, setDarkMode] = useState(false);
+  const [darkMode, setDarkMode] = useState(initialDarkMode);
   const submitted = useRef(false);
 
   const answers = useMemo(() => states.map((s) => s.answer), [states]);
@@ -132,15 +135,15 @@ export function TestScreen({
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <select
-              aria-label="Test appearance"
-              value={darkMode ? "dark" : "light"}
-              onChange={(event) => setDarkMode(event.target.value === "dark")}
-              className="h-8 rounded-full border border-white/15 bg-white/10 px-3 text-xs text-current outline-none backdrop-blur-sm"
+            <button
+              type="button"
+              aria-label={`Switch to ${darkMode ? "light" : "dark"} mode`}
+              title={`Switch to ${darkMode ? "light" : "dark"} mode`}
+              onClick={() => setDarkMode((current) => !current)}
+              className="grid h-8 w-8 place-items-center rounded-full border border-white/15 bg-white/10 text-current backdrop-blur-sm"
             >
-              <option value="light">Light mode</option>
-              <option value="dark">Dark mode</option>
-            </select>
+              {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </button>
             <div
               className={cn(
                 "flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-1.5 backdrop-blur-sm",

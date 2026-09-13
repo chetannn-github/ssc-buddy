@@ -39,6 +39,7 @@ export type TestConfig = {
   questionCount: number | null;
   maxQuestions: number | null;
   answerKey: (Option | null)[] | null;
+  darkMode: boolean | null;
 };
 
 const PRESETS = [15, 30, 45, 60];
@@ -482,6 +483,7 @@ export function SetupScreen({
               const len = countMode === "fixed" ? parsedCount : (available ?? full.length);
               return full.slice(parsedStart - 1, parsedStart - 1 + len);
             })(),
+            darkMode: null,
           })
         }
       >
