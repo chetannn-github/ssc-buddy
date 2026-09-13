@@ -1,6 +1,54 @@
 import { useEffect, useState } from "react";
 import { todayISO, uid, type TrackerData } from "@/lib/tracker";
 
+function DarkDropdown({
+  value,
+  options,
+  onChange,
+  disabled = false,
+}: {
+  value: string;
+  options: { value: string; label: string }[];
+  onChange: (value: string) => void;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = options.find((option) => option.value === value)?.label ?? "Select";
+
+  return (
+    <div className="relative mt-1.5">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen((current) => !current)}
+        className="flex h-10 w-full items-center justify-between rounded-xl bg-[#303030] px-3 text-left text-sm text-zinc-100 outline-none transition hover:bg-[#373737] disabled:cursor-not-allowed disabled:bg-black/20 disabled:text-zinc-500"
+      >
+        <span>{selected}</span>
+        <span className="text-xs text-zinc-500">⌄</span>
+      </button>
+      {open && !disabled && (
+        <div className="absolute z-10 mt-1 w-full overflow-hidden rounded-xl bg-[#242424] py-1 shadow-xl ring-1 ring-white/5">
+          {options.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => {
+                onChange(option.value);
+                setOpen(false);
+              }}
+              className={`block w-full px-3 py-2 text-left text-sm transition-colors hover:bg-white/10 ${
+                option.value === value ? "text-white" : "text-zinc-300"
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function MockTestLogDialog({
   open,
   data,
@@ -35,8 +83,6 @@ export function MockTestLogDialog({
   if (!open) return null;
   const field =
     "h-10 w-full appearance-none rounded-xl border border-white/10 bg-black/20 px-3 text-sm text-white outline-none transition focus:border-blue-400/70 disabled:cursor-not-allowed disabled:opacity-40 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
-  const selectField =
-    "h-10 w-full appearance-none rounded-xl bg-black/20 px-3 text-sm text-white outline-none transition focus:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40";
 
   const submit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -96,36 +142,29 @@ export function MockTestLogDialog({
         <form className="mt-5 grid gap-3 sm:grid-cols-2" onSubmit={submit}>
           <label className="text-sm text-zinc-300">
             Test type
-            <select
-              className={`${selectField} mt-1.5`}
+            <DarkDropdown
               value={type}
-              onChange={(event) => {
-                const nextType = event.target.value;
+              options={["Sectional", "Pre", "Mains"].map((option) => ({
+                value: option,
+                label: option,
+              }))}
+              onChange={(nextType) => {
                 setType(nextType);
                 if (nextType === "Sectional") setSubjectId(data.subjects[0]?.id ?? "");
               }}
-            >
-              <option>Sectional</option>
-              <option>Pre</option>
-              <option>Mains</option>
-            </select>
+            />
           </label>
           <label className="text-sm text-zinc-300">
             Subject
-            <select
-              className={`${selectField} mt-1.5`}
+            <DarkDropdown
               value={isSectional ? subjectId : "__all__"}
-              onChange={(event) => setSubjectId(event.target.value)}
+              options={[
+                ...(!isSectional ? [{ value: "__all__", label: "All subjects" }] : []),
+                ...data.subjects.map((subject) => ({ value: subject.id, label: subject.name })),
+              ]}
+              onChange={setSubjectId}
               disabled={!isSectional}
-              required={isSectional}
-            >
-              {!isSectional && <option value="__all__">All subjects</option>}
-              {data.subjects.map((subject) => (
-                <option key={subject.id} value={subject.id}>
-                  {subject.name}
-                </option>
-              ))}
-            </select>
+            />
           </label>
           <label className="text-sm text-zinc-300">
             Date
