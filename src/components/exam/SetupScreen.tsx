@@ -227,14 +227,14 @@ export function SetupScreen({
   if (isLoading) return <PageLoader label="Preparing your test" />;
 
   return (
-    <div className="card-surface space-y-7 p-6 sm:p-8">
+    <div className="card-surface space-y-5 p-5 sm:p-6">
       {/* Subject & chapter */}
-      <section className="space-y-3">
+      <section className="space-y-2">
         <Label className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">
           Topic
         </Label>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5">
             <Select
               value={subject}
               onValueChange={(v) => {
@@ -264,7 +264,7 @@ export function SetupScreen({
             </div>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <Select value={chapter} onValueChange={(v) => selectChapter(v)} disabled={!subject}>
               <SelectTrigger>
                 <SelectValue placeholder={subject ? "Select chapter" : "Select a subject first"} />
@@ -293,7 +293,7 @@ export function SetupScreen({
         </div>
 
         {chapter && (
-          <div className="space-y-2 rounded-lg border border-border bg-background/50 p-3">
+          <div className="space-y-1.5 rounded-lg border border-border bg-background/50 p-2.5">
             <Label className="text-xs text-muted-foreground">Exercise</Label>
             <div className="flex flex-wrap gap-2">
               {exercises.map((ex) => (
@@ -324,12 +324,12 @@ export function SetupScreen({
       </section>
 
       {/* Duration & start number */}
-      <section className="space-y-3">
+      <section className="space-y-2">
         <Label className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">
           Timing
         </Label>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5">
             <Input
               inputMode="numeric"
               max={MAX_DURATION_MINUTES}
@@ -355,7 +355,7 @@ export function SetupScreen({
             </div>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <Input
               inputMode="numeric"
               value={startNumber}
@@ -422,9 +422,9 @@ export function SetupScreen({
       </section>
 
       {/* Marking scheme — compact inline */}
-      <section className="space-y-2 border-t border-border pt-4">
+      <section className="space-y-1.5 border-t border-border pt-3">
         {editingMarking ? (
-          <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+          <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
             <div className="space-y-1">
               <Label htmlFor="positive" className="text-xs text-muted-foreground">
                 Marks / correct
@@ -464,8 +464,7 @@ export function SetupScreen({
       </section>
 
       <Button
-        size="lg"
-        className="w-full sm:w-auto"
+        className="h-10 w-full sm:w-auto"
         disabled={!valid}
         onClick={() =>
           onStart({
