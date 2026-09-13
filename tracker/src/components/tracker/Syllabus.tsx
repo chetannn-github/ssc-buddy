@@ -168,7 +168,7 @@ export function Syllabus() {
   };
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-1.5">
       <Card className="!p-2.5 sm:!p-3">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-base font-semibold">Overall syllabus</h2>

@@ -202,7 +202,7 @@ export function Revision() {
   const [openSubjectId, setOpenSubjectId] = useState(data.subjects[0]?.id ?? "");
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-1.5">
       {data.subjects.map((s) => (
         <SubjectRevision
           key={s.id}
