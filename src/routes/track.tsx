@@ -30,7 +30,7 @@ function TrackPage() {
   return (
     <AppShell title="Tracker">
       <div className="tracker-theme -mx-4 -my-6 min-h-[calc(100vh-4rem)] bg-[#121212] px-3 py-4 text-zinc-100 sm:-mx-6 sm:px-4 sm:py-5">
-        <main className="mx-auto w-full max-w-2xl">
+        <main className="mx-auto w-full max-w-4xl">
           <nav className="grid grid-cols-3 gap-0.5 rounded-full bg-card p-0.5">
             {TABS.map((item) => (
               <button

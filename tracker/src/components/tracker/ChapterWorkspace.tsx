@@ -263,12 +263,6 @@ export function ChapterWorkspace({ mode }: { mode: Mode }) {
                         pinned={data.pinnedChapterIds.includes(chapter.id)}
                         onOpen={() => setSelected({ subject, chapter })}
                         onPin={() => togglePin(chapter.id)}
-                        onDecrease={() =>
-                          setCompleted(subject.id, chapter.id, chapter.completed - 1)
-                        }
-                        onIncrease={() =>
-                          setCompleted(subject.id, chapter.id, chapter.completed + 1)
-                        }
                       />
                     ))
                   ) : (
@@ -327,8 +321,6 @@ function ChapterRow({
   pinned,
   onOpen,
   onPin,
-  onDecrease,
-  onIncrease,
 }: {
   subject: Subject;
   chapter: Chapter;
@@ -336,8 +328,6 @@ function ChapterRow({
   pinned: boolean;
   onOpen: () => void;
   onPin: () => void;
-  onDecrease: () => void;
-  onIncrease: () => void;
 }) {
   const { data } = useTracker();
   const revision = data.revision[subject.id];
@@ -373,16 +363,6 @@ function ChapterRow({
       <span className="w-9 shrink-0 text-right font-mono text-xs text-muted-foreground">
         {pct(done, total)}%
       </span>
-      {mode === "syllabus" && (
-        <>
-          <IconButton label={`Decrease ${chapter.name}`} onClick={onDecrease}>
-            −
-          </IconButton>
-          <IconButton label={`Increase ${chapter.name}`} variant="solid" onClick={onIncrease}>
-            +
-          </IconButton>
-        </>
-      )}
       <button
         type="button"
         onClick={onPin}
@@ -512,10 +492,10 @@ function ChapterDrawer({
         <div className="mt-5 grid grid-cols-2 gap-2">
           <button
             type="button"
-            onClick={() => onSetCompleted(subject.id, chapter.id, chapter.total)}
+            onClick={() => setEditing((value) => !value)}
             className="rounded-lg bg-track px-3 py-2.5 text-sm font-medium"
           >
-            Mark complete
+            {editing ? "Close edit" : "Edit chapter"}
           </button>
           <button
             type="button"
@@ -551,16 +531,9 @@ function ChapterDrawer({
             </div>
           </section>
         )}
-        <section className="mt-5 rounded-xl bg-card p-4">
-          <button
-            type="button"
-            onClick={() => setEditing((value) => !value)}
-            className="rounded-lg bg-track px-3 py-2 text-sm font-medium transition-colors hover:text-white"
-          >
-            {editing ? "Close edit" : "Edit chapter"}
-          </button>
-          {editing && (
-            <div className="mt-3">
+        {editing && (
+          <section className="mt-5 rounded-xl bg-card p-4">
+            <div>
               <label className="block text-sm text-zinc-400">
                 Chapter name
                 <input
@@ -598,8 +571,8 @@ function ChapterDrawer({
                 </button>
               </div>
             </div>
-          )}
-        </section>
+          </section>
+        )}
       </aside>
     </div>
   );
