@@ -44,7 +44,7 @@ export function SolutionScreen({ record, onExit }: Props) {
         : verdicts[i] === "incorrect"
           ? "border-destructive bg-destructive text-destructive-foreground"
           : "border-border bg-muted text-muted-foreground",
-      i === current && "ring-2 ring-ring ring-offset-2",
+      i === current && "border-primary ring-2 ring-primary ring-offset-2 ring-offset-background",
     );
 
   const optionClass = (opt: Option) => {

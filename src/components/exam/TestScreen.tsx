@@ -102,7 +102,7 @@ export function TestScreen({
           : s.visited
             ? "border-border bg-unanswered text-unanswered-foreground"
             : "border-border bg-muted text-muted-foreground",
-      i === current && "ring-2 ring-ring ring-offset-2",
+      i === current && "border-primary ring-2 ring-primary ring-offset-2 ring-offset-background",
     );
 
   const q: QuestionState = states[current] ?? blank(true);
