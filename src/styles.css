@@ -292,7 +292,7 @@
 
 :root[data-profile-transition]::view-transition-old(root),
 :root[data-profile-transition]::view-transition-new(root) {
-  animation-duration: 520ms;
+  animation-duration: 720ms;
   animation-timing-function: cubic-bezier(0.65, 0, 0.35, 1);
 }
 
