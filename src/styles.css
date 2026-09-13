@@ -120,6 +120,27 @@
   --accent-green: oklch(0.75 0.15 160);
 }
 
+.exam-dark {
+  --background: oklch(0.15 0 0);
+  --foreground: oklch(0.92 0 0);
+  --surface: oklch(0.18 0 0);
+  --card: oklch(0.18 0 0);
+  --card-foreground: oklch(0.92 0 0);
+  --popover: oklch(0.18 0 0);
+  --popover-foreground: oklch(0.92 0 0);
+  --primary: oklch(0.68 0.13 250);
+  --primary-foreground: oklch(0.18 0 0);
+  --secondary: oklch(0.23 0 0);
+  --secondary-foreground: oklch(0.92 0 0);
+  --muted: oklch(0.23 0 0);
+  --muted-foreground: oklch(0.63 0 0);
+  --accent: oklch(0.25 0 0);
+  --accent-foreground: oklch(0.92 0 0);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 12%);
+  --ring: oklch(0.68 0.13 250);
+}
+
 .tracker-theme input[type="number"] {
   appearance: textfield;
   -moz-appearance: textfield;

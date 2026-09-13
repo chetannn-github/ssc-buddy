@@ -109,54 +109,56 @@ function TestPage() {
         phase === "key" ? "Answer key" : phase === "instructions" ? "Test instructions" : "New test"
       }
     >
-      {phase === "key" && config && config.questionCount ? (
-        <AnswerKeyScreen
-          count={config.questionCount}
-          startNumber={config.startNumber}
-          subject={config.subject}
-          chapter={config.chapter}
-          onBack={() => setPhase("setup")}
-          onConfirm={(key) => {
-            setAnswerKey(key.some(Boolean) ? key : null);
-            setPhase("instructions");
-          }}
-        />
-      ) : phase === "instructions" && config ? (
-        <InstructionsScreen
-          subject={config.subject}
-          chapter={config.chapter}
-          exercise={config.exercise}
-          minutes={config.minutes}
-          questionCount={config.questionCount}
-          marking={config.marking}
-          onBack={() =>
-            setPhase(config.answerKey ? "setup" : config.questionCount ? "key" : "setup")
-          }
-          onStart={() => setPhase("test")}
-        />
-      ) : (
-        <SetupScreen
-          prefill={{
-            subject: search.subject,
-            chapter: search.chapter,
-            exercise: search.exercise,
-            minutes: search.minutes,
-            startNumber: search.start,
-            questionCount: search.count ?? null,
-          }}
-          onStart={(nextConfig) => {
-            setConfig(nextConfig);
-            setAnswerKey(nextConfig.answerKey);
-            setPhase(
-              nextConfig.answerKey
-                ? "instructions"
-                : nextConfig.questionCount
-                  ? "key"
-                  : "instructions",
-            );
-          }}
-        />
-      )}
+      <div className="exam-dark -mx-4 -my-6 min-h-[calc(100vh-4rem)] bg-[#121212] px-4 py-6 text-zinc-100 sm:-mx-6 sm:px-6">
+        {phase === "key" && config && config.questionCount ? (
+          <AnswerKeyScreen
+            count={config.questionCount}
+            startNumber={config.startNumber}
+            subject={config.subject}
+            chapter={config.chapter}
+            onBack={() => setPhase("setup")}
+            onConfirm={(key) => {
+              setAnswerKey(key.some(Boolean) ? key : null);
+              setPhase("instructions");
+            }}
+          />
+        ) : phase === "instructions" && config ? (
+          <InstructionsScreen
+            subject={config.subject}
+            chapter={config.chapter}
+            exercise={config.exercise}
+            minutes={config.minutes}
+            questionCount={config.questionCount}
+            marking={config.marking}
+            onBack={() =>
+              setPhase(config.answerKey ? "setup" : config.questionCount ? "key" : "setup")
+            }
+            onStart={() => setPhase("test")}
+          />
+        ) : (
+          <SetupScreen
+            prefill={{
+              subject: search.subject,
+              chapter: search.chapter,
+              exercise: search.exercise,
+              minutes: search.minutes,
+              startNumber: search.start,
+              questionCount: search.count ?? null,
+            }}
+            onStart={(nextConfig) => {
+              setConfig(nextConfig);
+              setAnswerKey(nextConfig.answerKey);
+              setPhase(
+                nextConfig.answerKey
+                  ? "instructions"
+                  : nextConfig.questionCount
+                    ? "key"
+                    : "instructions",
+              );
+            }}
+          />
+        )}
+      </div>
     </AppShell>
   );
 }

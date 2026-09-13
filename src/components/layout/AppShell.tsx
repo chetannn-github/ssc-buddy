@@ -27,7 +27,7 @@ const nav = [
 ] as const;
 
 type AppPath = "/" | "/profile" | "/track" | "/progress" | "/test" | "/history";
-const noAnimationDarkPaths = new Set<AppPath>(["/", "/profile", "/track", "/progress"]);
+const noAnimationDarkPaths = new Set<AppPath>(["/", "/profile", "/track", "/progress", "/test"]);
 
 function skipsThemeTransition(from: string, to: AppPath) {
   return noAnimationDarkPaths.has(from as AppPath) && noAnimationDarkPaths.has(to);
@@ -201,7 +201,11 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
     ...trackerActivityDates.map((date) => ({ date })),
   ]).current;
   const isDarkPage =
-    path === "/" || path === "/profile" || path === "/track" || path === "/progress";
+    path === "/" ||
+    path === "/profile" ||
+    path === "/track" ||
+    path === "/progress" ||
+    path === "/test";
   const navigateWithThemeTransition = (event: MouseEvent<HTMLAnchorElement>, to: AppPath) => {
     if (skipsThemeTransition(path, to)) return;
 
@@ -217,7 +221,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
       return;
     }
 
-    const isDarkDestination = to === "/" || to === "/track" || to === "/progress";
+    const isDarkDestination = to === "/" || to === "/track" || to === "/progress" || to === "/test";
     if (!isDarkPage && !isDarkDestination) return;
 
     event.preventDefault();
