@@ -35,8 +35,12 @@ const nav = [
   { title: "History", url: "/history", icon: History },
 ] as const;
 
-type AppPath = "/" | "/track" | "/progress" | "/test" | "/history";
-const instantDarkPaths = new Set(["/", "/profile", "/track"]);
+type AppPath = "/" | "/profile" | "/track" | "/progress" | "/test" | "/history";
+const noAnimationDarkPaths = new Set<AppPath>(["/", "/profile", "/track"]);
+
+function skipsThemeTransition(from: string, to: AppPath) {
+  return noAnimationDarkPaths.has(from as AppPath) && noAnimationDarkPaths.has(to);
+}
 
 type ViewTransitionDocument = Document & {
   startViewTransition?: (callback: () => Promise<unknown>) => { finished: Promise<void> };
@@ -208,7 +212,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
   const isDarkPage =
     path === "/" || path === "/profile" || path === "/track" || path === "/progress";
   const navigateWithThemeTransition = (event: MouseEvent<HTMLAnchorElement>, to: AppPath) => {
-    if (instantDarkPaths.has(path) && instantDarkPaths.has(to)) return;
+    if (skipsThemeTransition(path, to)) return;
 
     if (
       event.defaultPrevented ||
