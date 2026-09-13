@@ -54,19 +54,21 @@ export function SolutionScreen({ record, onExit }: Props) {
       if (!retry) return "border-border bg-surface hover:border-primary/40 hover:bg-accent/50";
       if (opt === retry) {
         return retry === correctOpt
-          ? "border-answered bg-answered/15 font-semibold"
-          : "border-destructive bg-destructive/10 font-semibold";
+          ? "border-answered bg-answered/15 font-semibold ring-1 ring-answered/45"
+          : "border-destructive bg-destructive/10 font-semibold ring-1 ring-destructive/45";
       }
       if (retry !== correctOpt && opt === correctOpt) {
-        return "border-answered bg-answered/15 font-semibold";
+        return "border-answered bg-answered/15 font-semibold ring-1 ring-answered/45";
       }
       if (retry === correctOpt && original && original !== correctOpt && opt === original) {
-        return "border-destructive bg-destructive/10 font-semibold";
+        return "border-destructive bg-destructive/10 font-semibold ring-1 ring-destructive/45";
       }
       return "border-border bg-surface";
     }
-    if (correctOpt && opt === correctOpt) return "border-answered bg-answered/15 font-semibold";
-    if (opt === original) return "border-destructive bg-destructive/10 font-semibold";
+    if (correctOpt && opt === correctOpt)
+      return "border-answered bg-answered/15 font-semibold ring-1 ring-answered/45";
+    if (opt === original)
+      return "border-destructive bg-destructive/10 font-semibold ring-1 ring-destructive/45";
     return "border-border bg-surface";
   };
 
