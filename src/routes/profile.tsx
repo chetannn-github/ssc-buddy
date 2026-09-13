@@ -732,9 +732,9 @@ export function Profile() {
                 <Link
                   to="/test"
                   onClick={startPracticeSession}
-                  className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-emerald-500 px-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-400"
+                  className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-[#00b878] px-3 text-sm font-semibold text-white transition-colors hover:bg-[#00a66c]"
                 >
-                  <Plus className="h-4 w-4" /> New practice session
+                  <Plus className="h-4 w-4" /> Practice session
                 </Link>
                 <Button
                   type="button"
