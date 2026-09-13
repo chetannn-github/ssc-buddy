@@ -1,4 +1,4 @@
-import { Star, X } from "lucide-react";
+import { ChevronRight, Star, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useTracker } from "@/lib/tracker-store";
 import {
@@ -52,6 +52,7 @@ export function ChapterWorkspace({ mode }: { mode: Mode }) {
   const { data, update } = useTracker();
   const { openForm, confirm } = useTrackerDialog();
   const [subjectFilter, setSubjectFilter] = useState("all");
+  const [openSubjectId, setOpenSubjectId] = useState(data.subjects[0]?.id ?? "");
   const [selected, setSelected] = useState<Selected>(null);
   const overall = overallSyllabus(data);
   const subjects =
@@ -202,15 +203,32 @@ export function ChapterWorkspace({ mode }: { mode: Mode }) {
         {subjects.map((subject) => {
           const progress =
             mode === "syllabus" ? subjectSyllabus(subject) : subjectRevision(data, subject);
+          const isOpen = openSubjectId === subject.id;
           return (
             <div key={subject.id} className="rounded-xl bg-card p-3">
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <h2 className="text-base font-semibold">{subject.name}</h2>
-                  <p className="font-mono text-xs text-muted-foreground">
-                    {progress.done} / {progress.total} · {pct(progress.done, progress.total)}%
-                  </p>
-                </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setOpenSubjectId((current) => (current === subject.id ? "" : subject.id))
+                  }
+                  className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                  aria-expanded={isOpen}
+                >
+                  <ChevronRight
+                    className={
+                      isOpen
+                        ? "h-4 w-4 shrink-0 rotate-90 text-muted-foreground transition-transform"
+                        : "h-4 w-4 shrink-0 text-muted-foreground transition-transform"
+                    }
+                  />
+                  <div className="min-w-0">
+                    <h2 className="text-base font-semibold">{subject.name}</h2>
+                    <p className="font-mono text-xs text-muted-foreground">
+                      {progress.done} / {progress.total} · {pct(progress.done, progress.total)}%
+                    </p>
+                  </div>
+                </button>
                 {mode === "syllabus" && (
                   <GhostButton
                     tone="blue"
@@ -227,24 +245,36 @@ export function ChapterWorkspace({ mode }: { mode: Mode }) {
                   tone={mode === "revision" ? "green" : "blue"}
                 />
               </div>
-              <div className="mt-2 divide-y divide-white/[0.06]">
-                {subject.chapters.length ? (
-                  subject.chapters.map((chapter) => (
-                    <ChapterRow
-                      key={chapter.id}
-                      subject={subject}
-                      chapter={chapter}
-                      mode={mode}
-                      pinned={data.pinnedChapterIds.includes(chapter.id)}
-                      onOpen={() => setSelected({ subject, chapter })}
-                      onPin={() => togglePin(chapter.id)}
-                      onDecrease={() => setCompleted(subject.id, chapter.id, chapter.completed - 1)}
-                      onIncrease={() => setCompleted(subject.id, chapter.id, chapter.completed + 1)}
-                    />
-                  ))
-                ) : (
-                  <p className="py-3 text-sm text-muted-foreground">No chapters yet.</p>
-                )}
+              <div
+                className={
+                  isOpen
+                    ? "mt-2 grid grid-rows-[1fr] transition-[grid-template-rows] duration-300"
+                    : "grid grid-rows-[0fr] transition-[grid-template-rows] duration-300"
+                }
+              >
+                <div className="min-h-0 overflow-hidden divide-y divide-white/[0.06]">
+                  {subject.chapters.length ? (
+                    subject.chapters.map((chapter) => (
+                      <ChapterRow
+                        key={chapter.id}
+                        subject={subject}
+                        chapter={chapter}
+                        mode={mode}
+                        pinned={data.pinnedChapterIds.includes(chapter.id)}
+                        onOpen={() => setSelected({ subject, chapter })}
+                        onPin={() => togglePin(chapter.id)}
+                        onDecrease={() =>
+                          setCompleted(subject.id, chapter.id, chapter.completed - 1)
+                        }
+                        onIncrease={() =>
+                          setCompleted(subject.id, chapter.id, chapter.completed + 1)
+                        }
+                      />
+                    ))
+                  ) : (
+                    <p className="py-3 text-sm text-muted-foreground">No chapters yet.</p>
+                  )}
+                </div>
               </div>
             </div>
           );
@@ -525,10 +555,9 @@ function ChapterDrawer({
           <button
             type="button"
             onClick={() => setEditing((value) => !value)}
-            className="flex w-full items-center justify-between text-left"
+            className="rounded-lg bg-track px-3 py-2 text-sm font-medium transition-colors hover:text-white"
           >
-            <Label>Edit chapter</Label>
-            <span className="text-xs text-zinc-400">{editing ? "Close" : "Open"}</span>
+            {editing ? "Close edit" : "Edit chapter"}
           </button>
           {editing && (
             <div className="mt-3">
