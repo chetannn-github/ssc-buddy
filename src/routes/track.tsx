@@ -5,6 +5,7 @@ import { TrackerProvider } from "@/lib/tracker-store";
 import { Revision } from "../../tracker/src/components/tracker/Revision";
 import { Syllabus } from "../../tracker/src/components/tracker/Syllabus";
 import { Tests } from "../../tracker/src/components/tracker/Tests";
+import { TrackerDialogProvider } from "../../tracker/src/components/tracker/dialog";
 
 const TABS = ["Syllabus", "Revision", "Mock Test"] as const;
 type Tab = (typeof TABS)[number];
@@ -16,7 +17,9 @@ export const Route = createFileRoute("/track")({
   head: () => ({ meta: [{ title: "Tracker" }] }),
   component: () => (
     <TrackerProvider>
-      <TrackPage />
+      <TrackerDialogProvider>
+        <TrackPage />
+      </TrackerDialogProvider>
     </TrackerProvider>
   ),
 });

@@ -2,9 +2,11 @@ import { useRef, useState } from "react";
 import { useTracker } from "@/lib/tracker-store";
 import { IMPORT_PROMPT, type TrackerData } from "@/lib/tracker";
 import { GhostButton, Label } from "./ui";
+import { useTrackerDialog } from "./dialog";
 
 export function DataPanel() {
   const { data, replace, reset } = useTracker();
+  const { confirm } = useTrackerDialog();
   const [importing, setImporting] = useState(false);
   const [text, setText] = useState("");
   const [msg, setMsg] = useState("");
@@ -22,7 +24,10 @@ export function DataPanel() {
 
   const applyJson = (raw: string) => {
     try {
-      const cleaned = raw.trim().replace(/^```(?:json)?/i, "").replace(/```$/, "");
+      const cleaned = raw
+        .trim()
+        .replace(/^```(?:json)?/i, "")
+        .replace(/```$/, "");
       const parsed = JSON.parse(cleaned) as TrackerData;
       replace(parsed);
       setMsg("Data imported.");
@@ -50,7 +55,14 @@ export function DataPanel() {
           <GhostButton
             tone="danger"
             onClick={() => {
-              if (window.confirm("Reset all tracker data to defaults?")) reset();
+              confirm({
+                title: "Reset tracker?",
+                description:
+                  "All Track subjects, progress, and test records will be permanently removed.",
+                confirmLabel: "Reset tracker",
+                danger: true,
+                onConfirm: reset,
+              });
             }}
           >
             Reset

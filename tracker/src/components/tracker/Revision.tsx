@@ -10,6 +10,7 @@ import {
   type Subject,
 } from "@/lib/tracker";
 import { Bar, Card, ChevronIcon, GhostButton, Num } from "./ui";
+import { useTrackerDialog } from "./dialog";
 
 function Dots({
   done,
@@ -54,6 +55,7 @@ function SubjectRevision({
   onOpenChange: () => void;
 }) {
   const { data, update } = useTracker();
+  const { confirm, openForm } = useTrackerDialog();
   const rev = data.revision[subject.id];
   if (!rev) return null;
   const x = subjectRevision(data, subject);
@@ -96,15 +98,27 @@ function SubjectRevision({
         <GhostButton
           tone="blue"
           onClick={() => {
-            const name = window.prompt("Revision type name (e.g. Notes, Little Book)");
-            if (!name?.trim()) return;
-            const target = window.prompt("Revision target", "5");
-            update((d) => {
-              d.revision[subject.id]?.types.push({
-                id: uid(),
-                name: name.trim(),
-                target: Math.max(1, Number(target) || 5),
-              });
+            openForm({
+              title: "Add revision type",
+              fields: [
+                { name: "name", label: "Revision type", placeholder: "e.g. Notes" },
+                {
+                  name: "target",
+                  label: "Revision target",
+                  type: "number",
+                  min: 1,
+                  defaultValue: "5",
+                },
+              ],
+              confirmLabel: "Add type",
+              onConfirm: ({ name, target }) =>
+                update((d) => {
+                  d.revision[subject.id]?.types.push({
+                    id: uid(),
+                    name: name?.trim() || "Revision",
+                    target: Math.max(1, Number(target) || 5),
+                  });
+                }),
             });
           }}
         >
@@ -146,11 +160,17 @@ function SubjectRevision({
                         aria-label={`Remove ${t.name}`}
                         title={`Remove ${t.name} from ${subject.name}`}
                         onClick={() => {
-                          if (!window.confirm(`Remove revision type "${t.name}"?`)) return;
-                          update((d) => {
-                            const r = d.revision[subject.id];
-                            if (!r) return;
-                            r.types = r.types.filter((y) => y.id !== t.id);
+                          confirm({
+                            title: "Remove revision type?",
+                            description: `“${t.name}” will be removed from ${subject.name}.`,
+                            confirmLabel: "Remove type",
+                            danger: true,
+                            onConfirm: () =>
+                              update((d) => {
+                                const r = d.revision[subject.id];
+                                if (!r) return;
+                                r.types = r.types.filter((y) => y.id !== t.id);
+                              }),
                           });
                         }}
                         className="text-muted-foreground transition-colors hover:text-destructive"

@@ -10,9 +10,11 @@ import {
   type Chapter,
 } from "@/lib/tracker";
 import { Bar, Card, ChevronIcon, GhostButton, IconButton, Num, PencilIcon, TrashIcon } from "./ui";
+import { useTrackerDialog } from "./dialog";
 
 function ChapterRow({ subjectId, chapter }: { subjectId: string; chapter: Chapter }) {
   const { update } = useTracker();
+  const { confirm, openForm } = useTrackerDialog();
   const status = chapterStatus(chapter);
 
   const setCompleted = (n: number) =>
@@ -27,26 +29,42 @@ function ChapterRow({ subjectId, chapter }: { subjectId: string; chapter: Chapte
     });
 
   const editChapter = () => {
-    const name = window.prompt("Chapter name", chapter.name);
-    if (name === null) return;
-    const total = window.prompt("Total lectures / questions", String(chapter.total));
-    if (total === null) return;
-    update((d) => {
-      const c = d.subjects
-        .find((s) => s.id === subjectId)
-        ?.chapters.find((x) => x.id === chapter.id);
-      if (!c) return;
-      c.name = name.trim() || c.name;
-      c.total = Math.max(0, Number(total) || 0);
-      c.completed = Math.min(c.completed, c.total);
+    openForm({
+      title: "Edit chapter",
+      fields: [
+        { name: "name", label: "Chapter name", defaultValue: chapter.name },
+        {
+          name: "total",
+          label: "Total lectures / questions",
+          type: "number",
+          min: 0,
+          defaultValue: String(chapter.total),
+        },
+      ],
+      onConfirm: ({ name, total }) =>
+        update((d) => {
+          const c = d.subjects
+            .find((s) => s.id === subjectId)
+            ?.chapters.find((x) => x.id === chapter.id);
+          if (!c) return;
+          c.name = name?.trim() || c.name;
+          c.total = Math.max(0, Number(total) || 0);
+          c.completed = Math.min(c.completed, c.total);
+        }),
     });
   };
 
   const removeChapter = () => {
-    if (!window.confirm(`Delete chapter "${chapter.name}"?`)) return;
-    update((d) => {
-      const s = d.subjects.find((x) => x.id === subjectId);
-      if (s) s.chapters = s.chapters.filter((c) => c.id !== chapter.id);
+    confirm({
+      title: "Delete chapter?",
+      description: `“${chapter.name}” and its progress will be removed.`,
+      confirmLabel: "Delete chapter",
+      danger: true,
+      onConfirm: () =>
+        update((d) => {
+          const s = d.subjects.find((x) => x.id === subjectId);
+          if (s) s.chapters = s.chapters.filter((c) => c.id !== chapter.id);
+        }),
     });
   };
 
@@ -100,39 +118,53 @@ function ChapterRow({ subjectId, chapter }: { subjectId: string; chapter: Chapte
 
 export function Syllabus() {
   const { data, update } = useTracker();
+  const { confirm, openForm } = useTrackerDialog();
   const overall = overallSyllabus(data);
   const [openSubjectId, setOpenSubjectId] = useState(data.subjects[0]?.id ?? "");
 
   const addChapter = (subjectId: string) => {
-    const name = window.prompt("Chapter name");
-    if (!name?.trim()) return;
-    const total = window.prompt("Total lectures / questions", "10");
-    update((d) => {
-      d.subjects
-        .find((subject) => subject.id === subjectId)
-        ?.chapters.push({
-          id: uid(),
-          name: name.trim(),
-          total: Math.max(0, Number(total) || 0),
-          completed: 0,
-        });
+    openForm({
+      title: "Add chapter",
+      fields: [
+        { name: "name", label: "Chapter name", placeholder: "e.g. Number System" },
+        {
+          name: "total",
+          label: "Total lectures / questions",
+          type: "number",
+          min: 0,
+          defaultValue: "10",
+        },
+      ],
+      confirmLabel: "Add chapter",
+      onConfirm: ({ name, total }) =>
+        update((d) => {
+          d.subjects
+            .find((subject) => subject.id === subjectId)
+            ?.chapters.push({
+              id: uid(),
+              name: name?.trim() || "Untitled chapter",
+              total: Math.max(0, Number(total) || 0),
+              completed: 0,
+            });
+        }),
     });
   };
 
   const addSubject = () => {
-    const name = window.prompt("Subject name");
-    if (!name?.trim()) return;
-    const id = uid();
-    update((d) => {
-      d.subjects.push({ id, name: name.trim(), chapters: [] });
-      d.revision[id] = {
-        types: [],
-        done: {},
-        targets: {},
-      };
-      d.tests.targets[id] = 0;
+    openForm({
+      title: "Add subject",
+      fields: [{ name: "name", label: "Subject name", placeholder: "e.g. Maths" }],
+      confirmLabel: "Add subject",
+      onConfirm: ({ name }) => {
+        const id = uid();
+        update((d) => {
+          d.subjects.push({ id, name: name?.trim() || "Untitled subject", chapters: [] });
+          d.revision[id] = { types: [], done: {}, targets: {} };
+          d.tests.targets[id] = 0;
+        });
+        setOpenSubjectId(id);
+      },
     });
-    setOpenSubjectId(id);
   };
 
   return (
@@ -180,11 +212,14 @@ export function Syllabus() {
                 <IconButton
                   label="Rename subject"
                   onClick={() => {
-                    const name = window.prompt("Subject name", s.name);
-                    if (!name?.trim()) return;
-                    update((d) => {
-                      const t = d.subjects.find((y) => y.id === s.id);
-                      if (t) t.name = name.trim();
+                    openForm({
+                      title: "Rename subject",
+                      fields: [{ name: "name", label: "Subject name", defaultValue: s.name }],
+                      onConfirm: ({ name }) =>
+                        update((d) => {
+                          const t = d.subjects.find((y) => y.id === s.id);
+                          if (t) t.name = name?.trim() || t.name;
+                        }),
                     });
                   }}
                 >
@@ -193,12 +228,18 @@ export function Syllabus() {
                 <IconButton
                   label="Delete subject"
                   onClick={() => {
-                    if (!window.confirm(`Delete subject "${s.name}" and all its chapters?`)) return;
-                    update((d) => {
-                      d.subjects = d.subjects.filter((y) => y.id !== s.id);
-                      delete d.revision[s.id];
-                      delete d.tests.targets[s.id];
-                      d.tests.log = d.tests.log.filter((t) => t.subjectId !== s.id);
+                    confirm({
+                      title: "Delete subject?",
+                      description: `“${s.name}”, its chapters, revisions, and sectional tests will be removed.`,
+                      confirmLabel: "Delete subject",
+                      danger: true,
+                      onConfirm: () =>
+                        update((d) => {
+                          d.subjects = d.subjects.filter((y) => y.id !== s.id);
+                          delete d.revision[s.id];
+                          delete d.tests.targets[s.id];
+                          d.tests.log = d.tests.log.filter((t) => t.subjectId !== s.id);
+                        }),
                     });
                   }}
                 >
