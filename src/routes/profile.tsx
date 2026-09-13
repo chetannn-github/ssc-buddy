@@ -390,8 +390,9 @@ function StudyTrackerOverview({ tracker }: { tracker: TrackerData | null }) {
   const syllabus = overallSyllabus(tracker);
   const mockDone = tracker.tests.mocks.pre.done + tracker.tests.mocks.mains.done;
   const mockTarget = tracker.tests.mocks.pre.target + tracker.tests.mocks.mains.target;
-  const syllabusDays = daysLeft(tracker.meta.syllabusDeadline);
-  const targetDays = daysLeft(tracker.meta.targetDate);
+  const countdowns = tracker.meta.countdowns.filter(
+    (countdown) => countdown.name && countdown.date,
+  );
 
   return (
     <section className="border-t border-white/10 pt-5 sm:pt-6">
@@ -406,32 +407,47 @@ function StudyTrackerOverview({ tracker }: { tracker: TrackerData | null }) {
           {syllabus.done}/{syllabus.total} Lectures
         </span>
       </div>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <div className="rounded-xl border border-amber-300/15 bg-amber-300/[0.05] px-4 py-3">
-          <p className="text-xs font-medium text-zinc-400">Syllabus deadline</p>
-          <div className="mt-2 flex items-end justify-between gap-3">
-            <p className="text-sm font-medium text-zinc-200">
-              {fmtDate(tracker.meta.syllabusDeadline)}
-            </p>
-            <p className="text-right leading-none">
-              <span className="text-2xl font-semibold text-amber-200">
-                {Math.max(0, syllabusDays)}
-              </span>
-              <span className="ml-1 text-xs text-amber-100/70">days left</span>
-            </p>
-          </div>
+      {countdowns.length > 0 && (
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          {countdowns.map((countdown, index) => {
+            const tone = index === 0 ? "amber" : "sky";
+            return (
+              <div
+                key={countdown.id}
+                className={cn(
+                  "rounded-xl px-4 py-3",
+                  tone === "amber"
+                    ? "border border-amber-300/15 bg-amber-300/[0.05]"
+                    : "border border-sky-300/15 bg-sky-300/[0.05]",
+                )}
+              >
+                <p className="text-xs font-medium text-zinc-400">{countdown.name}</p>
+                <div className="mt-2 flex items-end justify-between gap-3">
+                  <p className="text-sm font-medium text-zinc-200">{fmtDate(countdown.date)}</p>
+                  <p className="text-right leading-none">
+                    <span
+                      className={cn(
+                        "text-2xl font-semibold",
+                        tone === "amber" ? "text-amber-200" : "text-sky-200",
+                      )}
+                    >
+                      {Math.max(0, daysLeft(countdown.date))}
+                    </span>
+                    <span
+                      className={cn(
+                        "ml-1 text-xs",
+                        tone === "amber" ? "text-amber-100/70" : "text-sky-100/70",
+                      )}
+                    >
+                      days left
+                    </span>
+                  </p>
+                </div>
+              </div>
+            );
+          })}
         </div>
-        <div className="rounded-xl border border-sky-300/15 bg-sky-300/[0.05] px-4 py-3">
-          <p className="text-xs font-medium text-zinc-400">Final target</p>
-          <div className="mt-2 flex items-end justify-between gap-3">
-            <p className="text-sm font-medium text-zinc-200">{fmtDate(tracker.meta.targetDate)}</p>
-            <p className="text-right leading-none">
-              <span className="text-2xl font-semibold text-sky-200">{Math.max(0, targetDays)}</span>
-              <span className="ml-1 text-xs text-sky-100/70">days left</span>
-            </p>
-          </div>
-        </div>
-      </div>
+      )}
 
       <div className="mt-4 grid gap-3 md:grid-cols-3">
         <Link
@@ -534,8 +550,9 @@ export function Profile() {
   const [nameDraft, setNameDraft] = useState("");
   const [goalDraft, setGoalDraft] = useState("");
   const [examNameDraft, setExamNameDraft] = useState("");
-  const [syllabusDeadlineDraft, setSyllabusDeadlineDraft] = useState("");
-  const [targetDateDraft, setTargetDateDraft] = useState("");
+  const [countdownDrafts, setCountdownDrafts] = useState<
+    Array<{ id: string; name: string; date: string }>
+  >([]);
   const [importMessage, setImportMessage] = useState("");
   const [promptCopied, setPromptCopied] = useState(false);
   const importFileRef = useRef<HTMLInputElement>(null);
@@ -551,8 +568,7 @@ export function Profile() {
       const trackerData = loadTrackerData();
       setTracker(trackerData);
       setExamNameDraft(trackerData.meta.examName);
-      setSyllabusDeadlineDraft(trackerData.meta.syllabusDeadline);
-      setTargetDateDraft(trackerData.meta.targetDate);
+      setCountdownDrafts(trackerData.meta.countdowns);
       setProfile(saved);
       setNameDraft(saved?.name ?? "");
       setGoalDraft(saved ? String(saved.questionGoal) : "100");
@@ -629,8 +645,9 @@ export function Profile() {
         meta: {
           ...tracker.meta,
           examName: examNameDraft.trim() || tracker.meta.examName,
-          syllabusDeadline: syllabusDeadlineDraft || tracker.meta.syllabusDeadline,
-          targetDate: targetDateDraft || tracker.meta.targetDate,
+          countdowns: countdownDrafts
+            .filter((countdown) => countdown.name.trim() && countdown.date)
+            .slice(0, 2),
         },
       });
       setTracker(nextTracker);
@@ -870,25 +887,45 @@ export function Profile() {
                   placeholder="e.g. SSC CGL 2027"
                 />
               </label>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="block text-sm font-medium text-zinc-200">
-                  Syllabus deadline
-                  <Input
-                    className="mt-2 h-11 border-white/10 bg-[#151515] text-zinc-100 focus-visible:border-zinc-500"
-                    type="date"
-                    value={syllabusDeadlineDraft}
-                    onChange={(event) => setSyllabusDeadlineDraft(event.target.value)}
-                  />
-                </label>
-                <label className="block text-sm font-medium text-zinc-200">
-                  Target date
-                  <Input
-                    className="mt-2 h-11 border-white/10 bg-[#151515] text-zinc-100 focus-visible:border-zinc-500"
-                    type="date"
-                    value={targetDateDraft}
-                    onChange={(event) => setTargetDateDraft(event.target.value)}
-                  />
-                </label>
+              <div className="space-y-3">
+                <p className="text-sm font-medium text-zinc-200">
+                  Countdowns <span className="font-normal text-zinc-500">(up to 2)</span>
+                </p>
+                {[0, 1].map((index) => {
+                  const countdown = countdownDrafts[index] ?? {
+                    id: `countdown-${index + 1}`,
+                    name: "",
+                    date: "",
+                  };
+                  return (
+                    <div key={countdown.id} className="grid gap-2 sm:grid-cols-[1fr_0.8fr]">
+                      <Input
+                        className="h-11 border-white/10 bg-[#151515] text-zinc-100 placeholder:text-zinc-500 focus-visible:border-zinc-500"
+                        value={countdown.name}
+                        placeholder={`Countdown ${index + 1} name`}
+                        onChange={(event) =>
+                          setCountdownDrafts((current) => {
+                            const next = [...current];
+                            next[index] = { ...countdown, name: event.target.value };
+                            return next;
+                          })
+                        }
+                      />
+                      <Input
+                        className="h-11 border-white/10 bg-[#151515] text-zinc-100 focus-visible:border-zinc-500"
+                        type="date"
+                        value={countdown.date}
+                        onChange={(event) =>
+                          setCountdownDrafts((current) => {
+                            const next = [...current];
+                            next[index] = { ...countdown, date: event.target.value };
+                            return next;
+                          })
+                        }
+                      />
+                    </div>
+                  );
+                })}
               </div>
             </div>
             <div className="mt-6 flex justify-end gap-2">

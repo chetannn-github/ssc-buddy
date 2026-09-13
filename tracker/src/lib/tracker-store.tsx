@@ -27,7 +27,26 @@ function migrate(raw: unknown): TrackerData {
   if (!d || typeof d !== "object" || !Array.isArray(d.subjects)) return base;
   const out: TrackerData = {
     version: 1,
-    meta: { ...base.meta, ...(d.meta ?? {}) },
+    meta: {
+      ...base.meta,
+      ...(d.meta ?? {}),
+      countdowns: Array.isArray(d.meta?.countdowns)
+        ? d.meta.countdowns.slice(0, 2).map((countdown, index) => ({
+            id: String(countdown?.id ?? `countdown-${index + 1}`),
+            name: String(countdown?.name ?? ""),
+            date: String(countdown?.date ?? ""),
+          }))
+        : [
+            d.meta?.syllabusDeadline
+              ? { id: "countdown-1", name: "Syllabus deadline", date: d.meta.syllabusDeadline }
+              : null,
+            d.meta?.targetDate
+              ? { id: "countdown-2", name: "Target date", date: d.meta.targetDate }
+              : null,
+          ].filter(
+            (countdown): countdown is { id: string; name: string; date: string } => !!countdown,
+          ),
+    },
     subjects: d.subjects.map((s) => ({
       id: String(s.id ?? Math.random()),
       name: String(s.name ?? "Subject"),

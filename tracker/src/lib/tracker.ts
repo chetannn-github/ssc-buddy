@@ -28,7 +28,12 @@ export type TrackerActivity = {
 };
 export type TrackerData = {
   version: 1;
-  meta: { examName: string; syllabusDeadline: string; targetDate: string };
+  meta: {
+    examName: string;
+    syllabusDeadline: string;
+    targetDate: string;
+    countdowns: Array<{ id: string; name: string; date: string }>;
+  };
   subjects: Subject[];
   revision: Record<string, RevisionSubject>;
   tests: {
@@ -48,6 +53,7 @@ export function defaultData(): TrackerData {
       examName: "",
       syllabusDeadline: "",
       targetDate: "",
+      countdowns: [],
     },
     subjects: [],
     revision: {},
@@ -173,7 +179,7 @@ Use this exact data shape:
 
 {
   "version": 1,
-  "meta": { "examName": "", "syllabusDeadline": "", "targetDate": "" },
+  "meta": { "examName": "", "syllabusDeadline": "", "targetDate": "", "countdowns": [] },
   "subjects": [
     {
       "id": "maths",

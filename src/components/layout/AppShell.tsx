@@ -36,8 +36,10 @@ function ProfileOnboarding({ onComplete }: { onComplete: (profile: PracticeProfi
   const [name, setName] = useState("");
   const [goal, setGoal] = useState("100");
   const [examName, setExamName] = useState("SSC CGL 2027");
-  const [syllabusDeadline, setSyllabusDeadline] = useState("2026-11-15");
-  const [targetDate, setTargetDate] = useState("2027-02-01");
+  const [countdowns, setCountdowns] = useState([
+    { id: "countdown-1", name: "", date: "" },
+    { id: "countdown-2", name: "", date: "" },
+  ]);
   const parsedGoal = Math.max(1, Math.min(100000, Number(goal) || 0));
   const canContinue = name.trim().length > 0 && Number(goal) >= 1;
   const importInput = useRef<HTMLInputElement>(null);
@@ -53,8 +55,7 @@ function ProfileOnboarding({ onComplete }: { onComplete: (profile: PracticeProfi
       meta: {
         ...tracker.meta,
         examName: examName.trim() || tracker.meta.examName,
-        syllabusDeadline: syllabusDeadline || tracker.meta.syllabusDeadline,
-        targetDate: targetDate || tracker.meta.targetDate,
+        countdowns: countdowns.filter((countdown) => countdown.name.trim() && countdown.date),
       },
     });
     onComplete(profile);
@@ -110,25 +111,38 @@ function ProfileOnboarding({ onComplete }: { onComplete: (profile: PracticeProfi
               placeholder="e.g. SSC CGL 2027"
             />
           </label>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block text-sm font-medium text-zinc-200">
-              Syllabus deadline
-              <Input
-                className="mt-2 h-11 border-white/10 bg-zinc-900 text-zinc-100"
-                type="date"
-                value={syllabusDeadline}
-                onChange={(event) => setSyllabusDeadline(event.target.value)}
-              />
-            </label>
-            <label className="block text-sm font-medium text-zinc-200">
-              Target date
-              <Input
-                className="mt-2 h-11 border-white/10 bg-zinc-900 text-zinc-100"
-                type="date"
-                value={targetDate}
-                onChange={(event) => setTargetDate(event.target.value)}
-              />
-            </label>
+          <div className="space-y-3">
+            <p className="text-sm font-medium text-zinc-200">
+              Countdowns <span className="font-normal text-zinc-500">(up to 2)</span>
+            </p>
+            {countdowns.map((countdown, index) => (
+              <div key={countdown.id} className="grid gap-2 sm:grid-cols-[1fr_0.8fr]">
+                <Input
+                  className="h-11 border-white/10 bg-zinc-900 text-zinc-100"
+                  value={countdown.name}
+                  onChange={(event) =>
+                    setCountdowns((current) =>
+                      current.map((item, itemIndex) =>
+                        itemIndex === index ? { ...item, name: event.target.value } : item,
+                      ),
+                    )
+                  }
+                  placeholder={`Countdown ${index + 1} name`}
+                />
+                <Input
+                  className="h-11 border-white/10 bg-zinc-900 text-zinc-100"
+                  type="date"
+                  value={countdown.date}
+                  onChange={(event) =>
+                    setCountdowns((current) =>
+                      current.map((item, itemIndex) =>
+                        itemIndex === index ? { ...item, date: event.target.value } : item,
+                      ),
+                    )
+                  }
+                />
+              </div>
+            ))}
           </div>
         </div>
         <Button
