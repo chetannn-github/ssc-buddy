@@ -130,7 +130,7 @@ export function TestScreen({
   return (
     <div
       className={cn(
-        "app-page-enter min-h-screen transition-colors duration-300",
+        "min-h-screen",
         isThemeSwitching && "test-theme-switch",
         darkMode ? "exam-dark bg-[#121212] text-zinc-100" : "bg-background",
       )}
