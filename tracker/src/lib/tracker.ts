@@ -25,6 +25,9 @@ export type TrackerActivity = {
   date: string;
   type: TrackerActivityType;
   count: number;
+  subjectId?: string;
+  chapterId?: string;
+  revisionTypeId?: string;
 };
 export type TrackerData = {
   version: 1;
@@ -153,10 +156,11 @@ export function recordActivity(
   data: TrackerData,
   type: TrackerActivityType,
   count: number,
+  context: Pick<TrackerActivity, "subjectId" | "chapterId" | "revisionTypeId"> = {},
   date = todayISO(),
 ) {
-  if (count === 0) return;
-  data.activity.unshift({ id: uid(), date, type, count });
+  if (count <= 0) return;
+  data.activity.unshift({ id: uid(), date, type, count, ...context });
 }
 
 /** Dates with a net-positive tracker contribution, used for the shared streak. */

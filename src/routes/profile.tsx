@@ -153,7 +153,12 @@ function ActivityHeatmap({
     const activity = new Map<string, number>();
     const details = new Map<string, DayActivityDetail[]>();
     const addDetail = (date: string, detail: DayActivityDetail) => {
-      details.set(date, [...(details.get(date) ?? []), detail]);
+      const dayDetails = details.get(date) ?? [];
+      const matching = dayDetails.find(
+        (item) => item.label === detail.label && item.detail === detail.detail,
+      );
+      if (matching) matching.count += detail.count;
+      else details.set(date, [...dayDetails, detail]);
     };
     records.forEach((record) => {
       const key = activityDay(record.date);
@@ -184,9 +189,21 @@ function ActivityHeatmap({
       const key = activityDay(entry.date);
       if (!key) return;
       activity.set(key, (activity.get(key) ?? 0) + entry.count);
+      const subject = tracker.subjects.find((item) => item.id === entry.subjectId);
+      const chapter = subject?.chapters.find((item) => item.id === entry.chapterId);
+      const chapterLabel =
+        subject && chapter ? `${subject.name} · ${chapter.name}` : "Earlier saved activity";
+      const revisionType = tracker.revision[subject?.id ?? ""]?.types.find(
+        (item) => item.id === entry.revisionTypeId,
+      );
       addDetail(key, {
-        label: entry.type === "lecture" ? "Lectures completed" : entry.type === "revision" ? "Revisions" : "Mock-test activity",
-        detail: entry.count > 0 ? "Completed" : "Progress adjusted",
+        label:
+          entry.type === "lecture"
+            ? "Lectures"
+            : entry.type === "revision"
+              ? `Revision${revisionType ? ` · ${revisionType.name}` : ""}`
+              : "Mock-test activity",
+        detail: chapterLabel,
         count: Math.abs(entry.count),
       });
     });

@@ -91,6 +91,9 @@ function migrate(raw: unknown): TrackerData {
         date: String(entry.date ?? ""),
         type: entry.type,
         count: Number(entry.count) || 1,
+        ...(entry.subjectId ? { subjectId: String(entry.subjectId) } : {}),
+        ...(entry.chapterId ? { chapterId: String(entry.chapterId) } : {}),
+        ...(entry.revisionTypeId ? { revisionTypeId: String(entry.revisionTypeId) } : {}),
       })),
   };
   for (const s of out.subjects) {

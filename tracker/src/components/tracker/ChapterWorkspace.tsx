@@ -34,10 +34,11 @@ function RevisionDots({
         <button
           key={number}
           type="button"
-          onClick={() => onSet(done === number ? number - 1 : number)}
+          onClick={() => number > done && onSet(number)}
+          disabled={number <= done}
           className={
             number <= done
-              ? "h-7 w-7 rounded-full bg-accent-green font-mono text-[11px] text-card"
+              ? "h-7 w-7 rounded-full bg-accent-green font-mono text-[11px] text-card disabled:opacity-100"
               : "h-7 w-7 rounded-full bg-track font-mono text-[11px] text-muted-foreground transition-colors hover:text-foreground"
           }
         >
@@ -81,8 +82,8 @@ export function ChapterWorkspace({ mode }: { mode: Mode }) {
         .find((subject) => subject.id === subjectId)
         ?.chapters.find((item) => item.id === chapterId);
       if (!chapter) return;
-      const next = Math.max(0, Math.min(value, chapter.total));
-      recordActivity(draft, "lecture", next - chapter.completed);
+      const next = Math.max(chapter.completed, Math.min(value, chapter.total));
+      recordActivity(draft, "lecture", next - chapter.completed, { subjectId, chapterId });
       chapter.completed = next;
     });
 
@@ -91,8 +92,13 @@ export function ChapterWorkspace({ mode }: { mode: Mode }) {
       const revision = draft.revision[subjectId];
       if (!revision) return;
       revision.done[chapterId] = revision.done[chapterId] ?? {};
-      const next = Math.max(0, value);
-      recordActivity(draft, "revision", next - (revision.done[chapterId]![typeId] ?? 0));
+      const current = revision.done[chapterId]![typeId] ?? 0;
+      const next = Math.max(current, value);
+      recordActivity(draft, "revision", next - current, {
+        subjectId,
+        chapterId,
+        revisionTypeId: typeId,
+      });
       revision.done[chapterId]![typeId] = next;
     });
 
@@ -414,8 +420,7 @@ function ChapterDrawer({
         ?.chapters.find((item) => item.id === chapter.id);
       if (!target) return;
       target.name = name.trim() || target.name;
-      target.total = Math.max(0, Number(total) || 0);
-      target.completed = Math.min(target.completed, target.total);
+      target.total = Math.max(target.completed, Number(total) || 0);
     });
   const remove = () =>
     confirm({
@@ -464,20 +469,9 @@ function ChapterDrawer({
           </div>
         </div>
         <div className="mt-5 flex items-center gap-2">
-          <IconButton
-            label="Decrease completed lectures"
-            onClick={() => onSetCompleted(subject.id, chapter.id, chapter.completed - 1)}
-          >
-            −
-          </IconButton>
-          <input
-            value={chapter.completed}
-            onChange={(event) =>
-              onSetCompleted(subject.id, chapter.id, Number(event.target.value) || 0)
-            }
-            className="h-10 w-20 rounded-lg bg-track text-center font-mono outline-none"
-            inputMode="numeric"
-          />
+          <span className="grid h-10 w-20 place-items-center rounded-lg bg-track font-mono">
+            {chapter.completed}
+          </span>
           <IconButton
             label="Increase completed lectures"
             variant="solid"
