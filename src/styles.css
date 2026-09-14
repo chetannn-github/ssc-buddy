@@ -33,6 +33,42 @@
   animation: consistency-flame 2s ease-in-out 1;
 }
 
+@keyframes streak-celebration-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.8) translateY(14px);
+  }
+  18% {
+    opacity: 1;
+  }
+  72% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.04) translateY(-8px);
+  }
+}
+
+@keyframes streak-celebration-flame {
+  0%,
+  100% {
+    transform: rotate(-5deg) scale(1);
+  }
+  50% {
+    transform: rotate(5deg) scale(1.15);
+  }
+}
+
+.streak-celebration {
+  animation: streak-celebration-in 2.4s ease-in-out forwards;
+}
+
+.streak-celebration-flame {
+  animation: streak-celebration-flame 600ms ease-in-out 3;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 /*

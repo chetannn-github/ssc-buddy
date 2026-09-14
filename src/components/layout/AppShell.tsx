@@ -176,17 +176,38 @@ function ProfileOnboarding({ onComplete }: { onComplete: (profile: PracticeProfi
   );
 }
 
+function StreakCelebration({ streak }: { streak: number }) {
+  return (
+    <div className="pointer-events-none fixed inset-0 z-[80] grid place-items-center p-4">
+      <div className="streak-celebration flex flex-col items-center rounded-3xl border border-amber-200/25 bg-[#20180d]/95 px-8 py-7 text-center text-amber-50 shadow-[0_24px_80px_-20px_rgba(245,158,11,0.6)] backdrop-blur-md">
+        <div className="streak-celebration-flame grid h-16 w-16 place-items-center rounded-2xl bg-amber-400/15 text-amber-300">
+          <Flame className="h-10 w-10 fill-current" />
+        </div>
+        <p className="mt-4 text-xs font-semibold tracking-[0.2em] text-amber-200/80 uppercase">
+          Streak increased
+        </p>
+        <p className="mt-1 text-3xl font-bold">{streak} day streak!</p>
+        <p className="mt-2 text-sm text-amber-100/70">Keep the momentum going.</p>
+      </div>
+    </div>
+  );
+}
+
 export function AppShell({ title, subtitle, actions, children }: Props) {
   const path = useRouterState({ select: (r) => r.location.pathname });
   const [records, setRecords] = useState<TestRecord[]>([]);
   const [trackerActivityDates, setTrackerActivityDates] = useState<string[]>([]);
   const [profile, setProfile] = useState<PracticeProfile | null | undefined>(undefined);
+  const [celebratedStreak, setCelebratedStreak] = useState<number | null>(null);
+  const [streakReady, setStreakReady] = useState(false);
+  const previousStreak = useRef<number | null>(null);
 
   useEffect(() => {
     const refresh = () => {
       setRecords(loadHistory());
       const tracker = loadTrackerData();
       setTrackerActivityDates(trackerActiveDates(tracker));
+      setStreakReady(true);
     };
     refresh();
     window.addEventListener("storage", refresh);
@@ -208,6 +229,23 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
     ...records,
     ...trackerActivityDates.map((date) => ({ date })),
   ]).current;
+
+  useEffect(() => {
+    if (!streakReady) return;
+    if (previousStreak.current === null) {
+      previousStreak.current = currentStreak;
+      return;
+    }
+    if (currentStreak <= previousStreak.current) {
+      previousStreak.current = currentStreak;
+      return;
+    }
+    previousStreak.current = currentStreak;
+    setCelebratedStreak(currentStreak);
+    const timeout = window.setTimeout(() => setCelebratedStreak(null), 2400);
+    return () => window.clearTimeout(timeout);
+  }, [currentStreak, streakReady]);
+
   const isDarkPage =
     path === "/" ||
     path === "/profile" ||
@@ -291,6 +329,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
         {children}
       </main>
       {profile === null && <ProfileOnboarding onComplete={setProfile} />}
+      {celebratedStreak !== null && <StreakCelebration streak={celebratedStreak} />}
     </div>
   );
 }
