@@ -82,6 +82,32 @@ function formatDate(date: string) {
   return new Date(date).toLocaleDateString(undefined, { day: "numeric", month: "short" });
 }
 
+type DayActivityDetail = { label: string; detail: string; count: number };
+
+function DayActivityDetails({ date, items }: { date: string; items: DayActivityDetail[] }) {
+  const total = items.reduce((sum, item) => sum + item.count, 0);
+  return (
+    <div className="mt-3 min-h-16 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2.5 text-xs text-zinc-300">
+      <div className="flex items-center justify-between gap-3">
+        <span className="font-medium text-zinc-100">{formatDate(date)}</span>
+        <span className="text-zinc-500">{total} activit{total === 1 ? "y" : "ies"}</span>
+      </div>
+      {items.length ? (
+        <ul className="mt-2 space-y-1">
+          {items.map((item, index) => (
+            <li key={`${item.label}-${item.detail}-${index}`} className="flex justify-between gap-3">
+              <span><span className="text-zinc-100">{item.label}</span> · {item.detail}</span>
+              <span className="shrink-0 font-mono text-zinc-500">×{item.count}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-2 text-zinc-500">No activity recorded on this day.</p>
+      )}
+    </div>
+  );
+}
+
 function ActivityHeatmap({
   records,
   tracker,
@@ -125,23 +151,44 @@ function ActivityHeatmap({
       return date;
     });
     const activity = new Map<string, number>();
+    const details = new Map<string, DayActivityDetail[]>();
+    const addDetail = (date: string, detail: DayActivityDetail) => {
+      details.set(date, [...(details.get(date) ?? []), detail]);
+    };
     records.forEach((record) => {
       const key = activityDay(record.date);
       if (!key) return;
-      activity.set(
-        key,
-        (activity.get(key) ?? 0) + Math.max(1, record.answers.filter(Boolean).length),
-      );
+      const count = Math.max(1, record.answers.filter(Boolean).length);
+      activity.set(key, (activity.get(key) ?? 0) + count);
+      addDetail(key, {
+        label: "Practice test",
+        detail: `${record.subject} · ${record.chapter}`,
+        count,
+      });
     });
     tracker?.tests.log.forEach((test) => {
       const key = activityDay(test.date);
       if (!key) return;
       activity.set(key, (activity.get(key) ?? 0) + 1);
+      const subject =
+        test.subjectId === "__all__"
+          ? test.type
+          : (tracker.subjects.find((item) => item.id === test.subjectId)?.name ?? test.type);
+      addDetail(key, {
+        label: `${test.type} mock test`,
+        detail: test.score !== null && test.total !== null ? `${subject} · ${test.score}/${test.total}` : subject,
+        count: 1,
+      });
     });
     tracker?.activity.forEach((entry) => {
       const key = activityDay(entry.date);
       if (!key) return;
       activity.set(key, (activity.get(key) ?? 0) + entry.count);
+      addDetail(key, {
+        label: entry.type === "lecture" ? "Lectures completed" : entry.type === "revision" ? "Revisions" : "Mock-test activity",
+        detail: entry.count > 0 ? "Completed" : "Progress adjusted",
+        count: Math.abs(entry.count),
+      });
     });
     const values = entries.map((date) => Math.max(0, activity.get(localDay(date)) ?? 0));
     const maximum = Math.max(...values, 1);
@@ -163,13 +210,20 @@ function ActivityHeatmap({
     });
 
     return {
-      days: entries.map((date, index) => ({ date, value: values[index] ?? 0, maximum })),
+      days: entries.map((date, index) => ({
+        date,
+        value: values[index] ?? 0,
+        maximum,
+        details: details.get(localDay(date)) ?? [],
+      })),
       monthLabels: labels,
       totalActivity: values.reduce((sum, value) => sum + value, 0),
       activeDays: values.filter(Boolean).length,
       maxStreak: longest,
     };
   }, [records, tracker, range]);
+  const [hoveredDay, setHoveredDay] = useState<string | null>(null);
+  const activeDay = days.find(({ date }) => localDay(date) === hoveredDay) ?? days.at(-1);
 
   return (
     <section className="overflow-hidden py-5 text-zinc-100 sm:py-6">
@@ -208,11 +262,14 @@ function ActivityHeatmap({
               const intensity = value === 0 ? 0 : Math.min(4, Math.ceil((value / maximum) * 4));
               const startsMonth = index > 0 && date.getMonth() !== days[index - 1]?.date.getMonth();
               return (
-                <span
+                <button
+                  type="button"
                   key={localDay(date)}
-                  title={`${formatDate(localDay(date))}: ${value} activit${value === 1 ? "y" : "ies"}`}
+                  onMouseEnter={() => setHoveredDay(localDay(date))}
+                  onFocus={() => setHoveredDay(localDay(date))}
+                  aria-label={`${formatDate(localDay(date))}: ${value} activit${value === 1 ? "y" : "ies"}`}
                   className={cn(
-                    "aspect-square w-full rounded-[3px] ring-1 ring-inset ring-white/5",
+                    "aspect-square w-full rounded-[3px] ring-1 ring-inset ring-white/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300",
                     startsMonth && "ml-px",
                     intensity === 0 && "bg-zinc-700",
                     intensity === 1 && "bg-emerald-200",
@@ -224,6 +281,9 @@ function ActivityHeatmap({
               );
             })}
           </div>
+          {activeDay && (
+            <DayActivityDetails date={localDay(activeDay.date)} items={activeDay.details} />
+          )}
         </div>
       </div>
       <div className="mt-3 flex items-center justify-end gap-1.5 text-[10px] text-zinc-400">

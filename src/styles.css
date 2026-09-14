@@ -353,6 +353,14 @@
   color: #f4f4f5;
 }
 
+/* Make every actionable control visibly actionable across Track, Progress, and chapter drawers. */
+button:not(:disabled),
+a[href],
+select:not(:disabled),
+[role="button"]:not([aria-disabled="true"]) {
+  cursor: pointer;
+}
+
 :root {
   --radius: 0.75rem;
   --background: oklch(0.972 0.008 250);

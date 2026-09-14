@@ -52,7 +52,8 @@ export function ChapterWorkspace({ mode }: { mode: Mode }) {
   const { data, update } = useTracker();
   const { openForm, confirm } = useTrackerDialog();
   const [subjectFilter, setSubjectFilter] = useState("all");
-  const [openSubjectId, setOpenSubjectId] = useState(data.subjects[0]?.id ?? "");
+  // Keep both workspaces calm on entry; users can open the subject they need.
+  const [openSubjectId, setOpenSubjectId] = useState("");
   const [selected, setSelected] = useState<Selected>(null);
   const overall = overallSyllabus(data);
   const subjects =
@@ -189,9 +190,6 @@ export function ChapterWorkspace({ mode }: { mode: Mode }) {
               >
                 <Star className="h-3.5 w-3.5 fill-accent-blue text-accent-blue" />
                 {chapter.name}
-                <span className="font-mono text-xs text-muted-foreground">
-                  {chapter.completed}/{chapter.total}
-                </span>
               </button>
             ))}
           </div>
