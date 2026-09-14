@@ -143,6 +143,32 @@ export function ChapterWorkspace({ mode }: { mode: Mode }) {
         }),
     });
 
+  const addRevisionType = (subjectId: string) =>
+    openForm({
+      title: "Add revision type",
+      fields: [
+        { name: "name", label: "Revision type", placeholder: "e.g. Revision 1" },
+        {
+          name: "target",
+          label: "Revisions per chapter",
+          type: "number",
+          min: 1,
+          defaultValue: "1",
+        },
+      ],
+      confirmLabel: "Add revision type",
+      onConfirm: ({ name, target }) =>
+        update((draft) => {
+          const revision = draft.revision[subjectId];
+          if (!revision) return;
+          revision.types.push({
+            id: uid(),
+            name: name?.trim() || `Revision ${revision.types.length + 1}`,
+            target: Math.max(1, Number(target) || 1),
+          });
+        }),
+    });
+
   return (
     <div className="space-y-3">
       <div className="sticky top-0 z-10 -mx-3 border-b border-white/10 bg-[#121212]/95 px-3 pt-1 pb-3 backdrop-blur sm:-mx-4 sm:px-4">
@@ -240,6 +266,15 @@ export function ChapterWorkspace({ mode }: { mode: Mode }) {
                     onClick={() => addChapter(subject.id)}
                   >
                     + Chapter
+                  </GhostButton>
+                )}
+                {mode === "revision" && (
+                  <GhostButton
+                    tone="blue"
+                    className="!px-2 !py-1 text-xs"
+                    onClick={() => addRevisionType(subject.id)}
+                  >
+                    + Revision type
                   </GhostButton>
                 )}
               </div>
