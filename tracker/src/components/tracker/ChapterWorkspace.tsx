@@ -532,7 +532,7 @@ function ChapterDrawer({
             {pinned ? "★ Unpin" : "☆ Pin"}
           </button>
         </div>
-        {revision && (
+        {revision && revision.types.length > 0 && (
           <section className="mt-5 rounded-xl bg-card p-4">
             <Label>Revision</Label>
             <div className="mt-3 space-y-4">
