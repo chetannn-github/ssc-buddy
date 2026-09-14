@@ -7,6 +7,7 @@ import {
   GraduationCap,
   Route as RouteIcon,
   Upload,
+  X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -31,6 +32,32 @@ const nav = [
   { title: "Progress", url: "/progress", icon: BarChart3 },
   { title: "Practice session", url: "/test", icon: FilePenLine },
 ] as const;
+
+const MANIFESTATION_COMPLETION_KEY = "ssc-buddy-manifestation-completed";
+const DAILY_MANIFESTATION = "I will show up and study with focus today.";
+
+function localDateKey() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
+    now.getDate(),
+  ).padStart(2, "0")}`;
+}
+
+function hasCompletedTodayManifestation() {
+  try {
+    return localStorage.getItem(MANIFESTATION_COMPLETION_KEY) === localDateKey();
+  } catch {
+    return false;
+  }
+}
+
+function completeTodayManifestation() {
+  try {
+    localStorage.setItem(MANIFESTATION_COMPLETION_KEY, localDateKey());
+  } catch {
+    /* Storage only retains today's completion, never the typed text. */
+  }
+}
 
 function ProfileOnboarding({ onComplete }: { onComplete: (profile: PracticeProfile) => void }) {
   const [name, setName] = useState("");
@@ -176,19 +203,110 @@ function ProfileOnboarding({ onComplete }: { onComplete: (profile: PracticeProfi
   );
 }
 
-function StreakCelebration({ streak }: { streak: number }) {
+function StreakCelebration({ streak, onClose }: { streak: number; onClose: () => void }) {
   return (
-    <div className="pointer-events-none fixed inset-0 z-[80] grid place-items-center p-4">
-      <div className="streak-celebration flex flex-col items-center rounded-3xl border border-amber-200/25 bg-[#20180d]/95 px-8 py-7 text-center text-amber-50 shadow-[0_24px_80px_-20px_rgba(245,158,11,0.6)] backdrop-blur-md">
-        <div className="streak-celebration-flame grid h-16 w-16 place-items-center rounded-2xl bg-amber-400/15 text-amber-300">
-          <Flame className="h-10 w-10 fill-current" />
+    <div className="fixed inset-0 z-[80] grid place-items-center bg-black/65 p-4 backdrop-blur-sm">
+      <section className="streak-celebration relative w-full max-w-sm overflow-hidden rounded-3xl border border-white/10 bg-[#1b1b1b] px-7 py-8 text-center text-zinc-100 shadow-[0_24px_80px_-24px_rgba(0,0,0,0.8)]">
+        <div className="absolute inset-x-0 top-0 h-28 bg-[radial-gradient(circle_at_50%_0%,rgba(96,165,250,0.2),transparent_70%)]" />
+        <button
+          type="button"
+          aria-label="Close streak celebration"
+          onClick={onClose}
+          className="absolute top-4 right-4 grid h-8 w-8 place-items-center rounded-full text-zinc-400 transition-colors hover:bg-white/10 hover:text-white"
+        >
+          <X className="h-4 w-4" />
+        </button>
+        <div className="relative mx-auto grid h-16 w-16 place-items-center rounded-2xl border border-amber-300/20 bg-amber-400/10 text-amber-300 shadow-[0_0_40px_rgba(251,191,36,0.16)]">
+          <Flame className="streak-celebration-flame h-9 w-9 fill-current" />
         </div>
-        <p className="mt-4 text-xs font-semibold tracking-[0.2em] text-amber-200/80 uppercase">
+        <p className="relative mt-5 text-[11px] font-semibold tracking-[0.2em] text-zinc-400 uppercase">
           Streak increased
         </p>
-        <p className="mt-1 text-3xl font-bold">{streak} day streak!</p>
-        <p className="mt-2 text-sm text-amber-100/70">Keep the momentum going.</p>
-      </div>
+        <p className="relative mt-2 text-3xl font-bold text-white">{streak} day streak!</p>
+        <p className="relative mt-2 text-sm text-zinc-400">You showed up again today. Keep going.</p>
+        <button
+          type="button"
+          onClick={onClose}
+          className="relative mt-6 w-full rounded-xl bg-blue-400 px-4 py-3 text-sm font-semibold text-[#101827] transition-colors hover:bg-blue-300"
+        >
+          Keep going
+        </button>
+      </section>
+    </div>
+  );
+}
+
+function DailyManifestation({ onComplete }: { onComplete: () => void }) {
+  const [step, setStep] = useState(1);
+  const [value, setValue] = useState("");
+  const [error, setError] = useState("");
+  const matchesManifestation =
+    value.trim().replace(/\s+/g, " ").toLowerCase() === DAILY_MANIFESTATION.toLowerCase();
+  const submit = () => {
+    if (!matchesManifestation) {
+      setError("Type the sentence exactly to continue.");
+      return;
+    }
+    if (step < 3) {
+      setStep((current) => current + 1);
+      setValue("");
+      setError("");
+      return;
+    }
+    completeTodayManifestation();
+    onComplete();
+  };
+
+  return (
+    <div className="fixed inset-0 z-[70] grid place-items-center bg-[#0d1018]/90 p-4 backdrop-blur-md">
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="manifestation-title"
+        className="w-full max-w-md rounded-3xl border border-white/10 bg-[#1b1b1b] p-6 text-zinc-100 shadow-[0_24px_80px_-24px_black] sm:p-8"
+      >
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-400/15 text-blue-300">
+          <Flame className="h-6 w-6" />
+        </div>
+        <p className="mt-5 text-[11px] font-semibold tracking-[0.2em] text-zinc-500 uppercase">
+          Daily manifestation · {step}/3
+        </p>
+        <h2 id="manifestation-title" className="mt-2 text-2xl font-semibold">
+          Start with intention
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-zinc-400">
+          Type this once. Repeat it three times to unlock today&apos;s study space.
+        </p>
+        <blockquote className="mt-5 rounded-xl border border-blue-300/15 bg-blue-400/[0.06] px-4 py-3 text-center text-base font-medium leading-7 text-blue-100">
+          “{DAILY_MANIFESTATION}”
+        </blockquote>
+        <label className="mt-5 block text-sm font-medium text-zinc-200">
+          Your manifestation
+          <Input
+            className="mt-2 h-11 border-white/10 bg-zinc-900 text-zinc-100"
+            value={value}
+            onChange={(event) => {
+              setValue(event.target.value);
+              if (error) setError("");
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") submit();
+            }}
+            placeholder="Type the sentence above"
+            autoFocus
+          />
+        </label>
+        {error && <p className="mt-2 text-xs text-amber-300">{error}</p>}
+        <Button
+          className="mt-5 h-11 w-full bg-blue-400 text-[#101827] hover:bg-blue-300"
+          onClick={submit}
+        >
+          {step === 3 ? "Done — enter study space" : "Continue"}
+        </Button>
+        <p className="mt-3 text-center text-xs text-zinc-500">
+          Your typed words are never saved.
+        </p>
+      </section>
     </div>
   );
 }
@@ -200,6 +318,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
   const [profile, setProfile] = useState<PracticeProfile | null | undefined>(undefined);
   const [celebratedStreak, setCelebratedStreak] = useState<number | null>(null);
   const [streakReady, setStreakReady] = useState(false);
+  const [manifestationOpen, setManifestationOpen] = useState(false);
   const previousStreak = useRef<number | null>(null);
 
   useEffect(() => {
@@ -225,6 +344,11 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
     return () => window.removeEventListener("cbt-profile-updated", refresh);
   }, []);
 
+  useEffect(() => {
+    if (!profile) return;
+    setManifestationOpen(!hasCompletedTodayManifestation());
+  }, [profile]);
+
   const currentStreak = getStreaks([
     ...records,
     ...trackerActivityDates.map((date) => ({ date })),
@@ -242,8 +366,6 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
     }
     previousStreak.current = currentStreak;
     setCelebratedStreak(currentStreak);
-    const timeout = window.setTimeout(() => setCelebratedStreak(null), 2400);
-    return () => window.clearTimeout(timeout);
   }, [currentStreak, streakReady]);
 
   const isDarkPage =
@@ -329,7 +451,12 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
         {children}
       </main>
       {profile === null && <ProfileOnboarding onComplete={setProfile} />}
-      {celebratedStreak !== null && <StreakCelebration streak={celebratedStreak} />}
+      {profile && manifestationOpen && (
+        <DailyManifestation onComplete={() => setManifestationOpen(false)} />
+      )}
+      {celebratedStreak !== null && (
+        <StreakCelebration streak={celebratedStreak} onClose={() => setCelebratedStreak(null)} />
+      )}
     </div>
   );
 }
