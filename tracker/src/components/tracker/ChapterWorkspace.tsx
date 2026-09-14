@@ -196,15 +196,15 @@ export function ChapterWorkspace({ mode }: { mode: Mode }) {
         </section>
       )}
 
-      <section className="space-y-3">
+      <section className="space-y-1.5">
         <Label>{mode === "syllabus" ? "Chapters" : "Revision chapters"}</Label>
         {subjects.map((subject) => {
           const progress =
             mode === "syllabus" ? subjectSyllabus(subject) : subjectRevision(data, subject);
           const isOpen = openSubjectId === subject.id;
           return (
-            <div key={subject.id} className="rounded-xl bg-card p-3">
-              <div className="flex items-center gap-2">
+            <div key={subject.id} className="rounded-xl bg-card px-3 py-2">
+              <div className="flex items-center gap-1.5">
                 <button
                   type="button"
                   onClick={() =>
@@ -237,7 +237,7 @@ export function ChapterWorkspace({ mode }: { mode: Mode }) {
                   </GhostButton>
                 )}
               </div>
-              <div className="mt-2">
+              <div className="mt-1.5">
                 <Bar
                   value={pct(progress.done, progress.total)}
                   tone={mode === "revision" ? "green" : "blue"}
@@ -246,7 +246,7 @@ export function ChapterWorkspace({ mode }: { mode: Mode }) {
               <div
                 className={
                   isOpen
-                    ? "mt-2 grid grid-rows-[1fr] transition-[grid-template-rows] duration-300"
+                    ? "mt-1.5 grid grid-rows-[1fr] transition-[grid-template-rows] duration-300"
                     : "grid grid-rows-[0fr] transition-[grid-template-rows] duration-300"
                 }
               >
