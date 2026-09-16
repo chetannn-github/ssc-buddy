@@ -204,31 +204,32 @@ function ProfileOnboarding({ onComplete }: { onComplete: (profile: PracticeProfi
 
 function StreakCelebration({ streak, onClose }: { streak: number; onClose: () => void }) {
   return (
-    <div className="fixed inset-0 z-[80] grid place-items-center bg-black/65 p-4 backdrop-blur-sm">
-      <section className="streak-celebration relative w-full max-w-sm overflow-hidden rounded-3xl border border-white/10 bg-[#1b1b1b] px-7 py-8 text-center text-zinc-100 shadow-[0_24px_80px_-24px_rgba(0,0,0,0.8)]">
-        <div className="absolute inset-x-0 top-0 h-28 bg-[radial-gradient(circle_at_50%_0%,rgba(96,165,250,0.2),transparent_70%)]" />
+    <div className="fixed inset-0 z-[80] grid place-items-center bg-black/80 p-4 backdrop-blur-sm">
+      <section className="streak-celebration relative w-full max-w-sm rounded-2xl border border-white/10 bg-[#171717] p-6 text-center text-zinc-100 shadow-[0_24px_80px_-24px_black] sm:p-7">
         <button
           type="button"
           aria-label="Close streak celebration"
           onClick={onClose}
-          className="absolute top-4 right-4 grid h-8 w-8 place-items-center rounded-full text-zinc-400 transition-colors hover:bg-white/10 hover:text-white"
+          className="absolute top-3 right-3 grid h-8 w-8 place-items-center rounded-md text-zinc-500 transition-colors hover:bg-white/10 hover:text-zinc-100"
         >
           <X className="h-4 w-4" />
         </button>
-        <div className="relative mx-auto grid h-16 w-16 place-items-center rounded-2xl border border-amber-300/20 bg-amber-400/10 text-amber-300 shadow-[0_0_40px_rgba(251,191,36,0.16)]">
-          <Flame className="streak-celebration-flame h-9 w-9 fill-current" />
+        <div className="mx-auto grid h-12 w-12 place-items-center rounded-xl border border-amber-300/15 bg-amber-400/10 text-amber-300">
+          <Flame className="streak-celebration-flame h-6 w-6 fill-current" />
         </div>
-        <p className="relative mt-5 text-[11px] font-semibold tracking-[0.2em] text-zinc-400 uppercase">
+        <p className="mt-4 text-[10px] font-semibold tracking-[0.18em] text-zinc-500 uppercase">
           Streak increased
         </p>
-        <p className="relative mt-2 text-3xl font-bold text-white">{streak} day streak!</p>
-        <p className="relative mt-2 text-sm text-zinc-400">You showed up again today. Keep going.</p>
+        <p className="mt-1.5 text-2xl font-semibold tracking-tight text-zinc-50">
+          {streak}-day streak
+        </p>
+        <p className="mt-2 text-sm text-zinc-400">Keep showing up.</p>
         <button
           type="button"
           onClick={onClose}
-          className="relative mt-6 w-full rounded-xl bg-blue-400 px-4 py-3 text-sm font-semibold text-[#101827] transition-colors hover:bg-blue-300"
+          className="mt-5 w-full rounded-lg bg-zinc-100 px-4 py-2.5 text-sm font-semibold text-zinc-900 transition-colors hover:bg-white"
         >
-          Keep going
+          Continue
         </button>
       </section>
     </div>
