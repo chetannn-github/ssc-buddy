@@ -10,7 +10,7 @@ import {
   Save,
   Upload,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -346,6 +346,41 @@ function avatarUrl(file: string) {
   return `/avatars/${encodeURIComponent(file)}`;
 }
 
+function AnimatedNumber({ value }: { value: number }) {
+  const [displayValue, setDisplayValue] = useState(value);
+  const displayValueRef = useRef(value);
+
+  useEffect(() => {
+    const startValue = displayValueRef.current;
+    const difference = value - startValue;
+    if (!difference) return;
+    const startedAt = performance.now();
+    const duration = 360;
+    let frame = 0;
+    const animate = (now: number) => {
+      const progress = Math.min(1, (now - startedAt) / duration);
+      const eased = 1 - (1 - progress) ** 3;
+      const next = Math.round(startValue + difference * eased);
+      displayValueRef.current = next;
+      setDisplayValue(next);
+      if (progress < 1) frame = requestAnimationFrame(animate);
+    };
+    frame = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(frame);
+  }, [value]);
+
+  return <>{displayValue}</>;
+}
+
+function StatCell({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="px-3 py-2 text-center sm:px-2">
+      <p className="text-base font-semibold text-zinc-100">{children}</p>
+      <p className="mt-0.5 text-xs text-zinc-400">{label}</p>
+    </div>
+  );
+}
+
 function TargetProgress({
   attempted,
   goal,
@@ -370,19 +405,34 @@ function TargetProgress({
   onRangeChange: (range: ActivityRange) => void;
 }) {
   const [rangeOpen, setRangeOpen] = useState(false);
+  const rangeMenuRef = useRef<HTMLDivElement>(null);
   const progress = Math.min(100, Math.round((attempted / Math.max(1, goal)) * 100));
   const practiceStats = [
-    ["Question goal", goal],
-    ["Completed", `${attempted} · ${progress}%`],
-    ["Practice sessions", tests],
-    ["Correct", correct],
-    ["Wrong", wrong],
+    { label: "Practice sessions", value: tests },
+    { label: "Correct", value: correct },
+    { label: "Wrong", value: wrong },
   ];
   const trackerStats = [
-    ["Lectures", lectures],
-    ["Revisions", revisions],
-    ["Mock tests", mockTests],
+    { label: "Lectures", value: lectures },
+    { label: "Revisions", value: revisions },
+    { label: "Mock tests", value: mockTests },
   ];
+
+  useEffect(() => {
+    if (!rangeOpen) return;
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      if (!rangeMenuRef.current?.contains(event.target as Node)) setRangeOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setRangeOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [rangeOpen]);
 
   return (
     <section className="overflow-hidden rounded-2xl border border-white/10 bg-[#1a1a1a]">
@@ -390,7 +440,7 @@ function TargetProgress({
         <span className="text-[11px] font-semibold tracking-[0.16em] text-zinc-500 uppercase">
           Practice
         </span>
-        <div className="relative">
+        <div ref={rangeMenuRef} className="relative">
           <button
             type="button"
             onClick={() => setRangeOpen((open) => !open)}
@@ -425,22 +475,20 @@ function TargetProgress({
         </div>
       </div>
       <div className="grid grid-cols-2 divide-x-0 divide-y divide-white/10 px-2 py-2 sm:grid-cols-5 sm:divide-x sm:divide-y-0 sm:px-3">
-        {practiceStats.map(([label, value]) => (
-          <div key={String(label)} className="px-3 py-2 text-center sm:px-2">
-            <p className="text-base font-semibold text-zinc-100">{value}</p>
-            <p className="mt-0.5 text-xs text-zinc-400">{label}</p>
-          </div>
+        <StatCell label="Question goal"><AnimatedNumber value={goal} /></StatCell>
+        <StatCell label="Completed">
+          <AnimatedNumber value={attempted} /> · <AnimatedNumber value={progress} />%
+        </StatCell>
+        {practiceStats.map(({ label, value }) => (
+          <StatCell key={label} label={label}><AnimatedNumber value={value} /></StatCell>
         ))}
       </div>
       <div className="border-t border-white/10 px-4 pt-3 text-[11px] font-semibold tracking-[0.16em] text-zinc-500 uppercase sm:px-5">
         Study tracker
       </div>
       <div className="grid grid-cols-3 divide-x divide-white/10 px-2 py-2 sm:px-3">
-        {trackerStats.map(([label, value]) => (
-          <div key={String(label)} className="px-3 py-2 text-center sm:px-4">
-            <p className="text-base font-semibold text-zinc-100">{value}</p>
-            <p className="mt-0.5 text-xs text-zinc-400">{label}</p>
-          </div>
+        {trackerStats.map(({ label, value }) => (
+          <StatCell key={label} label={label}><AnimatedNumber value={value} /></StatCell>
         ))}
       </div>
     </section>
