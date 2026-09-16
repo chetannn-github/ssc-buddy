@@ -34,7 +34,6 @@ const nav = [
 ] as const;
 
 const MANIFESTATION_COMPLETION_KEY = "ssc-buddy-manifestation-completed";
-const DAILY_MANIFESTATION = "I will show up and study with focus today.";
 
 function localDateKey() {
   const now = new Date();
@@ -236,12 +235,19 @@ function StreakCelebration({ streak, onClose }: { streak: number; onClose: () =>
   );
 }
 
-function DailyManifestation({ onComplete }: { onComplete: () => void }) {
+function DailyManifestation({
+  manifestation,
+  onComplete,
+}: {
+  manifestation: string;
+  onComplete: () => void;
+}) {
   const [step, setStep] = useState(1);
   const [value, setValue] = useState("");
   const [error, setError] = useState("");
   const matchesManifestation =
-    value.trim().replace(/\s+/g, " ").toLowerCase() === DAILY_MANIFESTATION.toLowerCase();
+    value.trim().replace(/\s+/g, " ").toLowerCase() ===
+    manifestation.trim().replace(/\s+/g, " ").toLowerCase();
   const submit = () => {
     if (!matchesManifestation) {
       setError("Type the sentence exactly to continue.");
@@ -278,7 +284,7 @@ function DailyManifestation({ onComplete }: { onComplete: () => void }) {
           Type this once. Repeat it three times to unlock today&apos;s study space.
         </p>
         <blockquote className="mt-5 rounded-xl border border-blue-300/15 bg-blue-400/[0.06] px-4 py-3 text-center text-base font-medium leading-7 text-blue-100">
-          “{DAILY_MANIFESTATION}”
+          “{manifestation}”
         </blockquote>
         <label className="mt-5 block text-sm font-medium text-zinc-200">
           Your manifestation
@@ -346,7 +352,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
 
   useEffect(() => {
     if (!profile) return;
-    setManifestationOpen(!hasCompletedTodayManifestation());
+    setManifestationOpen(Boolean(profile.manifestation?.trim()) && !hasCompletedTodayManifestation());
   }, [profile]);
 
   const currentStreak = getStreaks([
@@ -451,8 +457,11 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
         {children}
       </main>
       {profile === null && <ProfileOnboarding onComplete={setProfile} />}
-      {profile && manifestationOpen && (
-        <DailyManifestation onComplete={() => setManifestationOpen(false)} />
+      {profile?.manifestation && manifestationOpen && (
+        <DailyManifestation
+          manifestation={profile.manifestation}
+          onComplete={() => setManifestationOpen(false)}
+        />
       )}
       {celebratedStreak !== null && (
         <StreakCelebration streak={celebratedStreak} onClose={() => setCelebratedStreak(null)} />

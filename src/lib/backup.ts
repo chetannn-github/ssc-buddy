@@ -32,7 +32,8 @@ function isProfile(value: unknown): value is PracticeProfile {
     typeof profile.questionGoal === "number" &&
     Number.isFinite(profile.questionGoal) &&
     profile.questionGoal >= 1 &&
-    (profile.avatar === undefined || typeof profile.avatar === "string")
+    (profile.avatar === undefined || typeof profile.avatar === "string") &&
+    (profile.manifestation === undefined || typeof profile.manifestation === "string")
   );
 }
 

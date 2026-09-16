@@ -2,6 +2,7 @@ export type PracticeProfile = {
   name: string;
   questionGoal: number;
   avatar?: string;
+  manifestation?: string;
 };
 
 const PROFILE_KEY = "cbt-practice-profile";
@@ -23,6 +24,9 @@ export function loadPracticeProfile(): PracticeProfile | null {
       name: profile.name.trim(),
       questionGoal: Math.round(profile.questionGoal),
       ...(typeof profile.avatar === "string" ? { avatar: profile.avatar } : {}),
+      ...(typeof profile.manifestation === "string" && profile.manifestation.trim()
+        ? { manifestation: profile.manifestation.trim() }
+        : {}),
     };
   } catch {
     return null;
@@ -36,6 +40,7 @@ export function savePracticeProfile(profile: PracticeProfile) {
       name: profile.name.trim(),
       questionGoal: Math.max(1, Math.round(profile.questionGoal)),
       ...(profile.avatar ? { avatar: profile.avatar } : {}),
+      ...(profile.manifestation?.trim() ? { manifestation: profile.manifestation.trim() } : {}),
     }),
   );
   window.dispatchEvent(new Event("cbt-profile-updated"));

@@ -239,8 +239,8 @@ function ActivityHeatmap({
       maxStreak: longest,
     };
   }, [records, tracker, range]);
-  const [hoveredDay, setHoveredDay] = useState<string | null>(null);
-  const activeDay = days.find(({ date }) => localDay(date) === hoveredDay) ?? days.at(-1);
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const activeDay = days.find(({ date }) => localDay(date) === selectedDay) ?? days.at(-1);
 
   return (
     <section className="overflow-hidden py-5 text-zinc-100 sm:py-6">
@@ -282,8 +282,7 @@ function ActivityHeatmap({
                 <button
                   type="button"
                   key={localDay(date)}
-                  onMouseEnter={() => setHoveredDay(localDay(date))}
-                  onFocus={() => setHoveredDay(localDay(date))}
+                  onClick={() => setSelectedDay(localDay(date))}
                   aria-label={`${formatDate(localDay(date))}: ${value} activit${value === 1 ? "y" : "ies"}`}
                   className={cn(
                     "aspect-square w-full rounded-[3px] ring-1 ring-inset ring-white/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300",
@@ -632,6 +631,7 @@ export function Profile() {
   const [avatarFiles, setAvatarFiles] = useState<string[]>([]);
   const [nameDraft, setNameDraft] = useState("");
   const [goalDraft, setGoalDraft] = useState("");
+  const [manifestationDraft, setManifestationDraft] = useState("");
   const [examNameDraft, setExamNameDraft] = useState("");
   const [countdownDrafts, setCountdownDrafts] = useState<
     Array<{ id: string; name: string; date: string }>
@@ -655,6 +655,7 @@ export function Profile() {
       setProfile(saved);
       setNameDraft(saved?.name ?? "");
       setGoalDraft(saved ? String(saved.questionGoal) : "100");
+      setManifestationDraft(saved?.manifestation ?? "");
       // Never leave the screen blocked if a static avatar file stalls on a weak connection.
       loaderFailSafe = setTimeout(() => setIsLoading(false), 1500);
       try {
@@ -720,6 +721,7 @@ export function Profile() {
       name: nameDraft.trim(),
       questionGoal: Math.min(100000, Number(goalDraft)),
       ...(profile?.avatar ? { avatar: profile.avatar } : {}),
+      ...(manifestationDraft.trim() ? { manifestation: manifestationDraft.trim() } : {}),
     };
     savePracticeProfile(next);
     if (tracker) {
@@ -745,7 +747,12 @@ export function Profile() {
     const options = avatarFiles.filter((file) => file !== avatar);
     const nextAvatar = options[Math.floor(Math.random() * options.length)] ?? avatar;
     if (!nextAvatar) return;
-    const next = { name: displayName, questionGoal, avatar: nextAvatar };
+    const next = {
+      name: displayName,
+      questionGoal,
+      avatar: nextAvatar,
+      ...(profile?.manifestation ? { manifestation: profile.manifestation } : {}),
+    };
     savePracticeProfile(next);
     setProfile(next);
   };
@@ -758,6 +765,7 @@ export function Profile() {
       setProfile(saved);
       setNameDraft(saved?.name ?? "");
       setGoalDraft(saved ? String(saved.questionGoal) : "100");
+      setManifestationDraft(saved?.manifestation ?? "");
       setImportMessage("Data imported successfully.");
     } catch {
       setImportMessage("Choose a valid full backup or Tracker JSON file.");
@@ -961,6 +969,18 @@ export function Profile() {
                   value={goalDraft}
                   onChange={(event) => setGoalDraft(event.target.value.replace(/\D/g, ""))}
                 />
+              </label>
+              <label className="block text-sm font-medium text-zinc-200">
+                Daily manifestation <span className="font-normal text-zinc-500">(optional)</span>
+                <textarea
+                  className="mt-2 min-h-24 w-full rounded-md border border-white/10 bg-[#151515] px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus-visible:border-zinc-500 focus-visible:outline-none"
+                  value={manifestationDraft}
+                  onChange={(event) => setManifestationDraft(event.target.value)}
+                  placeholder="Write the sentence you want to type daily"
+                />
+                <span className="mt-1 block text-xs font-normal text-zinc-500">
+                  Leave blank to keep the daily manifestation disabled.
+                </span>
               </label>
               <label className="block text-sm font-medium text-zinc-200">
                 Exam name
