@@ -309,14 +309,6 @@ function MotivationalVideos({ onClose }: { onClose: () => void }) {
     };
   }, []);
 
-  useEffect(() => {
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", closeOnEscape);
-    return () => document.removeEventListener("keydown", closeOnEscape);
-  }, [onClose]);
-
   const selectedIndex = selectedVideo ? videos.indexOf(selectedVideo) : -1;
   const showVideo = (direction: -1 | 1) => {
     if (selectedIndex < 0 || videos.length < 2) return;
@@ -328,6 +320,16 @@ function MotivationalVideos({ onClose }: { onClose: () => void }) {
     if (video.paused) void video.play();
     else video.pause();
   };
+
+  useEffect(() => {
+    const handleKeyboard = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+      if (event.key === "ArrowLeft") showVideo(-1);
+      if (event.key === "ArrowRight") showVideo(1);
+    };
+    document.addEventListener("keydown", handleKeyboard);
+    return () => document.removeEventListener("keydown", handleKeyboard);
+  }, [onClose, selectedIndex, videos]);
 
   return (
     <div className="fixed inset-0 z-[75] bg-black/90 backdrop-blur-md" onMouseDown={onClose}>
