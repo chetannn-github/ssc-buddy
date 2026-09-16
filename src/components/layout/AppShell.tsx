@@ -586,7 +586,7 @@ function MotivationalMusic({ onClose }: { onClose: () => void }) {
           </button>
           <button type="button" onClick={togglePlayback} aria-label="Play or pause music" className="relative grid h-8 w-8 place-items-center overflow-hidden rounded-lg p-[2px]" style={{ background: `conic-gradient(#ef4444 ${playbackPercent}%, rgba(255,255,255,0.12) 0)` }}>
             <span className="grid h-full w-full place-items-center overflow-hidden rounded-md bg-[#1b1b1b]">
-              {coverUrl ? <img src={coverUrl} alt="Album cover" className="h-full w-full animate-[spin_8s_linear_infinite] object-cover" style={{ animationPlayState: isPlaying ? "running" : "paused" }} /> : <Music2 className="h-4 w-4" />}
+            {coverUrl ? <img draggable={false} src={coverUrl} alt="Album cover" className="h-full w-full animate-[spin_8s_linear_infinite select-none object-cover" style={{ animationPlayState: isPlaying ? "running" : "paused" }} /> : <Music2 className="h-4 w-4" />}
             </span>
           </button>
           <button type="button" onClick={onClose} aria-label="Close music player" className="grid h-8 w-8 place-items-center rounded-lg text-zinc-500 hover:bg-white/10 hover:text-zinc-100">
@@ -621,12 +621,12 @@ function MotivationalMusic({ onClose }: { onClose: () => void }) {
               onClick={handleRingClick}
               onPointerDown={handleRingPointerDown}
               onPointerMove={(event) => { if (event.currentTarget.hasPointerCapture(event.pointerId)) seekFromRing(event); }}
-              className="relative grid h-24 w-24 place-items-center overflow-visible rounded-full p-[3px] text-zinc-100 transition-transform hover:scale-105"
+              className="relative grid h-24 w-24 touch-none select-none place-items-center overflow-visible rounded-full p-[3px] text-zinc-100 transition-transform hover:scale-105"
               style={{ background: `conic-gradient(#ef4444 ${playbackPercent}%, rgba(255,255,255,0.12) 0)` }}
               aria-label="Play or pause music"
             >
               <span className="grid h-full w-full place-items-center overflow-hidden rounded-full bg-[#171717]">
-                {coverUrl ? <img src={coverUrl} alt="Album cover" className="h-full w-full animate-[spin_8s_linear_infinite] object-cover" style={{ animationPlayState: isPlaying ? "running" : "paused" }} /> : <Music2 className="h-9 w-9" />}
+                {coverUrl ? <img draggable={false} src={coverUrl} alt="Album cover" className="h-full w-full animate-[spin_8s_linear_infinite select-none object-cover" style={{ animationPlayState: isPlaying ? "running" : "paused" }} /> : <Music2 className="h-9 w-9" />}
               </span>
               <span className="pointer-events-none absolute inset-0" style={{ transform: `rotate(${playbackPercent * 3.6}deg)` }}>
                 <span className="absolute top-0 left-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-0.5 rounded-full border-2 border-[#171717] bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.9)]" />

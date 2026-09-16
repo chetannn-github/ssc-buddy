@@ -14,7 +14,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { aggregateRecords, metricsForRecord } from "@/lib/analytics";
+import { aggregateRecords } from "@/lib/analytics";
 import { loadHistory, type TestRecord } from "@/lib/exam";
 import { loadPracticeProfile, savePracticeProfile, type PracticeProfile } from "@/lib/profile";
 import { downloadPracticeBackup, restorePracticeBackup } from "@/lib/backup";
@@ -776,10 +776,6 @@ export function Profile() {
       tracker.tests.log.filter((test) => isInRange(test.date, range)).length;
     return { lectures, revisions, mockTests };
   }, [range, tracker]);
-  const recent = useMemo(
-    () => [...records].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5),
-    [records],
-  );
   const saveProfile = () => {
     if (!nameDraft.trim() || Number(goalDraft) < 1) return;
     const next = {
@@ -903,6 +899,16 @@ export function Profile() {
                 <Button
                   type="button"
                   variant="ghost"
+                  className="h-9 gap-1.5 px-2.5 text-sm text-zinc-300 hover:bg-white/10 hover:text-white"
+                  asChild
+                >
+                  <Link to="/history">
+                    <FilePenLine className="h-4 w-4" /> Previous sessions
+                  </Link>
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
                   className="h-9 gap-1.5 px-2.5 text-sm text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
                   onClick={() => setEditingProfile(true)}
                 >
@@ -958,43 +964,6 @@ export function Profile() {
 
           <StudyTrackerOverview tracker={tracker} />
 
-          <section className="border-t border-white/10 pt-5 sm:pt-6">
-            <h2 className="text-base font-semibold">Recent practice sessions</h2>
-            <div className="mt-3">
-              {recent.length ? (
-                recent.map((record) => {
-                  const metrics = metricsForRecord(record);
-                  return (
-                    <Link
-                      key={record.id}
-                      to="/history/$id"
-                      params={{ id: record.id }}
-                      className="flex items-center justify-between gap-3 border-b border-white/10 py-3 last:border-b-0"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold">
-                          {record.subject} · {record.chapter}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {record.exercise ?? "Exercise 1"} · {formatDate(record.date)}
-                        </p>
-                      </div>
-                      <div className="text-right text-xs">
-                        <p className="font-semibold">{record.score ?? "—"} marks</p>
-                        <p className="text-muted-foreground">
-                          {metrics.accuracy === null ? "—" : `${Math.round(metrics.accuracy)}%`}
-                        </p>
-                      </div>
-                    </Link>
-                  );
-                })
-              ) : (
-                <p className="py-4 text-sm text-muted-foreground">
-                  No practice sessions recorded yet.
-                </p>
-              )}
-            </div>
-          </section>
         </div>
       </div>
       {previewingAvatar && avatar && (
