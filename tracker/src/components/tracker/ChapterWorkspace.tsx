@@ -1,4 +1,4 @@
-import { ChevronRight, Star, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronRight, ListOrdered, Star, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useTracker } from "@/lib/tracker-store";
 import {
@@ -55,6 +55,7 @@ export function ChapterWorkspace({ mode }: { mode: Mode }) {
   const [subjectFilter, setSubjectFilter] = useState("all");
   // Keep both workspaces calm on entry; users can open the subject they need.
   const [openSubjectId, setOpenSubjectId] = useState("");
+  const [reorderingSubjectId, setReorderingSubjectId] = useState("");
   const [selected, setSelected] = useState<Selected>(null);
   const overall = overallSyllabus(data);
   const subjects =
@@ -62,10 +63,16 @@ export function ChapterWorkspace({ mode }: { mode: Mode }) {
       ? data.subjects
       : data.subjects.filter((subject) => subject.id === subjectFilter);
   const pinned = useMemo(
-    () =>
-      data.subjects
-        .flatMap((subject) => subject.chapters.map((chapter) => ({ subject, chapter })))
-        .filter(({ chapter }) => data.pinnedChapterIds.includes(chapter.id)),
+    () => {
+      const chaptersById = new Map<string, { subject: Subject; chapter: Chapter }>();
+      data.subjects.forEach((subject) =>
+        subject.chapters.forEach((chapter) => chaptersById.set(chapter.id, { subject, chapter })),
+      );
+      return data.pinnedChapterIds.flatMap((chapterId) => {
+        const entry = chaptersById.get(chapterId);
+        return entry ? [entry] : [];
+      });
+    },
     [data.pinnedChapterIds, data.subjects],
   );
 
@@ -141,6 +148,14 @@ export function ChapterWorkspace({ mode }: { mode: Mode }) {
           draft.revision[id] = { types: [], done: {}, targets: {} };
           draft.tests.targets[id] = 0;
         }),
+    });
+
+  const moveChapter = (subjectId: string, chapterIndex: number, direction: -1 | 1) =>
+    update((draft) => {
+      const chapters = draft.subjects.find((subject) => subject.id === subjectId)?.chapters;
+      const nextIndex = chapterIndex + direction;
+      if (!chapters || nextIndex < 0 || nextIndex >= chapters.length) return;
+      [chapters[chapterIndex], chapters[nextIndex]] = [chapters[nextIndex]!, chapters[chapterIndex]!];
     });
 
   const addRevisionType = (subjectId: string) =>
@@ -234,6 +249,7 @@ export function ChapterWorkspace({ mode }: { mode: Mode }) {
           const progress =
             mode === "syllabus" ? subjectSyllabus(subject) : subjectRevision(data, subject);
           const isOpen = openSubjectId === subject.id;
+          const isReordering = reorderingSubjectId === subject.id;
           return (
             <div key={subject.id} className="rounded-xl bg-card px-3 py-2">
               <div className="flex items-center gap-1.5">
@@ -260,13 +276,33 @@ export function ChapterWorkspace({ mode }: { mode: Mode }) {
                   </div>
                 </button>
                 {mode === "syllabus" && (
-                  <GhostButton
-                    tone="blue"
-                    className="!px-2 !py-1 text-xs"
-                    onClick={() => addChapter(subject.id)}
-                  >
-                    + Chapter
-                  </GhostButton>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <GhostButton
+                      tone="blue"
+                      className="!px-2 !py-1 text-xs"
+                      onClick={() => addChapter(subject.id)}
+                    >
+                      + Chapter
+                    </GhostButton>
+                    <button
+                      type="button"
+                      aria-pressed={isReordering}
+                      onClick={() => {
+                        setOpenSubjectId(subject.id);
+                        setReorderingSubjectId((current) =>
+                          current === subject.id ? "" : subject.id,
+                        );
+                      }}
+                      className={
+                        isReordering
+                          ? "inline-flex h-7 items-center gap-1 rounded-full border border-accent-blue/30 bg-accent-blue/10 px-2 text-xs text-accent-blue"
+                          : "inline-flex h-7 items-center gap-1 rounded-full border border-white/10 px-2 text-xs text-muted-foreground transition-colors hover:bg-track hover:text-foreground"
+                      }
+                    >
+                      <ListOrdered className="h-3.5 w-3.5" />
+                      {isReordering ? "Done" : "Reorder"}
+                    </button>
+                  </div>
                 )}
                 {mode === "revision" && (
                   <GhostButton
@@ -293,17 +329,28 @@ export function ChapterWorkspace({ mode }: { mode: Mode }) {
               >
                 <div className="min-h-0 overflow-hidden divide-y divide-white/[0.06]">
                   {subject.chapters.length ? (
-                    subject.chapters.map((chapter) => (
-                      <ChapterRow
-                        key={chapter.id}
-                        subject={subject}
-                        chapter={chapter}
-                        mode={mode}
-                        pinned={data.pinnedChapterIds.includes(chapter.id)}
-                        onOpen={() => setSelected({ subject, chapter })}
-                        onPin={() => togglePin(chapter.id)}
-                      />
-                    ))
+                    <>
+                      {isReordering && (
+                        <p className="border-b border-white/[0.06] py-2 text-xs text-muted-foreground">
+                          Use the arrows to set your study order. Changes save automatically.
+                        </p>
+                      )}
+                      {subject.chapters.map((chapter, chapterIndex) => (
+                        <ChapterRow
+                          key={chapter.id}
+                          subject={subject}
+                          chapter={chapter}
+                          mode={mode}
+                          pinned={data.pinnedChapterIds.includes(chapter.id)}
+                          reordering={isReordering}
+                          onOpen={() => setSelected({ subject, chapter })}
+                          onPin={() => togglePin(chapter.id)}
+                          onMove={(direction) => moveChapter(subject.id, chapterIndex, direction)}
+                          canMoveUp={chapterIndex > 0}
+                          canMoveDown={chapterIndex < subject.chapters.length - 1}
+                        />
+                      ))}
+                    </>
                   ) : (
                     <p className="py-3 text-sm text-muted-foreground">No chapters yet.</p>
                   )}
@@ -358,15 +405,23 @@ function ChapterRow({
   chapter,
   mode,
   pinned,
+  reordering,
   onOpen,
   onPin,
+  onMove,
+  canMoveUp,
+  canMoveDown,
 }: {
   subject: Subject;
   chapter: Chapter;
   mode: Mode;
   pinned: boolean;
+  reordering: boolean;
   onOpen: () => void;
   onPin: () => void;
+  onMove: (direction: -1 | 1) => void;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
 }) {
   const { data } = useTracker();
   const revision = data.revision[subject.id];
@@ -402,18 +457,41 @@ function ChapterRow({
       <span className="w-9 shrink-0 text-right font-mono text-xs text-muted-foreground">
         {pct(done, total)}%
       </span>
-      <button
-        type="button"
-        onClick={onPin}
-        aria-label={pinned ? "Unpin chapter" : "Pin chapter"}
-        className={
-          pinned
-            ? "grid h-7 w-7 place-items-center rounded-full bg-track text-accent-blue"
-            : "grid h-7 w-7 place-items-center rounded-full bg-track text-muted-foreground hover:text-foreground"
-        }
-      >
-        <Star className={pinned ? "h-4 w-4 fill-current" : "h-4 w-4"} />
-      </button>
+      {reordering ? (
+        <div className="flex shrink-0 gap-1">
+          <button
+            type="button"
+            onClick={() => onMove(-1)}
+            disabled={!canMoveUp}
+            aria-label={`Move ${chapter.name} up`}
+            className="grid h-7 w-7 place-items-center rounded-md bg-track text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-35"
+          >
+            <ArrowUp className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => onMove(1)}
+            disabled={!canMoveDown}
+            aria-label={`Move ${chapter.name} down`}
+            className="grid h-7 w-7 place-items-center rounded-md bg-track text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-35"
+          >
+            <ArrowDown className="h-4 w-4" />
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={onPin}
+          aria-label={pinned ? "Unpin chapter" : "Pin chapter"}
+          className={
+            pinned
+              ? "grid h-7 w-7 place-items-center rounded-full bg-track text-accent-blue"
+              : "grid h-7 w-7 place-items-center rounded-full bg-track text-muted-foreground hover:text-foreground"
+          }
+        >
+          <Star className={pinned ? "h-4 w-4 fill-current" : "h-4 w-4"} />
+        </button>
+      )}
     </div>
   );
 }
