@@ -387,10 +387,42 @@ function trackTitle(file: string) {
   return decodeURIComponent(file).replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ");
 }
 
+function embeddedCoverArt(bytes: Uint8Array): Blob | null {
+  if (String.fromCharCode(...bytes.slice(0, 3)) !== "ID3") return null;
+  const version = bytes[3] ?? 0;
+  if (version !== 3 && version !== 4) return null;
+  const readSize = (offset: number, synchsafe: boolean) =>
+    synchsafe
+      ? ((bytes[offset] ?? 0) << 21) | ((bytes[offset + 1] ?? 0) << 14) | ((bytes[offset + 2] ?? 0) << 7) | (bytes[offset + 3] ?? 0)
+      : ((bytes[offset] ?? 0) << 24) | ((bytes[offset + 1] ?? 0) << 16) | ((bytes[offset + 2] ?? 0) << 8) | (bytes[offset + 3] ?? 0);
+  const end = Math.min(bytes.length, 10 + readSize(6, true));
+  for (let offset = 10; offset + 10 <= end;) {
+    const id = String.fromCharCode(...bytes.slice(offset, offset + 4));
+    const size = readSize(offset + 4, version === 4);
+    const start = offset + 10;
+    if (!id.trim() || size <= 0 || start + size > end) break;
+    if (id === "APIC") {
+      const mimeEnd = bytes.indexOf(0, start + 1);
+      if (mimeEnd < 0) return null;
+      const mime = new TextDecoder().decode(bytes.slice(start + 1, mimeEnd)) || "image/jpeg";
+      const encoding = bytes[start] ?? 0;
+      let imageStart = mimeEnd + 2;
+      if (encoding === 0 || encoding === 3) imageStart = bytes.indexOf(0, imageStart) + 1;
+      else while (imageStart + 1 < start + size && ((bytes[imageStart] ?? 0) !== 0 || (bytes[imageStart + 1] ?? 0) !== 0)) imageStart += 2;
+      if (encoding === 1 || encoding === 2) imageStart += 2;
+      return imageStart < start + size ? new Blob([bytes.slice(imageStart, start + size)], { type: mime }) : null;
+    }
+    offset = start + size;
+  }
+  return null;
+}
+
 function MotivationalMusic({ onClose }: { onClose: () => void }) {
   const [tracks, setTracks] = useState<string[]>([]);
   const [selectedTrack, setSelectedTrack] = useState<string | null>(null);
   const [minimized, setMinimized] = useState(false);
+  const [coverUrl, setCoverUrl] = useState<string | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
 
   useEffect(() => {
@@ -411,6 +443,26 @@ function MotivationalMusic({ onClose }: { onClose: () => void }) {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    let objectUrl: string | null = null;
+    setCoverUrl(null);
+    if (!selectedTrack) return;
+    fetch(`/music/${encodeURIComponent(selectedTrack)}`)
+      .then((response) => response.arrayBuffer())
+      .then((buffer) => {
+        const cover = embeddedCoverArt(new Uint8Array(buffer));
+        if (!cover || !active) return;
+        objectUrl = URL.createObjectURL(cover);
+        setCoverUrl(objectUrl);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [selectedTrack]);
 
   const trackIndex = selectedTrack ? tracks.indexOf(selectedTrack) : -1;
   const showTrack = (direction: -1 | 1) => {
@@ -449,7 +501,12 @@ function MotivationalMusic({ onClose }: { onClose: () => void }) {
       key={selectedTrack}
       autoPlay
       loop={tracks.length === 1}
-      onEnded={() => showTrack(1)}
+      onPlay={() => setIsPlaying(true)}
+      onPause={() => setIsPlaying(false)}
+      onEnded={() => {
+        setIsPlaying(false);
+        showTrack(1);
+      }}
       src={`/music/${encodeURIComponent(selectedTrack)}`}
     />
   ) : null;
@@ -462,8 +519,8 @@ function MotivationalMusic({ onClose }: { onClose: () => void }) {
           <button type="button" onClick={() => setMinimized(false)} className="min-w-0 text-left" aria-label="Expand music player">
             <p className="max-w-40 truncate text-xs font-medium">{selectedTrack ? trackTitle(selectedTrack) : "Music"}</p>
           </button>
-          <button type="button" onClick={togglePlayback} aria-label="Play or pause music" className="grid h-8 w-8 place-items-center rounded-lg bg-white/[0.08] hover:bg-white/[0.14]">
-            <Music2 className="h-4 w-4" />
+          <button type="button" onClick={togglePlayback} aria-label="Play or pause music" className="grid h-8 w-8 place-items-center overflow-hidden rounded-lg bg-white/[0.08] hover:bg-white/[0.14]">
+            {coverUrl ? <img src={coverUrl} alt="Album cover" className={cn("h-full w-full object-cover", isPlaying && "animate-[spin_8s_linear_infinite]")} /> : <Music2 className="h-4 w-4" />}
           </button>
           <button type="button" onClick={onClose} aria-label="Close music player" className="grid h-8 w-8 place-items-center rounded-lg text-zinc-500 hover:bg-white/10 hover:text-zinc-100">
             <X className="h-4 w-4" />
@@ -492,8 +549,8 @@ function MotivationalMusic({ onClose }: { onClose: () => void }) {
         </button>
         <div className="grid gap-6 sm:grid-cols-[minmax(0,1fr)_12rem]">
           <div className="flex min-h-64 flex-col items-center justify-center">
-            <button type="button" onClick={togglePlayback} className="grid h-24 w-24 place-items-center rounded-full border border-white/10 bg-white/[0.04] text-zinc-100 transition-colors hover:bg-white/[0.08]" aria-label="Play or pause music">
-              <Music2 className="h-9 w-9" />
+            <button type="button" onClick={togglePlayback} className="grid h-24 w-24 place-items-center overflow-hidden rounded-full border border-white/10 bg-white/[0.04] text-zinc-100 transition-colors hover:bg-white/[0.08]" aria-label="Play or pause music">
+              {coverUrl ? <img src={coverUrl} alt="Album cover" className={cn("h-full w-full object-cover", isPlaying && "animate-[spin_8s_linear_infinite]")} /> : <Music2 className="h-9 w-9" />}
             </button>
             <p className="mt-5 max-w-full truncate text-center text-base font-semibold text-zinc-100">
               {selectedTrack ? trackTitle(selectedTrack) : "No music added"}
