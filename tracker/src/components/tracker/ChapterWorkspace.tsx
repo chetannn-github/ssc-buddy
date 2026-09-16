@@ -330,11 +330,6 @@ export function ChapterWorkspace({ mode }: { mode: Mode }) {
                 <div className="min-h-0 overflow-hidden divide-y divide-white/[0.06]">
                   {subject.chapters.length ? (
                     <>
-                      {isReordering && (
-                        <p className="border-b border-white/[0.06] py-2 text-xs text-muted-foreground">
-                          Use the arrows to set your study order. Changes save automatically.
-                        </p>
-                      )}
                       {subject.chapters.map((chapter, chapterIndex) => (
                         <ChapterRow
                           key={chapter.id}
