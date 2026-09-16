@@ -289,10 +289,14 @@ function DailyManifestation({
   );
 }
 
-function MotivationalVideos({ onClose }: { onClose: () => void }) {
+function MotivationalVideos({ onClose, onOpen }: { onClose: () => void; onOpen: () => void }) {
   const [videos, setVideos] = useState<string[]>([]);
   const [selectedVideo, setSelectedVideo] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    onOpen();
+  }, [onOpen]);
 
   useEffect(() => {
     let active = true;
@@ -460,6 +464,12 @@ function MotivationalMusic({ onClose }: { onClose: () => void }) {
   }, []);
 
   useEffect(() => {
+    const pause = () => audioRef.current?.pause();
+    window.addEventListener("ssc-music-pause", pause);
+    return () => window.removeEventListener("ssc-music-pause", pause);
+  }, []);
+
+  useEffect(() => {
     let active = true;
     let objectUrl: string | null = null;
     setCoverUrl(null);
@@ -547,9 +557,9 @@ function MotivationalMusic({ onClose }: { onClose: () => void }) {
         {audioPlayer}
         <div className="fixed right-4 bottom-4 z-[75] flex max-w-[calc(100vw-2rem)] items-center gap-2 rounded-xl border border-white/10 bg-[#1b1b1b] p-2 pl-3 text-zinc-100 shadow-2xl">
           <button type="button" onClick={() => setMinimized(false)} className="min-w-0 text-left" aria-label="Expand music player">
-            <p className="max-w-40 truncate text-xs font-medium">{selectedTrack ? trackTitle(selectedTrack) : "Music"}</p>
+            <span className="block max-w-40 truncate text-xs font-medium">{selectedTrack ? trackTitle(selectedTrack) : "Music"}</span>
           </button>
-          <button type="button" onClick={togglePlayback} aria-label="Play or pause music" className="grid h-8 w-8 place-items-center overflow-hidden rounded-lg p-[2px]" style={{ background: `conic-gradient(#ef4444 ${playbackPercent}%, rgba(255,255,255,0.12) 0)` }}>
+          <button type="button" onClick={togglePlayback} aria-label="Play or pause music" className="relative grid h-8 w-8 place-items-center overflow-hidden rounded-lg p-[2px]" style={{ background: `conic-gradient(#ef4444 ${playbackPercent}%, rgba(255,255,255,0.12) 0)` }}>
             <span className="grid h-full w-full place-items-center overflow-hidden rounded-md bg-[#1b1b1b]">
               {coverUrl ? <img src={coverUrl} alt="Album cover" className="h-full w-full animate-[spin_8s_linear_infinite] object-cover" style={{ animationPlayState: isPlaying ? "running" : "paused" }} /> : <Music2 className="h-4 w-4" />}
             </span>
@@ -584,12 +594,15 @@ function MotivationalMusic({ onClose }: { onClose: () => void }) {
             <button
               type="button"
               onClick={togglePlayback}
-              className="grid h-24 w-24 place-items-center overflow-hidden rounded-full p-[3px] text-zinc-100 transition-transform hover:scale-105"
+              className="relative grid h-24 w-24 place-items-center overflow-visible rounded-full p-[3px] text-zinc-100 transition-transform hover:scale-105"
               style={{ background: `conic-gradient(#ef4444 ${playbackPercent}%, rgba(255,255,255,0.12) 0)` }}
               aria-label="Play or pause music"
             >
               <span className="grid h-full w-full place-items-center overflow-hidden rounded-full bg-[#171717]">
                 {coverUrl ? <img src={coverUrl} alt="Album cover" className="h-full w-full animate-[spin_8s_linear_infinite] object-cover" style={{ animationPlayState: isPlaying ? "running" : "paused" }} /> : <Music2 className="h-9 w-9" />}
+              </span>
+              <span className="pointer-events-none absolute inset-0" style={{ transform: `rotate(${playbackPercent * 3.6}deg)` }}>
+                <span className="absolute top-0 left-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-0.5 rounded-full border-2 border-[#171717] bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.9)]" />
               </span>
             </button>
             <p className="mt-5 w-56 max-w-full truncate text-center text-base font-semibold text-zinc-100">
@@ -794,7 +807,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
           onComplete={() => setManifestationOpen(false)}
         />
       )}
-      {videosOpen && <MotivationalVideos onClose={() => setVideosOpen(false)} />}
+      {videosOpen && <MotivationalVideos onOpen={() => window.dispatchEvent(new Event("ssc-music-pause"))} onClose={() => setVideosOpen(false)} />}
       {musicOpen && <MotivationalMusic onClose={() => setMusicOpen(false)} />}
       {celebratedStreak !== null && (
         <StreakCelebration streak={celebratedStreak} onClose={() => setCelebratedStreak(null)} />
