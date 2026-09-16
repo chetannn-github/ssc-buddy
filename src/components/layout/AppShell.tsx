@@ -5,6 +5,7 @@ import {
   FilePenLine,
   Flame,
   GraduationCap,
+  Play,
   Route as RouteIcon,
   Upload,
   X,
@@ -282,6 +283,102 @@ function DailyManifestation({
   );
 }
 
+function videoTitle(file: string) {
+  return decodeURIComponent(file)
+    .replace(/\.[^.]+$/, "")
+    .replace(/[-_]+/g, " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function MotivationalVideos({ onClose }: { onClose: () => void }) {
+  const [videos, setVideos] = useState<string[]>([]);
+  const [selectedVideo, setSelectedVideo] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    fetch("/videos/manifest.json", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) return [];
+        const files = (await response.json()) as unknown;
+        return Array.isArray(files) ? files.filter((file): file is string => typeof file === "string") : [];
+      })
+      .then((files) => {
+        if (!active) return;
+        setVideos(files);
+        setSelectedVideo(files[0] ?? null);
+      })
+      .catch(() => active && setVideos([]));
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-[75] grid place-items-center bg-black/85 p-4 backdrop-blur-md" onMouseDown={onClose}>
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="motivational-videos-title"
+        className="w-full max-w-3xl rounded-2xl border border-white/10 bg-[#171717] p-5 text-zinc-100 shadow-[0_24px_80px_-24px_black] sm:p-6"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-[10px] font-semibold tracking-[0.18em] text-zinc-500 uppercase">Focus break</p>
+            <h2 id="motivational-videos-title" className="mt-1 text-lg font-semibold">Motivational videos</h2>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close motivational videos" className="grid h-8 w-8 place-items-center rounded-md text-zinc-500 transition-colors hover:bg-white/10 hover:text-zinc-100">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        {selectedVideo ? (
+          <>
+            <video key={selectedVideo} className="mt-5 aspect-video w-full rounded-xl bg-black" controls autoPlay playsInline>
+              <source src={`/videos/${encodeURIComponent(selectedVideo)}`} />
+              Your browser does not support video playback.
+            </video>
+            {videos.length > 1 && (
+              <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
+                {videos.map((file) => (
+                  <button
+                    key={file}
+                    type="button"
+                    onClick={() => setSelectedVideo(file)}
+                    className={cn(
+                      "shrink-0 rounded-lg border px-3 py-2 text-left text-xs transition-colors",
+                      selectedVideo === file
+                        ? "border-zinc-100 bg-zinc-100 text-zinc-900"
+                        : "border-white/10 bg-white/[0.03] text-zinc-300 hover:bg-white/[0.08]",
+                    )}
+                  >
+                    {videoTitle(file)}
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="mt-5 grid aspect-video place-items-center rounded-xl border border-dashed border-white/10 bg-black/20 px-6 text-center">
+            <div>
+              <Play className="mx-auto h-6 w-6 text-zinc-600" />
+              <p className="mt-3 text-sm text-zinc-400">No videos added yet.</p>
+              <p className="mt-1 text-xs text-zinc-600">Add MP4, WebM, MOV, M4V, or OGV files to public/videos.</p>
+            </div>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
 export function AppShell({ title, subtitle, actions, children }: Props) {
   const path = useRouterState({ select: (r) => r.location.pathname });
   const [records, setRecords] = useState<TestRecord[]>([]);
@@ -290,6 +387,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
   const [celebratedStreak, setCelebratedStreak] = useState<number | null>(null);
   const [streakReady, setStreakReady] = useState(false);
   const [manifestationOpen, setManifestationOpen] = useState(false);
+  const [videosOpen, setVideosOpen] = useState(false);
   const previousStreak = useRef<number | null>(null);
 
   useEffect(() => {
@@ -370,6 +468,15 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
             {subtitle && <p className="truncate text-xs opacity-75 sm:text-sm">{subtitle}</p>}
           </div>
           {actions}
+          <button
+            type="button"
+            onClick={() => setVideosOpen(true)}
+            aria-label="Motivational videos"
+            className="flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium text-white/70 transition-colors hover:bg-white/10 hover:text-white sm:px-3 sm:text-sm"
+          >
+            <Play className="h-4 w-4" />
+            <span className="hidden sm:inline">Motivational videos</span>
+          </button>
           <nav className="flex shrink-0 items-center gap-1">
             {nav.map((item) => {
               const active = path.startsWith(item.url);
@@ -428,6 +535,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
           onComplete={() => setManifestationOpen(false)}
         />
       )}
+      {videosOpen && <MotivationalVideos onClose={() => setVideosOpen(false)} />}
       {celebratedStreak !== null && (
         <StreakCelebration streak={celebratedStreak} onClose={() => setCelebratedStreak(null)} />
       )}
