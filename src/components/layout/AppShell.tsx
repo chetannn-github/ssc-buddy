@@ -482,15 +482,16 @@ function MotivationalMusic({ onClose }: { onClose: () => void }) {
 
   const playlists = useMemo(() => [...new Set(tracks.map(playlistName))], [tracks]);
   const playlistTracks = tracks.filter((track) => playlistName(track) === selectedPlaylist);
-  const trackIndex = selectedTrack ? playlistTracks.indexOf(selectedTrack) : -1;
+  const playingPlaylistTracks = selectedTrack
+    ? tracks.filter((track) => playlistName(track) === playlistName(selectedTrack))
+    : [];
+  const trackIndex = selectedTrack ? playingPlaylistTracks.indexOf(selectedTrack) : -1;
   const showTrack = (direction: -1 | 1) => {
-    if (trackIndex < 0 || playlistTracks.length < 2) return;
-    setSelectedTrack(playlistTracks[(trackIndex + direction + playlistTracks.length) % playlistTracks.length] ?? null);
+    if (trackIndex < 0 || playingPlaylistTracks.length < 2) return;
+    setSelectedTrack(playingPlaylistTracks[(trackIndex + direction + playingPlaylistTracks.length) % playingPlaylistTracks.length] ?? null);
   };
   const choosePlaylist = (playlist: string) => {
-    const options = tracks.filter((track) => playlistName(track) === playlist);
     setSelectedPlaylist(playlist);
-    setSelectedTrack(options.length ? options[Math.floor(Math.random() * options.length)] ?? null : null);
   };
   const togglePlayback = () => {
     const audio = audioRef.current;
@@ -509,6 +510,8 @@ function MotivationalMusic({ onClose }: { onClose: () => void }) {
       if (event.key === "Escape") onClose();
       if (event.key === "ArrowLeft") showTrack(-1);
       if (event.key === "ArrowRight") showTrack(1);
+      if (event.shiftKey && event.key.toLowerCase() === "n") showTrack(1);
+      if (event.shiftKey && event.key.toLowerCase() === "p") showTrack(-1);
       if (event.key === " ") {
         event.preventDefault();
         togglePlayback();
@@ -516,14 +519,14 @@ function MotivationalMusic({ onClose }: { onClose: () => void }) {
     };
     document.addEventListener("keydown", handleKeyboard);
     return () => document.removeEventListener("keydown", handleKeyboard);
-  }, [onClose, trackIndex, playlistTracks]);
+  }, [onClose, trackIndex, playingPlaylistTracks]);
 
   const audioPlayer = selectedTrack ? (
     <audio
       ref={audioRef}
       key={selectedTrack}
       autoPlay
-      loop={playlistTracks.length === 1}
+      loop={playingPlaylistTracks.length === 1}
       onPlay={() => setIsPlaying(true)}
       onPause={() => setIsPlaying(false)}
       onTimeUpdate={(event) => {
@@ -546,8 +549,10 @@ function MotivationalMusic({ onClose }: { onClose: () => void }) {
           <button type="button" onClick={() => setMinimized(false)} className="min-w-0 text-left" aria-label="Expand music player">
             <p className="max-w-40 truncate text-xs font-medium">{selectedTrack ? trackTitle(selectedTrack) : "Music"}</p>
           </button>
-          <button type="button" onClick={togglePlayback} aria-label="Play or pause music" className="grid h-8 w-8 place-items-center overflow-hidden rounded-lg bg-white/[0.08] hover:bg-white/[0.14]">
-            {coverUrl ? <img src={coverUrl} alt="Album cover" className="h-full w-full animate-[spin_8s_linear_infinite] object-cover" style={{ animationPlayState: isPlaying ? "running" : "paused" }} /> : <Music2 className="h-4 w-4" />}
+          <button type="button" onClick={togglePlayback} aria-label="Play or pause music" className="grid h-8 w-8 place-items-center overflow-hidden rounded-lg p-[2px]" style={{ background: `conic-gradient(#ef4444 ${playbackPercent}%, rgba(255,255,255,0.12) 0)` }}>
+            <span className="grid h-full w-full place-items-center overflow-hidden rounded-md bg-[#1b1b1b]">
+              {coverUrl ? <img src={coverUrl} alt="Album cover" className="h-full w-full animate-[spin_8s_linear_infinite] object-cover" style={{ animationPlayState: isPlaying ? "running" : "paused" }} /> : <Music2 className="h-4 w-4" />}
+            </span>
           </button>
           <button type="button" onClick={onClose} aria-label="Close music player" className="grid h-8 w-8 place-items-center rounded-lg text-zinc-500 hover:bg-white/10 hover:text-zinc-100">
             <X className="h-4 w-4" />
@@ -587,7 +592,7 @@ function MotivationalMusic({ onClose }: { onClose: () => void }) {
                 {coverUrl ? <img src={coverUrl} alt="Album cover" className="h-full w-full animate-[spin_8s_linear_infinite] object-cover" style={{ animationPlayState: isPlaying ? "running" : "paused" }} /> : <Music2 className="h-9 w-9" />}
               </span>
             </button>
-            <p className="mt-5 max-w-full truncate text-center text-base font-semibold text-zinc-100">
+            <p className="mt-5 w-56 max-w-full truncate text-center text-base font-semibold text-zinc-100">
               {selectedTrack ? trackTitle(selectedTrack) : "No music added"}
             </p>
             <div className="mt-5 flex items-center justify-center gap-3">
@@ -605,7 +610,7 @@ function MotivationalMusic({ onClose }: { onClose: () => void }) {
                 </button>
               ))}
             </div>
-            <div className="overflow-y-auto">
+            <div className="overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {playlistTracks.map((track) => (
               <button key={track} type="button" onClick={() => setSelectedTrack(track)} className={cn("w-full truncate rounded-lg px-3 py-2.5 text-left text-xs transition-colors", selectedTrack === track ? "bg-white/10 text-white" : "text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-200")}>
                 {trackTitle(track)}
