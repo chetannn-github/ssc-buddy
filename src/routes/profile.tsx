@@ -986,9 +986,9 @@ export function Profile() {
               <label className="block text-sm font-medium text-zinc-200">
                 Daily manifestation <span className="font-normal text-zinc-500">(optional)</span>
                 <textarea
-                  className="mt-2 min-h-24 w-full rounded-md border border-white/10 bg-[#151515] px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus-visible:border-zinc-500 focus-visible:outline-none"
+                  className="mt-2 min-h-24 w-full rounded-md border border-white/10 bg-[#151515] px-3 py-2 text-sm text-zinc-100 uppercase placeholder:text-zinc-500 focus-visible:border-zinc-500 focus-visible:outline-none"
                   value={manifestationDraft}
-                  onChange={(event) => setManifestationDraft(event.target.value)}
+                  onChange={(event) => setManifestationDraft(event.target.value.toUpperCase())}
                   placeholder="Write the sentence you want to type daily"
                 />
                 <span className="mt-1 block text-xs font-normal text-zinc-500">

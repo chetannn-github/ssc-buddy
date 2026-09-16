@@ -279,10 +279,10 @@ function DailyManifestation({
         </blockquote>
         <label className="mt-4 block">
           <Input
-            className="h-11 border-white/10 bg-black/30 text-zinc-100 placeholder:text-zinc-600 focus-visible:border-zinc-500"
+            className="h-11 border-white/10 bg-black/30 text-zinc-100 uppercase placeholder:text-zinc-600 focus-visible:border-zinc-500"
             value={value}
             onChange={(event) => {
-              setValue(event.target.value);
+              setValue(event.target.value.toUpperCase());
               if (error) setError("");
             }}
             onKeyDown={(event) => {
