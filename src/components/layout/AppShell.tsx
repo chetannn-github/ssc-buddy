@@ -428,6 +428,7 @@ function MotivationalMusic({ onClose }: { onClose: () => void }) {
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [selectedPlaylist, setSelectedPlaylist] = useState("");
+  const [playbackPercent, setPlaybackPercent] = useState(0);
   const audioRef = useRef<HTMLAudioElement>(null);
 
   useEffect(() => {
@@ -462,6 +463,7 @@ function MotivationalMusic({ onClose }: { onClose: () => void }) {
     let active = true;
     let objectUrl: string | null = null;
     setCoverUrl(null);
+    setPlaybackPercent(0);
     if (!selectedTrack) return;
     fetch(`/music/${encodeURIComponent(selectedTrack)}`)
       .then((response) => response.arrayBuffer())
@@ -524,6 +526,10 @@ function MotivationalMusic({ onClose }: { onClose: () => void }) {
       loop={playlistTracks.length === 1}
       onPlay={() => setIsPlaying(true)}
       onPause={() => setIsPlaying(false)}
+      onTimeUpdate={(event) => {
+        const { currentTime, duration } = event.currentTarget;
+        setPlaybackPercent(Number.isFinite(duration) && duration > 0 ? (currentTime / duration) * 100 : 0);
+      }}
       onEnded={() => {
         setIsPlaying(false);
         showTrack(1);
@@ -570,8 +576,16 @@ function MotivationalMusic({ onClose }: { onClose: () => void }) {
         </button>
         <div className="grid gap-6 sm:grid-cols-[12rem_minmax(0,1fr)]">
           <div className="flex min-h-64 flex-col items-center justify-center sm:order-2">
-            <button type="button" onClick={togglePlayback} className="grid h-24 w-24 place-items-center overflow-hidden rounded-full border border-white/10 bg-white/[0.04] text-zinc-100 transition-colors hover:bg-white/[0.08]" aria-label="Play or pause music">
-              {coverUrl ? <img src={coverUrl} alt="Album cover" className="h-full w-full animate-[spin_8s_linear_infinite] object-cover" style={{ animationPlayState: isPlaying ? "running" : "paused" }} /> : <Music2 className="h-9 w-9" />}
+            <button
+              type="button"
+              onClick={togglePlayback}
+              className="grid h-24 w-24 place-items-center overflow-hidden rounded-full p-[3px] text-zinc-100 transition-transform hover:scale-105"
+              style={{ background: `conic-gradient(#ef4444 ${playbackPercent}%, rgba(255,255,255,0.12) 0)` }}
+              aria-label="Play or pause music"
+            >
+              <span className="grid h-full w-full place-items-center overflow-hidden rounded-full bg-[#171717]">
+                {coverUrl ? <img src={coverUrl} alt="Album cover" className="h-full w-full animate-[spin_8s_linear_infinite] object-cover" style={{ animationPlayState: isPlaying ? "running" : "paused" }} /> : <Music2 className="h-9 w-9" />}
+              </span>
             </button>
             <p className="mt-5 max-w-full truncate text-center text-base font-semibold text-zinc-100">
               {selectedTrack ? trackTitle(selectedTrack) : "No music added"}
@@ -583,15 +597,15 @@ function MotivationalMusic({ onClose }: { onClose: () => void }) {
               <button type="button" onClick={() => seek(10)} aria-label="Forward 10 seconds" className="grid h-10 w-10 place-items-center rounded-full bg-white/[0.06] text-zinc-200 hover:bg-white/10"><RotateCw className="h-4 w-4" /></button>
             </div>
           </div>
-          <div className="flex max-h-72 flex-col rounded-xl border border-white/[0.08] bg-[#0b0b0b] sm:order-1">
-            <div className="flex gap-1 overflow-x-auto border-b border-white/[0.08] p-1.5">
+          <div className="flex max-h-72 flex-col sm:order-1">
+            <div className="flex gap-1 overflow-x-auto pb-2">
               {playlists.map((playlist) => (
                 <button key={playlist} type="button" onClick={() => choosePlaylist(playlist)} className={cn("shrink-0 rounded-md px-2 py-1 text-[10px] transition-colors", selectedPlaylist === playlist ? "bg-white/10 text-white" : "text-zinc-500 hover:text-zinc-200")}>
                   {playlist}
                 </button>
               ))}
             </div>
-            <div className="overflow-y-auto p-1.5">
+            <div className="overflow-y-auto">
             {playlistTracks.map((track) => (
               <button key={track} type="button" onClick={() => setSelectedTrack(track)} className={cn("w-full truncate rounded-lg px-3 py-2.5 text-left text-xs transition-colors", selectedTrack === track ? "bg-white/10 text-white" : "text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-200")}>
                 {trackTitle(track)}
