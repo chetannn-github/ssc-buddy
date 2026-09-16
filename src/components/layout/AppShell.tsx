@@ -264,32 +264,22 @@ function DailyManifestation({
   };
 
   return (
-    <div className="fixed inset-0 z-[70] grid place-items-center bg-[#0d1018]/90 p-4 backdrop-blur-md">
+    <div className="fixed inset-0 z-[70] grid place-items-center bg-black/85 p-4 backdrop-blur-md">
       <section
         role="dialog"
         aria-modal="true"
         aria-labelledby="manifestation-title"
-        className="w-full max-w-md rounded-3xl border border-white/10 bg-[#1b1b1b] p-6 text-zinc-100 shadow-[0_24px_80px_-24px_black] sm:p-8"
+        className="w-full max-w-md rounded-2xl border border-white/10 bg-[#171717] p-6 text-zinc-100 shadow-[0_24px_80px_-24px_black]"
       >
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-400/15 text-blue-300">
-          <Flame className="h-6 w-6" />
-        </div>
-        <p className="mt-5 text-[11px] font-semibold tracking-[0.2em] text-zinc-500 uppercase">
-          Daily manifestation · {step}/3
-        </p>
-        <h2 id="manifestation-title" className="mt-2 text-2xl font-semibold">
-          Start with intention
+        <h2 id="manifestation-title" className="text-lg font-semibold">
+          Daily manifestation
         </h2>
-        <p className="mt-2 text-sm leading-6 text-zinc-400">
-          Type this once. Repeat it three times to unlock today&apos;s study space.
-        </p>
-        <blockquote className="mt-5 rounded-xl border border-blue-300/15 bg-blue-400/[0.06] px-4 py-3 text-center text-base font-medium leading-7 text-blue-100">
+        <blockquote className="mt-4 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-center text-base font-medium leading-7 text-zinc-100">
           “{manifestation}”
         </blockquote>
-        <label className="mt-5 block text-sm font-medium text-zinc-200">
-          Your manifestation
+        <label className="mt-4 block">
           <Input
-            className="mt-2 h-11 border-white/10 bg-zinc-900 text-zinc-100"
+            className="h-11 border-white/10 bg-black/30 text-zinc-100 placeholder:text-zinc-600 focus-visible:border-zinc-500"
             value={value}
             onChange={(event) => {
               setValue(event.target.value);
@@ -298,20 +288,17 @@ function DailyManifestation({
             onKeyDown={(event) => {
               if (event.key === "Enter") submit();
             }}
-            placeholder="Type the sentence above"
+            placeholder="Type here"
             autoFocus
           />
         </label>
         {error && <p className="mt-2 text-xs text-amber-300">{error}</p>}
         <Button
-          className="mt-5 h-11 w-full bg-blue-400 text-[#101827] hover:bg-blue-300"
+          className="mt-4 h-11 w-full bg-zinc-100 text-zinc-900 hover:bg-white"
           onClick={submit}
         >
-          {step === 3 ? "Done — enter study space" : "Continue"}
+          {step === 3 ? "Done" : "Continue"}
         </Button>
-        <p className="mt-3 text-center text-xs text-zinc-500">
-          Your typed words are never saved.
-        </p>
       </section>
     </div>
   );
