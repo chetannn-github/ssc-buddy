@@ -82,6 +82,15 @@ function formatDate(date: string) {
   return new Date(date).toLocaleDateString(undefined, { day: "numeric", month: "short" });
 }
 
+function formatHeatmapTooltipDate(date: Date) {
+  return date.toLocaleDateString(undefined, {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
 type DayActivityDetail = { label: string; detail: string; count: number };
 
 function DayActivityDetails({ date, items }: { date: string; items: DayActivityDetail[] }) {
@@ -285,7 +294,7 @@ function ActivityHeatmap({
                   onClick={() => setSelectedDay(localDay(date))}
                   aria-label={`${formatDate(localDay(date))}: ${value} activit${value === 1 ? "y" : "ies"}`}
                   className={cn(
-                    "aspect-square w-full rounded-[3px] ring-1 ring-inset ring-white/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300",
+                    "group relative aspect-square w-full rounded-[3px] ring-1 ring-inset ring-white/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300",
                     startsMonth && "ml-px",
                     intensity === 0 && "bg-zinc-700",
                     intensity === 1 && "bg-emerald-200",
@@ -293,7 +302,11 @@ function ActivityHeatmap({
                     intensity === 3 && "bg-emerald-500",
                     intensity === 4 && "bg-emerald-700",
                   )}
-                />
+                >
+                  <span className="pointer-events-none absolute bottom-[calc(100%+0.45rem)] left-1/2 z-20 hidden -translate-x-1/2 whitespace-nowrap rounded-md border border-white/10 bg-[#1d1d1d] px-2 py-1 text-[10px] font-medium text-zinc-200 shadow-lg group-hover:block group-focus-visible:block">
+                    {formatHeatmapTooltipDate(date)}
+                  </span>
+                </button>
               );
             })}
           </div>
