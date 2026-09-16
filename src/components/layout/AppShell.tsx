@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { PointerEvent, ReactNode } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   BarChart3,
@@ -36,7 +36,6 @@ type Props = {
 };
 
 const nav = [
-  { title: "Daily tasks", url: "/tasks", icon: ListTodo },
   { title: "Track", url: "/track", icon: RouteIcon },
   { title: "Progress", url: "/progress", icon: BarChart3 },
   { title: "Practice session", url: "/test", icon: FilePenLine },
@@ -436,6 +435,7 @@ function MotivationalMusic({ onClose }: { onClose: () => void }) {
   const [selectedPlaylist, setSelectedPlaylist] = useState("");
   const [playbackPercent, setPlaybackPercent] = useState(0);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const seekingRef = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -516,6 +516,29 @@ function MotivationalMusic({ onClose }: { onClose: () => void }) {
     if (!audio) return;
     audio.currentTime = Math.max(0, Math.min(audio.duration || Infinity, audio.currentTime + seconds));
   };
+  const seekFromRing = (event: PointerEvent<HTMLButtonElement>) => {
+    const audio = audioRef.current;
+    if (!audio || !Number.isFinite(audio.duration) || audio.duration <= 0) return;
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const x = event.clientX - bounds.left - bounds.width / 2;
+    const y = event.clientY - bounds.top - bounds.height / 2;
+    const angle = (Math.atan2(y, x) * 180) / Math.PI;
+    const percent = (angle + 450) % 360 / 3.6;
+    audio.currentTime = (percent / 100) * audio.duration;
+    setPlaybackPercent(percent);
+  };
+  const handleRingPointerDown = (event: PointerEvent<HTMLButtonElement>) => {
+    seekingRef.current = true;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    seekFromRing(event);
+  };
+  const handleRingClick = () => {
+    if (seekingRef.current) {
+      seekingRef.current = false;
+      return;
+    }
+    togglePlayback();
+  };
 
   useEffect(() => {
     const handleKeyboard = (event: KeyboardEvent) => {
@@ -595,7 +618,9 @@ function MotivationalMusic({ onClose }: { onClose: () => void }) {
           <div className="flex min-h-64 flex-col items-center justify-center sm:order-2">
             <button
               type="button"
-              onClick={togglePlayback}
+              onClick={handleRingClick}
+              onPointerDown={handleRingPointerDown}
+              onPointerMove={(event) => { if (event.currentTarget.hasPointerCapture(event.pointerId)) seekFromRing(event); }}
               className="relative grid h-24 w-24 place-items-center overflow-visible rounded-full p-[3px] text-zinc-100 transition-transform hover:scale-105"
               style={{ background: `conic-gradient(#ef4444 ${playbackPercent}%, rgba(255,255,255,0.12) 0)` }}
               aria-label="Play or pause music"
