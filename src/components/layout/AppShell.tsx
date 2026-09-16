@@ -7,6 +7,7 @@ import {
   FilePenLine,
   Flame,
   GraduationCap,
+  Music2,
   Play,
   Route as RouteIcon,
   Upload,
@@ -379,6 +380,103 @@ function MotivationalVideos({ onClose }: { onClose: () => void }) {
   );
 }
 
+function trackTitle(file: string) {
+  return decodeURIComponent(file).replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ");
+}
+
+function MotivationalMusic({ onClose }: { onClose: () => void }) {
+  const [tracks, setTracks] = useState<string[]>([]);
+  const [selectedTrack, setSelectedTrack] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
+
+  useEffect(() => {
+    let active = true;
+    fetch("/music/manifest.json", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) return [];
+        const files = (await response.json()) as unknown;
+        return Array.isArray(files) ? files.filter((file): file is string => typeof file === "string") : [];
+      })
+      .then((files) => {
+        if (!active) return;
+        setTracks(files);
+        setSelectedTrack(files.length ? files[Math.floor(Math.random() * files.length)] ?? null : null);
+      })
+      .catch(() => active && setTracks([]));
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const trackIndex = selectedTrack ? tracks.indexOf(selectedTrack) : -1;
+  const showTrack = (direction: -1 | 1) => {
+    if (trackIndex < 0 || tracks.length < 2) return;
+    setSelectedTrack(tracks[(trackIndex + direction + tracks.length) % tracks.length] ?? null);
+  };
+  const togglePlayback = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (audio.paused) void audio.play();
+    else audio.pause();
+  };
+
+  useEffect(() => {
+    const handleKeyboard = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+      if (event.key === "ArrowLeft") showTrack(-1);
+      if (event.key === "ArrowRight") showTrack(1);
+      if (event.key === " ") {
+        event.preventDefault();
+        togglePlayback();
+      }
+    };
+    document.addEventListener("keydown", handleKeyboard);
+    return () => document.removeEventListener("keydown", handleKeyboard);
+  }, [onClose, trackIndex, tracks]);
+
+  return (
+    <div className="fixed inset-0 z-[75] grid place-items-center bg-black/90 p-4 backdrop-blur-md" onMouseDown={onClose}>
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-label="Motivational music"
+        className="relative w-full max-w-md rounded-2xl border border-white/10 bg-[#171717] p-6 text-zinc-100 shadow-[0_24px_80px_-24px_black]"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <button type="button" onClick={onClose} aria-label="Close music player" className="absolute top-3 right-3 grid h-8 w-8 place-items-center rounded-full text-zinc-500 transition-colors hover:bg-white/10 hover:text-zinc-100">
+          <X className="h-4 w-4" />
+        </button>
+        <button type="button" onClick={togglePlayback} className="mx-auto grid h-20 w-20 place-items-center rounded-full border border-white/10 bg-white/[0.04] text-zinc-100 transition-colors hover:bg-white/[0.08]" aria-label="Play or pause music">
+          <Music2 className="h-8 w-8" />
+        </button>
+        <p className="mt-5 truncate text-center text-base font-semibold text-zinc-100">
+          {selectedTrack ? trackTitle(selectedTrack) : "No music added"}
+        </p>
+        {selectedTrack && (
+          <audio
+            ref={audioRef}
+            key={selectedTrack}
+            autoPlay
+            loop={tracks.length === 1}
+            onEnded={() => showTrack(1)}
+            src={`/music/${encodeURIComponent(selectedTrack)}`}
+          />
+        )}
+        {tracks.length > 1 && (
+          <div className="mt-5 flex items-center justify-center gap-5">
+            <button type="button" onClick={() => showTrack(-1)} aria-label="Previous song" className="grid h-10 w-10 place-items-center rounded-full bg-white/[0.06] text-zinc-200 transition-colors hover:bg-white/10">
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <button type="button" onClick={() => showTrack(1)} aria-label="Next song" className="grid h-10 w-10 place-items-center rounded-full bg-white/[0.06] text-zinc-200 transition-colors hover:bg-white/10">
+              <ChevronRight className="h-5 w-5" />
+            </button>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
 export function AppShell({ title, subtitle, actions, children }: Props) {
   const path = useRouterState({ select: (r) => r.location.pathname });
   const [records, setRecords] = useState<TestRecord[]>([]);
@@ -388,6 +486,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
   const [streakReady, setStreakReady] = useState(false);
   const [manifestationOpen, setManifestationOpen] = useState(false);
   const [videosOpen, setVideosOpen] = useState(false);
+  const [musicOpen, setMusicOpen] = useState(false);
   const previousStreak = useRef<number | null>(null);
 
   useEffect(() => {
@@ -477,6 +576,15 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
             <Play className="h-4 w-4" />
             <span className="hidden sm:inline">Motivational videos</span>
           </button>
+          <button
+            type="button"
+            onClick={() => setMusicOpen(true)}
+            aria-label="Motivational music"
+            className="flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium text-white/70 transition-colors hover:bg-white/10 hover:text-white sm:px-3 sm:text-sm"
+          >
+            <Music2 className="h-4 w-4" />
+            <span className="hidden sm:inline">Motivational music</span>
+          </button>
           <nav className="flex shrink-0 items-center gap-1">
             {nav.map((item) => {
               const active = path.startsWith(item.url);
@@ -536,6 +644,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
         />
       )}
       {videosOpen && <MotivationalVideos onClose={() => setVideosOpen(false)} />}
+      {musicOpen && <MotivationalMusic onClose={() => setMusicOpen(false)} />}
       {celebratedStreak !== null && (
         <StreakCelebration streak={celebratedStreak} onClose={() => setCelebratedStreak(null)} />
       )}
