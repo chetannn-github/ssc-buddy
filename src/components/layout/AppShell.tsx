@@ -702,6 +702,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
   const isDarkPage =
     path === "/" ||
     path === "/profile" ||
+    path === "/tasks" ||
     path === "/track" ||
     path === "/progress" ||
     path === "/mock-tests" ||
