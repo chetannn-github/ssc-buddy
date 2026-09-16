@@ -7,6 +7,7 @@ import {
   FilePenLine,
   Flame,
   GraduationCap,
+  ListTodo,
   Minimize2,
   Music2,
   Play,
@@ -35,6 +36,7 @@ type Props = {
 };
 
 const nav = [
+  { title: "Daily tasks", url: "/tasks", icon: ListTodo },
   { title: "Track", url: "/track", icon: RouteIcon },
   { title: "Progress", url: "/progress", icon: BarChart3 },
   { title: "Practice session", url: "/test", icon: FilePenLine },
