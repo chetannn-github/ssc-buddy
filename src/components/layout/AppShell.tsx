@@ -301,7 +301,7 @@ function MotivationalVideos({ onClose }: { onClose: () => void }) {
       .then((files) => {
         if (!active) return;
         setVideos(files);
-        setSelectedVideo(files[0] ?? null);
+        setSelectedVideo(files.length ? files[Math.floor(Math.random() * files.length)] ?? null : null);
       })
       .catch(() => active && setVideos([]));
     return () => {
@@ -330,12 +330,12 @@ function MotivationalVideos({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="fixed inset-0 z-[75] grid place-items-center bg-black/90 p-3 backdrop-blur-md sm:p-6" onMouseDown={onClose}>
+    <div className="fixed inset-0 z-[75] bg-black/90 backdrop-blur-md" onMouseDown={onClose}>
       <section
         role="dialog"
         aria-modal="true"
         aria-label="Motivational videos"
-        className="relative h-[min(82vh,48rem)] w-full max-w-5xl overflow-hidden rounded-2xl border border-white/10 bg-black text-zinc-100 shadow-[0_24px_80px_-24px_black]"
+        className="relative h-full w-full overflow-hidden bg-black text-zinc-100"
         onMouseDown={(event) => event.stopPropagation()}
       >
         <button type="button" onClick={onClose} aria-label="Close video player" className="absolute top-3 right-3 z-20 grid h-9 w-9 place-items-center rounded-full bg-black/50 text-zinc-300 backdrop-blur transition-colors hover:bg-black/80 hover:text-white">
@@ -348,8 +348,10 @@ function MotivationalVideos({ onClose }: { onClose: () => void }) {
               key={selectedVideo}
               className="h-full w-full cursor-pointer object-contain"
               autoPlay
+              loop={videos.length === 1}
               playsInline
               onClick={togglePlayback}
+              onEnded={() => showVideo(1)}
             >
               <source src={`/videos/${encodeURIComponent(selectedVideo)}`} />
               Your browser does not support video playback.
