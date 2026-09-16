@@ -2,6 +2,8 @@ import type { ReactNode } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   BarChart3,
+  ChevronLeft,
+  ChevronRight,
   FilePenLine,
   Flame,
   GraduationCap,
@@ -283,16 +285,10 @@ function DailyManifestation({
   );
 }
 
-function videoTitle(file: string) {
-  return decodeURIComponent(file)
-    .replace(/\.[^.]+$/, "")
-    .replace(/[-_]+/g, " ")
-    .replace(/\b\w/g, (character) => character.toUpperCase());
-}
-
 function MotivationalVideos({ onClose }: { onClose: () => void }) {
   const [videos, setVideos] = useState<string[]>([]);
   const [selectedVideo, setSelectedVideo] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     let active = true;
@@ -321,57 +317,57 @@ function MotivationalVideos({ onClose }: { onClose: () => void }) {
     return () => document.removeEventListener("keydown", closeOnEscape);
   }, [onClose]);
 
+  const selectedIndex = selectedVideo ? videos.indexOf(selectedVideo) : -1;
+  const showVideo = (direction: -1 | 1) => {
+    if (selectedIndex < 0 || videos.length < 2) return;
+    setSelectedVideo(videos[(selectedIndex + direction + videos.length) % videos.length] ?? null);
+  };
+  const togglePlayback = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.paused) void video.play();
+    else video.pause();
+  };
+
   return (
-    <div className="fixed inset-0 z-[75] grid place-items-center bg-black/85 p-4 backdrop-blur-md" onMouseDown={onClose}>
+    <div className="fixed inset-0 z-[75] grid place-items-center bg-black/90 p-3 backdrop-blur-md sm:p-6" onMouseDown={onClose}>
       <section
         role="dialog"
         aria-modal="true"
-        aria-labelledby="motivational-videos-title"
-        className="w-full max-w-3xl rounded-2xl border border-white/10 bg-[#171717] p-5 text-zinc-100 shadow-[0_24px_80px_-24px_black] sm:p-6"
+        aria-label="Motivational videos"
+        className="relative h-[min(82vh,48rem)] w-full max-w-5xl overflow-hidden rounded-2xl border border-white/10 bg-black text-zinc-100 shadow-[0_24px_80px_-24px_black]"
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <p className="text-[10px] font-semibold tracking-[0.18em] text-zinc-500 uppercase">Focus break</p>
-            <h2 id="motivational-videos-title" className="mt-1 text-lg font-semibold">Motivational videos</h2>
-          </div>
-          <button type="button" onClick={onClose} aria-label="Close motivational videos" className="grid h-8 w-8 place-items-center rounded-md text-zinc-500 transition-colors hover:bg-white/10 hover:text-zinc-100">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
+        <button type="button" onClick={onClose} aria-label="Close video player" className="absolute top-3 right-3 z-20 grid h-9 w-9 place-items-center rounded-full bg-black/50 text-zinc-300 backdrop-blur transition-colors hover:bg-black/80 hover:text-white">
+          <X className="h-4 w-4" />
+        </button>
         {selectedVideo ? (
-          <>
-            <video key={selectedVideo} className="mt-5 aspect-video w-full rounded-xl bg-black" controls autoPlay playsInline>
+          <div className="relative h-full w-full">
+            <video
+              ref={videoRef}
+              key={selectedVideo}
+              className="h-full w-full cursor-pointer object-contain"
+              autoPlay
+              playsInline
+              onClick={togglePlayback}
+            >
               <source src={`/videos/${encodeURIComponent(selectedVideo)}`} />
               Your browser does not support video playback.
             </video>
             {videos.length > 1 && (
-              <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
-                {videos.map((file) => (
-                  <button
-                    key={file}
-                    type="button"
-                    onClick={() => setSelectedVideo(file)}
-                    className={cn(
-                      "shrink-0 rounded-lg border px-3 py-2 text-left text-xs transition-colors",
-                      selectedVideo === file
-                        ? "border-zinc-100 bg-zinc-100 text-zinc-900"
-                        : "border-white/10 bg-white/[0.03] text-zinc-300 hover:bg-white/[0.08]",
-                    )}
-                  >
-                    {videoTitle(file)}
-                  </button>
-                ))}
-              </div>
+              <>
+                <button type="button" onClick={() => showVideo(-1)} aria-label="Previous video" className="absolute top-1/2 left-3 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-black/50 text-white backdrop-blur transition-colors hover:bg-black/80 sm:left-5">
+                  <ChevronLeft className="h-6 w-6" />
+                </button>
+                <button type="button" onClick={() => showVideo(1)} aria-label="Next video" className="absolute top-1/2 right-3 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-black/50 text-white backdrop-blur transition-colors hover:bg-black/80 sm:right-5">
+                  <ChevronRight className="h-6 w-6" />
+                </button>
+              </>
             )}
-          </>
+          </div>
         ) : (
-          <div className="mt-5 grid aspect-video place-items-center rounded-xl border border-dashed border-white/10 bg-black/20 px-6 text-center">
-            <div>
-              <Play className="mx-auto h-6 w-6 text-zinc-600" />
-              <p className="mt-3 text-sm text-zinc-400">No videos added yet.</p>
-              <p className="mt-1 text-xs text-zinc-600">Add MP4, WebM, MOV, M4V, or OGV files to public/videos.</p>
-            </div>
+          <div className="grid h-full place-items-center">
+            <Play className="h-7 w-7 text-zinc-700" />
           </div>
         )}
       </section>
