@@ -581,3 +581,32 @@ select:not(:disabled),
     animation: none;
   }
 }
+
+/* Daily Tasks (Lovable workspace, mapped to SSC Buddy's neutral dark palette). */
+.daily-tasks-ui {
+  --color-background: #121212;
+  --color-foreground: #f4f4f5;
+  --color-surface: #171717;
+  --color-surface-2: #202020;
+  --color-popover: #1b1b1b;
+  --color-primary: #6ee7c5;
+  --color-primary-foreground: #11251f;
+  --color-muted: #27272a;
+  --color-muted-foreground: #a1a1aa;
+  --color-accent-soft: rgba(110, 231, 197, .12);
+  --color-border: rgba(255, 255, 255, .10);
+  --color-chart-2: #52525b;
+  --radius: .75rem;
+}
+.daily-tasks-ui .panel { border: 1px solid var(--color-border); border-radius: var(--radius); background: var(--color-surface); box-shadow: 0 16px 35px -30px #000; }
+.daily-tasks-ui .label-caps { font-size: .625rem; letter-spacing: .14em; text-transform: uppercase; color: var(--color-muted-foreground); }
+.daily-tasks-ui .bg-surface { background: var(--color-surface); }
+.daily-tasks-ui .bg-surface-2 { background: var(--color-surface-2); }
+.daily-tasks-ui .bg-popover { background: var(--color-popover); }
+.daily-tasks-ui .text-foreground { color: var(--color-foreground); }
+.daily-tasks-ui .text-muted-foreground { color: var(--color-muted-foreground); }
+.daily-tasks-ui .border-border { border-color: var(--color-border); }
+.daily-tasks-ui .bg-primary { background: var(--color-primary); }
+.daily-tasks-ui .text-primary { color: var(--color-primary); }
+.daily-tasks-ui .bg-accent-soft { background: var(--color-accent-soft); }
+.daily-tasks-ui .bg-chart-2 { background: var(--color-chart-2); }
