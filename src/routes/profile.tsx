@@ -252,7 +252,7 @@ function ActivityHeatmap({
   const activeDay = days.find(({ date }) => localDay(date) === selectedDay) ?? days.at(-1);
 
   return (
-    <section className="overflow-hidden py-5 text-zinc-100 sm:py-6">
+    <section className="overflow-visible py-5 text-zinc-100 sm:py-6">
       <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-2 text-sm">
         <p className="text-zinc-400">
           {totalActivity} activities · {rangeLabels[range].toLowerCase()}
