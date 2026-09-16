@@ -7,8 +7,11 @@ import {
   FilePenLine,
   Flame,
   GraduationCap,
+  Minimize2,
   Music2,
   Play,
+  RotateCcw,
+  RotateCw,
   Route as RouteIcon,
   Upload,
   X,
@@ -387,6 +390,7 @@ function trackTitle(file: string) {
 function MotivationalMusic({ onClose }: { onClose: () => void }) {
   const [tracks, setTracks] = useState<string[]>([]);
   const [selectedTrack, setSelectedTrack] = useState<string | null>(null);
+  const [minimized, setMinimized] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
 
   useEffect(() => {
@@ -419,6 +423,11 @@ function MotivationalMusic({ onClose }: { onClose: () => void }) {
     if (audio.paused) void audio.play();
     else audio.pause();
   };
+  const seek = (seconds: number) => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.currentTime = Math.max(0, Math.min(audio.duration || Infinity, audio.currentTime + seconds));
+  };
 
   useEffect(() => {
     const handleKeyboard = (event: KeyboardEvent) => {
@@ -434,46 +443,79 @@ function MotivationalMusic({ onClose }: { onClose: () => void }) {
     return () => document.removeEventListener("keydown", handleKeyboard);
   }, [onClose, trackIndex, tracks]);
 
+  const audioPlayer = selectedTrack ? (
+    <audio
+      ref={audioRef}
+      key={selectedTrack}
+      autoPlay
+      loop={tracks.length === 1}
+      onEnded={() => showTrack(1)}
+      src={`/music/${encodeURIComponent(selectedTrack)}`}
+    />
+  ) : null;
+
+  if (minimized) {
+    return (
+      <>
+        {audioPlayer}
+        <div className="fixed right-4 bottom-4 z-[75] flex max-w-[calc(100vw-2rem)] items-center gap-2 rounded-xl border border-white/10 bg-[#1b1b1b] p-2 pl-3 text-zinc-100 shadow-2xl">
+          <button type="button" onClick={() => setMinimized(false)} className="min-w-0 text-left" aria-label="Expand music player">
+            <p className="max-w-40 truncate text-xs font-medium">{selectedTrack ? trackTitle(selectedTrack) : "Music"}</p>
+          </button>
+          <button type="button" onClick={togglePlayback} aria-label="Play or pause music" className="grid h-8 w-8 place-items-center rounded-lg bg-white/[0.08] hover:bg-white/[0.14]">
+            <Music2 className="h-4 w-4" />
+          </button>
+          <button type="button" onClick={onClose} aria-label="Close music player" className="grid h-8 w-8 place-items-center rounded-lg text-zinc-500 hover:bg-white/10 hover:text-zinc-100">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      </>
+    );
+  }
+
   return (
-    <div className="fixed inset-0 z-[75] grid place-items-center bg-black/90 p-4 backdrop-blur-md" onMouseDown={onClose}>
+    <>
+      {audioPlayer}
+      <div className="fixed inset-0 z-[75] grid place-items-center bg-black/90 p-4 backdrop-blur-md" onMouseDown={onClose}>
       <section
         role="dialog"
         aria-modal="true"
         aria-label="Motivational music"
-        className="relative w-full max-w-md rounded-2xl border border-white/10 bg-[#171717] p-6 text-zinc-100 shadow-[0_24px_80px_-24px_black]"
+        className="relative w-full max-w-3xl rounded-2xl border border-white/10 bg-[#171717] p-5 text-zinc-100 shadow-[0_24px_80px_-24px_black] sm:p-6"
         onMouseDown={(event) => event.stopPropagation()}
       >
         <button type="button" onClick={onClose} aria-label="Close music player" className="absolute top-3 right-3 grid h-8 w-8 place-items-center rounded-full text-zinc-500 transition-colors hover:bg-white/10 hover:text-zinc-100">
           <X className="h-4 w-4" />
         </button>
-        <button type="button" onClick={togglePlayback} className="mx-auto grid h-20 w-20 place-items-center rounded-full border border-white/10 bg-white/[0.04] text-zinc-100 transition-colors hover:bg-white/[0.08]" aria-label="Play or pause music">
-          <Music2 className="h-8 w-8" />
+        <button type="button" onClick={() => setMinimized(true)} aria-label="Minimize music player" className="absolute top-3 right-12 grid h-8 w-8 place-items-center rounded-full text-zinc-500 transition-colors hover:bg-white/10 hover:text-zinc-100">
+          <Minimize2 className="h-4 w-4" />
         </button>
-        <p className="mt-5 truncate text-center text-base font-semibold text-zinc-100">
-          {selectedTrack ? trackTitle(selectedTrack) : "No music added"}
-        </p>
-        {selectedTrack && (
-          <audio
-            ref={audioRef}
-            key={selectedTrack}
-            autoPlay
-            loop={tracks.length === 1}
-            onEnded={() => showTrack(1)}
-            src={`/music/${encodeURIComponent(selectedTrack)}`}
-          />
-        )}
-        {tracks.length > 1 && (
-          <div className="mt-5 flex items-center justify-center gap-5">
-            <button type="button" onClick={() => showTrack(-1)} aria-label="Previous song" className="grid h-10 w-10 place-items-center rounded-full bg-white/[0.06] text-zinc-200 transition-colors hover:bg-white/10">
-              <ChevronLeft className="h-5 w-5" />
+        <div className="grid gap-6 sm:grid-cols-[minmax(0,1fr)_12rem]">
+          <div className="flex min-h-64 flex-col items-center justify-center">
+            <button type="button" onClick={togglePlayback} className="grid h-24 w-24 place-items-center rounded-full border border-white/10 bg-white/[0.04] text-zinc-100 transition-colors hover:bg-white/[0.08]" aria-label="Play or pause music">
+              <Music2 className="h-9 w-9" />
             </button>
-            <button type="button" onClick={() => showTrack(1)} aria-label="Next song" className="grid h-10 w-10 place-items-center rounded-full bg-white/[0.06] text-zinc-200 transition-colors hover:bg-white/10">
-              <ChevronRight className="h-5 w-5" />
-            </button>
+            <p className="mt-5 max-w-full truncate text-center text-base font-semibold text-zinc-100">
+              {selectedTrack ? trackTitle(selectedTrack) : "No music added"}
+            </p>
+            <div className="mt-5 flex items-center justify-center gap-3">
+              <button type="button" onClick={() => seek(-10)} aria-label="Back 10 seconds" className="grid h-10 w-10 place-items-center rounded-full bg-white/[0.06] text-zinc-200 hover:bg-white/10"><RotateCcw className="h-4 w-4" /></button>
+              {tracks.length > 1 && <button type="button" onClick={() => showTrack(-1)} aria-label="Previous song" className="grid h-10 w-10 place-items-center rounded-full bg-white/[0.06] text-zinc-200 hover:bg-white/10"><ChevronLeft className="h-5 w-5" /></button>}
+              {tracks.length > 1 && <button type="button" onClick={() => showTrack(1)} aria-label="Next song" className="grid h-10 w-10 place-items-center rounded-full bg-white/[0.06] text-zinc-200 hover:bg-white/10"><ChevronRight className="h-5 w-5" /></button>}
+              <button type="button" onClick={() => seek(10)} aria-label="Forward 10 seconds" className="grid h-10 w-10 place-items-center rounded-full bg-white/[0.06] text-zinc-200 hover:bg-white/10"><RotateCw className="h-4 w-4" /></button>
+            </div>
           </div>
-        )}
+          <div className="max-h-72 overflow-y-auto rounded-xl border border-white/[0.08] bg-black/20 p-1.5">
+            {tracks.map((track) => (
+              <button key={track} type="button" onClick={() => setSelectedTrack(track)} className={cn("w-full truncate rounded-lg px-3 py-2.5 text-left text-xs transition-colors", selectedTrack === track ? "bg-white/10 text-white" : "text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-200")}>
+                {trackTitle(track)}
+              </button>
+            ))}
+          </div>
+        </div>
       </section>
-    </div>
+      </div>
+    </>
   );
 }
 
