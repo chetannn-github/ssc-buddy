@@ -554,7 +554,7 @@ function MotivationalMusic({ onClose }: { onClose: () => void }) {
   return (
     <>
       {audioPlayer}
-      <div className="fixed inset-0 z-[75] grid place-items-center bg-black/90 p-4 backdrop-blur-md">
+      <div className="fixed inset-0 z-[75] grid place-items-center bg-black/90 p-4 backdrop-blur-md" onMouseDown={() => setMinimized(true)}>
       <section
         role="dialog"
         aria-modal="true"
@@ -568,8 +568,8 @@ function MotivationalMusic({ onClose }: { onClose: () => void }) {
         <button type="button" onClick={() => setMinimized(true)} aria-label="Minimize music player" className="absolute top-3 right-12 grid h-8 w-8 place-items-center rounded-full text-zinc-500 transition-colors hover:bg-white/10 hover:text-zinc-100">
           <Minimize2 className="h-4 w-4" />
         </button>
-        <div className="grid gap-6 sm:grid-cols-[minmax(0,1fr)_12rem]">
-          <div className="flex min-h-64 flex-col items-center justify-center">
+        <div className="grid gap-6 sm:grid-cols-[12rem_minmax(0,1fr)]">
+          <div className="flex min-h-64 flex-col items-center justify-center sm:order-2">
             <button type="button" onClick={togglePlayback} className="grid h-24 w-24 place-items-center overflow-hidden rounded-full border border-white/10 bg-white/[0.04] text-zinc-100 transition-colors hover:bg-white/[0.08]" aria-label="Play or pause music">
               {coverUrl ? <img src={coverUrl} alt="Album cover" className="h-full w-full animate-[spin_8s_linear_infinite] object-cover" style={{ animationPlayState: isPlaying ? "running" : "paused" }} /> : <Music2 className="h-9 w-9" />}
             </button>
@@ -583,7 +583,7 @@ function MotivationalMusic({ onClose }: { onClose: () => void }) {
               <button type="button" onClick={() => seek(10)} aria-label="Forward 10 seconds" className="grid h-10 w-10 place-items-center rounded-full bg-white/[0.06] text-zinc-200 hover:bg-white/10"><RotateCw className="h-4 w-4" /></button>
             </div>
           </div>
-          <div className="flex max-h-72 flex-col rounded-xl border border-white/[0.08] bg-black/20">
+          <div className="flex max-h-72 flex-col rounded-xl border border-white/[0.08] bg-[#0b0b0b] sm:order-1">
             <div className="flex gap-1 overflow-x-auto border-b border-white/[0.08] p-1.5">
               {playlists.map((playlist) => (
                 <button key={playlist} type="button" onClick={() => choosePlaylist(playlist)} className={cn("shrink-0 rounded-md px-2 py-1 text-[10px] transition-colors", selectedPlaylist === playlist ? "bg-white/10 text-white" : "text-zinc-500 hover:text-zinc-200")}>
