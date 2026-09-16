@@ -38,7 +38,7 @@ function Row({
 export function Dashboard() {
   const { data } = useTracker();
   const overall = overallSyllabus(data);
-  const left = daysLeft(data.meta.syllabusDeadline);
+  const left = daysLeft(data.meta.examDate);
   const totalTests = data.tests.log.length;
   const totalTestTarget = data.subjects.reduce((a, s) => a + (data.tests.targets[s.id] ?? 0), 0);
   const mockDone = data.tests.mocks.pre.done + data.tests.mocks.mains.done;
@@ -58,8 +58,8 @@ export function Dashboard() {
         </div>
         <p className="mt-3 font-mono text-[13px] text-muted-foreground">
           {left >= 0
-            ? `${left} days left to finish the syllabus`
-            : `syllabus deadline passed ${Math.abs(left)} days ago`}
+            ? `${left} days left until the exam`
+            : `exam date passed ${Math.abs(left)} days ago`}
         </p>
       </Card>
 

@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { TrackerProvider, useTracker } from "@/lib/tracker-store";
-import { daysLeft, fmtDate, fmtMonth, overallSyllabus, pct } from "@/lib/tracker";
+import { daysLeft, fmtDate, overallSyllabus, pct } from "@/lib/tracker";
 import { Dashboard } from "@/components/tracker/Dashboard";
 import { Syllabus } from "@/components/tracker/Syllabus";
 import { Revision } from "@/components/tracker/Revision";
@@ -39,7 +39,7 @@ function Header() {
   const { data, update } = useTracker();
   const [editing, setEditing] = useState(false);
   const overall = overallSyllabus(data);
-  const left = daysLeft(data.meta.syllabusDeadline);
+  const left = daysLeft(data.meta.examDate);
 
   const chip =
     "inline-flex items-center gap-2 rounded-full bg-card px-4 py-2 font-mono text-[13px] text-muted-foreground";
@@ -57,29 +57,16 @@ function Header() {
           {editing ? (
             <>
               <label className={chip}>
-                Syllabus
+                Exam
                 <input
                   type="date"
-                  aria-label="Syllabus deadline"
+                  aria-label="Exam date"
                   className="bg-transparent text-foreground outline-none"
-                  value={data.meta.syllabusDeadline}
+                  value={data.meta.examDate}
                   onChange={(e) =>
                     update((d) => {
-                      d.meta.syllabusDeadline = e.target.value;
-                    })
-                  }
-                />
-              </label>
-              <label className={chip}>
-                Target
-                <input
-                  type="date"
-                  aria-label="Final preparation target"
-                  className="bg-transparent text-foreground outline-none"
-                  value={data.meta.targetDate}
-                  onChange={(e) =>
-                    update((d) => {
-                      d.meta.targetDate = e.target.value;
+                      d.meta.examDate = e.target.value;
+                      if (!d.meta.prepStartDate) d.meta.prepStartDate = new Date().toISOString().slice(0, 10);
                     })
                   }
                 />
@@ -94,8 +81,7 @@ function Header() {
             </>
           ) : (
             <>
-              <span className={chip}>Syllabus · {fmtDate(data.meta.syllabusDeadline)}</span>
-              <span className={chip}>Target · {fmtMonth(data.meta.targetDate)}</span>
+              <span className={chip}>Exam · {fmtDate(data.meta.examDate)}</span>
               <span className={chip}>T-{left} days</span>
               <button
                 type="button"

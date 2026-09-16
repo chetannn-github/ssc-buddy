@@ -20,7 +20,6 @@ import { loadPracticeProfile, savePracticeProfile, type PracticeProfile } from "
 import { downloadPracticeBackup, restorePracticeBackup } from "@/lib/backup";
 import {
   overallSyllabus,
-  daysLeft,
   fmtDate,
   pct,
   subjectRevision,
@@ -523,53 +522,60 @@ function TrackerRow({
 }
 
 function CountdownSummary({ tracker }: { tracker: TrackerData | null }) {
-  const countdowns = (tracker?.meta.countdowns ?? []).filter(
-    (countdown) => countdown.name && countdown.date,
-  );
-  if (!countdowns.length) return null;
+  const meta = tracker?.meta;
+  const examDate = meta?.examDate;
+  if (!meta || !examDate) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const start = new Date(`${meta.prepStartDate || localDay(today)}T00:00:00`);
+  const end = new Date(`${examDate}T00:00:00`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+  const day = 86400000;
+  const totalDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / day));
+  const elapsedDays = Math.max(0, Math.min(totalDays, Math.round((today.getTime() - start.getTime()) / day)));
+  const elapsed = Math.round((elapsedDays / totalDays) * 100);
+  const daysRemaining = Math.max(0, Math.ceil((end.getTime() - today.getTime()) / day));
+  const circumference = 2 * Math.PI * 42;
+  const dashOffset = circumference - (circumference * elapsed) / 100;
 
   return (
-    <div className="grid w-full max-w-md grid-cols-1 gap-2 sm:grid-cols-2 lg:w-[22rem] lg:grid-cols-1">
-      {countdowns.map((countdown, index) => {
-        const tone = index === 0 ? "amber" : "sky";
-        return (
-          <div
-            key={countdown.id}
-            className={cn(
-              "rounded-xl px-3 py-2.5 text-left",
-              tone === "amber"
-                ? "border border-amber-300/15 bg-amber-300/[0.05]"
-                : "border border-sky-300/15 bg-sky-300/[0.05]",
-            )}
-          >
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="truncate text-xs font-medium text-zinc-300">{countdown.name}</p>
-                <p className="mt-0.5 text-[11px] text-zinc-500">{fmtDate(countdown.date)}</p>
-              </div>
-              <p className="shrink-0 text-right leading-none">
-                <span
-                  className={cn(
-                    "text-xl font-semibold",
-                    tone === "amber" ? "text-amber-200" : "text-sky-200",
-                  )}
-                >
-                  {Math.max(0, daysLeft(countdown.date))}
-                </span>
-                <span
-                  className={cn(
-                    "ml-1 text-[10px]",
-                    tone === "amber" ? "text-amber-100/70" : "text-sky-100/70",
-                  )}
-                >
-                  days
-                </span>
-              </p>
-            </div>
+    <section className="w-full max-w-xl rounded-2xl border border-amber-300/20 bg-[#11110d] p-4 shadow-[0_16px_45px_-30px_black] lg:w-[30rem]">
+      <div className="flex items-center gap-4">
+        <div className="relative grid h-28 w-28 shrink-0 place-items-center">
+          <svg className="h-full w-full -rotate-90" viewBox="0 0 100 100" aria-hidden="true">
+            <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="5" />
+            <circle
+              cx="50"
+              cy="50"
+              r="42"
+              fill="none"
+              stroke="#facc15"
+              strokeWidth="5"
+              strokeLinecap="round"
+              strokeDasharray={circumference}
+              strokeDashoffset={dashOffset}
+              className="transition-[stroke-dashoffset] duration-700 ease-out"
+            />
+          </svg>
+          <div className="absolute text-center">
+            <p className="text-3xl font-semibold tracking-tight text-amber-300">{daysRemaining}</p>
+            <p className="mt-0.5 text-[10px] font-medium text-zinc-500 uppercase">days</p>
           </div>
-        );
-      })}
-    </div>
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] font-semibold tracking-[0.16em] text-amber-300 uppercase">Upcoming exam</p>
+          <p className="mt-1 truncate text-xl font-semibold text-zinc-100">{meta.examName || "Exam"}</p>
+          <p className="mt-1 text-sm text-zinc-500">{fmtDate(examDate)}</p>
+          <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-white/[0.07]">
+            <div className="h-full rounded-full bg-amber-300 transition-[width] duration-700 ease-out" style={{ width: `${elapsed}%` }} />
+          </div>
+        </div>
+      </div>
+      <div className="mt-3 flex items-center justify-between border-t border-white/[0.06] pt-3 text-xs">
+        <span className="text-zinc-500">Preparation window</span>
+        <span className="font-semibold text-zinc-200">{elapsed}% elapsed</span>
+      </div>
+    </section>
   );
 }
 
@@ -694,9 +700,7 @@ export function Profile() {
   const [goalDraft, setGoalDraft] = useState("");
   const [manifestationDraft, setManifestationDraft] = useState("");
   const [examNameDraft, setExamNameDraft] = useState("");
-  const [countdownDrafts, setCountdownDrafts] = useState<
-    Array<{ id: string; name: string; date: string }>
-  >([]);
+  const [examDateDraft, setExamDateDraft] = useState("");
   const [importMessage, setImportMessage] = useState("");
   const [promptCopied, setPromptCopied] = useState(false);
   const importFileRef = useRef<HTMLInputElement>(null);
@@ -712,7 +716,7 @@ export function Profile() {
       const trackerData = loadTrackerData();
       setTracker(trackerData);
       setExamNameDraft(trackerData.meta.examName);
-      setCountdownDrafts(trackerData.meta.countdowns);
+      setExamDateDraft(trackerData.meta.examDate);
       setProfile(saved);
       setNameDraft(saved?.name ?? "");
       setGoalDraft(saved ? String(saved.questionGoal) : "100");
@@ -791,9 +795,8 @@ export function Profile() {
         meta: {
           ...tracker.meta,
           examName: examNameDraft.trim() || tracker.meta.examName,
-          countdowns: countdownDrafts
-            .filter((countdown) => countdown.name.trim() && countdown.date)
-            .slice(0, 2),
+          prepStartDate: tracker.meta.prepStartDate || localDay(new Date()),
+          examDate: examDateDraft,
         },
       });
       setTracker(nextTracker);
@@ -821,12 +824,14 @@ export function Profile() {
     try {
       await restorePracticeBackup(file);
       const saved = loadPracticeProfile();
+      const trackerData = loadTrackerData();
       setRecords(loadHistory());
-      setTracker(loadTrackerData());
+      setTracker(trackerData);
       setProfile(saved);
       setNameDraft(saved?.name ?? "");
       setGoalDraft(saved ? String(saved.questionGoal) : "100");
       setManifestationDraft(saved?.manifestation ?? "");
+      setExamDateDraft(trackerData.meta.examDate);
       setImportMessage("Data imported successfully.");
     } catch {
       setImportMessage("Choose a valid full backup or Tracker JSON file.");
@@ -1052,46 +1057,18 @@ export function Profile() {
                   placeholder="e.g. SSC CGL 2027"
                 />
               </label>
-              <div className="space-y-3">
-                <p className="text-sm font-medium text-zinc-200">
-                  Countdowns <span className="font-normal text-zinc-500">(up to 2)</span>
-                </p>
-                {[0, 1].map((index) => {
-                  const countdown = countdownDrafts[index] ?? {
-                    id: `countdown-${index + 1}`,
-                    name: "",
-                    date: "",
-                  };
-                  return (
-                    <div key={countdown.id} className="grid gap-2 sm:grid-cols-[1fr_0.8fr]">
-                      <Input
-                        className="h-11 border-white/10 bg-[#151515] text-zinc-100 placeholder:text-zinc-500 focus-visible:border-zinc-500"
-                        value={countdown.name}
-                        placeholder={`Countdown ${index + 1} name`}
-                        onChange={(event) =>
-                          setCountdownDrafts((current) => {
-                            const next = [...current];
-                            next[index] = { ...countdown, name: event.target.value };
-                            return next;
-                          })
-                        }
-                      />
-                      <Input
-                        className="h-11 border-white/10 bg-[#151515] text-zinc-100 focus-visible:border-zinc-500"
-                        type="date"
-                        value={countdown.date}
-                        onChange={(event) =>
-                          setCountdownDrafts((current) => {
-                            const next = [...current];
-                            next[index] = { ...countdown, date: event.target.value };
-                            return next;
-                          })
-                        }
-                      />
-                    </div>
-                  );
-                })}
-              </div>
+              <label className="block text-sm font-medium text-zinc-200">
+                Exam date <span className="font-normal text-zinc-500">(optional)</span>
+                <Input
+                  className="mt-2 h-11 border-white/10 bg-[#151515] text-zinc-100 focus-visible:border-zinc-500"
+                  type="date"
+                  value={examDateDraft}
+                  onChange={(event) => setExamDateDraft(event.target.value)}
+                />
+                <span className="mt-1 block text-xs font-normal text-zinc-500">
+                  Your preparation start is automatically saved from today.
+                </span>
+              </label>
             </div>
             <div className="mt-6 flex justify-end gap-2">
               <Button

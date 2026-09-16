@@ -33,9 +33,8 @@ export type TrackerData = {
   version: 1;
   meta: {
     examName: string;
-    syllabusDeadline: string;
-    targetDate: string;
-    countdowns: Array<{ id: string; name: string; date: string }>;
+    prepStartDate: string;
+    examDate: string;
   };
   pinnedChapterIds: string[];
   subjects: Subject[];
@@ -55,9 +54,8 @@ export function defaultData(): TrackerData {
     version: 1,
     meta: {
       examName: "",
-      syllabusDeadline: "",
-      targetDate: "",
-      countdowns: [],
+      prepStartDate: "",
+      examDate: "",
     },
     pinnedChapterIds: [],
     subjects: [],
@@ -185,7 +183,7 @@ Use this exact data shape:
 
 {
   "version": 1,
-  "meta": { "examName": "", "syllabusDeadline": "", "targetDate": "", "countdowns": [] },
+  "meta": { "examName": "", "prepStartDate": "", "examDate": "" },
   "subjects": [
     {
       "id": "maths",

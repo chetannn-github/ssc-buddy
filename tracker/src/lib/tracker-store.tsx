@@ -24,28 +24,23 @@ const TrackerCtx = createContext<Ctx | null>(null);
 function migrate(raw: unknown): TrackerData {
   const base = defaultData();
   const d = raw as Partial<TrackerData>;
+  const legacyMeta = (d.meta ?? {}) as Partial<TrackerData["meta"]> & {
+    targetDate?: unknown;
+    countdowns?: Array<{ date?: unknown }>;
+  };
   if (!d || typeof d !== "object" || !Array.isArray(d.subjects)) return base;
   const out: TrackerData = {
     version: 1,
     meta: {
       ...base.meta,
       ...(d.meta ?? {}),
-      countdowns: Array.isArray(d.meta?.countdowns)
-        ? d.meta.countdowns.slice(0, 2).map((countdown, index) => ({
-            id: String(countdown?.id ?? `countdown-${index + 1}`),
-            name: String(countdown?.name ?? ""),
-            date: String(countdown?.date ?? ""),
-          }))
-        : [
-            d.meta?.syllabusDeadline
-              ? { id: "countdown-1", name: "Syllabus deadline", date: d.meta.syllabusDeadline }
-              : null,
-            d.meta?.targetDate
-              ? { id: "countdown-2", name: "Target date", date: d.meta.targetDate }
-              : null,
-          ].filter(
-            (countdown): countdown is { id: string; name: string; date: string } => !!countdown,
-          ),
+      prepStartDate: String(legacyMeta.prepStartDate ?? ""),
+      examDate: String(
+        legacyMeta.examDate ??
+          legacyMeta.targetDate ??
+          (Array.isArray(legacyMeta.countdowns) ? legacyMeta.countdowns[0]?.date : "") ??
+          "",
+      ),
     },
     pinnedChapterIds: Array.isArray(d.pinnedChapterIds)
       ? d.pinnedChapterIds.map((id) => String(id))
