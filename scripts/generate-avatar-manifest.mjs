@@ -10,7 +10,9 @@ const musicExtension = /\.(mp3|m4a|ogg|wav)$/i;
 const [avatarFiles, videoFiles, musicFiles] = await Promise.all([
   readdir(avatarDirectory).then((files) => files.filter((file) => imageExtension.test(file)).sort()),
   readdir(videoDirectory).then((files) => files.filter((file) => videoExtension.test(file)).sort()),
-  readdir(musicDirectory).then((files) => files.filter((file) => musicExtension.test(file)).sort()),
+  readdir(musicDirectory, { recursive: true }).then((files) =>
+    files.filter((file) => musicExtension.test(file)).map((file) => file.replaceAll("\\", "/")).sort(),
+  ),
 ]);
 
 await Promise.all([

@@ -16,7 +16,7 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getStreaks } from "@/lib/analytics";
@@ -384,7 +384,11 @@ function MotivationalVideos({ onClose }: { onClose: () => void }) {
 }
 
 function trackTitle(file: string) {
-  return decodeURIComponent(file).replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ");
+  return decodeURIComponent(file).split("/").at(-1)?.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ") ?? file;
+}
+
+function playlistName(file: string) {
+  return decodeURIComponent(file).split("/").slice(0, -1).join(" / ") || "Music";
 }
 
 function embeddedCoverArt(bytes: Uint8Array): Blob | null {
@@ -423,6 +427,7 @@ function MotivationalMusic({ onClose }: { onClose: () => void }) {
   const [minimized, setMinimized] = useState(false);
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [selectedPlaylist, setSelectedPlaylist] = useState("");
   const audioRef = useRef<HTMLAudioElement>(null);
 
   useEffect(() => {
@@ -436,12 +441,21 @@ function MotivationalMusic({ onClose }: { onClose: () => void }) {
       .then((files) => {
         if (!active) return;
         setTracks(files);
-        setSelectedTrack(files.length ? files[Math.floor(Math.random() * files.length)] ?? null : null);
+        const playlist = files[0] ? playlistName(files[0]) : "";
+        const initialTracks = files.filter((file) => playlistName(file) === playlist);
+        setSelectedPlaylist(playlist);
+        setSelectedTrack(initialTracks.length ? initialTracks[Math.floor(Math.random() * initialTracks.length)] ?? null : null);
       })
       .catch(() => active && setTracks([]));
     return () => {
       active = false;
     };
+  }, []);
+
+  useEffect(() => {
+    const expand = () => setMinimized(false);
+    window.addEventListener("ssc-music-expand", expand);
+    return () => window.removeEventListener("ssc-music-expand", expand);
   }, []);
 
   useEffect(() => {
@@ -464,10 +478,17 @@ function MotivationalMusic({ onClose }: { onClose: () => void }) {
     };
   }, [selectedTrack]);
 
-  const trackIndex = selectedTrack ? tracks.indexOf(selectedTrack) : -1;
+  const playlists = useMemo(() => [...new Set(tracks.map(playlistName))], [tracks]);
+  const playlistTracks = tracks.filter((track) => playlistName(track) === selectedPlaylist);
+  const trackIndex = selectedTrack ? playlistTracks.indexOf(selectedTrack) : -1;
   const showTrack = (direction: -1 | 1) => {
-    if (trackIndex < 0 || tracks.length < 2) return;
-    setSelectedTrack(tracks[(trackIndex + direction + tracks.length) % tracks.length] ?? null);
+    if (trackIndex < 0 || playlistTracks.length < 2) return;
+    setSelectedTrack(playlistTracks[(trackIndex + direction + playlistTracks.length) % playlistTracks.length] ?? null);
+  };
+  const choosePlaylist = (playlist: string) => {
+    const options = tracks.filter((track) => playlistName(track) === playlist);
+    setSelectedPlaylist(playlist);
+    setSelectedTrack(options.length ? options[Math.floor(Math.random() * options.length)] ?? null : null);
   };
   const togglePlayback = () => {
     const audio = audioRef.current;
@@ -493,14 +514,14 @@ function MotivationalMusic({ onClose }: { onClose: () => void }) {
     };
     document.addEventListener("keydown", handleKeyboard);
     return () => document.removeEventListener("keydown", handleKeyboard);
-  }, [onClose, trackIndex, tracks]);
+  }, [onClose, trackIndex, playlistTracks]);
 
   const audioPlayer = selectedTrack ? (
     <audio
       ref={audioRef}
       key={selectedTrack}
       autoPlay
-      loop={tracks.length === 1}
+      loop={playlistTracks.length === 1}
       onPlay={() => setIsPlaying(true)}
       onPause={() => setIsPlaying(false)}
       onEnded={() => {
@@ -520,7 +541,7 @@ function MotivationalMusic({ onClose }: { onClose: () => void }) {
             <p className="max-w-40 truncate text-xs font-medium">{selectedTrack ? trackTitle(selectedTrack) : "Music"}</p>
           </button>
           <button type="button" onClick={togglePlayback} aria-label="Play or pause music" className="grid h-8 w-8 place-items-center overflow-hidden rounded-lg bg-white/[0.08] hover:bg-white/[0.14]">
-            {coverUrl ? <img src={coverUrl} alt="Album cover" className={cn("h-full w-full object-cover", isPlaying && "animate-[spin_8s_linear_infinite]")} /> : <Music2 className="h-4 w-4" />}
+            {coverUrl ? <img src={coverUrl} alt="Album cover" className="h-full w-full animate-[spin_8s_linear_infinite] object-cover" style={{ animationPlayState: isPlaying ? "running" : "paused" }} /> : <Music2 className="h-4 w-4" />}
           </button>
           <button type="button" onClick={onClose} aria-label="Close music player" className="grid h-8 w-8 place-items-center rounded-lg text-zinc-500 hover:bg-white/10 hover:text-zinc-100">
             <X className="h-4 w-4" />
@@ -533,7 +554,7 @@ function MotivationalMusic({ onClose }: { onClose: () => void }) {
   return (
     <>
       {audioPlayer}
-      <div className="fixed inset-0 z-[75] grid place-items-center bg-black/90 p-4 backdrop-blur-md" onMouseDown={onClose}>
+      <div className="fixed inset-0 z-[75] grid place-items-center bg-black/90 p-4 backdrop-blur-md">
       <section
         role="dialog"
         aria-modal="true"
@@ -550,7 +571,7 @@ function MotivationalMusic({ onClose }: { onClose: () => void }) {
         <div className="grid gap-6 sm:grid-cols-[minmax(0,1fr)_12rem]">
           <div className="flex min-h-64 flex-col items-center justify-center">
             <button type="button" onClick={togglePlayback} className="grid h-24 w-24 place-items-center overflow-hidden rounded-full border border-white/10 bg-white/[0.04] text-zinc-100 transition-colors hover:bg-white/[0.08]" aria-label="Play or pause music">
-              {coverUrl ? <img src={coverUrl} alt="Album cover" className={cn("h-full w-full object-cover", isPlaying && "animate-[spin_8s_linear_infinite]")} /> : <Music2 className="h-9 w-9" />}
+              {coverUrl ? <img src={coverUrl} alt="Album cover" className="h-full w-full animate-[spin_8s_linear_infinite] object-cover" style={{ animationPlayState: isPlaying ? "running" : "paused" }} /> : <Music2 className="h-9 w-9" />}
             </button>
             <p className="mt-5 max-w-full truncate text-center text-base font-semibold text-zinc-100">
               {selectedTrack ? trackTitle(selectedTrack) : "No music added"}
@@ -562,12 +583,21 @@ function MotivationalMusic({ onClose }: { onClose: () => void }) {
               <button type="button" onClick={() => seek(10)} aria-label="Forward 10 seconds" className="grid h-10 w-10 place-items-center rounded-full bg-white/[0.06] text-zinc-200 hover:bg-white/10"><RotateCw className="h-4 w-4" /></button>
             </div>
           </div>
-          <div className="max-h-72 overflow-y-auto rounded-xl border border-white/[0.08] bg-black/20 p-1.5">
-            {tracks.map((track) => (
+          <div className="flex max-h-72 flex-col rounded-xl border border-white/[0.08] bg-black/20">
+            <div className="flex gap-1 overflow-x-auto border-b border-white/[0.08] p-1.5">
+              {playlists.map((playlist) => (
+                <button key={playlist} type="button" onClick={() => choosePlaylist(playlist)} className={cn("shrink-0 rounded-md px-2 py-1 text-[10px] transition-colors", selectedPlaylist === playlist ? "bg-white/10 text-white" : "text-zinc-500 hover:text-zinc-200")}>
+                  {playlist}
+                </button>
+              ))}
+            </div>
+            <div className="overflow-y-auto p-1.5">
+            {playlistTracks.map((track) => (
               <button key={track} type="button" onClick={() => setSelectedTrack(track)} className={cn("w-full truncate rounded-lg px-3 py-2.5 text-left text-xs transition-colors", selectedTrack === track ? "bg-white/10 text-white" : "text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-200")}>
                 {trackTitle(track)}
               </button>
             ))}
+            </div>
           </div>
         </div>
       </section>
@@ -677,7 +707,10 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
           </button>
           <button
             type="button"
-            onClick={() => setMusicOpen(true)}
+            onClick={() => {
+              if (musicOpen) window.dispatchEvent(new Event("ssc-music-expand"));
+              else setMusicOpen(true);
+            }}
             aria-label="Motivational music"
             className="flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium text-white/70 transition-colors hover:bg-white/10 hover:text-white sm:px-3 sm:text-sm"
           >
