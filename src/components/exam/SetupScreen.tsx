@@ -551,7 +551,9 @@ export function SetupScreen({
                 setQuestionCount((current) =>
                   current === ""
                     ? current
-                    : String(Math.max(1, Math.min(Number(current) || 1, Math.min(500, nextAvailable))),
+                    : String(
+                        Math.max(1, Math.min(Number(current) || 1, Math.min(500, nextAvailable))),
+                      ),
                 );
               }}
               placeholder="Start question no. e.g. 151"
