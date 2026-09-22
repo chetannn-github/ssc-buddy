@@ -1,4 +1,4 @@
-import type { PointerEvent, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   BarChart3,
@@ -11,6 +11,7 @@ import {
   Minimize2,
   Music2,
   Play,
+  Repeat2,
   RotateCcw,
   RotateCw,
   Route as RouteIcon,
@@ -368,10 +369,9 @@ function MotivationalVideos({ onClose, onOpen }: { onClose: () => void; onOpen: 
               key={selectedVideo}
               className="h-full w-full cursor-pointer object-contain"
               autoPlay
-              loop={videos.length === 1}
+              loop
               playsInline
               onClick={togglePlayback}
-              onEnded={() => showVideo(1)}
             >
               <source src={`/videos/${encodeURIComponent(selectedVideo)}`} />
               Your browser does not support video playback.
@@ -472,8 +472,8 @@ export function MotivationalMusic({ onClose }: { onClose: () => void }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [selectedPlaylist, setSelectedPlaylist] = useState("");
   const [playbackPercent, setPlaybackPercent] = useState(0);
+  const [repeatTrack, setRepeatTrack] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
-  const seekingRef = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -567,29 +567,7 @@ export function MotivationalMusic({ onClose }: { onClose: () => void }) {
       Math.min(audio.duration || Infinity, audio.currentTime + seconds),
     );
   };
-  const seekFromRing = (event: PointerEvent<HTMLButtonElement>) => {
-    const audio = audioRef.current;
-    if (!audio || !Number.isFinite(audio.duration) || audio.duration <= 0) return;
-    const bounds = event.currentTarget.getBoundingClientRect();
-    const x = event.clientX - bounds.left - bounds.width / 2;
-    const y = event.clientY - bounds.top - bounds.height / 2;
-    const angle = (Math.atan2(y, x) * 180) / Math.PI;
-    const percent = ((angle + 450) % 360) / 3.6;
-    audio.currentTime = (percent / 100) * audio.duration;
-    setPlaybackPercent(percent);
-  };
-  const handleRingPointerDown = (event: PointerEvent<HTMLButtonElement>) => {
-    seekingRef.current = true;
-    event.currentTarget.setPointerCapture(event.pointerId);
-    seekFromRing(event);
-  };
-  const handleRingClick = () => {
-    if (seekingRef.current) {
-      seekingRef.current = false;
-      return;
-    }
-    togglePlayback();
-  };
+  const handleRingClick = () => togglePlayback();
 
   useEffect(() => {
     const handleKeyboard = (event: KeyboardEvent) => {
@@ -612,7 +590,7 @@ export function MotivationalMusic({ onClose }: { onClose: () => void }) {
       ref={audioRef}
       key={selectedTrack}
       autoPlay
-      loop={playingPlaylistTracks.length === 1}
+      loop={repeatTrack}
       onPlay={() => setIsPlaying(true)}
       onPause={() => setIsPlaying(false)}
       onTimeUpdate={(event) => {
@@ -623,7 +601,7 @@ export function MotivationalMusic({ onClose }: { onClose: () => void }) {
       }}
       onEnded={() => {
         setIsPlaying(false);
-        showTrack(1);
+        if (!repeatTrack) showTrack(1);
       }}
       src={`/music/${encodeURIComponent(selectedTrack)}`}
     />
@@ -715,10 +693,6 @@ export function MotivationalMusic({ onClose }: { onClose: () => void }) {
               <button
                 type="button"
                 onClick={handleRingClick}
-                onPointerDown={handleRingPointerDown}
-                onPointerMove={(event) => {
-                  if (event.currentTarget.hasPointerCapture(event.pointerId)) seekFromRing(event);
-                }}
                 className="relative grid h-24 w-24 touch-none select-none place-items-center overflow-visible rounded-full p-[3px] text-zinc-100 transition-transform hover:scale-105"
                 style={{
                   background: `conic-gradient(#ef4444 ${playbackPercent}%, rgba(255,255,255,0.12) 0)`,
@@ -756,6 +730,20 @@ export function MotivationalMusic({ onClose }: { onClose: () => void }) {
                   className="grid h-10 w-10 place-items-center rounded-full bg-white/[0.06] text-zinc-200 hover:bg-white/10"
                 >
                   <RotateCcw className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRepeatTrack((current) => !current)}
+                  aria-label={repeatTrack ? "Turn off repeat" : "Repeat current song"}
+                  aria-pressed={repeatTrack}
+                  className={cn(
+                    "grid h-10 w-10 place-items-center rounded-full transition-colors",
+                    repeatTrack
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-white/[0.06] text-zinc-200 hover:bg-white/10",
+                  )}
+                >
+                  <Repeat2 className="h-4 w-4" />
                 </button>
                 {tracks.length > 1 && (
                   <button
