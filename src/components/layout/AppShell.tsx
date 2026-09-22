@@ -305,12 +305,16 @@ function MotivationalVideos({ onClose, onOpen }: { onClose: () => void; onOpen: 
       .then(async (response) => {
         if (!response.ok) return [];
         const files = (await response.json()) as unknown;
-        return Array.isArray(files) ? files.filter((file): file is string => typeof file === "string") : [];
+        return Array.isArray(files)
+          ? files.filter((file): file is string => typeof file === "string")
+          : [];
       })
       .then((files) => {
         if (!active) return;
         setVideos(files);
-        setSelectedVideo(files.length ? files[Math.floor(Math.random() * files.length)] ?? null : null);
+        setSelectedVideo(
+          files.length ? (files[Math.floor(Math.random() * files.length)] ?? null) : null,
+        );
       })
       .catch(() => active && setVideos([]));
     return () => {
@@ -349,7 +353,12 @@ function MotivationalVideos({ onClose, onOpen }: { onClose: () => void; onOpen: 
         className="relative h-full w-full overflow-hidden bg-black text-zinc-100"
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <button type="button" onClick={onClose} aria-label="Close video player" className="absolute top-3 right-3 z-20 grid h-9 w-9 place-items-center rounded-full bg-black/50 text-zinc-300 backdrop-blur transition-colors hover:bg-black/80 hover:text-white">
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close video player"
+          className="absolute top-3 right-3 z-20 grid h-9 w-9 place-items-center rounded-full bg-black/50 text-zinc-300 backdrop-blur transition-colors hover:bg-black/80 hover:text-white"
+        >
           <X className="h-4 w-4" />
         </button>
         {selectedVideo ? (
@@ -369,10 +378,20 @@ function MotivationalVideos({ onClose, onOpen }: { onClose: () => void; onOpen: 
             </video>
             {videos.length > 1 && (
               <>
-                <button type="button" onClick={() => showVideo(-1)} aria-label="Previous video" className="absolute top-1/2 left-3 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-black/50 text-white backdrop-blur transition-colors hover:bg-black/80 sm:left-5">
+                <button
+                  type="button"
+                  onClick={() => showVideo(-1)}
+                  aria-label="Previous video"
+                  className="absolute top-1/2 left-3 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-black/50 text-white backdrop-blur transition-colors hover:bg-black/80 sm:left-5"
+                >
                   <ChevronLeft className="h-6 w-6" />
                 </button>
-                <button type="button" onClick={() => showVideo(1)} aria-label="Next video" className="absolute top-1/2 right-3 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-black/50 text-white backdrop-blur transition-colors hover:bg-black/80 sm:right-5">
+                <button
+                  type="button"
+                  onClick={() => showVideo(1)}
+                  aria-label="Next video"
+                  className="absolute top-1/2 right-3 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-black/50 text-white backdrop-blur transition-colors hover:bg-black/80 sm:right-5"
+                >
                   <ChevronRight className="h-6 w-6" />
                 </button>
               </>
@@ -389,7 +408,13 @@ function MotivationalVideos({ onClose, onOpen }: { onClose: () => void; onOpen: 
 }
 
 function trackTitle(file: string) {
-  return decodeURIComponent(file).split("/").at(-1)?.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ") ?? file;
+  return (
+    decodeURIComponent(file)
+      .split("/")
+      .at(-1)
+      ?.replace(/\.[^.]+$/, "")
+      .replace(/[-_]+/g, " ") ?? file
+  );
 }
 
 function playlistName(file: string) {
@@ -402,8 +427,14 @@ function embeddedCoverArt(bytes: Uint8Array): Blob | null {
   if (version !== 3 && version !== 4) return null;
   const readSize = (offset: number, synchsafe: boolean) =>
     synchsafe
-      ? ((bytes[offset] ?? 0) << 21) | ((bytes[offset + 1] ?? 0) << 14) | ((bytes[offset + 2] ?? 0) << 7) | (bytes[offset + 3] ?? 0)
-      : ((bytes[offset] ?? 0) << 24) | ((bytes[offset + 1] ?? 0) << 16) | ((bytes[offset + 2] ?? 0) << 8) | (bytes[offset + 3] ?? 0);
+      ? ((bytes[offset] ?? 0) << 21) |
+        ((bytes[offset + 1] ?? 0) << 14) |
+        ((bytes[offset + 2] ?? 0) << 7) |
+        (bytes[offset + 3] ?? 0)
+      : ((bytes[offset] ?? 0) << 24) |
+        ((bytes[offset + 1] ?? 0) << 16) |
+        ((bytes[offset + 2] ?? 0) << 8) |
+        (bytes[offset + 3] ?? 0);
   const end = Math.min(bytes.length, 10 + readSize(6, true));
   for (let offset = 10; offset + 10 <= end;) {
     const id = String.fromCharCode(...bytes.slice(offset, offset + 4));
@@ -417,16 +448,23 @@ function embeddedCoverArt(bytes: Uint8Array): Blob | null {
       const encoding = bytes[start] ?? 0;
       let imageStart = mimeEnd + 2;
       if (encoding === 0 || encoding === 3) imageStart = bytes.indexOf(0, imageStart) + 1;
-      else while (imageStart + 1 < start + size && ((bytes[imageStart] ?? 0) !== 0 || (bytes[imageStart + 1] ?? 0) !== 0)) imageStart += 2;
+      else
+        while (
+          imageStart + 1 < start + size &&
+          ((bytes[imageStart] ?? 0) !== 0 || (bytes[imageStart + 1] ?? 0) !== 0)
+        )
+          imageStart += 2;
       if (encoding === 1 || encoding === 2) imageStart += 2;
-      return imageStart < start + size ? new Blob([bytes.slice(imageStart, start + size)], { type: mime }) : null;
+      return imageStart < start + size
+        ? new Blob([bytes.slice(imageStart, start + size)], { type: mime })
+        : null;
     }
     offset = start + size;
   }
   return null;
 }
 
-function MotivationalMusic({ onClose }: { onClose: () => void }) {
+export function MotivationalMusic({ onClose }: { onClose: () => void }) {
   const [tracks, setTracks] = useState<string[]>([]);
   const [selectedTrack, setSelectedTrack] = useState<string | null>(null);
   const [minimized, setMinimized] = useState(false);
@@ -443,7 +481,9 @@ function MotivationalMusic({ onClose }: { onClose: () => void }) {
       .then(async (response) => {
         if (!response.ok) return [];
         const files = (await response.json()) as unknown;
-        return Array.isArray(files) ? files.filter((file): file is string => typeof file === "string") : [];
+        return Array.isArray(files)
+          ? files.filter((file): file is string => typeof file === "string")
+          : [];
       })
       .then((files) => {
         if (!active) return;
@@ -451,7 +491,11 @@ function MotivationalMusic({ onClose }: { onClose: () => void }) {
         const playlist = files[0] ? playlistName(files[0]) : "";
         const initialTracks = files.filter((file) => playlistName(file) === playlist);
         setSelectedPlaylist(playlist);
-        setSelectedTrack(initialTracks.length ? initialTracks[Math.floor(Math.random() * initialTracks.length)] ?? null : null);
+        setSelectedTrack(
+          initialTracks.length
+            ? (initialTracks[Math.floor(Math.random() * initialTracks.length)] ?? null)
+            : null,
+        );
       })
       .catch(() => active && setTracks([]));
     return () => {
@@ -500,7 +544,11 @@ function MotivationalMusic({ onClose }: { onClose: () => void }) {
   const trackIndex = selectedTrack ? playingPlaylistTracks.indexOf(selectedTrack) : -1;
   const showTrack = (direction: -1 | 1) => {
     if (trackIndex < 0 || playingPlaylistTracks.length < 2) return;
-    setSelectedTrack(playingPlaylistTracks[(trackIndex + direction + playingPlaylistTracks.length) % playingPlaylistTracks.length] ?? null);
+    setSelectedTrack(
+      playingPlaylistTracks[
+        (trackIndex + direction + playingPlaylistTracks.length) % playingPlaylistTracks.length
+      ] ?? null,
+    );
   };
   const choosePlaylist = (playlist: string) => {
     setSelectedPlaylist(playlist);
@@ -514,7 +562,10 @@ function MotivationalMusic({ onClose }: { onClose: () => void }) {
   const seek = (seconds: number) => {
     const audio = audioRef.current;
     if (!audio) return;
-    audio.currentTime = Math.max(0, Math.min(audio.duration || Infinity, audio.currentTime + seconds));
+    audio.currentTime = Math.max(
+      0,
+      Math.min(audio.duration || Infinity, audio.currentTime + seconds),
+    );
   };
   const seekFromRing = (event: PointerEvent<HTMLButtonElement>) => {
     const audio = audioRef.current;
@@ -523,7 +574,7 @@ function MotivationalMusic({ onClose }: { onClose: () => void }) {
     const x = event.clientX - bounds.left - bounds.width / 2;
     const y = event.clientY - bounds.top - bounds.height / 2;
     const angle = (Math.atan2(y, x) * 180) / Math.PI;
-    const percent = (angle + 450) % 360 / 3.6;
+    const percent = ((angle + 450) % 360) / 3.6;
     audio.currentTime = (percent / 100) * audio.duration;
     setPlaybackPercent(percent);
   };
@@ -566,7 +617,9 @@ function MotivationalMusic({ onClose }: { onClose: () => void }) {
       onPause={() => setIsPlaying(false)}
       onTimeUpdate={(event) => {
         const { currentTime, duration } = event.currentTarget;
-        setPlaybackPercent(Number.isFinite(duration) && duration > 0 ? (currentTime / duration) * 100 : 0);
+        setPlaybackPercent(
+          Number.isFinite(duration) && duration > 0 ? (currentTime / duration) * 100 : 0,
+        );
       }}
       onEnded={() => {
         setIsPlaying(false);
@@ -581,15 +634,45 @@ function MotivationalMusic({ onClose }: { onClose: () => void }) {
       <>
         {audioPlayer}
         <div className="fixed right-4 bottom-4 z-[75] flex max-w-[calc(100vw-2rem)] items-center gap-2 rounded-xl border border-white/10 bg-[#1b1b1b] p-2 pl-3 text-zinc-100 shadow-2xl">
-          <button type="button" onClick={() => setMinimized(false)} className="min-w-0 text-left" aria-label="Expand music player">
-            <span className="block max-w-40 truncate text-xs font-medium">{selectedTrack ? trackTitle(selectedTrack) : "Music"}</span>
-          </button>
-          <button type="button" onClick={togglePlayback} aria-label="Play or pause music" className="relative grid h-8 w-8 place-items-center overflow-hidden rounded-lg p-[2px]" style={{ background: `conic-gradient(#ef4444 ${playbackPercent}%, rgba(255,255,255,0.12) 0)` }}>
-            <span className="grid h-full w-full place-items-center overflow-hidden rounded-md bg-[#1b1b1b]">
-            {coverUrl ? <img draggable={false} src={coverUrl} alt="Album cover" className="h-full w-full animate-[spin_8s_linear_infinite select-none object-cover" style={{ animationPlayState: isPlaying ? "running" : "paused" }} /> : <Music2 className="h-4 w-4" />}
+          <button
+            type="button"
+            onClick={() => setMinimized(false)}
+            className="min-w-0 text-left"
+            aria-label="Expand music player"
+          >
+            <span className="block max-w-40 truncate text-xs font-medium">
+              {selectedTrack ? trackTitle(selectedTrack) : "Music"}
             </span>
           </button>
-          <button type="button" onClick={onClose} aria-label="Close music player" className="grid h-8 w-8 place-items-center rounded-lg text-zinc-500 hover:bg-white/10 hover:text-zinc-100">
+          <button
+            type="button"
+            onClick={togglePlayback}
+            aria-label="Play or pause music"
+            className="relative grid h-8 w-8 place-items-center overflow-hidden rounded-lg p-[2px]"
+            style={{
+              background: `conic-gradient(#ef4444 ${playbackPercent}%, rgba(255,255,255,0.12) 0)`,
+            }}
+          >
+            <span className="grid h-full w-full place-items-center overflow-hidden rounded-md bg-[#1b1b1b]">
+              {coverUrl ? (
+                <img
+                  draggable={false}
+                  src={coverUrl}
+                  alt="Album cover"
+                  className="h-full w-full animate-[spin_8s_linear_infinite select-none object-cover"
+                  style={{ animationPlayState: isPlaying ? "running" : "paused" }}
+                />
+              ) : (
+                <Music2 className="h-4 w-4" />
+              )}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close music player"
+            className="grid h-8 w-8 place-items-center rounded-lg text-zinc-500 hover:bg-white/10 hover:text-zinc-100"
+          >
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -600,66 +683,148 @@ function MotivationalMusic({ onClose }: { onClose: () => void }) {
   return (
     <>
       {audioPlayer}
-      <div className="fixed inset-0 z-[75] grid place-items-center bg-black/90 p-4 backdrop-blur-md" onMouseDown={() => setMinimized(true)}>
-      <section
-        role="dialog"
-        aria-modal="true"
-        aria-label="Motivational music"
-        className="relative w-full max-w-3xl rounded-2xl border border-white/10 bg-[#171717] p-5 text-zinc-100 shadow-[0_24px_80px_-24px_black] sm:p-6"
-        onMouseDown={(event) => event.stopPropagation()}
+      <div
+        className="fixed inset-0 z-[75] grid place-items-center bg-black/90 p-4 backdrop-blur-md"
+        onMouseDown={() => setMinimized(true)}
       >
-        <button type="button" onClick={onClose} aria-label="Close music player" className="absolute top-3 right-3 grid h-8 w-8 place-items-center rounded-full text-zinc-500 transition-colors hover:bg-white/10 hover:text-zinc-100">
-          <X className="h-4 w-4" />
-        </button>
-        <button type="button" onClick={() => setMinimized(true)} aria-label="Minimize music player" className="absolute top-3 right-12 grid h-8 w-8 place-items-center rounded-full text-zinc-500 transition-colors hover:bg-white/10 hover:text-zinc-100">
-          <Minimize2 className="h-4 w-4" />
-        </button>
-        <div className="grid gap-6 sm:grid-cols-[12rem_minmax(0,1fr)]">
-          <div className="flex min-h-64 flex-col items-center justify-center sm:order-2">
-            <button
-              type="button"
-              onClick={handleRingClick}
-              onPointerDown={handleRingPointerDown}
-              onPointerMove={(event) => { if (event.currentTarget.hasPointerCapture(event.pointerId)) seekFromRing(event); }}
-              className="relative grid h-24 w-24 touch-none select-none place-items-center overflow-visible rounded-full p-[3px] text-zinc-100 transition-transform hover:scale-105"
-              style={{ background: `conic-gradient(#ef4444 ${playbackPercent}%, rgba(255,255,255,0.12) 0)` }}
-              aria-label="Play or pause music"
-            >
-              <span className="grid h-full w-full place-items-center overflow-hidden rounded-full bg-[#171717]">
-                {coverUrl ? <img draggable={false} src={coverUrl} alt="Album cover" className="h-full w-full animate-[spin_8s_linear_infinite select-none object-cover" style={{ animationPlayState: isPlaying ? "running" : "paused" }} /> : <Music2 className="h-9 w-9" />}
-              </span>
-              <span className="pointer-events-none absolute inset-0" style={{ transform: `rotate(${playbackPercent * 3.6}deg)` }}>
-                <span className="absolute top-0 left-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-0.5 rounded-full border-2 border-[#171717] bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.9)]" />
-              </span>
-            </button>
-            <p className="mt-5 w-56 max-w-full truncate text-center text-base font-semibold text-zinc-100">
-              {selectedTrack ? trackTitle(selectedTrack) : "No music added"}
-            </p>
-            <div className="mt-5 flex items-center justify-center gap-3">
-              <button type="button" onClick={() => seek(-10)} aria-label="Back 10 seconds" className="grid h-10 w-10 place-items-center rounded-full bg-white/[0.06] text-zinc-200 hover:bg-white/10"><RotateCcw className="h-4 w-4" /></button>
-              {tracks.length > 1 && <button type="button" onClick={() => showTrack(-1)} aria-label="Previous song" className="grid h-10 w-10 place-items-center rounded-full bg-white/[0.06] text-zinc-200 hover:bg-white/10"><ChevronLeft className="h-5 w-5" /></button>}
-              {tracks.length > 1 && <button type="button" onClick={() => showTrack(1)} aria-label="Next song" className="grid h-10 w-10 place-items-center rounded-full bg-white/[0.06] text-zinc-200 hover:bg-white/10"><ChevronRight className="h-5 w-5" /></button>}
-              <button type="button" onClick={() => seek(10)} aria-label="Forward 10 seconds" className="grid h-10 w-10 place-items-center rounded-full bg-white/[0.06] text-zinc-200 hover:bg-white/10"><RotateCw className="h-4 w-4" /></button>
-            </div>
-          </div>
-          <div className="flex max-h-72 flex-col sm:order-1">
-            <div className="flex gap-1 overflow-x-auto pb-2">
-              {playlists.map((playlist) => (
-                <button key={playlist} type="button" onClick={() => choosePlaylist(playlist)} className={cn("shrink-0 rounded-md px-2 py-1 text-[10px] transition-colors", selectedPlaylist === playlist ? "bg-white/10 text-white" : "text-zinc-500 hover:text-zinc-200")}>
-                  {playlist}
-                </button>
-              ))}
-            </div>
-            <div className="overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {playlistTracks.map((track) => (
-              <button key={track} type="button" onClick={() => setSelectedTrack(track)} className={cn("w-full truncate rounded-lg px-3 py-2.5 text-left text-xs transition-colors", selectedTrack === track ? "bg-white/10 text-white" : "text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-200")}>
-                {trackTitle(track)}
+        <section
+          role="dialog"
+          aria-modal="true"
+          aria-label="Motivational music"
+          className="relative w-full max-w-3xl rounded-2xl border border-white/10 bg-[#171717] p-5 text-zinc-100 shadow-[0_24px_80px_-24px_black] sm:p-6"
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close music player"
+            className="absolute top-3 right-3 grid h-8 w-8 place-items-center rounded-full text-zinc-500 transition-colors hover:bg-white/10 hover:text-zinc-100"
+          >
+            <X className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setMinimized(true)}
+            aria-label="Minimize music player"
+            className="absolute top-3 right-12 grid h-8 w-8 place-items-center rounded-full text-zinc-500 transition-colors hover:bg-white/10 hover:text-zinc-100"
+          >
+            <Minimize2 className="h-4 w-4" />
+          </button>
+          <div className="grid gap-6 sm:grid-cols-[12rem_minmax(0,1fr)]">
+            <div className="flex min-h-64 flex-col items-center justify-center sm:order-2">
+              <button
+                type="button"
+                onClick={handleRingClick}
+                onPointerDown={handleRingPointerDown}
+                onPointerMove={(event) => {
+                  if (event.currentTarget.hasPointerCapture(event.pointerId)) seekFromRing(event);
+                }}
+                className="relative grid h-24 w-24 touch-none select-none place-items-center overflow-visible rounded-full p-[3px] text-zinc-100 transition-transform hover:scale-105"
+                style={{
+                  background: `conic-gradient(#ef4444 ${playbackPercent}%, rgba(255,255,255,0.12) 0)`,
+                }}
+                aria-label="Play or pause music"
+              >
+                <span className="grid h-full w-full place-items-center overflow-hidden rounded-full bg-[#171717]">
+                  {coverUrl ? (
+                    <img
+                      draggable={false}
+                      src={coverUrl}
+                      alt="Album cover"
+                      className="h-full w-full animate-[spin_8s_linear_infinite select-none object-cover"
+                      style={{ animationPlayState: isPlaying ? "running" : "paused" }}
+                    />
+                  ) : (
+                    <Music2 className="h-9 w-9" />
+                  )}
+                </span>
+                <span
+                  className="pointer-events-none absolute inset-0"
+                  style={{ transform: `rotate(${playbackPercent * 3.6}deg)` }}
+                >
+                  <span className="absolute top-0 left-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-0.5 rounded-full border-2 border-[#171717] bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.9)]" />
+                </span>
               </button>
-            ))}
+              <p className="mt-5 w-56 max-w-full truncate text-center text-base font-semibold text-zinc-100">
+                {selectedTrack ? trackTitle(selectedTrack) : "No music added"}
+              </p>
+              <div className="mt-5 flex items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => seek(-10)}
+                  aria-label="Back 10 seconds"
+                  className="grid h-10 w-10 place-items-center rounded-full bg-white/[0.06] text-zinc-200 hover:bg-white/10"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                </button>
+                {tracks.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => showTrack(-1)}
+                    aria-label="Previous song"
+                    className="grid h-10 w-10 place-items-center rounded-full bg-white/[0.06] text-zinc-200 hover:bg-white/10"
+                  >
+                    <ChevronLeft className="h-5 w-5" />
+                  </button>
+                )}
+                {tracks.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => showTrack(1)}
+                    aria-label="Next song"
+                    className="grid h-10 w-10 place-items-center rounded-full bg-white/[0.06] text-zinc-200 hover:bg-white/10"
+                  >
+                    <ChevronRight className="h-5 w-5" />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => seek(10)}
+                  aria-label="Forward 10 seconds"
+                  className="grid h-10 w-10 place-items-center rounded-full bg-white/[0.06] text-zinc-200 hover:bg-white/10"
+                >
+                  <RotateCw className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+            <div className="flex max-h-72 flex-col sm:order-1">
+              <div className="flex gap-1 overflow-x-auto pb-2">
+                {playlists.map((playlist) => (
+                  <button
+                    key={playlist}
+                    type="button"
+                    onClick={() => choosePlaylist(playlist)}
+                    className={cn(
+                      "shrink-0 rounded-md px-2 py-1 text-[10px] transition-colors",
+                      selectedPlaylist === playlist
+                        ? "bg-white/10 text-white"
+                        : "text-zinc-500 hover:text-zinc-200",
+                    )}
+                  >
+                    {playlist}
+                  </button>
+                ))}
+              </div>
+              <div className="overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {playlistTracks.map((track) => (
+                  <button
+                    key={track}
+                    type="button"
+                    onClick={() => setSelectedTrack(track)}
+                    className={cn(
+                      "w-full truncate rounded-lg px-3 py-2.5 text-left text-xs transition-colors",
+                      selectedTrack === track
+                        ? "bg-white/10 text-white"
+                        : "text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-200",
+                    )}
+                  >
+                    {trackTitle(track)}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
       </div>
     </>
   );
@@ -674,7 +839,6 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
   const [streakReady, setStreakReady] = useState(false);
   const [manifestationOpen, setManifestationOpen] = useState(false);
   const [videosOpen, setVideosOpen] = useState(false);
-  const [musicOpen, setMusicOpen] = useState(false);
   const previousStreak = useRef<number | null>(null);
 
   useEffect(() => {
@@ -702,7 +866,9 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
 
   useEffect(() => {
     if (!profile) return;
-    setManifestationOpen(Boolean(profile.manifestation?.trim()) && !hasCompletedTodayManifestation());
+    setManifestationOpen(
+      Boolean(profile.manifestation?.trim()) && !hasCompletedTodayManifestation(),
+    );
   }, [profile]);
 
   const currentStreak = getStreaks([
@@ -768,8 +934,8 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
           <button
             type="button"
             onClick={() => {
-              if (musicOpen) window.dispatchEvent(new Event("ssc-music-expand"));
-              else setMusicOpen(true);
+              window.dispatchEvent(new Event("ssc-music-open"));
+              window.dispatchEvent(new Event("ssc-music-expand"));
             }}
             aria-label="Motivational music"
             className="flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium text-white/70 transition-colors hover:bg-white/10 hover:text-white sm:px-3 sm:text-sm"
@@ -835,8 +1001,12 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
           onComplete={() => setManifestationOpen(false)}
         />
       )}
-      {videosOpen && <MotivationalVideos onOpen={() => window.dispatchEvent(new Event("ssc-music-pause"))} onClose={() => setVideosOpen(false)} />}
-      {musicOpen && <MotivationalMusic onClose={() => setMusicOpen(false)} />}
+      {videosOpen && (
+        <MotivationalVideos
+          onOpen={() => window.dispatchEvent(new Event("ssc-music-pause"))}
+          onClose={() => setVideosOpen(false)}
+        />
+      )}
       {celebratedStreak !== null && (
         <StreakCelebration streak={celebratedStreak} onClose={() => setCelebratedStreak(null)} />
       )}
