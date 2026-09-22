@@ -222,7 +222,9 @@ export function getExercise(
   const chapter = getChapter(subjectName, chapterName);
   if (!chapter) return null;
   if (!exerciseName) return chapter.exercises[0] ?? null;
-  return chapter.exercises.find((e) => e.name === exerciseName) ?? chapter.exercises[0] ?? null;
+  // A named exercise must match exactly. Falling back to the first exercise
+  // would apply an unrelated answer key after an exercise is deleted/renamed.
+  return chapter.exercises.find((e) => e.name === exerciseName) ?? null;
 }
 
 /* ---------- History ---------- */

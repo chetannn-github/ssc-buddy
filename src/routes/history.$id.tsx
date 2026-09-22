@@ -62,7 +62,9 @@ function ResultDetail() {
     reevaluationTimer.current = setTimeout(() => setReevaluating(false), 2000);
 
     const exercise = getExercise(record.subject, record.chapter, record.exercise);
-    const fullAnswerKey = exercise?.answerKey;
+    // JSON attempts keep their key with the history record, so a deleted source
+    // exercise can still be evaluated accurately instead of using another set.
+    const fullAnswerKey = exercise?.answerKey ?? record.answerKey;
     if (!fullAnswerKey) return;
 
     const answerKey = fullAnswerKey.slice(
