@@ -718,7 +718,7 @@ export function MotivationalMusic({ onClose }: { onClose: () => void }) {
                   src={coverUrl}
                   alt="Album cover"
                   className={cn(
-                    "h-full w-full select-none object-cover",
+                    "music-cover-art h-full w-full select-none object-cover",
                     isPlaying && "music-cover-art-playing",
                   )}
                 />

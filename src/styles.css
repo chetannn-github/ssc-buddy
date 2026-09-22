@@ -34,13 +34,14 @@
   }
 }
 
-.music-cover-art-playing {
-  animation-play-state: running;
+.music-cover-art {
+  animation: music-cover-spin 20s linear infinite !important;
+  animation-play-state: paused !important;
+  transform-origin: center;
 }
 
-.music-cover-art {
-  animation: music-cover-spin 20s linear infinite;
-  animation-play-state: paused;
+.music-cover-art.music-cover-art-playing {
+  animation-play-state: running !important;
 }
 
 .animate-consistency-flame {
