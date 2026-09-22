@@ -305,6 +305,7 @@ export function MotivationalVideos({
   const [selectedVideo, setSelectedVideo] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(true);
   const [playbackOverlay, setPlaybackOverlay] = useState<"play" | "pause" | null>(null);
+  const [videoDirection, setVideoDirection] = useState<"next" | "previous">("next");
   const videoRef = useRef<HTMLVideoElement>(null);
   const swipeStartY = useRef<number | null>(null);
   const didSwipe = useRef(false);
@@ -348,6 +349,7 @@ export function MotivationalVideos({
   const selectedIndex = selectedVideo ? videos.indexOf(selectedVideo) : -1;
   const showVideo = (direction: -1 | 1) => {
     if (selectedIndex < 0 || videos.length < 2) return;
+    setVideoDirection(direction === 1 ? "next" : "previous");
     setSelectedVideo(videos[(selectedIndex + direction + videos.length) % videos.length] ?? null);
   };
   const togglePlayback = () => {
@@ -398,21 +400,25 @@ export function MotivationalVideos({
         {selectedVideo ? (
           <div
             className="group relative h-full w-full"
-            onPointerDown={(event) => {
-              swipeStartY.current = event.clientY;
+            onTouchStart={(event) => {
+              swipeStartY.current = event.touches[0]?.clientY ?? null;
             }}
-            onPointerUp={(event) => {
+            onTouchEnd={(event) => {
               const start = swipeStartY.current;
               swipeStartY.current = null;
-              if (start === null || Math.abs(event.clientY - start) < 50) return;
+              const end = event.changedTouches[0]?.clientY;
+              if (start === null || end === undefined || Math.abs(end - start) < 45) return;
               didSwipe.current = true;
-              showVideo(event.clientY < start ? 1 : -1);
+              showVideo(end < start ? 1 : -1);
             }}
           >
             <video
               ref={videoRef}
-              key={selectedVideo}
-              className="h-full w-full cursor-pointer object-contain"
+              key={`${selectedVideo}-${videoDirection}`}
+              className={cn(
+                "h-full w-full cursor-pointer object-contain",
+                videoDirection === "next" ? "reel-slide-in-up" : "reel-slide-in-down",
+              )}
               autoPlay
               loop
               playsInline
