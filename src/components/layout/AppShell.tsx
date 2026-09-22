@@ -294,7 +294,13 @@ function DailyManifestation({
   );
 }
 
-function MotivationalVideos({ onClose, onOpen }: { onClose: () => void; onOpen: () => void }) {
+export function MotivationalVideos({
+  onClose,
+  onOpen,
+}: {
+  onClose: () => void;
+  onOpen: () => void;
+}) {
   const [videos, setVideos] = useState<string[]>([]);
   const [selectedVideo, setSelectedVideo] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(true);
@@ -910,7 +916,6 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
   const [celebratedStreak, setCelebratedStreak] = useState<number | null>(null);
   const [streakReady, setStreakReady] = useState(false);
   const [manifestationOpen, setManifestationOpen] = useState(false);
-  const [videosOpen, setVideosOpen] = useState(false);
   const previousStreak = useRef<number | null>(null);
 
   useEffect(() => {
@@ -994,27 +999,6 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
             {subtitle && <p className="truncate text-xs opacity-75 sm:text-sm">{subtitle}</p>}
           </div>
           {actions}
-          <button
-            type="button"
-            onClick={() => setVideosOpen(true)}
-            aria-label="Motivational videos"
-            className="flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium text-white/70 transition-colors hover:bg-white/10 hover:text-white sm:px-3 sm:text-sm"
-          >
-            <Play className="h-4 w-4" />
-            <span className="hidden sm:inline">Motivational videos</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              window.dispatchEvent(new Event("ssc-music-open"));
-              window.dispatchEvent(new Event("ssc-music-expand"));
-            }}
-            aria-label="Motivational music"
-            className="flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium text-white/70 transition-colors hover:bg-white/10 hover:text-white sm:px-3 sm:text-sm"
-          >
-            <Music2 className="h-4 w-4" />
-            <span className="hidden sm:inline">Motivational music</span>
-          </button>
           <nav className="flex shrink-0 items-center gap-1">
             {nav.map((item) => {
               const active = path.startsWith(item.url);
@@ -1071,12 +1055,6 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
         <DailyManifestation
           manifestation={profile.manifestation}
           onComplete={() => setManifestationOpen(false)}
-        />
-      )}
-      {videosOpen && (
-        <MotivationalVideos
-          onOpen={() => window.dispatchEvent(new Event("ssc-music-pause"))}
-          onClose={() => setVideosOpen(false)}
         />
       )}
       {celebratedStreak !== null && (

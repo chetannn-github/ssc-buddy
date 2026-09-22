@@ -5,7 +5,9 @@ import {
   Download,
   FilePenLine,
   LoaderCircle,
+  Music2,
   Pencil,
+  Play,
   RefreshCw,
   Save,
   Upload,
@@ -20,7 +22,6 @@ import { loadPracticeProfile, savePracticeProfile, type PracticeProfile } from "
 import { downloadPracticeBackup, restorePracticeBackup } from "@/lib/backup";
 import {
   overallSyllabus,
-  fmtDate,
   pct,
   subjectRevision,
   subjectSyllabus,
@@ -98,13 +99,20 @@ function DayActivityDetails({ date, items }: { date: string; items: DayActivityD
     <div className="mt-3 min-h-16 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2.5 text-xs text-zinc-300">
       <div className="flex items-center justify-between gap-3">
         <span className="font-medium text-zinc-100">{formatDate(date)}</span>
-        <span className="text-zinc-500">{total} activit{total === 1 ? "y" : "ies"}</span>
+        <span className="text-zinc-500">
+          {total} activit{total === 1 ? "y" : "ies"}
+        </span>
       </div>
       {items.length ? (
         <ul className="mt-2 space-y-1">
           {items.map((item, index) => (
-            <li key={`${item.label}-${item.detail}-${index}`} className="flex justify-between gap-3">
-              <span><span className="text-zinc-100">{item.label}</span> · {item.detail}</span>
+            <li
+              key={`${item.label}-${item.detail}-${index}`}
+              className="flex justify-between gap-3"
+            >
+              <span>
+                <span className="text-zinc-100">{item.label}</span> · {item.detail}
+              </span>
               <span className="shrink-0 font-mono text-zinc-500">×{item.count}</span>
             </li>
           ))}
@@ -189,7 +197,10 @@ function ActivityHeatmap({
           : (tracker.subjects.find((item) => item.id === test.subjectId)?.name ?? test.type);
       addDetail(key, {
         label: `${test.type} mock test`,
-        detail: test.score !== null && test.total !== null ? `${subject} · ${test.score}/${test.total}` : subject,
+        detail:
+          test.score !== null && test.total !== null
+            ? `${subject} · ${test.score}/${test.total}`
+            : subject,
         count: 1,
       });
     });
@@ -474,12 +485,16 @@ function TargetProgress({
         </div>
       </div>
       <div className="grid grid-cols-2 divide-x-0 divide-y divide-white/10 px-2 py-2 sm:grid-cols-5 sm:divide-x sm:divide-y-0 sm:px-3">
-        <StatCell label="Question goal"><AnimatedNumber value={goal} /></StatCell>
+        <StatCell label="Question goal">
+          <AnimatedNumber value={goal} />
+        </StatCell>
         <StatCell label="Completed">
           <AnimatedNumber value={attempted} /> · <AnimatedNumber value={progress} />%
         </StatCell>
         {practiceStats.map(({ label, value }) => (
-          <StatCell key={label} label={label}><AnimatedNumber value={value} /></StatCell>
+          <StatCell key={label} label={label}>
+            <AnimatedNumber value={value} />
+          </StatCell>
         ))}
       </div>
       <div className="border-t border-white/10 px-4 pt-3 text-[11px] font-semibold tracking-[0.16em] text-zinc-500 uppercase sm:px-5">
@@ -487,7 +502,9 @@ function TargetProgress({
       </div>
       <div className="grid grid-cols-3 divide-x divide-white/10 px-2 py-2 sm:px-3">
         {trackerStats.map(({ label, value }) => (
-          <StatCell key={label} label={label}><AnimatedNumber value={value} /></StatCell>
+          <StatCell key={label} label={label}>
+            <AnimatedNumber value={value} />
+          </StatCell>
         ))}
       </div>
     </section>
@@ -518,64 +535,6 @@ function TrackerRow({
         {done}/{total}
       </span>
     </div>
-  );
-}
-
-function CountdownSummary({ tracker }: { tracker: TrackerData | null }) {
-  const meta = tracker?.meta;
-  const examDate = meta?.examDate;
-  if (!meta || !examDate) return null;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const start = new Date(`${meta.prepStartDate || localDay(today)}T00:00:00`);
-  const end = new Date(`${examDate}T00:00:00`);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
-  const day = 86400000;
-  const totalDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / day));
-  const elapsedDays = Math.max(0, Math.min(totalDays, Math.round((today.getTime() - start.getTime()) / day)));
-  const elapsed = Math.round((elapsedDays / totalDays) * 100);
-  const daysRemaining = Math.max(0, Math.ceil((end.getTime() - today.getTime()) / day));
-  const circumference = 2 * Math.PI * 42;
-  const dashOffset = circumference - (circumference * elapsed) / 100;
-
-  return (
-    <section className="w-full max-w-xl rounded-2xl border border-amber-300/20 bg-[#11110d] p-4 shadow-[0_16px_45px_-30px_black] lg:w-[30rem]">
-      <div className="flex items-center gap-4">
-        <div className="relative grid h-28 w-28 shrink-0 place-items-center">
-          <svg className="h-full w-full -rotate-90" viewBox="0 0 100 100" aria-hidden="true">
-            <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="5" />
-            <circle
-              cx="50"
-              cy="50"
-              r="42"
-              fill="none"
-              stroke="#facc15"
-              strokeWidth="5"
-              strokeLinecap="round"
-              strokeDasharray={circumference}
-              strokeDashoffset={dashOffset}
-              className="transition-[stroke-dashoffset] duration-700 ease-out"
-            />
-          </svg>
-          <div className="absolute text-center">
-            <p className="text-3xl font-semibold tracking-tight text-amber-300">{daysRemaining}</p>
-            <p className="mt-0.5 text-[10px] font-medium text-zinc-500 uppercase">days</p>
-          </div>
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-semibold tracking-[0.16em] text-amber-300 uppercase">Upcoming exam</p>
-          <p className="mt-1 truncate text-xl font-semibold text-zinc-100">{meta.examName || "Exam"}</p>
-          <p className="mt-1 text-sm text-zinc-500">{fmtDate(examDate)}</p>
-          <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-white/[0.07]">
-            <div className="h-full rounded-full bg-amber-300 transition-[width] duration-700 ease-out" style={{ width: `${elapsed}%` }} />
-          </div>
-        </div>
-      </div>
-      <div className="mt-3 flex items-center justify-between border-t border-white/[0.06] pt-3 text-xs">
-        <span className="text-zinc-500">Preparation window</span>
-        <span className="font-semibold text-zinc-200">{elapsed}% elapsed</span>
-      </div>
-    </section>
   );
 }
 
@@ -909,6 +868,25 @@ export function Profile() {
                 <Button
                   type="button"
                   variant="ghost"
+                  className="h-9 gap-1.5 px-2.5 text-sm text-zinc-300 hover:bg-white/10 hover:text-white"
+                  onClick={() => window.dispatchEvent(new Event("ssc-videos-open"))}
+                >
+                  <Play className="h-4 w-4" /> Videos
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-9 gap-1.5 px-2.5 text-sm text-zinc-300 hover:bg-white/10 hover:text-white"
+                  onClick={() => {
+                    window.dispatchEvent(new Event("ssc-music-open"));
+                    window.dispatchEvent(new Event("ssc-music-expand"));
+                  }}
+                >
+                  <Music2 className="h-4 w-4" /> Music
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
                   className="h-9 gap-1.5 px-2.5 text-sm text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
                   onClick={() => setEditingProfile(true)}
                 >
@@ -935,7 +913,6 @@ export function Profile() {
                 </Button>
               </div>
             </div>
-            <CountdownSummary tracker={tracker} />
           </section>
 
           {tracker && (
@@ -963,7 +940,6 @@ export function Profile() {
           <ActivityHeatmap records={records} tracker={tracker} range="year" />
 
           <StudyTrackerOverview tracker={tracker} />
-
         </div>
       </div>
       {previewingAvatar && avatar && (

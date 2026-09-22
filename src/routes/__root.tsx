@@ -11,7 +11,7 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
-import { MotivationalMusic } from "@/components/layout/AppShell";
+import { MotivationalMusic, MotivationalVideos } from "@/components/layout/AppShell";
 
 function NotFoundComponent() {
   return (
@@ -133,11 +133,17 @@ function RootShell({ children }: { children: ReactNode }) {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const [musicOpen, setMusicOpen] = useState(false);
+  const [videosOpen, setVideosOpen] = useState(false);
 
   useEffect(() => {
     const openMusic = () => setMusicOpen(true);
     window.addEventListener("ssc-music-open", openMusic);
     return () => window.removeEventListener("ssc-music-open", openMusic);
+  }, []);
+  useEffect(() => {
+    const openVideos = () => setVideosOpen(true);
+    window.addEventListener("ssc-videos-open", openVideos);
+    return () => window.removeEventListener("ssc-videos-open", openVideos);
   }, []);
 
   return (
@@ -145,6 +151,12 @@ function RootComponent() {
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
       {musicOpen && <MotivationalMusic onClose={() => setMusicOpen(false)} />}
+      {videosOpen && (
+        <MotivationalVideos
+          onOpen={() => window.dispatchEvent(new Event("ssc-music-pause"))}
+          onClose={() => setVideosOpen(false)}
+        />
+      )}
     </QueryClientProvider>
   );
 }

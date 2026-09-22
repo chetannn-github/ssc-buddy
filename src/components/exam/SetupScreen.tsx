@@ -542,6 +542,17 @@ export function SetupScreen({
                   ? Math.max(1, Math.min(Number(next) || 1, maxStartNumber))
                   : next;
                 setStartNumber(next === "" ? "" : String(capped));
+                const nextStart = Number(capped) || 1;
+                const nextAvailable = isJsonExercise
+                  ? Math.max(0, (orderedJsonQuestions?.length ?? 0) - nextStart + 1)
+                  : chapterTotal
+                    ? Math.max(0, chapterTotal - nextStart + 1)
+                    : 500;
+                setQuestionCount((current) =>
+                  current === ""
+                    ? current
+                    : String(Math.max(1, Math.min(Number(current) || 1, Math.min(500, nextAvailable))),
+                );
               }}
               placeholder="Start question no. e.g. 151"
             />
