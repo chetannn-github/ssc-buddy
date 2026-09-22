@@ -315,6 +315,14 @@ export function MotivationalVideos({
   }, [onOpen]);
 
   useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, []);
+
+  useEffect(() => {
     let active = true;
     fetch("/videos/manifest.json", { cache: "no-store" })
       .then(async (response) => {
