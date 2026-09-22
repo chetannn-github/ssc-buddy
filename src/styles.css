@@ -194,6 +194,35 @@
   color-scheme: dark;
 }
 
+/* Keep scrollable test panels consistent with the dark exam surface. */
+.exam-dark * {
+  scrollbar-color: #737373 #181818;
+}
+
+.exam-dark ::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+.exam-dark ::-webkit-scrollbar-track {
+  background: #181818;
+  border-radius: 999px;
+}
+
+.exam-dark ::-webkit-scrollbar-thumb {
+  background: #737373;
+  border: 3px solid #181818;
+  border-radius: 999px;
+}
+
+.exam-dark ::-webkit-scrollbar-thumb:hover {
+  background: #a1a1aa;
+}
+
+.exam-dark ::-webkit-scrollbar-button {
+  background: #181818;
+}
+
 .test-dark-dialog {
   --background: oklch(0.18 0 0);
   --foreground: oklch(0.92 0 0);
@@ -593,20 +622,50 @@ select:not(:disabled),
   --color-primary-foreground: #11251f;
   --color-muted: #27272a;
   --color-muted-foreground: #a1a1aa;
-  --color-accent-soft: rgba(110, 231, 197, .12);
-  --color-border: rgba(255, 255, 255, .10);
+  --color-accent-soft: rgba(110, 231, 197, 0.12);
+  --color-border: rgba(255, 255, 255, 0.1);
   --color-chart-2: #52525b;
-  --radius: .75rem;
+  --radius: 0.75rem;
 }
-.daily-tasks-ui .panel { border: 1px solid var(--color-border); border-radius: var(--radius); background: var(--color-surface); box-shadow: 0 16px 35px -30px #000; }
-.daily-tasks-ui .label-caps { font-size: .625rem; letter-spacing: .14em; text-transform: uppercase; color: var(--color-muted-foreground); }
-.daily-tasks-ui .bg-surface { background: var(--color-surface); }
-.daily-tasks-ui .bg-surface-2 { background: var(--color-surface-2); }
-.daily-tasks-ui .bg-popover { background: var(--color-popover); }
-.daily-tasks-ui .text-foreground { color: var(--color-foreground); }
-.daily-tasks-ui .text-muted-foreground { color: var(--color-muted-foreground); }
-.daily-tasks-ui .border-border { border-color: var(--color-border); }
-.daily-tasks-ui .bg-primary { background: var(--color-primary); }
-.daily-tasks-ui .text-primary { color: var(--color-primary); }
-.daily-tasks-ui .bg-accent-soft { background: var(--color-accent-soft); }
-.daily-tasks-ui .bg-chart-2 { background: var(--color-chart-2); }
+.daily-tasks-ui .panel {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  box-shadow: 0 16px 35px -30px #000;
+}
+.daily-tasks-ui .label-caps {
+  font-size: 0.625rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-muted-foreground);
+}
+.daily-tasks-ui .bg-surface {
+  background: var(--color-surface);
+}
+.daily-tasks-ui .bg-surface-2 {
+  background: var(--color-surface-2);
+}
+.daily-tasks-ui .bg-popover {
+  background: var(--color-popover);
+}
+.daily-tasks-ui .text-foreground {
+  color: var(--color-foreground);
+}
+.daily-tasks-ui .text-muted-foreground {
+  color: var(--color-muted-foreground);
+}
+.daily-tasks-ui .border-border {
+  border-color: var(--color-border);
+}
+.daily-tasks-ui .bg-primary {
+  background: var(--color-primary);
+}
+.daily-tasks-ui .text-primary {
+  color: var(--color-primary);
+}
+.daily-tasks-ui .bg-accent-soft {
+  background: var(--color-accent-soft);
+}
+.daily-tasks-ui .bg-chart-2 {
+  background: var(--color-chart-2);
+}
