@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -48,6 +49,7 @@ export type TestConfig = {
 
 const PRESETS = [15, 30, 45, 60];
 const MAX_DURATION_MINUTES = 300;
+const GPT_QUESTION_PROMPT = `Create SSC-style MCQ questions for this chapter. Return ONLY a valid JSON array—no markdown, notes, or extra text. Every item must have: question (string), options (array of exactly 4 strings), correctAnswer (0 for first option through 3 for fourth), and optional explanation (string).`;
 
 const optionLetters: Option[] = ["A", "B", "C", "D"];
 
@@ -122,6 +124,7 @@ export function SetupScreen({
   const [jsonExerciseName, setJsonExerciseName] = useState("");
   const [jsonText, setJsonText] = useState("");
   const [jsonError, setJsonError] = useState("");
+  const [promptCopied, setPromptCopied] = useState(false);
 
   const [minutes, setMinutes] = useState(
     String(Math.min(MAX_DURATION_MINUTES, prefill?.minutes ?? 30)),
@@ -181,6 +184,8 @@ export function SetupScreen({
     (countMode === "unlimited" || Number(questionCount) >= 1);
 
   const isJsonExercise = Boolean(activeExercise?.questions?.length);
+  const answerKeyExercises = exercises.filter((item) => !item.questions?.length);
+  const questionExercises = exercises.filter((item) => item.questions?.length);
 
   const createSubject = () => {
     const name = newSubject.trim();
@@ -294,6 +299,7 @@ export function SetupScreen({
     setJsonExerciseName(`Practice Set ${exercises.length + 1}`);
     setJsonText("");
     setJsonError("");
+    setPromptCopied(false);
     setJsonDialogOpen(true);
   };
 
@@ -404,32 +410,58 @@ export function SetupScreen({
 
         {chapter && (
           <div className="space-y-1.5 rounded-lg border border-border bg-background/50 p-2">
-            <div className="flex flex-wrap gap-1.5">
-              {exercises.map((ex) => (
-                <Button
-                  key={ex.name}
-                  type="button"
-                  size="sm"
-                  variant={ex.name === activeExerciseName ? "default" : "outline"}
-                  onClick={() => selectChapter(chapter, ex.name)}
-                >
-                  {ex.name}
-                  {ex.questionCount ? ` · ${ex.questionCount}Q` : ""}
+            {answerKeyExercises.length > 0 && (
+              <div>
+                <p className="mb-1 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+                  Answer-key exercises
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {answerKeyExercises.map((ex) => (
+                    <Button
+                      key={ex.name}
+                      type="button"
+                      size="sm"
+                      variant={ex.name === activeExerciseName ? "default" : "outline"}
+                      onClick={() => selectChapter(chapter, ex.name)}
+                    >
+                      {ex.name}
+                      {ex.questionCount ? ` · ${ex.questionCount}Q` : ""}
+                    </Button>
+                  ))}
+                  <Button type="button" size="sm" variant="ghost" onClick={addExercise}>
+                    + Add answer-key exercise
+                  </Button>
+                </div>
+              </div>
+            )}
+            <div className={answerKeyExercises.length > 0 ? "mt-3" : ""}>
+              <p className="mb-1 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+                Question-based exercises
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {questionExercises.map((ex) => (
+                  <Button
+                    key={ex.name}
+                    type="button"
+                    size="sm"
+                    variant={ex.name === activeExerciseName ? "default" : "outline"}
+                    onClick={() => selectChapter(chapter, ex.name)}
+                  >
+                    {ex.name}
+                    {ex.questionCount ? ` · ${ex.questionCount}Q` : ""}
+                  </Button>
+                ))}
+                <Button type="button" size="sm" variant="secondary" onClick={openJsonExercise}>
+                  + Add question exercise
                 </Button>
-              ))}
-              <Button type="button" size="sm" variant="ghost" onClick={addExercise}>
-                + Add exercise
-              </Button>
-              <Button type="button" size="sm" variant="secondary" onClick={openJsonExercise}>
-                + Add JSON exercise
-              </Button>
+              </div>
             </div>
             <button
               type="button"
               onClick={editChapter}
               className="text-xs font-medium text-primary underline-offset-2 hover:underline"
             >
-              {isJsonExercise ? "Replace JSON of" : "Edit questions & answer key of"} “
+              {isJsonExercise ? "Edit questions of" : "Edit questions & answer key of"} “
               {activeExerciseName || chapter}”
             </button>
             {isJsonExercise && (
@@ -441,7 +473,7 @@ export function SetupScreen({
                 }}
                 className="ml-3 text-xs font-medium text-destructive underline-offset-2 hover:underline"
               >
-                Delete JSON exercise
+                Delete question exercise
               </button>
             )}
           </div>
@@ -681,7 +713,7 @@ export function SetupScreen({
       <Dialog open={jsonDialogOpen} onOpenChange={setJsonDialogOpen}>
         <DialogContent className="exam-dialog-content max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Add JSON exercise to {chapter}</DialogTitle>
+            <DialogTitle>Add question exercise to {chapter}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <Input
@@ -700,10 +732,25 @@ export function SetupScreen({
                 '[\n  {\n    "question": "25% of 240 is?",\n    "options": ["40", "50", "60", "80"],\n    "correctAnswer": 2,\n    "explanation": "25% × 240 = 60"\n  }\n]'
               }
             />
-            <p className="text-xs text-muted-foreground">
-              correctAnswer: 0 = first option, 1 = second, 2 = third, 3 = fourth. Explanation is
-              optional.
-            </p>
+            <div className="rounded-lg border border-border bg-muted/30 p-3">
+              <div className="mb-1.5 flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold">Need questions from GPT?</p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7 gap-1.5 text-xs"
+                  onClick={() => {
+                    void navigator.clipboard.writeText(GPT_QUESTION_PROMPT);
+                    setPromptCopied(true);
+                  }}
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                  {promptCopied ? "Copied" : "Copy GPT prompt"}
+                </Button>
+              </div>
+              <p className="text-xs leading-5 text-muted-foreground">{GPT_QUESTION_PROMPT}</p>
+            </div>
             {jsonError && <p className="text-sm text-destructive">{jsonError}</p>}
             <Button onClick={saveJsonExercise}>Validate & save exercise</Button>
           </div>
