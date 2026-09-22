@@ -306,10 +306,13 @@ export function MotivationalVideos({
   const [isPlaying, setIsPlaying] = useState(true);
   const [playbackOverlay, setPlaybackOverlay] = useState<"play" | "pause" | null>(null);
   const [videoDirection, setVideoDirection] = useState<"next" | "previous">("next");
+  const [dragOffset, setDragOffset] = useState(0);
+  const [isDraggingReel, setIsDraggingReel] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const swipeStartY = useRef<number | null>(null);
   const didSwipe = useRef(false);
   const overlayTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reelTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     onOpen();
@@ -366,6 +369,7 @@ export function MotivationalVideos({
   useEffect(
     () => () => {
       if (overlayTimer.current) clearTimeout(overlayTimer.current);
+      if (reelTimer.current) clearTimeout(reelTimer.current);
     },
     [],
   );
@@ -402,39 +406,71 @@ export function MotivationalVideos({
             className="group relative h-full w-full"
             onTouchStart={(event) => {
               swipeStartY.current = event.touches[0]?.clientY ?? null;
+              setIsDraggingReel(true);
+            }}
+            onTouchMove={(event) => {
+              const start = swipeStartY.current;
+              const current = event.touches[0]?.clientY;
+              if (start === null || current === undefined) return;
+              setDragOffset(
+                Math.max(
+                  -window.innerHeight * 0.7,
+                  Math.min(window.innerHeight * 0.7, current - start),
+                ),
+              );
             }}
             onTouchEnd={(event) => {
               const start = swipeStartY.current;
               swipeStartY.current = null;
               const end = event.changedTouches[0]?.clientY;
-              if (start === null || end === undefined || Math.abs(end - start) < 45) return;
+              if (start === null || end === undefined) return;
+              const distance = end - start;
+              setIsDraggingReel(false);
+              if (Math.abs(distance) < 90 || videos.length < 2) {
+                setDragOffset(0);
+                return;
+              }
               didSwipe.current = true;
-              showVideo(end < start ? 1 : -1);
+              const direction = distance < 0 ? 1 : -1;
+              setDragOffset(distance < 0 ? -window.innerHeight : window.innerHeight);
+              if (reelTimer.current) clearTimeout(reelTimer.current);
+              reelTimer.current = setTimeout(() => {
+                showVideo(direction);
+                setDragOffset(0);
+              }, 220);
             }}
           >
-            <video
-              ref={videoRef}
-              key={`${selectedVideo}-${videoDirection}`}
+            <div
               className={cn(
-                "h-full w-full cursor-pointer object-contain",
-                videoDirection === "next" ? "reel-slide-in-up" : "reel-slide-in-down",
+                "h-full w-full",
+                !isDraggingReel && "transition-transform duration-200 ease-out",
               )}
-              autoPlay
-              loop
-              playsInline
-              onClick={() => {
-                if (didSwipe.current) {
-                  didSwipe.current = false;
-                  return;
-                }
-                togglePlayback();
-              }}
-              onPlay={() => setIsPlaying(true)}
-              onPause={() => setIsPlaying(false)}
+              style={{ transform: `translateY(${dragOffset}px)` }}
             >
-              <source src={`/videos/${encodeURIComponent(selectedVideo)}`} />
-              Your browser does not support video playback.
-            </video>
+              <video
+                ref={videoRef}
+                key={`${selectedVideo}-${videoDirection}`}
+                className={cn(
+                  "h-full w-full cursor-pointer object-contain",
+                  videoDirection === "next" ? "reel-slide-in-up" : "reel-slide-in-down",
+                )}
+                autoPlay
+                loop
+                playsInline
+                onClick={() => {
+                  if (didSwipe.current) {
+                    didSwipe.current = false;
+                    return;
+                  }
+                  togglePlayback();
+                }}
+                onPlay={() => setIsPlaying(true)}
+                onPause={() => setIsPlaying(false)}
+              >
+                <source src={`/videos/${encodeURIComponent(selectedVideo)}`} />
+                Your browser does not support video playback.
+              </video>
+            </div>
             {playbackOverlay && (
               <div className="pointer-events-none absolute inset-0 grid place-items-center">
                 <span className="grid h-16 w-16 animate-in fade-in zoom-in-75 place-items-center rounded-full bg-black/65 text-white backdrop-blur-sm">
