@@ -35,7 +35,12 @@
 }
 
 .music-cover-art-playing {
-  animation: music-cover-spin 8s linear infinite;
+  animation-play-state: running;
+}
+
+.music-cover-art {
+  animation: music-cover-spin 20s linear infinite;
+  animation-play-state: paused;
 }
 
 .animate-consistency-flame {
