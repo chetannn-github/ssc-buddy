@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, ChevronRight, ListOrdered, Star, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronRight, GripVertical, ListOrdered, Star, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useTracker } from "@/lib/tracker-store";
 import {
@@ -56,25 +56,23 @@ export function ChapterWorkspace({ mode }: { mode: Mode }) {
   // Keep both workspaces calm on entry; users can open the subject they need.
   const [openSubjectId, setOpenSubjectId] = useState("");
   const [reorderingSubjectId, setReorderingSubjectId] = useState("");
+  const [draggingSubjectId, setDraggingSubjectId] = useState("");
   const [selected, setSelected] = useState<Selected>(null);
   const overall = overallSyllabus(data);
   const subjects =
     subjectFilter === "all"
       ? data.subjects
       : data.subjects.filter((subject) => subject.id === subjectFilter);
-  const pinned = useMemo(
-    () => {
-      const chaptersById = new Map<string, { subject: Subject; chapter: Chapter }>();
-      data.subjects.forEach((subject) =>
-        subject.chapters.forEach((chapter) => chaptersById.set(chapter.id, { subject, chapter })),
-      );
-      return data.pinnedChapterIds.flatMap((chapterId) => {
-        const entry = chaptersById.get(chapterId);
-        return entry ? [entry] : [];
-      });
-    },
-    [data.pinnedChapterIds, data.subjects],
-  );
+  const pinned = useMemo(() => {
+    const chaptersById = new Map<string, { subject: Subject; chapter: Chapter }>();
+    data.subjects.forEach((subject) =>
+      subject.chapters.forEach((chapter) => chaptersById.set(chapter.id, { subject, chapter })),
+    );
+    return data.pinnedChapterIds.flatMap((chapterId) => {
+      const entry = chaptersById.get(chapterId);
+      return entry ? [entry] : [];
+    });
+  }, [data.pinnedChapterIds, data.subjects]);
 
   const togglePin = (chapterId: string) =>
     update((draft) => {
@@ -150,12 +148,31 @@ export function ChapterWorkspace({ mode }: { mode: Mode }) {
         }),
     });
 
+  const moveSubject = (sourceId: string, targetId: string) => {
+    if (!sourceId || sourceId === targetId) return;
+    update((draft) => {
+      const sourceIndex = draft.subjects.findIndex((subject) => subject.id === sourceId);
+      const targetIndex = draft.subjects.findIndex((subject) => subject.id === targetId);
+      if (sourceIndex < 0 || targetIndex < 0) return;
+      const [subject] = draft.subjects.splice(sourceIndex, 1);
+      if (subject)
+        draft.subjects.splice(
+          sourceIndex < targetIndex ? targetIndex - 1 : targetIndex,
+          0,
+          subject,
+        );
+    });
+  };
+
   const moveChapter = (subjectId: string, chapterIndex: number, direction: -1 | 1) =>
     update((draft) => {
       const chapters = draft.subjects.find((subject) => subject.id === subjectId)?.chapters;
       const nextIndex = chapterIndex + direction;
       if (!chapters || nextIndex < 0 || nextIndex >= chapters.length) return;
-      [chapters[chapterIndex], chapters[nextIndex]] = [chapters[nextIndex]!, chapters[chapterIndex]!];
+      [chapters[chapterIndex], chapters[nextIndex]] = [
+        chapters[nextIndex]!,
+        chapters[chapterIndex]!,
+      ];
     });
 
   const addRevisionType = (subjectId: string) =>
@@ -251,8 +268,43 @@ export function ChapterWorkspace({ mode }: { mode: Mode }) {
           const isOpen = openSubjectId === subject.id;
           const isReordering = reorderingSubjectId === subject.id;
           return (
-            <div key={subject.id} className="rounded-xl bg-card px-3 py-2">
+            <div
+              key={subject.id}
+              draggable={mode === "syllabus"}
+              onDragStart={(event) => {
+                if (mode !== "syllabus") return;
+                event.dataTransfer.effectAllowed = "move";
+                event.dataTransfer.setData("text/plain", subject.id);
+                setDraggingSubjectId(subject.id);
+              }}
+              onDragOver={(event) => {
+                if (mode === "syllabus" && draggingSubjectId && draggingSubjectId !== subject.id)
+                  event.preventDefault();
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                moveSubject(
+                  event.dataTransfer.getData("text/plain") || draggingSubjectId,
+                  subject.id,
+                );
+                setDraggingSubjectId("");
+              }}
+              onDragEnd={() => setDraggingSubjectId("")}
+              className={
+                draggingSubjectId === subject.id
+                  ? "rounded-xl bg-card px-3 py-2 opacity-45"
+                  : "rounded-xl bg-card px-3 py-2"
+              }
+            >
               <div className="flex items-center gap-1.5">
+                {mode === "syllabus" && (
+                  <span
+                    className="cursor-grab touch-none text-muted-foreground active:cursor-grabbing"
+                    title="Drag to reorder subject"
+                  >
+                    <GripVertical className="h-4 w-4" />
+                  </span>
+                )}
                 <button
                   type="button"
                   onClick={() =>
