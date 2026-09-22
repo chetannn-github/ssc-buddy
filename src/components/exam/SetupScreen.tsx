@@ -739,8 +739,21 @@ export function SetupScreen({
 
       <Dialog open={jsonDialogOpen} onOpenChange={setJsonDialogOpen}>
         <DialogContent className="exam-dialog-content max-w-3xl">
-          <DialogHeader>
+          <DialogHeader className="flex-row items-center justify-between gap-3 space-y-0 pr-8">
             <DialogTitle>Add question exercise to {chapter}</DialogTitle>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-7 shrink-0 gap-1.5 text-xs"
+              onClick={() => {
+                void navigator.clipboard.writeText(GPT_QUESTION_PROMPT);
+                setPromptCopied(true);
+              }}
+            >
+              <Copy className="h-3.5 w-3.5" />
+              {promptCopied ? "Copied" : "Copy GPT prompt"}
+            </Button>
           </DialogHeader>
           <div className="space-y-3">
             <Input
@@ -759,25 +772,6 @@ export function SetupScreen({
                 '[\n  {\n    "question": "25% of 240 is?",\n    "options": ["40", "50", "60", "80"],\n    "correctAnswer": 2,\n    "explanation": "25% × 240 = 60"\n  }\n]'
               }
             />
-            <div className="rounded-lg border border-border bg-muted/30 p-3">
-              <div className="mb-1.5 flex items-center justify-between gap-2">
-                <p className="text-xs font-semibold">Need questions from GPT?</p>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  className="h-7 gap-1.5 text-xs"
-                  onClick={() => {
-                    void navigator.clipboard.writeText(GPT_QUESTION_PROMPT);
-                    setPromptCopied(true);
-                  }}
-                >
-                  <Copy className="h-3.5 w-3.5" />
-                  {promptCopied ? "Copied" : "Copy GPT prompt"}
-                </Button>
-              </div>
-              <p className="text-xs leading-5 text-muted-foreground">{GPT_QUESTION_PROMPT}</p>
-            </div>
             {jsonError && <p className="text-sm text-destructive">{jsonError}</p>}
             <Button onClick={saveJsonExercise}>Validate & save exercise</Button>
           </div>
