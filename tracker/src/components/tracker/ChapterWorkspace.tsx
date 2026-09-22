@@ -56,7 +56,7 @@ export function ChapterWorkspace({ mode }: { mode: Mode }) {
   // Keep both workspaces calm on entry; users can open the subject they need.
   const [openSubjectId, setOpenSubjectId] = useState("");
   const [reorderingSubjectId, setReorderingSubjectId] = useState("");
-  const [draggingSubjectId, setDraggingSubjectId] = useState("");
+  const [draggingChapterId, setDraggingChapterId] = useState("");
   const [selected, setSelected] = useState<Selected>(null);
   const overall = overallSyllabus(data);
   const subjects =
@@ -148,22 +148,6 @@ export function ChapterWorkspace({ mode }: { mode: Mode }) {
         }),
     });
 
-  const moveSubject = (sourceId: string, targetId: string) => {
-    if (!sourceId || sourceId === targetId) return;
-    update((draft) => {
-      const sourceIndex = draft.subjects.findIndex((subject) => subject.id === sourceId);
-      const targetIndex = draft.subjects.findIndex((subject) => subject.id === targetId);
-      if (sourceIndex < 0 || targetIndex < 0) return;
-      const [subject] = draft.subjects.splice(sourceIndex, 1);
-      if (subject)
-        draft.subjects.splice(
-          sourceIndex < targetIndex ? targetIndex - 1 : targetIndex,
-          0,
-          subject,
-        );
-    });
-  };
-
   const moveChapter = (subjectId: string, chapterIndex: number, direction: -1 | 1) =>
     update((draft) => {
       const chapters = draft.subjects.find((subject) => subject.id === subjectId)?.chapters;
@@ -173,6 +157,19 @@ export function ChapterWorkspace({ mode }: { mode: Mode }) {
         chapters[nextIndex]!,
         chapters[chapterIndex]!,
       ];
+    });
+
+  const moveChapterTo = (subjectId: string, sourceId: string, targetId: string) =>
+    update((draft) => {
+      if (!sourceId || sourceId === targetId) return;
+      const chapters = draft.subjects.find((subject) => subject.id === subjectId)?.chapters;
+      if (!chapters) return;
+      const sourceIndex = chapters.findIndex((chapter) => chapter.id === sourceId);
+      const targetIndex = chapters.findIndex((chapter) => chapter.id === targetId);
+      if (sourceIndex < 0 || targetIndex < 0) return;
+      const [chapter] = chapters.splice(sourceIndex, 1);
+      if (chapter)
+        chapters.splice(sourceIndex < targetIndex ? targetIndex - 1 : targetIndex, 0, chapter);
     });
 
   const addRevisionType = (subjectId: string) =>
@@ -268,43 +265,8 @@ export function ChapterWorkspace({ mode }: { mode: Mode }) {
           const isOpen = openSubjectId === subject.id;
           const isReordering = reorderingSubjectId === subject.id;
           return (
-            <div
-              key={subject.id}
-              draggable={mode === "syllabus"}
-              onDragStart={(event) => {
-                if (mode !== "syllabus") return;
-                event.dataTransfer.effectAllowed = "move";
-                event.dataTransfer.setData("text/plain", subject.id);
-                setDraggingSubjectId(subject.id);
-              }}
-              onDragOver={(event) => {
-                if (mode === "syllabus" && draggingSubjectId && draggingSubjectId !== subject.id)
-                  event.preventDefault();
-              }}
-              onDrop={(event) => {
-                event.preventDefault();
-                moveSubject(
-                  event.dataTransfer.getData("text/plain") || draggingSubjectId,
-                  subject.id,
-                );
-                setDraggingSubjectId("");
-              }}
-              onDragEnd={() => setDraggingSubjectId("")}
-              className={
-                draggingSubjectId === subject.id
-                  ? "rounded-xl bg-card px-3 py-2 opacity-45"
-                  : "rounded-xl bg-card px-3 py-2"
-              }
-            >
+            <div key={subject.id} className="rounded-xl bg-card px-3 py-2">
               <div className="flex items-center gap-1.5">
-                {mode === "syllabus" && (
-                  <span
-                    className="cursor-grab touch-none text-muted-foreground active:cursor-grabbing"
-                    title="Drag to reorder subject"
-                  >
-                    <GripVertical className="h-4 w-4" />
-                  </span>
-                )}
                 <button
                   type="button"
                   onClick={() =>
@@ -393,6 +355,11 @@ export function ChapterWorkspace({ mode }: { mode: Mode }) {
                           onOpen={() => setSelected({ subject, chapter })}
                           onPin={() => togglePin(chapter.id)}
                           onMove={(direction) => moveChapter(subject.id, chapterIndex, direction)}
+                          onDropChapter={(sourceId) =>
+                            moveChapterTo(subject.id, sourceId, chapter.id)
+                          }
+                          onDragChange={setDraggingChapterId}
+                          dragging={draggingChapterId === chapter.id}
                           canMoveUp={chapterIndex > 0}
                           canMoveDown={chapterIndex < subject.chapters.length - 1}
                         />
@@ -456,6 +423,9 @@ function ChapterRow({
   onOpen,
   onPin,
   onMove,
+  onDropChapter,
+  onDragChange,
+  dragging,
   canMoveUp,
   canMoveDown,
 }: {
@@ -467,6 +437,9 @@ function ChapterRow({
   onOpen: () => void;
   onPin: () => void;
   onMove: (direction: -1 | 1) => void;
+  onDropChapter: (sourceId: string) => void;
+  onDragChange: (chapterId: string) => void;
+  dragging: boolean;
   canMoveUp: boolean;
   canMoveDown: boolean;
 }) {
@@ -488,7 +461,31 @@ function ChapterRow({
   const done = mode === "syllabus" ? chapter.completed : revisionProgress;
   const total = mode === "syllabus" ? chapter.total : revisionTotal;
   return (
-    <div className="flex items-center gap-2 py-2">
+    <div
+      draggable={reordering}
+      onDragStart={(event) => {
+        if (!reordering) return;
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("text/plain", chapter.id);
+        onDragChange(chapter.id);
+      }}
+      onDragOver={(event) => {
+        if (reordering) event.preventDefault();
+      }}
+      onDrop={(event) => {
+        if (!reordering) return;
+        event.preventDefault();
+        onDropChapter(event.dataTransfer.getData("text/plain"));
+        onDragChange("");
+      }}
+      onDragEnd={() => onDragChange("")}
+      className={cn(
+        "flex items-center gap-2 rounded-lg py-2 transition-all",
+        reordering &&
+          "cursor-grab border border-transparent px-2 hover:border-accent-blue/25 hover:bg-accent-blue/5 active:cursor-grabbing",
+        dragging && "scale-[0.98] border-dashed border-accent-blue/50 bg-accent-blue/10 opacity-45",
+      )}
+    >
       <button type="button" onClick={onOpen} className="min-w-0 flex-1 text-left">
         <div className="flex items-center gap-1.5">
           <span className="truncate text-sm font-medium">{chapter.name}</span>
@@ -506,6 +503,12 @@ function ChapterRow({
       </span>
       {reordering ? (
         <div className="flex shrink-0 gap-1">
+          <span
+            className="grid h-7 w-5 place-items-center text-muted-foreground"
+            title="Drag to reorder"
+          >
+            <GripVertical className="h-4 w-4" />
+          </span>
           <button
             type="button"
             onClick={() => onMove(-1)}
