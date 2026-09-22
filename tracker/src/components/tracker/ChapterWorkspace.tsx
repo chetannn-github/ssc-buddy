@@ -1,6 +1,7 @@
 import { ArrowDown, ArrowUp, ChevronRight, GripVertical, ListOrdered, Star, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useTracker } from "@/lib/tracker-store";
+import { cn } from "@/lib/utils";
 import {
   overallSyllabus,
   pct,
