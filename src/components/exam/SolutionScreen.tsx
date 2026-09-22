@@ -194,7 +194,7 @@ export function SolutionScreen({ record, onExit }: Props) {
           {!reattempt && !original && (
             <p className="mt-4 text-sm text-muted-foreground">Not attempted · 0 marks</p>
           )}
-          {question?.explanation && (
+          {question?.explanation && (reattempt ? retry : original) && (
             <div className="mt-4 rounded-lg border border-primary/25 bg-primary/10 p-3 text-sm">
               <span className="font-semibold">Explanation: </span>
               {question.explanation}

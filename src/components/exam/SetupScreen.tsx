@@ -50,7 +50,7 @@ export type TestConfig = {
 
 const PRESETS = [15, 30, 45, 60];
 const MAX_DURATION_MINUTES = 300;
-const GPT_QUESTION_PROMPT = `Create SSC-style MCQ questions for this chapter. Return ONLY a valid JSON array—no markdown, notes, or extra text. Every item must have: number (positive unique question number), question (string), options (array of exactly 4 strings), correctAnswer (0 for first option through 3 for fourth), and optional explanation (string).`;
+const GPT_QUESTION_PROMPT = `Create SSC-style MCQ questions for this chapter. Return ONLY a valid JSON array—no markdown, notes, or extra text. Every item must have: question (string), options (array of exactly 4 strings), correctAnswer (0 for first option through 3 for fourth), and optional explanation (string).`;
 
 const optionLetters: Option[] = ["A", "B", "C", "D"];
 
@@ -64,9 +64,6 @@ function parseQuestionsJson(raw: string): McqQuestion[] {
     const q = item as Record<string, unknown>;
     const options = q["options"];
     const correct = q["correctAnswer"];
-    const number = q["number"];
-    if (!Number.isInteger(number) || (number as number) < 1)
-      throw new Error(`Question ${index + 1} needs a positive number.`);
     if (typeof q["question"] !== "string" || !q["question"].trim())
       throw new Error(`Question ${index + 1} needs question text.`);
     if (
@@ -81,7 +78,7 @@ function parseQuestionsJson(raw: string): McqQuestion[] {
     if (q["explanation"] !== undefined && typeof q["explanation"] !== "string")
       throw new Error(`Question ${index + 1}: explanation must be text.`);
     return {
-      number: number as number,
+      number: index + 1,
       question: q["question"].trim(),
       options: [
         options[0] as string,
@@ -95,8 +92,6 @@ function parseQuestionsJson(raw: string): McqQuestion[] {
         : {}),
     };
   });
-  if (new Set(questions.map((question) => question.number)).size !== questions.length)
-    throw new Error("Each question number must be unique.");
   return questions;
 }
 
@@ -171,18 +166,16 @@ export function SetupScreen({
   const activeExercise = chapter ? getExercise(subject, chapter, exercise || null) : null;
   const activeExerciseName = activeExercise?.name ?? exercise;
   const isJsonExercise = Boolean(activeExercise?.questions?.length);
+  const parsedStart = Math.max(1, Number(startNumber) || 1);
   const jsonQuestions = activeExercise?.questions ?? null;
-  const orderedJsonQuestions = jsonQuestions
-    ? [...jsonQuestions].sort((a, b) => (a.number ?? 0) - (b.number ?? 0))
-    : null;
-  const jsonStartIndex =
-    orderedJsonQuestions?.findIndex(
-      (item, index) => (item.number ?? index + 1) === Number(startNumber),
-    ) ?? -1;
-  const jsonAvailable = jsonStartIndex >= 0 ? orderedJsonQuestions!.slice(jsonStartIndex) : null;
+  const orderedJsonQuestions = jsonQuestions;
+  const jsonStartIndex = parsedStart - 1;
+  const jsonAvailable =
+    jsonStartIndex >= 0 && jsonStartIndex < (orderedJsonQuestions?.length ?? 0)
+      ? orderedJsonQuestions!.slice(jsonStartIndex)
+      : null;
   const chapterTotal = activeExercise?.questionCount ?? null;
   const parsedMinutes = Math.min(MAX_DURATION_MINUTES, Math.max(1, Number(minutes) || 0));
-  const parsedStart = Math.max(1, Number(startNumber) || 1);
   const available = isJsonExercise
     ? (jsonAvailable?.length ?? null)
     : chapterTotal
@@ -227,9 +220,7 @@ export function SetupScreen({
     if (ex?.questions?.length) {
       setCountMode("fixed");
       setQuestionCount(String(ex.questions.length));
-      setStartNumber(
-        String(Math.min(...ex.questions.map((item, index) => item.number ?? index + 1))),
-      );
+      setStartNumber("1");
     } else if (ex?.questionCount) {
       setCountMode("fixed");
       setQuestionCount(String(ex.questionCount));
@@ -245,9 +236,7 @@ export function SetupScreen({
     if (firstExercise?.questions?.length) {
       setCountMode("fixed");
       setQuestionCount(String(firstExercise.questions.length));
-      setStartNumber(
-        String(Math.min(...firstExercise.questions.map((item, index) => item.number ?? index + 1))),
-      );
+      setStartNumber("1");
     } else if (firstExercise?.questionCount) {
       setCountMode("fixed");
       setQuestionCount(String(firstExercise.questionCount));
@@ -283,7 +272,6 @@ export function SetupScreen({
       setJsonText(
         JSON.stringify(
           stored.questions.map((question) => ({
-            ...(question.number !== undefined ? { number: question.number } : {}),
             question: question.question,
             options: question.options,
             correctAnswer: optionLetters.indexOf(question.correctAnswer),
@@ -349,7 +337,7 @@ export function SetupScreen({
       setExercise(name);
       setQuestionCount(String(questions.length));
       setCountMode("fixed");
-      setStartNumber(String(Math.min(...questions.map((question) => question.number ?? 1))));
+      setStartNumber("1");
       setJsonDialogOpen(false);
     } catch (error) {
       setJsonError(error instanceof Error ? error.message : "Invalid JSON.");
@@ -570,7 +558,6 @@ export function SetupScreen({
             size="sm"
             variant={countMode === "unlimited" ? "default" : "outline"}
             onClick={() => setCountMode("unlimited")}
-            disabled={isJsonExercise}
           >
             Unlimited
           </Button>
@@ -665,20 +652,28 @@ export function SetupScreen({
             questionCount: countMode === "fixed" ? parsedCount : null,
             maxQuestions: available,
             answerKey: (() => {
-              if (isJsonExercise)
-                return (jsonAvailable ?? [])
-                  .slice(0, parsedCount)
-                  .map((question) => question.correctAnswer);
+              if (isJsonExercise) {
+                const selected =
+                  countMode === "fixed"
+                    ? (jsonAvailable ?? []).slice(0, parsedCount)
+                    : (jsonAvailable ?? []);
+                return selected.map((question) => question.correctAnswer);
+              }
               const full = activeExercise?.answerKey ?? null;
               if (!full) return null;
               const len = countMode === "fixed" ? parsedCount : (available ?? full.length);
               return full.slice(parsedStart - 1, parsedStart - 1 + len);
             })(),
-            questions: isJsonExercise ? (jsonAvailable ?? []).slice(0, parsedCount) : null,
+            questions: isJsonExercise
+              ? countMode === "fixed"
+                ? (jsonAvailable ?? []).slice(0, parsedCount)
+                : (jsonAvailable ?? [])
+              : null,
             questionNumbers: isJsonExercise
-              ? (jsonAvailable ?? [])
-                  .slice(0, parsedCount)
-                  .map((question, index) => question.number ?? parsedStart + index)
+              ? (countMode === "fixed"
+                  ? (jsonAvailable ?? []).slice(0, parsedCount)
+                  : (jsonAvailable ?? [])
+                ).map((_, index) => parsedStart + index)
               : null,
             darkMode: null,
           })
@@ -761,7 +756,7 @@ export function SetupScreen({
               }}
               className="min-h-72 font-mono text-xs"
               placeholder={
-                '[\n  {\n    "number": 151,\n    "question": "25% of 240 is?",\n    "options": ["40", "50", "60", "80"],\n    "correctAnswer": 2,\n    "explanation": "25% × 240 = 60"\n  }\n]'
+                '[\n  {\n    "question": "25% of 240 is?",\n    "options": ["40", "50", "60", "80"],\n    "correctAnswer": 2,\n    "explanation": "25% × 240 = 60"\n  }\n]'
               }
             />
             <div className="rounded-lg border border-border bg-muted/30 p-3">
