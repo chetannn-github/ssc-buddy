@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { PointerEvent, ReactNode } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   BarChart3,
@@ -567,7 +567,23 @@ export function MotivationalMusic({ onClose }: { onClose: () => void }) {
       Math.min(audio.duration || Infinity, audio.currentTime + seconds),
     );
   };
-  const handleRingClick = () => togglePlayback();
+  const handleRingPointerDown = (event: PointerEvent<HTMLButtonElement>) => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const x = event.clientX - bounds.left - bounds.width / 2;
+    const y = event.clientY - bounds.top - bounds.height / 2;
+    // The central record controls playback; the outer ring seeks through the song.
+    if (Math.hypot(x, y) <= bounds.width * 0.39) {
+      togglePlayback();
+      return;
+    }
+    if (!Number.isFinite(audio.duration) || audio.duration <= 0) return;
+    const angle = (Math.atan2(y, x) * 180) / Math.PI;
+    const percent = ((angle + 450) % 360) / 3.6;
+    audio.currentTime = (percent / 100) * audio.duration;
+    setPlaybackPercent(percent);
+  };
 
   useEffect(() => {
     const handleKeyboard = (event: KeyboardEvent) => {
@@ -637,8 +653,10 @@ export function MotivationalMusic({ onClose }: { onClose: () => void }) {
                   draggable={false}
                   src={coverUrl}
                   alt="Album cover"
-                  className="h-full w-full animate-[spin_8s_linear_infinite select-none object-cover"
-                  style={{ animationPlayState: isPlaying ? "running" : "paused" }}
+                  className={cn(
+                    "h-full w-full select-none object-cover",
+                    isPlaying && "music-cover-art-playing",
+                  )}
                 />
               ) : (
                 <Music2 className="h-4 w-4" />
@@ -692,7 +710,7 @@ export function MotivationalMusic({ onClose }: { onClose: () => void }) {
             <div className="flex min-h-64 flex-col items-center justify-center sm:order-2">
               <button
                 type="button"
-                onClick={handleRingClick}
+                onPointerDown={handleRingPointerDown}
                 className="relative grid h-24 w-24 touch-none select-none place-items-center overflow-visible rounded-full p-[3px] text-zinc-100 transition-transform hover:scale-105"
                 style={{
                   background: `conic-gradient(#ef4444 ${playbackPercent}%, rgba(255,255,255,0.12) 0)`,
@@ -705,8 +723,10 @@ export function MotivationalMusic({ onClose }: { onClose: () => void }) {
                       draggable={false}
                       src={coverUrl}
                       alt="Album cover"
-                      className="h-full w-full animate-[spin_8s_linear_infinite select-none object-cover"
-                      style={{ animationPlayState: isPlaying ? "running" : "paused" }}
+                      className={cn(
+                        "music-cover-art h-full w-full select-none object-cover",
+                        isPlaying && "music-cover-art-playing",
+                      )}
                     />
                   ) : (
                     <Music2 className="h-9 w-9" />

@@ -28,6 +28,16 @@
   }
 }
 
+@keyframes music-cover-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.music-cover-art-playing {
+  animation: music-cover-spin 8s linear infinite;
+}
+
 .animate-consistency-flame {
   transform-origin: center bottom;
   animation: consistency-flame 2s ease-in-out 1;
