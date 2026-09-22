@@ -226,6 +226,7 @@ export function SetupScreen({
     } else if (ex?.questionCount) {
       setCountMode("fixed");
       setQuestionCount(String(ex.questionCount));
+      setStartNumber("1");
     }
   };
 
@@ -242,6 +243,7 @@ export function SetupScreen({
     } else if (firstExercise?.questionCount) {
       setCountMode("fixed");
       setQuestionCount(String(firstExercise.questionCount));
+      setStartNumber("1");
     }
   };
 
