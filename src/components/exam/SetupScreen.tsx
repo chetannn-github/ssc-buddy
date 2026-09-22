@@ -189,6 +189,7 @@ export function SetupScreen({
     available ?? 500,
     Math.min(500, Math.max(1, Number(questionCount) || 0)),
   );
+  const maxQuestionCount = Math.min(500, available ?? 500);
   const countTooHigh =
     countMode === "fixed" && available !== null && Number(questionCount) > available;
   const valid =
@@ -583,8 +584,17 @@ export function SetupScreen({
           <div className="space-y-1">
             <Input
               inputMode="numeric"
+              min={1}
+              max={maxQuestionCount}
               value={questionCount}
-              onChange={(e) => setQuestionCount(e.target.value.replace(/\D/g, ""))}
+              onChange={(e) => {
+                const next = e.target.value.replace(/\D/g, "");
+                setQuestionCount(
+                  next === ""
+                    ? ""
+                    : String(Math.max(1, Math.min(Number(next) || 1, maxQuestionCount))),
+                );
+              }}
               placeholder="e.g. 50"
               className="sm:max-w-[200px]"
             />
