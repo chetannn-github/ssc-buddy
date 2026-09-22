@@ -175,6 +175,7 @@ export function SetupScreen({
       ? orderedJsonQuestions!.slice(jsonStartIndex)
       : null;
   const chapterTotal = activeExercise?.questionCount ?? null;
+  const maxStartNumber = isJsonExercise ? (orderedJsonQuestions?.length ?? null) : chapterTotal;
   const parsedMinutes = Math.min(MAX_DURATION_MINUTES, Math.max(1, Number(minutes) || 0));
   const available = isJsonExercise
     ? (jsonAvailable?.length ?? null)
@@ -531,8 +532,16 @@ export function SetupScreen({
           <div className="space-y-1.5">
             <Input
               inputMode="numeric"
+              min={1}
+              max={maxStartNumber ?? undefined}
               value={startNumber}
-              onChange={(e) => setStartNumber(e.target.value.replace(/\D/g, ""))}
+              onChange={(e) => {
+                const next = e.target.value.replace(/\D/g, "");
+                const capped = maxStartNumber
+                  ? Math.max(1, Math.min(Number(next) || 1, maxStartNumber))
+                  : next;
+                setStartNumber(next === "" ? "" : String(capped));
+              }}
               placeholder="Start question no. e.g. 151"
             />
             <p
