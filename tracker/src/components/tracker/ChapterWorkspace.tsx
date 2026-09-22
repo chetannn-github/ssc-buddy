@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, ChevronRight, GripVertical, ListOrdered, Star, X } from "lucide-react";
+import { ChevronRight, GripVertical, ListOrdered, Star, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useTracker } from "@/lib/tracker-store";
 import { cn } from "@/lib/utils";
@@ -147,17 +147,6 @@ export function ChapterWorkspace({ mode }: { mode: Mode }) {
           draft.revision[id] = { types: [], done: {}, targets: {} };
           draft.tests.targets[id] = 0;
         }),
-    });
-
-  const moveChapter = (subjectId: string, chapterIndex: number, direction: -1 | 1) =>
-    update((draft) => {
-      const chapters = draft.subjects.find((subject) => subject.id === subjectId)?.chapters;
-      const nextIndex = chapterIndex + direction;
-      if (!chapters || nextIndex < 0 || nextIndex >= chapters.length) return;
-      [chapters[chapterIndex], chapters[nextIndex]] = [
-        chapters[nextIndex]!,
-        chapters[chapterIndex]!,
-      ];
     });
 
   const moveChapterTo = (subjectId: string, sourceId: string, targetId: string) =>
@@ -355,14 +344,11 @@ export function ChapterWorkspace({ mode }: { mode: Mode }) {
                           reordering={isReordering}
                           onOpen={() => setSelected({ subject, chapter })}
                           onPin={() => togglePin(chapter.id)}
-                          onMove={(direction) => moveChapter(subject.id, chapterIndex, direction)}
                           onDropChapter={(sourceId) =>
                             moveChapterTo(subject.id, sourceId, chapter.id)
                           }
                           onDragChange={setDraggingChapterId}
                           dragging={draggingChapterId === chapter.id}
-                          canMoveUp={chapterIndex > 0}
-                          canMoveDown={chapterIndex < subject.chapters.length - 1}
                         />
                       ))}
                     </>
@@ -423,12 +409,9 @@ function ChapterRow({
   reordering,
   onOpen,
   onPin,
-  onMove,
   onDropChapter,
   onDragChange,
   dragging,
-  canMoveUp,
-  canMoveDown,
 }: {
   subject: Subject;
   chapter: Chapter;
@@ -437,12 +420,9 @@ function ChapterRow({
   reordering: boolean;
   onOpen: () => void;
   onPin: () => void;
-  onMove: (direction: -1 | 1) => void;
   onDropChapter: (sourceId: string) => void;
   onDragChange: (chapterId: string) => void;
   dragging: boolean;
-  canMoveUp: boolean;
-  canMoveDown: boolean;
 }) {
   const { data } = useTracker();
   const revision = data.revision[subject.id];
@@ -503,31 +483,13 @@ function ChapterRow({
         {pct(done, total)}%
       </span>
       {reordering ? (
-        <div className="flex shrink-0 gap-1">
+        <div className="flex shrink-0">
           <span
             className="grid h-7 w-5 place-items-center text-muted-foreground"
             title="Drag to reorder"
           >
             <GripVertical className="h-4 w-4" />
           </span>
-          <button
-            type="button"
-            onClick={() => onMove(-1)}
-            disabled={!canMoveUp}
-            aria-label={`Move ${chapter.name} up`}
-            className="grid h-7 w-7 place-items-center rounded-md bg-track text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-35"
-          >
-            <ArrowUp className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => onMove(1)}
-            disabled={!canMoveDown}
-            aria-label={`Move ${chapter.name} down`}
-            className="grid h-7 w-7 place-items-center rounded-md bg-track text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-35"
-          >
-            <ArrowDown className="h-4 w-4" />
-          </button>
         </div>
       ) : (
         <button
