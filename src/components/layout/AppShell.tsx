@@ -4,12 +4,15 @@ import {
   BarChart3,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   FilePenLine,
   Flame,
   GraduationCap,
   ListTodo,
   Minimize2,
   Music2,
+  Pause,
   Play,
   Repeat2,
   RotateCcw,
@@ -294,7 +297,12 @@ function DailyManifestation({
 function MotivationalVideos({ onClose, onOpen }: { onClose: () => void; onOpen: () => void }) {
   const [videos, setVideos] = useState<string[]>([]);
   const [selectedVideo, setSelectedVideo] = useState<string | null>(null);
+  const [isPlaying, setIsPlaying] = useState(true);
+  const [playbackOverlay, setPlaybackOverlay] = useState<"play" | "pause" | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const swipeStartY = useRef<number | null>(null);
+  const didSwipe = useRef(false);
+  const overlayTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     onOpen();
@@ -331,15 +339,26 @@ function MotivationalVideos({ onClose, onOpen }: { onClose: () => void; onOpen: 
   const togglePlayback = () => {
     const video = videoRef.current;
     if (!video) return;
-    if (video.paused) void video.play();
+    const action = video.paused ? "play" : "pause";
+    if (action === "play") void video.play();
     else video.pause();
+    setPlaybackOverlay(action);
+    if (overlayTimer.current) clearTimeout(overlayTimer.current);
+    overlayTimer.current = setTimeout(() => setPlaybackOverlay(null), 650);
   };
+
+  useEffect(
+    () => () => {
+      if (overlayTimer.current) clearTimeout(overlayTimer.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     const handleKeyboard = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
-      if (event.key === "ArrowLeft") showVideo(-1);
-      if (event.key === "ArrowRight") showVideo(1);
+      if (event.key === "ArrowUp" || event.key === "ArrowLeft") showVideo(-1);
+      if (event.key === "ArrowDown" || event.key === "ArrowRight") showVideo(1);
     };
     document.addEventListener("keydown", handleKeyboard);
     return () => document.removeEventListener("keydown", handleKeyboard);
@@ -363,7 +382,19 @@ function MotivationalVideos({ onClose, onOpen }: { onClose: () => void; onOpen: 
           <X className="h-4 w-4" />
         </button>
         {selectedVideo ? (
-          <div className="relative h-full w-full">
+          <div
+            className="group relative h-full w-full"
+            onPointerDown={(event) => {
+              swipeStartY.current = event.clientY;
+            }}
+            onPointerUp={(event) => {
+              const start = swipeStartY.current;
+              swipeStartY.current = null;
+              if (start === null || Math.abs(event.clientY - start) < 50) return;
+              didSwipe.current = true;
+              showVideo(event.clientY < start ? 1 : -1);
+            }}
+          >
             <video
               ref={videoRef}
               key={selectedVideo}
@@ -371,31 +402,64 @@ function MotivationalVideos({ onClose, onOpen }: { onClose: () => void; onOpen: 
               autoPlay
               loop
               playsInline
-              onClick={togglePlayback}
+              onClick={() => {
+                if (didSwipe.current) {
+                  didSwipe.current = false;
+                  return;
+                }
+                togglePlayback();
+              }}
+              onPlay={() => setIsPlaying(true)}
+              onPause={() => setIsPlaying(false)}
             >
               <source src={`/videos/${encodeURIComponent(selectedVideo)}`} />
               Your browser does not support video playback.
             </video>
-            {videos.length > 1 && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => showVideo(-1)}
-                  aria-label="Previous video"
-                  className="absolute top-1/2 left-3 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-black/50 text-white backdrop-blur transition-colors hover:bg-black/80 sm:left-5"
-                >
-                  <ChevronLeft className="h-6 w-6" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => showVideo(1)}
-                  aria-label="Next video"
-                  className="absolute top-1/2 right-3 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-black/50 text-white backdrop-blur transition-colors hover:bg-black/80 sm:right-5"
-                >
-                  <ChevronRight className="h-6 w-6" />
-                </button>
-              </>
+            {playbackOverlay && (
+              <div className="pointer-events-none absolute inset-0 grid place-items-center">
+                <span className="grid h-16 w-16 animate-in fade-in zoom-in-75 place-items-center rounded-full bg-black/65 text-white backdrop-blur-sm">
+                  {playbackOverlay === "play" ? (
+                    <Play className="h-7 w-7 fill-current" />
+                  ) : (
+                    <Pause className="h-7 w-7 fill-current" />
+                  )}
+                </span>
+              </div>
             )}
+            <div className="pointer-events-none absolute top-1/2 right-3 flex -translate-y-1/2 flex-col gap-3 opacity-0 transition-opacity group-hover:opacity-100 sm:right-5">
+              {videos.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => showVideo(-1)}
+                    aria-label="Previous video"
+                    className="pointer-events-auto grid h-11 w-11 place-items-center rounded-full bg-black/50 text-white backdrop-blur hover:bg-black/80"
+                  >
+                    <ChevronUp className="h-6 w-6" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => showVideo(1)}
+                    aria-label="Next video"
+                    className="pointer-events-auto grid h-11 w-11 place-items-center rounded-full bg-black/50 text-white backdrop-blur hover:bg-black/80"
+                  >
+                    <ChevronDown className="h-6 w-6" />
+                  </button>
+                </>
+              )}
+              <button
+                type="button"
+                onClick={togglePlayback}
+                aria-label={isPlaying ? "Pause video" : "Play video"}
+                className="pointer-events-auto grid h-11 w-11 place-items-center rounded-full bg-black/50 text-white backdrop-blur hover:bg-black/80"
+              >
+                {isPlaying ? (
+                  <Pause className="h-5 w-5 fill-current" />
+                ) : (
+                  <Play className="h-5 w-5 fill-current" />
+                )}
+              </button>
+            </div>
           </div>
         ) : (
           <div className="grid h-full place-items-center">
