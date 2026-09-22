@@ -136,12 +136,6 @@ export function SolutionScreen({ record, onExit }: Props) {
             </span>
           </div>
 
-          {!reattempt && (
-            <p className="mt-4 text-sm text-muted-foreground">
-              Your answer from the original attempt, with the correct option marked.
-            </p>
-          )}
-
           {question && (
             <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-foreground">
               {question.question}
@@ -200,7 +194,7 @@ export function SolutionScreen({ record, onExit }: Props) {
           {!reattempt && !original && (
             <p className="mt-4 text-sm text-muted-foreground">Not attempted · 0 marks</p>
           )}
-          {!reattempt && question?.explanation && (
+          {question?.explanation && (
             <div className="mt-4 rounded-lg border border-primary/25 bg-primary/10 p-3 text-sm">
               <span className="font-semibold">Explanation: </span>
               {question.explanation}

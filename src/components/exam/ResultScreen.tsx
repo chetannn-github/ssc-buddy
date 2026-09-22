@@ -109,13 +109,6 @@ export function ResultScreen({ record, onRestart, attempts = [] }: Props) {
   const checked = c + w;
   const attempted = record.answers.filter(Boolean).length;
   const unattempted = total - attempted;
-  const unattemptedNumbers = useMemo(
-    () =>
-      record.answers
-        .map((a, i) => (!a ? (record.questionNumbers?.[i] ?? record.startNumber + i) : null))
-        .filter((n): n is number => n !== null),
-    [record.answers, record.questionNumbers, record.startNumber],
-  );
   const remaining = attempted - checked;
   const score = computeScore(c, w, record.marking);
   const maxMarks = total * record.marking.positive;
@@ -223,19 +216,6 @@ export function ResultScreen({ record, onRestart, attempts = [] }: Props) {
             {answerFilter === "all" ? total : filteredAnswers.length} of {total} questions
           </span>
         </div>
-        {unattemptedNumbers.length > 0 && (
-          <div className="mb-3 flex flex-wrap items-center gap-1.5 rounded-lg border border-dashed border-border bg-muted/40 p-2">
-            <span className="text-[10px] font-medium text-muted-foreground">Unattempted:</span>
-            {unattemptedNumbers.map((n) => (
-              <span
-                key={n}
-                className="rounded bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground shadow-sm"
-              >
-                Q{n}
-              </span>
-            ))}
-          </div>
-        )}
         <div className="max-h-[32rem] space-y-1.5 overflow-y-auto pr-1 lg:max-h-none lg:overflow-visible lg:pr-0">
           {filteredAnswers.map(({ answer: a, index: i, verdict: v }) => {
             const attemptedRow = Boolean(a);
