@@ -12,7 +12,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
-import { formatClock, type Option, type QuestionState } from "@/lib/exam";
+import { formatClock, type McqQuestion, type Option, type QuestionState } from "@/lib/exam";
 
 const OPTIONS: Option[] = ["A", "B", "C", "D"];
 
@@ -23,6 +23,7 @@ type Props = {
   chapter: string;
   questionCount?: number | null;
   maxQuestions?: number | null;
+  questions?: McqQuestion[] | null;
   initialDarkMode: boolean;
   onSubmit: (answers: (Option | null)[], timeTakenSeconds: number) => void;
 };
@@ -36,6 +37,7 @@ export function TestScreen({
   chapter,
   questionCount = null,
   maxQuestions = null,
+  questions = null,
   initialDarkMode,
   onSubmit,
 }: Props) {
@@ -192,8 +194,9 @@ export function TestScreen({
             </span>
           </div>
 
-          <p className="mt-4 text-sm text-muted-foreground">
-            Read this question from your book and select the correct option.
+          <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-foreground">
+            {questions?.[current]?.question ??
+              "Read this question from your book and select the correct option."}
           </p>
 
           <div className="mt-4 grid gap-2 sm:grid-cols-2">
@@ -219,7 +222,7 @@ export function TestScreen({
                 >
                   {opt}
                 </span>
-                Option {opt}
+                {questions?.[current]?.options[OPTIONS.indexOf(opt)] ?? `Option ${opt}`}
               </button>
             ))}
           </div>

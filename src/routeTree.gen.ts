@@ -10,33 +10,18 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as TrackRouteImport } from './routes/track'
-import { Route as TasksRouteImport } from './routes/tasks'
-import { Route as ProgressRouteImport } from './routes/progress'
 import { Route as MockTestsRouteImport } from './routes/mock-tests'
 import { Route as ProfileRouteImport } from './routes/profile'
+import { Route as ProgressRouteImport } from './routes/progress'
+import { Route as TasksRouteImport } from './routes/tasks'
 import { Route as TestRouteImport } from './routes/test'
+import { Route as TrackRouteImport } from './routes/track'
 import { Route as HistoryIndexRouteImport } from './routes/history.index'
 import { Route as HistoryIdRouteImport } from './routes/history.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const TrackRoute = TrackRouteImport.update({
-  id: '/track',
-  path: '/track',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const TasksRoute = TasksRouteImport.update({
-  id: '/tasks',
-  path: '/tasks',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ProgressRoute = ProgressRouteImport.update({
-  id: '/progress',
-  path: '/progress',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MockTestsRoute = MockTestsRouteImport.update({
@@ -49,9 +34,24 @@ const ProfileRoute = ProfileRouteImport.update({
   path: '/profile',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProgressRoute = ProgressRouteImport.update({
+  id: '/progress',
+  path: '/progress',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TasksRoute = TasksRouteImport.update({
+  id: '/tasks',
+  path: '/tasks',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TestRoute = TestRouteImport.update({
   id: '/test',
   path: '/test',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TrackRoute = TrackRouteImport.update({
+  id: '/track',
+  path: '/track',
   getParentRoute: () => rootRouteImport,
 } as any)
 const HistoryIndexRoute = HistoryIndexRouteImport.update({
@@ -67,54 +67,82 @@ const HistoryIdRoute = HistoryIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/track': typeof TrackRoute
-  '/tasks': typeof TasksRoute
-  '/progress': typeof ProgressRoute
   '/mock-tests': typeof MockTestsRoute
   '/profile': typeof ProfileRoute
+  '/progress': typeof ProgressRoute
+  '/tasks': typeof TasksRoute
   '/test': typeof TestRoute
+  '/track': typeof TrackRoute
   '/history/$id': typeof HistoryIdRoute
   '/history/': typeof HistoryIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/track': typeof TrackRoute
-  '/tasks': typeof TasksRoute
-  '/progress': typeof ProgressRoute
   '/mock-tests': typeof MockTestsRoute
   '/profile': typeof ProfileRoute
+  '/progress': typeof ProgressRoute
+  '/tasks': typeof TasksRoute
   '/test': typeof TestRoute
+  '/track': typeof TrackRoute
   '/history/$id': typeof HistoryIdRoute
   '/history': typeof HistoryIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/track': typeof TrackRoute
-  '/tasks': typeof TasksRoute
-  '/progress': typeof ProgressRoute
   '/mock-tests': typeof MockTestsRoute
   '/profile': typeof ProfileRoute
+  '/progress': typeof ProgressRoute
+  '/tasks': typeof TasksRoute
   '/test': typeof TestRoute
+  '/track': typeof TrackRoute
   '/history/$id': typeof HistoryIdRoute
   '/history/': typeof HistoryIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/track' | '/tasks' | '/progress' | '/mock-tests' | '/profile' | '/test' | '/history/$id' | '/history/'
+  fullPaths:
+    | '/'
+    | '/mock-tests'
+    | '/profile'
+    | '/progress'
+    | '/tasks'
+    | '/test'
+    | '/track'
+    | '/history/$id'
+    | '/history/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/track' | '/tasks' | '/progress' | '/mock-tests' | '/profile' | '/test' | '/history/$id' | '/history'
-  id: '__root__' | '/' | '/track' | '/tasks' | '/progress' | '/mock-tests' | '/profile' | '/test' | '/history/$id' | '/history/'
+  to:
+    | '/'
+    | '/mock-tests'
+    | '/profile'
+    | '/progress'
+    | '/tasks'
+    | '/test'
+    | '/track'
+    | '/history/$id'
+    | '/history'
+  id:
+    | '__root__'
+    | '/'
+    | '/mock-tests'
+    | '/profile'
+    | '/progress'
+    | '/tasks'
+    | '/test'
+    | '/track'
+    | '/history/$id'
+    | '/history/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  TrackRoute: typeof TrackRoute
-  TasksRoute: typeof TasksRoute
-  ProgressRoute: typeof ProgressRoute
   MockTestsRoute: typeof MockTestsRoute
   ProfileRoute: typeof ProfileRoute
+  ProgressRoute: typeof ProgressRoute
+  TasksRoute: typeof TasksRoute
   TestRoute: typeof TestRoute
+  TrackRoute: typeof TrackRoute
   HistoryIdRoute: typeof HistoryIdRoute
   HistoryIndexRoute: typeof HistoryIndexRoute
 }
@@ -126,27 +154,6 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/track': {
-      id: '/track'
-      path: '/track'
-      fullPath: '/track'
-      preLoaderRoute: typeof TrackRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/tasks': {
-      id: '/tasks'
-      path: '/tasks'
-      fullPath: '/tasks'
-      preLoaderRoute: typeof TasksRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/progress': {
-      id: '/progress'
-      path: '/progress'
-      fullPath: '/progress'
-      preLoaderRoute: typeof ProgressRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/mock-tests': {
@@ -163,11 +170,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProfileRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/progress': {
+      id: '/progress'
+      path: '/progress'
+      fullPath: '/progress'
+      preLoaderRoute: typeof ProgressRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tasks': {
+      id: '/tasks'
+      path: '/tasks'
+      fullPath: '/tasks'
+      preLoaderRoute: typeof TasksRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/test': {
       id: '/test'
       path: '/test'
       fullPath: '/test'
       preLoaderRoute: typeof TestRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/track': {
+      id: '/track'
+      path: '/track'
+      fullPath: '/track'
+      preLoaderRoute: typeof TrackRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/history/': {
@@ -189,12 +217,12 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  TrackRoute: TrackRoute,
-  TasksRoute: TasksRoute,
-  ProgressRoute: ProgressRoute,
   MockTestsRoute: MockTestsRoute,
   ProfileRoute: ProfileRoute,
+  ProgressRoute: ProgressRoute,
+  TasksRoute: TasksRoute,
   TestRoute: TestRoute,
+  TrackRoute: TrackRoute,
   HistoryIdRoute: HistoryIdRoute,
   HistoryIndexRoute: HistoryIndexRoute,
 }

@@ -10,6 +10,13 @@ export type QuestionState = {
 
 export type MarkingScheme = { positive: number; negative: number };
 
+export type McqQuestion = {
+  question: string;
+  options: [string, string, string, string];
+  correctAnswer: Option;
+  explanation?: string;
+};
+
 export type TestRecord = {
   id: string;
   date: string;
@@ -21,6 +28,7 @@ export type TestRecord = {
   timeTakenSeconds: number;
   answers: (Option | null)[];
   answerKey?: (Option | null)[];
+  questions?: McqQuestion[] | undefined;
 
   evaluations?: Verdict[];
   correct: number | null;
@@ -33,6 +41,7 @@ export type Exercise = {
   name: string;
   questionCount: number | null;
   answerKey: (Option | null)[] | null;
+  questions?: McqQuestion[] | undefined;
 };
 
 export type Chapter = {
@@ -144,6 +153,7 @@ export function upsertExercise(
   exerciseName: string,
   questionCount: number | null = null,
   answerKey: (Option | null)[] | null = null,
+  questions?: McqQuestion[],
 ): Subject[] {
   const subjects = loadSubjects();
   const subject = subjects.find((s) => s.name === subjectName);
@@ -160,12 +170,29 @@ export function upsertExercise(
   if (existing) {
     existing.questionCount = questionCount;
     existing.answerKey = answerKey;
+    existing.questions = questions;
   } else {
-    chapter.exercises.push({ name, questionCount, answerKey });
+    chapter.exercises.push({ name, questionCount, answerKey, questions });
   }
   chapter.questionCount = chapter.exercises[0]?.questionCount ?? null;
   chapter.answerKey = chapter.exercises[0]?.answerKey ?? null;
 
+  saveSubjects(subjects);
+  return loadSubjects();
+}
+
+export function deleteExercise(
+  subjectName: string,
+  chapterName: string,
+  exerciseName: string,
+): Subject[] {
+  const subjects = loadSubjects();
+  const subject = subjects.find((subject) => subject.name === subjectName);
+  const chapter = subject?.chapters.find((item) => item.name === chapterName);
+  if (!chapter) return subjects;
+  chapter.exercises = chapter.exercises.filter((exercise) => exercise.name !== exerciseName);
+  chapter.questionCount = chapter.exercises[0]?.questionCount ?? null;
+  chapter.answerKey = chapter.exercises[0]?.answerKey ?? null;
   saveSubjects(subjects);
   return loadSubjects();
 }

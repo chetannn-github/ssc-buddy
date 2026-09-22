@@ -79,6 +79,7 @@ function TestPage() {
       timeTakenSeconds,
       answers,
       ...(key ? { answerKey: key } : {}),
+      ...(config.questions ? { questions: config.questions } : {}),
       ...(evaluations ? { evaluations } : {}),
       correct,
       wrong,
@@ -98,6 +99,7 @@ function TestPage() {
         chapter={config.exercise ? `${config.chapter} · ${config.exercise}` : config.chapter}
         questionCount={config.questionCount}
         maxQuestions={config.maxQuestions}
+        questions={config.questions}
         initialDarkMode={config.darkMode ?? false}
         onSubmit={handleSubmit}
       />

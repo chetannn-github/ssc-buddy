@@ -35,6 +35,7 @@ export function SolutionScreen({ record, onExit }: Props) {
   const original = record.answers[current] ?? null;
   const correctOpt = key[current] ?? null;
   const retry = retryAnswers[current] ?? null;
+  const question = record.questions?.[current];
 
   const paletteClass = (i: number) =>
     cn(
@@ -139,6 +140,12 @@ export function SolutionScreen({ record, onExit }: Props) {
             </p>
           )}
 
+          {question && (
+            <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-foreground">
+              {question.question}
+            </p>
+          )}
+
           <div className="mt-4 grid gap-2 sm:grid-cols-2">
             {OPTIONS.map((opt) => (
               <button
@@ -165,7 +172,7 @@ export function SolutionScreen({ record, onExit }: Props) {
                 >
                   {opt}
                 </span>
-                Option {opt}
+                {question?.options[OPTIONS.indexOf(opt)] ?? `Option ${opt}`}
                 <span className="ml-auto flex items-center gap-1.5 text-[10px] font-medium">
                   {(!reattempt || (retry !== null && retry !== correctOpt)) &&
                     correctOpt === opt && (
@@ -190,6 +197,12 @@ export function SolutionScreen({ record, onExit }: Props) {
 
           {!reattempt && !original && (
             <p className="mt-4 text-sm text-muted-foreground">Not attempted · 0 marks</p>
+          )}
+          {!reattempt && question?.explanation && (
+            <div className="mt-4 rounded-lg border border-primary/25 bg-primary/10 p-3 text-sm">
+              <span className="font-semibold">Explanation: </span>
+              {question.explanation}
+            </div>
           )}
 
           <div className="mt-6 flex flex-wrap gap-2 border-t border-border pt-4">

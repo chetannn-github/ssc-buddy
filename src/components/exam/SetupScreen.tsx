@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -16,6 +17,7 @@ import { PageLoader } from "@/components/ui/page-loader";
 import { consumeLightPageLoader } from "@/lib/navigation";
 import {
   upsertExercise,
+  deleteExercise,
   getExercise,
   addSubject,
   DEFAULT_EXERCISE,
@@ -25,6 +27,7 @@ import {
   loadSubjects,
   saveMarking,
   type MarkingScheme,
+  type McqQuestion,
   type Option,
   type Subject,
 } from "@/lib/exam";
@@ -39,11 +42,53 @@ export type TestConfig = {
   questionCount: number | null;
   maxQuestions: number | null;
   answerKey: (Option | null)[] | null;
+  questions: McqQuestion[] | null;
   darkMode: boolean | null;
 };
 
 const PRESETS = [15, 30, 45, 60];
 const MAX_DURATION_MINUTES = 300;
+
+const optionLetters: Option[] = ["A", "B", "C", "D"];
+
+function parseQuestionsJson(raw: string): McqQuestion[] {
+  const value: unknown = JSON.parse(raw);
+  if (!Array.isArray(value) || value.length === 0)
+    throw new Error("Use a JSON array with at least one question.");
+  if (value.length > 500) throw new Error("An exercise can contain at most 500 questions.");
+  return value.map((item, index) => {
+    if (!item || typeof item !== "object") throw new Error(`Question ${index + 1} is invalid.`);
+    const q = item as Record<string, unknown>;
+    const options = q["options"];
+    const correct = q["correctAnswer"];
+    if (typeof q["question"] !== "string" || !q["question"].trim())
+      throw new Error(`Question ${index + 1} needs question text.`);
+    if (
+      !Array.isArray(options) ||
+      options.length !== 4 ||
+      options.some((option) => typeof option !== "string" || !option.trim())
+    )
+      throw new Error(`Question ${index + 1} needs exactly four non-empty options.`);
+    const optionIndex = typeof correct === "number" ? correct : -1;
+    if (!Number.isInteger(optionIndex) || optionIndex < 0 || optionIndex > 3)
+      throw new Error(`Question ${index + 1}: correctAnswer must be 0, 1, 2, or 3.`);
+    if (q["explanation"] !== undefined && typeof q["explanation"] !== "string")
+      throw new Error(`Question ${index + 1}: explanation must be text.`);
+    return {
+      question: q["question"].trim(),
+      options: [
+        options[0] as string,
+        options[1] as string,
+        options[2] as string,
+        options[3] as string,
+      ],
+      correctAnswer: optionLetters[optionIndex]!,
+      ...(typeof q["explanation"] === "string" && q["explanation"].trim()
+        ? { explanation: q["explanation"].trim() }
+        : {}),
+    };
+  });
+}
 
 export type SetupPrefill = {
   subject?: string | undefined;
@@ -73,6 +118,10 @@ export function SetupScreen({
   const [draftStep, setDraftStep] = useState<"count" | "key">("count");
   const [draftKey, setDraftKey] = useState<(Option | null)[] | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [jsonDialogOpen, setJsonDialogOpen] = useState(false);
+  const [jsonExerciseName, setJsonExerciseName] = useState("");
+  const [jsonText, setJsonText] = useState("");
+  const [jsonError, setJsonError] = useState("");
 
   const [minutes, setMinutes] = useState(
     String(Math.min(MAX_DURATION_MINUTES, prefill?.minutes ?? 30)),
@@ -131,6 +180,8 @@ export function SetupScreen({
     !countTooHigh &&
     (countMode === "unlimited" || Number(questionCount) >= 1);
 
+  const isJsonExercise = Boolean(activeExercise?.questions?.length);
+
   const createSubject = () => {
     const name = newSubject.trim();
     if (!name) return;
@@ -145,7 +196,11 @@ export function SetupScreen({
     setChapter(name);
     const ex = getExercise(subject, name, exerciseName ?? null);
     setExercise(ex?.name ?? "");
-    if (ex?.questionCount) {
+    if (ex?.questions?.length) {
+      setCountMode("fixed");
+      setQuestionCount(String(ex.questions.length));
+      setStartNumber("1");
+    } else if (ex?.questionCount) {
       setCountMode("fixed");
       setQuestionCount(String(ex.questionCount));
     }
@@ -157,7 +212,11 @@ export function SetupScreen({
     setChapter(firstChapter?.name ?? "");
     const firstExercise = firstChapter?.exercises[0];
     setExercise(firstExercise?.name ?? "");
-    if (firstExercise?.questionCount) {
+    if (firstExercise?.questions?.length) {
+      setCountMode("fixed");
+      setQuestionCount(String(firstExercise.questions.length));
+      setStartNumber("1");
+    } else if (firstExercise?.questionCount) {
       setCountMode("fixed");
       setQuestionCount(String(firstExercise.questionCount));
     }
@@ -187,6 +246,24 @@ export function SetupScreen({
   const editChapter = () => {
     if (!subject || !chapter) return;
     const stored = getExercise(subject, chapter, exercise || null);
+    if (stored?.questions?.length) {
+      setJsonExerciseName(stored.name);
+      setJsonText(
+        JSON.stringify(
+          stored.questions.map((question) => ({
+            question: question.question,
+            options: question.options,
+            correctAnswer: optionLetters.indexOf(question.correctAnswer),
+            ...(question.explanation ? { explanation: question.explanation } : {}),
+          })),
+          null,
+          2,
+        ),
+      );
+      setJsonError("");
+      setJsonDialogOpen(true);
+      return;
+    }
     setChapterDraft(chapter);
     setDraftExercise(stored?.name ?? DEFAULT_EXERCISE);
     setDraftStep("count");
@@ -210,6 +287,39 @@ export function SetupScreen({
     setChapterDraft(null);
     setDraftKey(null);
     setIsEditing(false);
+  };
+
+  const openJsonExercise = () => {
+    if (!subject || !chapter) return;
+    setJsonExerciseName(`Practice Set ${exercises.length + 1}`);
+    setJsonText("");
+    setJsonError("");
+    setJsonDialogOpen(true);
+  };
+
+  const saveJsonExercise = () => {
+    try {
+      const questions = parseQuestionsJson(jsonText);
+      const name = jsonExerciseName.trim();
+      if (!name) throw new Error("Enter an exercise name.");
+      setSubjects(
+        upsertExercise(
+          subject,
+          chapter,
+          name,
+          questions.length,
+          questions.map((q) => q.correctAnswer),
+          questions,
+        ),
+      );
+      setExercise(name);
+      setQuestionCount(String(questions.length));
+      setCountMode("fixed");
+      setStartNumber("1");
+      setJsonDialogOpen(false);
+    } catch (error) {
+      setJsonError(error instanceof Error ? error.message : "Invalid JSON.");
+    }
   };
 
   const commitMarking = () => {
@@ -310,14 +420,30 @@ export function SetupScreen({
               <Button type="button" size="sm" variant="ghost" onClick={addExercise}>
                 + Add exercise
               </Button>
+              <Button type="button" size="sm" variant="secondary" onClick={openJsonExercise}>
+                + Add JSON exercise
+              </Button>
             </div>
             <button
               type="button"
               onClick={editChapter}
               className="text-xs font-medium text-primary underline-offset-2 hover:underline"
             >
-              Edit questions & answer key of “{activeExerciseName || chapter}”
+              {isJsonExercise ? "Replace JSON of" : "Edit questions & answer key of"} “
+              {activeExerciseName || chapter}”
             </button>
+            {isJsonExercise && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSubjects(deleteExercise(subject, chapter, activeExerciseName));
+                  selectChapter(chapter);
+                }}
+                className="ml-3 text-xs font-medium text-destructive underline-offset-2 hover:underline"
+              >
+                Delete JSON exercise
+              </button>
+            )}
           </div>
         )}
       </section>
@@ -360,6 +486,7 @@ export function SetupScreen({
               value={startNumber}
               onChange={(e) => setStartNumber(e.target.value.replace(/\D/g, ""))}
               placeholder="Start question no. e.g. 151"
+              disabled={isJsonExercise}
             />
             <p
               className={cn("text-xs", startTooHigh ? "text-destructive" : "text-muted-foreground")}
@@ -384,6 +511,7 @@ export function SetupScreen({
             size="sm"
             variant={countMode === "unlimited" ? "default" : "outline"}
             onClick={() => setCountMode("unlimited")}
+            disabled={isJsonExercise}
           >
             Unlimited
           </Button>
@@ -392,6 +520,7 @@ export function SetupScreen({
             size="sm"
             variant={countMode === "fixed" ? "default" : "outline"}
             onClick={() => setCountMode("fixed")}
+            disabled={isJsonExercise}
           >
             Fixed count
           </Button>
@@ -402,15 +531,18 @@ export function SetupScreen({
               inputMode="numeric"
               value={questionCount}
               onChange={(e) => setQuestionCount(e.target.value.replace(/\D/g, ""))}
+              disabled={isJsonExercise}
               placeholder="e.g. 50"
               className="sm:max-w-[200px]"
             />
             <p
               className={cn("text-xs", countTooHigh ? "text-destructive" : "text-muted-foreground")}
             >
-              {countTooHigh
-                ? `Only ${available} questions remain (Q${parsedStart}–Q${chapterTotal}).`
-                : `Q${parsedStart}–${parsedStart + parsedCount - 1}.`}
+              {isJsonExercise
+                ? `This JSON exercise contains ${activeExercise?.questions?.length ?? 0} questions.`
+                : countTooHigh
+                  ? `Only ${available} questions remain (Q${parsedStart}–Q${chapterTotal}).`
+                  : `Q${parsedStart}–${parsedStart + parsedCount - 1}.`}
             </p>
           </div>
         ) : (
@@ -476,11 +608,14 @@ export function SetupScreen({
             questionCount: countMode === "fixed" ? parsedCount : null,
             maxQuestions: available,
             answerKey: (() => {
+              if (activeExercise?.questions?.length)
+                return activeExercise.questions.map((q) => q.correctAnswer);
               const full = activeExercise?.answerKey ?? null;
               if (!full) return null;
               const len = countMode === "fixed" ? parsedCount : (available ?? full.length);
               return full.slice(parsedStart - 1, parsedStart - 1 + len);
             })(),
+            questions: activeExercise?.questions ?? null,
             darkMode: null,
           })
         }
@@ -540,6 +675,38 @@ export function SetupScreen({
               onConfirm={finishChapter}
             />
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={jsonDialogOpen} onOpenChange={setJsonDialogOpen}>
+        <DialogContent className="exam-dialog-content max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Add JSON exercise to {chapter}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Input
+              value={jsonExerciseName}
+              onChange={(e) => setJsonExerciseName(e.target.value)}
+              placeholder="Exercise name e.g. Practice Set 1"
+            />
+            <Textarea
+              value={jsonText}
+              onChange={(e) => {
+                setJsonText(e.target.value);
+                setJsonError("");
+              }}
+              className="min-h-72 font-mono text-xs"
+              placeholder={
+                '[\n  {\n    "question": "25% of 240 is?",\n    "options": ["40", "50", "60", "80"],\n    "correctAnswer": 2,\n    "explanation": "25% × 240 = 60"\n  }\n]'
+              }
+            />
+            <p className="text-xs text-muted-foreground">
+              correctAnswer: 0 = first option, 1 = second, 2 = third, 3 = fourth. Explanation is
+              optional.
+            </p>
+            {jsonError && <p className="text-sm text-destructive">{jsonError}</p>}
+            <Button onClick={saveJsonExercise}>Validate & save exercise</Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
