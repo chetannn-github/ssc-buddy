@@ -128,7 +128,9 @@ export function SolutionScreen({ record, onExit }: Props) {
       <main className="mx-auto grid max-w-6xl gap-4 px-4 py-5 lg:grid-cols-[1fr_320px]">
         <section className="card-surface p-5 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3">
-            <h2 className="text-lg font-semibold">Question {record.startNumber + current}</h2>
+            <h2 className="text-lg font-semibold">
+              Question {record.questionNumbers?.[current] ?? record.startNumber + current}
+            </h2>
             <span className="text-sm text-muted-foreground">
               Question {current + 1} of {total}
             </span>
@@ -244,7 +246,7 @@ export function SolutionScreen({ record, onExit }: Props) {
                 className={paletteClass(i)}
                 onClick={() => setCurrent(i)}
               >
-                {record.startNumber + i}
+                {record.questionNumbers?.[i] ?? record.startNumber + i}
               </button>
             ))}
           </div>

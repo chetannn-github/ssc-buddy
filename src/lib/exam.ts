@@ -11,6 +11,7 @@ export type QuestionState = {
 export type MarkingScheme = { positive: number; negative: number };
 
 export type McqQuestion = {
+  number?: number;
   question: string;
   options: [string, string, string, string];
   correctAnswer: Option;
@@ -27,6 +28,7 @@ export type TestRecord = {
   durationMinutes: number | null;
   timeTakenSeconds: number;
   answers: (Option | null)[];
+  questionNumbers?: number[];
   answerKey?: (Option | null)[];
   questions?: McqQuestion[] | undefined;
 

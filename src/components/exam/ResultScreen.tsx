@@ -112,9 +112,9 @@ export function ResultScreen({ record, onRestart, attempts = [] }: Props) {
   const unattemptedNumbers = useMemo(
     () =>
       record.answers
-        .map((a, i) => (!a ? record.startNumber + i : null))
+        .map((a, i) => (!a ? (record.questionNumbers?.[i] ?? record.startNumber + i) : null))
         .filter((n): n is number => n !== null),
-    [record.answers, record.startNumber],
+    [record.answers, record.questionNumbers, record.startNumber],
   );
   const remaining = attempted - checked;
   const score = computeScore(c, w, record.marking);
@@ -255,7 +255,7 @@ export function ResultScreen({ record, onRestart, attempts = [] }: Props) {
               >
                 <div className="flex min-w-0 items-baseline gap-2">
                   <span className="text-[10px] font-medium text-muted-foreground">
-                    Q{record.startNumber + i}
+                    Q{record.questionNumbers?.[i] ?? record.startNumber + i}
                   </span>
                   <span className={cn("text-sm", a ? "font-semibold" : "text-muted-foreground")}>
                     {a ?? "—"}

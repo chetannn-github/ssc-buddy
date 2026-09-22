@@ -24,6 +24,7 @@ type Props = {
   questionCount?: number | null;
   maxQuestions?: number | null;
   questions?: McqQuestion[] | null;
+  questionNumbers?: number[] | null;
   initialDarkMode: boolean;
   onSubmit: (answers: (Option | null)[], timeTakenSeconds: number) => void;
 };
@@ -38,6 +39,7 @@ export function TestScreen({
   questionCount = null,
   maxQuestions = null,
   questions = null,
+  questionNumbers = null,
   initialDarkMode,
   onSubmit,
 }: Props) {
@@ -184,7 +186,9 @@ export function TestScreen({
       <main className="mx-auto grid max-w-6xl gap-4 px-4 py-5 lg:grid-cols-[1fr_320px]">
         <section className="card-surface p-5 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3">
-            <h2 className="text-lg font-semibold">Question {startNumber + current}</h2>
+            <h2 className="text-lg font-semibold">
+              Question {questionNumbers?.[current] ?? startNumber + current}
+            </h2>
             <span className="text-sm text-muted-foreground">
               {questionCount
                 ? `Question ${current + 1} of ${questionCount}`
@@ -282,7 +286,7 @@ export function TestScreen({
           <div className="mt-4 grid max-h-[420px] grid-cols-5 gap-2 overflow-y-auto pt-2 pr-1 pb-2 pl-2">
             {states.map((s, i) => (
               <button key={i} type="button" className={paletteClass(s, i)} onClick={() => goTo(i)}>
-                {startNumber + i}
+                {questionNumbers?.[i] ?? startNumber + i}
               </button>
             ))}
           </div>

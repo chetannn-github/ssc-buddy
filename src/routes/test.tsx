@@ -78,6 +78,7 @@ function TestPage() {
       durationMinutes: config.minutes,
       timeTakenSeconds,
       answers,
+      ...(config.questionNumbers ? { questionNumbers: config.questionNumbers } : {}),
       ...(key ? { answerKey: key } : {}),
       ...(config.questions ? { questions: config.questions } : {}),
       ...(evaluations ? { evaluations } : {}),
@@ -100,6 +101,7 @@ function TestPage() {
         questionCount={config.questionCount}
         maxQuestions={config.maxQuestions}
         questions={config.questions}
+        questionNumbers={config.questionNumbers}
         initialDarkMode={config.darkMode ?? false}
         onSubmit={handleSubmit}
       />
