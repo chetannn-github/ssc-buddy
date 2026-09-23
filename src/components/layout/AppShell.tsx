@@ -1042,9 +1042,13 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
         style={isDarkPage ? undefined : { backgroundImage: "var(--gradient-header)" }}
       >
         <div className="mx-auto flex h-16 w-full max-w-5xl items-center gap-4 px-4 sm:px-6">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10">
+          <Link
+            to="/tasks"
+            aria-label="Open daily tasks"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 transition-colors hover:bg-white/15"
+          >
             <GraduationCap className="h-5 w-5" />
-          </span>
+          </Link>
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-base font-semibold sm:text-lg">{title}</h1>
             {subtitle && <p className="truncate text-xs opacity-75 sm:text-sm">{subtitle}</p>}

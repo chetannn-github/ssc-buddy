@@ -257,8 +257,8 @@ function DailyTasks() {
               </div>
             )}
           </div>
-          <TabsContent value="tasks" className="mt-5 space-y-5">
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <TabsContent value="tasks" className="mt-4 space-y-3">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {[
                 ["Today's tasks", String(todaySummary.total)],
                 ["Completed", String(todaySummary.completed)],
@@ -267,25 +267,25 @@ function DailyTasks() {
               ].map(([label, value]) => (
                 <div
                   key={label}
-                  className="rounded-xl border border-white/10 bg-[#1b1b1b] px-4 py-3"
+                  className="rounded-lg border border-white/10 bg-[#1b1b1b] px-3 py-2"
                 >
                   <p className="text-xs text-zinc-500">{label}</p>
-                  <p className="mt-1 text-xl font-semibold">{value}</p>
+                  <p className="mt-0.5 text-lg font-semibold">{value}</p>
                 </div>
               ))}
             </div>
-            <div className="rounded-xl border border-white/10 bg-[#1b1b1b] p-4">
+            <div className="rounded-lg border border-white/10 bg-[#1b1b1b] px-3 py-2.5">
               <div className="flex justify-between text-sm">
                 <span className="text-zinc-400">Today's progress</span>
                 <span>
                   {todaySummary.completed} / {todaySummary.total} completed
                 </span>
               </div>
-              <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
                 <AnimatedBar value={progress} tone="bg-blue-500" />
               </div>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               {todayTasks.length ? (
                 todayTasks.map((task) => (
                   <TaskRow
@@ -301,7 +301,7 @@ function DailyTasks() {
                   />
                 ))
               ) : (
-                <div className="rounded-xl border border-dashed border-white/15 px-6 py-14 text-center text-zinc-400">
+                <div className="rounded-lg border border-dashed border-white/15 px-4 py-10 text-center text-sm text-zinc-400">
                   No tasks for today. Add your first study task.
                 </div>
               )}
@@ -486,7 +486,7 @@ function TaskRow({
   readOnly?: boolean;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-[#1b1b1b] px-3 py-3">
+    <div className="flex items-center gap-3 rounded-lg border border-white/10 bg-[#1b1b1b] px-3 py-2.5">
       <button
         type="button"
         disabled={readOnly}
