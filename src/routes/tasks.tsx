@@ -247,7 +247,7 @@ function DailyTasks() {
                     key={item}
                     type="button"
                     onClick={() => setRange(item)}
-                    className={`h-9 rounded-md border px-3 text-sm transition-colors ${range === item ? "border-blue-500 bg-blue-600 text-white" : "border-white/15 bg-[#1b1b1b] text-zinc-300 hover:bg-white/10"}`}
+                    className={`h-9 rounded-md border px-3 text-sm transition-colors ${range === item ? "border-white/25 bg-white/10 text-zinc-100" : "border-white/15 bg-[#1b1b1b] text-zinc-300 hover:bg-white/10"}`}
                   >
                     {rangeLabels[item]}
                   </button>
@@ -359,44 +359,38 @@ function DailyTasks() {
                   key={option}
                   type="button"
                   onClick={() => setHistoryRange(option)}
-                  className={`h-9 rounded-md border px-3 text-sm transition-colors ${historyRange === option ? "border-blue-500 bg-blue-600 text-white" : "border-white/15 bg-[#1b1b1b] text-zinc-300 hover:bg-white/10"}`}
+                  className={`h-9 rounded-md border px-3 text-sm transition-colors ${historyRange === option ? "border-white/25 bg-white/10 text-zinc-100" : "border-white/15 bg-[#1b1b1b] text-zinc-300 hover:bg-white/10"}`}
                 >
                   {rangeLabels[option]}
                 </button>
               ))}
             </div>
             {historyDays.length && activeHistoryDay ? (
-              <div className="grid gap-5 lg:grid-cols-[13rem_minmax(0,1fr)]">
-                <aside className="overflow-hidden rounded-xl border border-white/10 bg-[#1b1b1b]">
-                  <p className="px-4 pt-4 text-[11px] font-semibold tracking-[0.16em] text-zinc-500 uppercase">
-                    Days
-                  </p>
-                  <div className="task-history-scroll mt-3 max-h-[28rem] overflow-y-auto p-2">
+              <div className="space-y-4">
+                <Select value={activeHistoryDay[0]} onValueChange={setSelectedHistoryDate}>
+                  <SelectTrigger className="w-full border-white/15 bg-[#1b1b1b] text-zinc-100 sm:w-64">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="task-history-scroll border-white/15 bg-[#1b1b1b] text-zinc-100">
                     {historyDays.map(([date, dayTasks]) => {
                       const summary = summarizeTasks(dayTasks);
+                      const label = new Date(`${date}T00:00:00`).toLocaleDateString(undefined, {
+                        weekday: "short",
+                        day: "numeric",
+                        month: "short",
+                      });
                       return (
-                        <button
+                        <SelectItem
                           key={date}
-                          type="button"
-                          onClick={() => setSelectedHistoryDate(date)}
-                          className={`w-full rounded-lg px-3 py-2.5 text-left transition-colors ${activeHistoryDay[0] === date ? "bg-blue-600 text-white" : "text-zinc-300 hover:bg-white/10"}`}
+                          value={date}
+                          className="focus:bg-white/10 focus:text-zinc-100"
                         >
-                          <span className="block text-sm font-medium">
-                            {new Date(`${date}T00:00:00`).toLocaleDateString(undefined, {
-                              day: "numeric",
-                              month: "short",
-                            })}
-                          </span>
-                          <span
-                            className={`mt-0.5 block text-xs ${activeHistoryDay[0] === date ? "text-blue-100" : "text-zinc-500"}`}
-                          >
-                            {summary.completed}/{summary.total} completed
-                          </span>
-                        </button>
+                          {label} · {summary.completed}/{summary.total} completed
+                        </SelectItem>
                       );
                     })}
-                  </div>
-                </aside>
+                  </SelectContent>
+                </Select>
                 <section className="rounded-xl border border-white/10 bg-[#1b1b1b] p-5">
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
