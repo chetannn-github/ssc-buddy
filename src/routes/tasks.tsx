@@ -78,6 +78,19 @@ function DailyTasks() {
       });
     return [...totals.entries()].sort((a, b) => b[1].minutes - a[1].minutes);
   }, [scopedTasks]);
+  const byType = useMemo(() => {
+    const totals = new Map<string, { count: number; minutes: number }>();
+    scopedTasks
+      .filter((task) => task.completed)
+      .forEach((task) => {
+        const existing = totals.get(task.type) ?? { count: 0, minutes: 0 };
+        totals.set(task.type, {
+          count: existing.count + 1,
+          minutes: existing.minutes + (task.minutesSpent ?? 0),
+        });
+      });
+    return [...totals.entries()].sort((a, b) => b[1].minutes - a[1].minutes);
+  }, [scopedTasks]);
   const byDay = useMemo(() => {
     const grouped = new Map<string, DailyTask[]>();
     scopedTasks.forEach((task) =>
@@ -281,6 +294,33 @@ function DailyTasks() {
                 </div>
               ) : (
                 <p className="mt-3 text-sm text-zinc-500">Complete tasks to see analytics.</p>
+              )}
+            </section>
+            <section className="rounded-xl border border-white/10 bg-[#1b1b1b] p-5">
+              <h2 className="text-sm font-semibold">Task-type breakdown</h2>
+              {byType.length ? (
+                <div className="mt-4 space-y-4">
+                  {byType.map(([name, stats]) => (
+                    <div key={name}>
+                      <div className="flex justify-between text-sm">
+                        <span>{name}</span>
+                        <span className="text-zinc-400">
+                          {stats.count} tasks · {formatDuration(stats.minutes)}
+                        </span>
+                      </div>
+                      <div className="mt-2 h-2 rounded-full bg-white/10">
+                        <div
+                          className="h-full rounded-full bg-blue-500"
+                          style={{
+                            width: `${Math.max(4, (stats.minutes / Math.max(1, byType[0]?.[1].minutes ?? 1)) * 100)}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-3 text-sm text-zinc-500">Complete tasks to see this breakdown.</p>
               )}
             </section>
             <section className="rounded-xl border border-white/10 bg-[#1b1b1b] p-5">
