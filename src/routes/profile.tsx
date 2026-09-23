@@ -32,6 +32,7 @@ import { IMPORT_PROMPT } from "@/lib/tracker";
 import { loadTrackerData, saveTrackerData } from "@/lib/tracker-store";
 import { cn } from "@/lib/utils";
 import { MockTestLogDialog } from "../../tracker/src/components/tracker/MockTestLogDialog";
+import { formatDuration, loadDailyTasks, type DailyTask } from "@/lib/daily-tasks";
 
 const title = "Profile";
 const description = "Your yearly practice activity and progress.";
@@ -237,11 +238,11 @@ function ActivityHeatmap({
     });
 
     const mappedDays = entries.map((date, index) => ({
-        date,
-        value: values[index] ?? 0,
-        maximum,
-        details: details.get(localDay(date)) ?? [],
-      }));
+      date,
+      value: values[index] ?? 0,
+      maximum,
+      details: details.get(localDay(date)) ?? [],
+    }));
     const monthGroups = mappedDays.reduce<
       { key: string; label: string; days: typeof mappedDays }[]
     >((groups, day) => {
@@ -292,11 +293,7 @@ function ActivityHeatmap({
         <div>
           <div className="flex items-start gap-2.5">
             {months.map((month) => (
-              <div
-                key={month.key}
-                className="min-w-0"
-                style={{ flex: "5 1 0%" }}
-              >
+              <div key={month.key} className="min-w-0" style={{ flex: "5 1 0%" }}>
                 <div
                   className="grid grid-flow-col grid-rows-7 gap-[3px]"
                   style={{ gridTemplateColumns: "repeat(5, minmax(0, 1fr))" }}
@@ -320,7 +317,8 @@ function ActivityHeatmap({
                         )}
                       >
                         <span className="pointer-events-none absolute bottom-[calc(100%+0.45rem)] left-1/2 z-20 hidden -translate-x-1/2 whitespace-nowrap rounded-md border border-white/10 bg-[#1d1d1d] px-2 py-1 text-[10px] font-medium text-zinc-200 shadow-lg group-hover:block group-focus-visible:block">
-                          {value} activit{value === 1 ? "y" : "ies"} on {formatHeatmapTooltipDate(date)}
+                          {value} activit{value === 1 ? "y" : "ies"} on{" "}
+                          {formatHeatmapTooltipDate(date)}
                         </span>
                       </button>
                     );
@@ -410,6 +408,9 @@ function TargetProgress({
   lectures,
   revisions,
   mockTests,
+  studyMinutes,
+  completedTasks,
+  incompleteTasks,
   range,
   onRangeChange,
 }: {
@@ -421,6 +422,9 @@ function TargetProgress({
   lectures: number;
   revisions: number;
   mockTests: number;
+  studyMinutes: number;
+  completedTasks: number;
+  incompleteTasks: number;
   range: ActivityRange;
   onRangeChange: (range: ActivityRange) => void;
 }) {
@@ -518,6 +522,13 @@ function TargetProgress({
             <AnimatedNumber value={value} />
           </StatCell>
         ))}
+        <StatCell label="Study time">{formatDuration(studyMinutes)}</StatCell>
+        <StatCell label="Tasks completed">
+          <AnimatedNumber value={completedTasks} />
+        </StatCell>
+        <StatCell label="Incomplete tasks">
+          <AnimatedNumber value={incompleteTasks} />
+        </StatCell>
       </div>
     </section>
   );
@@ -649,6 +660,7 @@ function StudyTrackerOverview({ tracker }: { tracker: TrackerData | null }) {
 
 export function Profile() {
   const [records, setRecords] = useState<TestRecord[]>([]);
+  const [dailyTasks, setDailyTasks] = useState<DailyTask[]>([]);
   const [tracker, setTracker] = useState<TrackerData | null>(null);
   const [range, setRange] = useState<ActivityRange>("today");
   const [profile, setProfile] = useState<PracticeProfile | null>(null);
@@ -684,6 +696,7 @@ export function Profile() {
       const startedAt = Date.now();
       const saved = loadPracticeProfile();
       setRecords(loadHistory());
+      setDailyTasks(loadDailyTasks());
       const trackerData = loadTrackerData();
       setTracker(trackerData);
       setExamNameDraft(trackerData.meta.examName);
@@ -715,12 +728,14 @@ export function Profile() {
     refresh();
     window.addEventListener("cbt-profile-updated", refresh);
     window.addEventListener("cbt-tracker-updated", refresh);
+    window.addEventListener("ssc-daily-tasks-updated", refresh);
     window.addEventListener("storage", refresh);
     return () => {
       if (loaderTimer) clearTimeout(loaderTimer);
       if (loaderFailSafe) clearTimeout(loaderFailSafe);
       window.removeEventListener("cbt-profile-updated", refresh);
       window.removeEventListener("cbt-tracker-updated", refresh);
+      window.removeEventListener("ssc-daily-tasks-updated", refresh);
       window.removeEventListener("storage", refresh);
     };
   }, []);
@@ -747,6 +762,15 @@ export function Profile() {
       tracker.tests.log.filter((test) => isInRange(test.date, range)).length;
     return { lectures, revisions, mockTests };
   }, [range, tracker]);
+  const dailyTaskTotals = useMemo(() => {
+    const tasks = dailyTasks.filter((task) => isInRange(task.date, range));
+    const completed = tasks.filter((task) => task.completed);
+    return {
+      studyMinutes: completed.reduce((total, task) => total + (task.minutesSpent ?? 0), 0),
+      completed: completed.length,
+      incomplete: tasks.length - completed.length,
+    };
+  }, [dailyTasks, range]);
   const saveProfile = () => {
     if (!nameDraft.trim() || Number(goalDraft) < 1) return;
     const next = {
@@ -945,6 +969,9 @@ export function Profile() {
             lectures={trackerTotals.lectures}
             revisions={trackerTotals.revisions}
             mockTests={trackerTotals.mockTests}
+            studyMinutes={dailyTaskTotals.studyMinutes}
+            completedTasks={dailyTaskTotals.completed}
+            incompleteTasks={dailyTaskTotals.incomplete}
             range={range}
             onRangeChange={setRange}
           />

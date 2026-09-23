@@ -38,7 +38,11 @@ export function rangeBounds(range: RangeKey) {
     from.setDate(today.getDate() - ((today.getDay() + 6) % 7));
     return { from: todayKey(from), to: todayKey(today) };
   }
-  if (range === "month") return { from: todayKey(new Date(today.getFullYear(), today.getMonth(), 1)), to: todayKey(today) };
+  if (range === "month")
+    return {
+      from: todayKey(new Date(today.getFullYear(), today.getMonth(), 1)),
+      to: todayKey(today),
+    };
   if (range === "3months") {
     const from = new Date(today);
     from.setMonth(today.getMonth() - 3);
@@ -50,7 +54,12 @@ export function rangeBounds(range: RangeKey) {
 export function summarizeTasks(tasks: DailyTask[]) {
   const completed = tasks.filter((task) => task.completed);
   const minutes = completed.reduce((sum, task) => sum + (task.minutesSpent ?? 0), 0);
-  return { total: tasks.length, completed: completed.length, pending: tasks.length - completed.length, minutes };
+  return {
+    total: tasks.length,
+    completed: completed.length,
+    pending: tasks.length - completed.length,
+    minutes,
+  };
 }
 
 function readTasks(): DailyTask[] {
@@ -69,4 +78,5 @@ export function loadDailyTasks() {
 
 export function saveDailyTasks(tasks: DailyTask[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+  window.dispatchEvent(new Event("ssc-daily-tasks-updated"));
 }
