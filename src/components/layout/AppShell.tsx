@@ -807,7 +807,7 @@ export function MotivationalMusic({ onClose }: { onClose: () => void }) {
           role="dialog"
           aria-modal="true"
           aria-label="Motivational music"
-          className="relative w-full max-w-3xl rounded-2xl border border-white/10 bg-[#171717] p-5 text-zinc-100 shadow-[0_24px_80px_-24px_black] sm:p-6"
+          className="relative w-full max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-white/10 bg-[#171717] p-5 text-zinc-100 shadow-[0_24px_80px_-24px_black] sm:max-w-3xl sm:p-6"
           onMouseDown={(event) => event.stopPropagation()}
         >
           <button
@@ -826,7 +826,7 @@ export function MotivationalMusic({ onClose }: { onClose: () => void }) {
           >
             <Minimize2 className="h-4 w-4" />
           </button>
-          <div className="grid gap-6 sm:grid-cols-[12rem_minmax(0,1fr)]">
+          <div className="grid min-w-0 gap-6 sm:grid-cols-[12rem_minmax(0,1fr)]">
             <div className="flex min-h-64 flex-col items-center justify-center sm:order-2">
               <button
                 type="button"
@@ -915,8 +915,8 @@ export function MotivationalMusic({ onClose }: { onClose: () => void }) {
                 </button>
               </div>
             </div>
-            <div className="flex max-h-72 flex-col sm:order-1">
-              <div className="flex gap-1 overflow-x-auto pb-2">
+            <div className="flex min-w-0 max-h-72 flex-col sm:order-1">
+              <div className="flex min-w-0 max-w-full gap-1 overflow-x-auto pb-2">
                 {playlists.map((playlist) => (
                   <button
                     key={playlist}
@@ -933,7 +933,7 @@ export function MotivationalMusic({ onClose }: { onClose: () => void }) {
                   </button>
                 ))}
               </div>
-              <div className="overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="min-w-0 max-w-full overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {playlistTracks.map((track) => (
                   <button
                     key={track}
