@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Check, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -34,6 +34,24 @@ const rangeLabels: Record<RangeKey, string> = {
   "3months": "Last 3 months",
   year: "This year",
 };
+
+function AnimatedBar({ value, tone }: { value: number; tone: string }) {
+  const target = Math.max(0, Math.min(100, value));
+  const [displayValue, setDisplayValue] = useState(0);
+
+  useEffect(() => {
+    setDisplayValue(0);
+    const frame = requestAnimationFrame(() => setDisplayValue(target));
+    return () => cancelAnimationFrame(frame);
+  }, [target]);
+
+  return (
+    <div
+      className={`h-full rounded-full ${tone} transition-[width] duration-700 ease-out motion-reduce:transition-none`}
+      style={{ width: `${displayValue}%` }}
+    />
+  );
+}
 
 function DailyTasks() {
   const [tasks, setTasks] = useState<DailyTask[]>(() => loadDailyTasks());
@@ -189,10 +207,7 @@ function DailyTasks() {
                 </span>
               </div>
               <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
-                <div
-                  className="h-full rounded-full bg-blue-500 transition-[width] duration-500"
-                  style={{ width: `${progress}%` }}
-                />
+                <AnimatedBar value={progress} tone="bg-blue-500" />
               </div>
             </div>
             <div className="space-y-2">
@@ -283,11 +298,12 @@ function DailyTasks() {
                           </span>
                         </div>
                         <div className="mt-2 h-2 rounded-full bg-white/10">
-                          <div
-                            className="h-full rounded-full bg-emerald-500 transition-[width] duration-700 ease-out motion-reduce:transition-none"
-                            style={{
-                              width: `${Math.max(4, (stats.minutes / Math.max(1, bySubject[0]?.[1].minutes ?? 1)) * 100)}%`,
-                            }}
+                          <AnimatedBar
+                            value={Math.max(
+                              4,
+                              (stats.minutes / Math.max(1, bySubject[0]?.[1].minutes ?? 1)) * 100,
+                            )}
+                            tone="bg-emerald-500"
                           />
                         </div>
                       </div>
@@ -310,11 +326,12 @@ function DailyTasks() {
                           </span>
                         </div>
                         <div className="mt-2 h-2 rounded-full bg-white/10">
-                          <div
-                            className="h-full rounded-full bg-blue-500 transition-[width] duration-700 ease-out motion-reduce:transition-none"
-                            style={{
-                              width: `${Math.max(4, (stats.minutes / Math.max(1, byType[0]?.[1].minutes ?? 1)) * 100)}%`,
-                            }}
+                          <AnimatedBar
+                            value={Math.max(
+                              4,
+                              (stats.minutes / Math.max(1, byType[0]?.[1].minutes ?? 1)) * 100,
+                            )}
+                            tone="bg-blue-500"
                           />
                         </div>
                       </div>
