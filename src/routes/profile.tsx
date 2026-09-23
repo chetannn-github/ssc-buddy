@@ -314,7 +314,7 @@ function ActivityHeatmap({
                   )}
                 >
                   <span className="pointer-events-none absolute bottom-[calc(100%+0.45rem)] left-1/2 z-20 hidden -translate-x-1/2 whitespace-nowrap rounded-md border border-white/10 bg-[#1d1d1d] px-2 py-1 text-[10px] font-medium text-zinc-200 shadow-lg group-hover:block group-focus-visible:block">
-                    {formatHeatmapTooltipDate(date)}
+                    {value} activit{value === 1 ? "y" : "ies"} on {formatHeatmapTooltipDate(date)}
                   </span>
                 </button>
               );
@@ -416,7 +416,6 @@ function TargetProgress({
 }) {
   const [rangeOpen, setRangeOpen] = useState(false);
   const rangeMenuRef = useRef<HTMLDivElement>(null);
-  const progress = Math.min(100, Math.round((attempted / Math.max(1, goal)) * 100));
   const practiceStats = [
     { label: "Practice sessions", value: tests },
     { label: "Correct", value: correct },
@@ -488,10 +487,13 @@ function TargetProgress({
         <StatCell label="Question goal">
           <AnimatedNumber value={goal} />
         </StatCell>
-        <StatCell label="Completed">
-          <AnimatedNumber value={attempted} /> · <AnimatedNumber value={progress} />%
+        <StatCell label="Practice sessions">
+          <AnimatedNumber value={tests} />
         </StatCell>
-        {practiceStats.map(({ label, value }) => (
+        <StatCell label="Questions done">
+          <AnimatedNumber value={attempted} />
+        </StatCell>
+        {practiceStats.slice(1).map(({ label, value }) => (
           <StatCell key={label} label={label}>
             <AnimatedNumber value={value} />
           </StatCell>
