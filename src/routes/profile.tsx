@@ -36,28 +36,34 @@ import { formatDuration, loadDailyTasks, type DailyTask } from "@/lib/daily-task
 
 const title = "Profile";
 const description = "Your yearly practice activity and progress.";
-type ActivityRange = "today" | "week" | "month" | "year" | "all";
+type ActivityRange = "today" | "week" | "month" | "lastMonth" | "year" | "all";
 let hasShownProfileLoader = false;
 
 const rangeLabels: Record<ActivityRange, string> = {
   today: "Today",
   week: "This week",
-  month: "Last month",
+  month: "This month",
+  lastMonth: "Last month",
   year: "This year",
   all: "All time",
 };
 
 function isInRange(dateValue: string, range: ActivityRange) {
   if (range === "all") return true;
-  const date = new Date(dateValue);
-  if (Number.isNaN(date.getTime())) return false;
-  date.setHours(0, 0, 0, 0);
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
-  if (range === "week") start.setDate(start.getDate() - 6);
-  if (range === "month") start.setMonth(start.getMonth() - 1);
-  if (range === "year") start.setDate(start.getDate() - 364);
-  return date >= start;
+  const date = activityDay(dateValue);
+  if (!date) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  let from = new Date(today);
+  let to = new Date(today);
+  if (range === "week") from.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+  if (range === "month") from = new Date(today.getFullYear(), today.getMonth(), 1);
+  if (range === "lastMonth") {
+    from = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    to = new Date(today.getFullYear(), today.getMonth(), 0);
+  }
+  if (range === "year") from = new Date(today.getFullYear(), 0, 1);
+  return date >= localDay(from) && date <= localDay(to);
 }
 
 export const Route = createFileRoute("/profile")({
