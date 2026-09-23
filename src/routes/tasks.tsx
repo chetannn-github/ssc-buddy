@@ -234,7 +234,7 @@ function DailyTasks() {
               </div>
             )}
             {activeTab === "history" && (
-              <div className="ml-auto">
+              <div className="ml-auto flex items-center gap-2">
                 <Select
                   value={historyRange}
                   onValueChange={(value) => setHistoryRange(value as RangeKey)}
@@ -254,6 +254,20 @@ function DailyTasks() {
                     ))}
                   </SelectContent>
                 </Select>
+                {activeHistoryDay && (
+                  <Select value={activeHistoryDay[0]} onValueChange={setSelectedHistoryDate}>
+                    <SelectTrigger className="hidden w-56 border-white/15 bg-[#1b1b1b] text-zinc-100 lg:flex">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="task-history-scroll border-white/15 bg-[#1b1b1b] text-zinc-100">
+                      {historyDays.map(([date, dayTasks]) => {
+                        const summary = summarizeTasks(dayTasks);
+                        const label = new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+                        return <SelectItem key={date} value={date} className="focus:bg-white/10 focus:text-zinc-100">{label} · {summary.completed}/{summary.total} completed</SelectItem>;
+                      })}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
             )}
           </div>
