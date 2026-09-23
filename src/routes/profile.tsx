@@ -179,7 +179,8 @@ function ActivityHeatmap({
     records.forEach((record) => {
       const key = activityDay(record.date);
       if (!key) return;
-      const count = Math.max(1, record.answers.filter(Boolean).length);
+      // A completed practice session represents one daily activity, regardless of question count.
+      const count = 1;
       activity.set(key, (activity.get(key) ?? 0) + count);
       addDetail(key, {
         label: "Practice test",
