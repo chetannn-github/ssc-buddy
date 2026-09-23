@@ -887,7 +887,19 @@ export function Profile() {
                   {tracker.meta.examName}
                 </p>
               )}
-              <h2 className="mt-0.5 truncate text-xl font-semibold text-zinc-50">{displayName}</h2>
+              <div className="mt-0.5 flex items-center justify-center gap-1 sm:justify-start">
+                <h2 className="truncate text-xl font-semibold text-zinc-50">{displayName}</h2>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  className="h-7 w-7 shrink-0 text-zinc-500 hover:bg-white/10 hover:text-zinc-100"
+                  onClick={() => setEditingProfile(true)}
+                  aria-label="Edit profile"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+              </div>
               <div className="mt-3 flex flex-wrap items-center justify-center gap-1.5 sm:justify-start">
                 <Button
                   type="button"
@@ -896,16 +908,6 @@ export function Profile() {
                   onClick={() => setLoggingMockTest(true)}
                 >
                   <FilePenLine className="h-4 w-4" /> Log mock test
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="h-9 gap-1.5 px-2.5 text-sm text-zinc-300 hover:bg-white/10 hover:text-white"
-                  asChild
-                >
-                  <Link to="/history">
-                    <FilePenLine className="h-4 w-4" /> Previous sessions
-                  </Link>
                 </Button>
                 <Button
                   type="button"
@@ -925,14 +927,6 @@ export function Profile() {
                   }}
                 >
                   <Music2 className="h-4 w-4" /> Music
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="h-9 gap-1.5 px-2.5 text-sm text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
-                  onClick={() => setEditingProfile(true)}
-                >
-                  <Pencil className="h-3.5 w-3.5" /> Edit
                 </Button>
                 <Button
                   type="button"
