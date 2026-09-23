@@ -166,16 +166,6 @@ function ActivityHeatmap({
       date.setDate(today.getDate() - (dayCount - 1 - index));
       return date;
     });
-    // Keep the year heatmap aligned to complete month blocks. The partial month at
-    // the far left would otherwise make the first visible block look wider.
-    const visibleEntries =
-      range === "year" && entries[0]?.getDate() !== 1
-        ? entries.filter(
-            (date) =>
-              date.getMonth() !== entries[0]?.getMonth() ||
-              date.getFullYear() !== entries[0]?.getFullYear(),
-          )
-        : entries;
     const activity = new Map<string, number>();
     const details = new Map<string, DayActivityDetail[]>();
     const addDetail = (date: string, detail: DayActivityDetail) => {
@@ -237,7 +227,7 @@ function ActivityHeatmap({
         count: Math.abs(entry.count),
       });
     });
-    const values = visibleEntries.map((date) => Math.max(0, activity.get(localDay(date)) ?? 0));
+    const values = entries.map((date) => Math.max(0, activity.get(localDay(date)) ?? 0));
     const maximum = Math.max(...values, 1);
     let longest = 0;
     let current = 0;
@@ -246,7 +236,7 @@ function ActivityHeatmap({
       longest = Math.max(longest, current);
     });
 
-    const mappedDays = visibleEntries.map((date, index) => ({
+    const mappedDays = entries.map((date, index) => ({
         date,
         value: values[index] ?? 0,
         maximum,
