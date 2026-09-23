@@ -269,60 +269,64 @@ function DailyTasks() {
                 </div>
               ))}
             </div>
-            <section className="rounded-xl border border-white/10 bg-[#1b1b1b] p-5">
-              <h2 className="text-sm font-semibold">Subject-wise study time</h2>
-              {bySubject.length ? (
-                <div className="mt-4 space-y-4">
-                  {bySubject.map(([name, stats]) => (
-                    <div key={name}>
-                      <div className="flex justify-between text-sm">
-                        <span>{name}</span>
-                        <span className="text-zinc-400">
-                          {stats.count} tasks · {formatDuration(stats.minutes)}
-                        </span>
+            <div className="grid gap-5 lg:grid-cols-2">
+              <section className="rounded-xl border border-white/10 bg-[#1b1b1b] p-5">
+                <h2 className="text-sm font-semibold">Subject-wise study time</h2>
+                {bySubject.length ? (
+                  <div className="mt-4 space-y-4">
+                    {bySubject.map(([name, stats]) => (
+                      <div key={name}>
+                        <div className="flex justify-between text-sm">
+                          <span>{name}</span>
+                          <span className="text-zinc-400">
+                            {stats.count} tasks · {formatDuration(stats.minutes)}
+                          </span>
+                        </div>
+                        <div className="mt-2 h-2 rounded-full bg-white/10">
+                          <div
+                            className="h-full rounded-full bg-emerald-500 transition-[width] duration-700 ease-out motion-reduce:transition-none"
+                            style={{
+                              width: `${Math.max(4, (stats.minutes / Math.max(1, bySubject[0]?.[1].minutes ?? 1)) * 100)}%`,
+                            }}
+                          />
+                        </div>
                       </div>
-                      <div className="mt-2 h-2 rounded-full bg-white/10">
-                        <div
-                          className="h-full rounded-full bg-emerald-500"
-                          style={{
-                            width: `${Math.max(4, (stats.minutes / Math.max(1, bySubject[0]?.[1].minutes ?? 1)) * 100)}%`,
-                          }}
-                        />
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-3 text-sm text-zinc-500">Complete tasks to see analytics.</p>
+                )}
+              </section>
+              <section className="rounded-xl border border-white/10 bg-[#1b1b1b] p-5">
+                <h2 className="text-sm font-semibold">Task-type breakdown</h2>
+                {byType.length ? (
+                  <div className="mt-4 space-y-4">
+                    {byType.map(([name, stats]) => (
+                      <div key={name}>
+                        <div className="flex justify-between text-sm">
+                          <span>{name}</span>
+                          <span className="text-zinc-400">
+                            {stats.count} tasks · {formatDuration(stats.minutes)}
+                          </span>
+                        </div>
+                        <div className="mt-2 h-2 rounded-full bg-white/10">
+                          <div
+                            className="h-full rounded-full bg-blue-500 transition-[width] duration-700 ease-out motion-reduce:transition-none"
+                            style={{
+                              width: `${Math.max(4, (stats.minutes / Math.max(1, byType[0]?.[1].minutes ?? 1)) * 100)}%`,
+                            }}
+                          />
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-3 text-sm text-zinc-500">Complete tasks to see analytics.</p>
-              )}
-            </section>
-            <section className="rounded-xl border border-white/10 bg-[#1b1b1b] p-5">
-              <h2 className="text-sm font-semibold">Task-type breakdown</h2>
-              {byType.length ? (
-                <div className="mt-4 space-y-4">
-                  {byType.map(([name, stats]) => (
-                    <div key={name}>
-                      <div className="flex justify-between text-sm">
-                        <span>{name}</span>
-                        <span className="text-zinc-400">
-                          {stats.count} tasks · {formatDuration(stats.minutes)}
-                        </span>
-                      </div>
-                      <div className="mt-2 h-2 rounded-full bg-white/10">
-                        <div
-                          className="h-full rounded-full bg-blue-500"
-                          style={{
-                            width: `${Math.max(4, (stats.minutes / Math.max(1, byType[0]?.[1].minutes ?? 1)) * 100)}%`,
-                          }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-3 text-sm text-zinc-500">Complete tasks to see this breakdown.</p>
-              )}
-            </section>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-3 text-sm text-zinc-500">
+                    Complete tasks to see this breakdown.
+                  </p>
+                )}
+              </section>
+            </div>
             <section className="rounded-xl border border-white/10 bg-[#1b1b1b] p-5">
               <h2 className="text-sm font-semibold">Day-wise history</h2>
               {byDay.length ? (
