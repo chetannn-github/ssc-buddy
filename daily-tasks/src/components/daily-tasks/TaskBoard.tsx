@@ -48,7 +48,13 @@ function TaskRow({
         <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
           <span>{task.subject}</span>
           <span>·</span>
-          <span>{formatDuration(task.targetMinutes)}</span>
+          <span className="capitalize">{task.type}</span>
+          {task.completed && (
+            <>
+              <span>·</span>
+              <span>{formatDuration(task.actualMinutes ?? task.targetMinutes)} spent</span>
+            </>
+          )}
           {task.completed && task.completedAt && (
             <span className="text-primary">• Completed {formatTime(task.completedAt)}</span>
           )}

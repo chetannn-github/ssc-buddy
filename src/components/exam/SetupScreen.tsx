@@ -85,7 +85,7 @@ function parseQuestionsJson(raw: string): McqQuestion[] {
         options[1] as string,
         options[2] as string,
         options[3] as string,
-      ],
+      ] as [string, string, string, string],
       correctAnswer: optionLetters[optionIndex]!,
       ...(typeof q["explanation"] === "string" && q["explanation"].trim()
         ? { explanation: q["explanation"].trim() }

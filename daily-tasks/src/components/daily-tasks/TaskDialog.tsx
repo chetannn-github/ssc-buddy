@@ -16,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { SUBJECTS, formatDuration, type Subject, type Task } from "@/lib/daily-tasks";
+import { formatDuration, type Subject, type Task, type TaskType } from "@/lib/daily-tasks";
 
 const PRESETS = [30, 60, 90, 120, 180];
 
@@ -25,29 +25,38 @@ export function TaskDialog({
   onOpenChange,
   date,
   task,
+  subjects,
   onSubmit,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   date: string;
   task?: Task | null;
-  onSubmit: (values: { name: string; subject: Subject; targetMinutes: number }) => void;
+  subjects: string[];
+  onSubmit: (values: {
+    name: string;
+    subject: Subject;
+    type: TaskType;
+    targetMinutes: number;
+  }) => void;
 }) {
   const [name, setName] = useState("");
-  const [subject, setSubject] = useState<Subject>("Maths");
+  const [subject, setSubject] = useState<Subject>("Other");
+  const [type, setType] = useState<TaskType>("other");
   const [minutes, setMinutes] = useState(120);
 
   useEffect(() => {
     if (!open) return;
     setName(task?.name ?? "");
-    setSubject(task?.subject ?? "Maths");
+    setSubject(task?.subject ?? subjects[0] ?? "Other");
+    setType(task?.type ?? "other");
     setMinutes(task?.targetMinutes ?? 120);
-  }, [open, task]);
+  }, [open, task, subjects]);
 
   const submit = () => {
     const trimmed = name.trim();
     if (!trimmed || minutes <= 0) return;
-    onSubmit({ name: trimmed, subject, targetMinutes: Math.round(minutes) });
+    onSubmit({ name: trimmed, subject, type, targetMinutes: Math.round(minutes) });
     onOpenChange(false);
   };
 
@@ -79,11 +88,31 @@ export function TaskDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {SUBJECTS.map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {s}
-                  </SelectItem>
-                ))}
+                {[...subjects, "Other"]
+                  .filter((s, index, all) => all.indexOf(s) === index)
+                  .map((s) => (
+                    <SelectItem key={s} value={s}>
+                      {s}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Task type</Label>
+            <Select value={type} onValueChange={(v) => setType(v as TaskType)}>
+              <SelectTrigger className="bg-surface-2">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {(["lecture", "revision", "mock", "practice session", "other"] as TaskType[]).map(
+                  (item) => (
+                    <SelectItem key={item} value={item}>
+                      {item}
+                    </SelectItem>
+                  ),
+                )}
               </SelectContent>
             </Select>
           </div>
@@ -121,7 +150,8 @@ export function TaskDialog({
           </div>
 
           <p className="text-xs text-muted-foreground">
-            Scheduled for {new Date(date).toLocaleDateString(undefined, {
+            Scheduled for{" "}
+            {new Date(date).toLocaleDateString(undefined, {
               month: "long",
               day: "numeric",
             })}
