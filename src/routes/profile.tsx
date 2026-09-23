@@ -689,7 +689,6 @@ export function Profile() {
   const [goalDraft, setGoalDraft] = useState("");
   const [manifestationDraft, setManifestationDraft] = useState("");
   const [examNameDraft, setExamNameDraft] = useState("");
-  const [examDateDraft, setExamDateDraft] = useState("");
   const [importMessage, setImportMessage] = useState("");
   const [promptCopied, setPromptCopied] = useState(false);
   const importFileRef = useRef<HTMLInputElement>(null);
@@ -706,7 +705,6 @@ export function Profile() {
       const trackerData = loadTrackerData();
       setTracker(trackerData);
       setExamNameDraft(trackerData.meta.examName);
-      setExamDateDraft(trackerData.meta.examDate);
       setProfile(saved);
       setNameDraft(saved?.name ?? "");
       setGoalDraft(saved ? String(saved.questionGoal) : "100");
@@ -793,7 +791,6 @@ export function Profile() {
           ...tracker.meta,
           examName: examNameDraft.trim() || tracker.meta.examName,
           prepStartDate: tracker.meta.prepStartDate || localDay(new Date()),
-          examDate: examDateDraft,
         },
       });
       setTracker(nextTracker);
@@ -828,7 +825,6 @@ export function Profile() {
       setNameDraft(saved?.name ?? "");
       setGoalDraft(saved ? String(saved.questionGoal) : "100");
       setManifestationDraft(saved?.manifestation ?? "");
-      setExamDateDraft(trackerData.meta.examDate);
       setImportMessage("Data imported successfully.");
     } catch {
       setImportMessage("Choose a valid full backup or Tracker JSON file.");
@@ -1040,18 +1036,6 @@ export function Profile() {
                   onChange={(event) => setExamNameDraft(event.target.value)}
                   placeholder="e.g. SSC CGL 2027"
                 />
-              </label>
-              <label className="block text-sm font-medium text-zinc-200">
-                Exam date <span className="font-normal text-zinc-500">(optional)</span>
-                <Input
-                  className="mt-2 h-11 border-white/10 bg-[#151515] text-zinc-100 focus-visible:border-zinc-500"
-                  type="date"
-                  value={examDateDraft}
-                  onChange={(event) => setExamDateDraft(event.target.value)}
-                />
-                <span className="mt-1 block text-xs font-normal text-zinc-500">
-                  Your preparation start is automatically saved from today.
-                </span>
               </label>
             </div>
             <div className="mt-6 flex justify-end gap-2">
