@@ -170,7 +170,11 @@ function ActivityHeatmap({
     // the far left would otherwise make the first visible block look wider.
     const visibleEntries =
       range === "year" && entries[0]?.getDate() !== 1
-        ? entries.filter((date) => date.getMonth() !== entries[0]?.getMonth())
+        ? entries.filter(
+            (date) =>
+              date.getMonth() !== entries[0]?.getMonth() ||
+              date.getFullYear() !== entries[0]?.getFullYear(),
+          )
         : entries;
     const activity = new Map<string, number>();
     const details = new Map<string, DayActivityDetail[]>();
