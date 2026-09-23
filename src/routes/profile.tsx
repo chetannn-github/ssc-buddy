@@ -291,13 +291,16 @@ function ActivityHeatmap({
       <div className="mt-5">
         <div>
           <div className="flex items-start gap-2.5">
-            {months.map((month, monthIndex) => (
+            {months.map((month) => (
               <div
                 key={month.key}
                 className="min-w-0"
-                style={{ flex: `${Math.ceil(month.days.length / 7)} 1 0%` }}
+                style={{ flex: "5 1 0%" }}
               >
-                <div className="grid grid-flow-col grid-rows-7 gap-[3px] [grid-auto-columns:minmax(0,1fr)]">
+                <div
+                  className="grid grid-flow-col grid-rows-7 gap-[3px]"
+                  style={{ gridTemplateColumns: "repeat(5, minmax(0, 1fr))" }}
+                >
                   {month.days.map(({ date, value, maximum }) => {
                     const intensity =
                       value === 0 ? 0 : Math.min(4, Math.ceil((value / maximum) * 4));
@@ -323,9 +326,7 @@ function ActivityHeatmap({
                     );
                   })}
                 </div>
-                {monthIndex > 0 && (
-                  <p className="mt-2 text-center text-[10px] text-zinc-400">{month.label}</p>
-                )}
+                <p className="mt-2 text-center text-[10px] text-zinc-400">{month.label}</p>
               </div>
             ))}
           </div>
