@@ -233,6 +233,29 @@ function DailyTasks() {
                 </Select>
               </div>
             )}
+            {activeTab === "history" && (
+              <div className="ml-auto">
+                <Select
+                  value={historyRange}
+                  onValueChange={(value) => setHistoryRange(value as RangeKey)}
+                >
+                  <SelectTrigger className="w-40 border-white/15 bg-[#1b1b1b] text-zinc-100">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="border-white/15 bg-[#1b1b1b] text-zinc-100">
+                    {historyRangeOptions.map((option) => (
+                      <SelectItem
+                        key={option}
+                        value={option}
+                        className="focus:bg-white/10 focus:text-zinc-100"
+                      >
+                        {rangeLabels[option]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
           <TabsContent value="tasks" className="mt-5 space-y-5">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -362,18 +385,6 @@ function DailyTasks() {
             </div>
           </TabsContent>
           <TabsContent value="history" className="mt-5">
-            <div className="mb-4 flex flex-wrap gap-2">
-              {historyRangeOptions.map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  onClick={() => setHistoryRange(option)}
-                  className={`h-9 rounded-md border px-3 text-sm transition-colors ${historyRange === option ? "border-white/25 bg-white/10 text-zinc-100" : "border-white/15 bg-[#1b1b1b] text-zinc-300 hover:bg-white/10"}`}
-                >
-                  {rangeLabels[option]}
-                </button>
-              ))}
-            </div>
             {historyDays.length && activeHistoryDay ? (
               <div className="space-y-4">
                 <Select value={activeHistoryDay[0]} onValueChange={setSelectedHistoryDate}>
