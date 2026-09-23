@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Check, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { Check, Pencil, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -58,6 +58,7 @@ function DailyTasks() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<DailyTask | null>(null);
   const [completing, setCompleting] = useState<DailyTask | null>(null);
+  const [selectedHistoryDate, setSelectedHistoryDate] = useState<string | null>(null);
   const [range, setRange] = useState<RangeKey>("week");
   const [subject, setSubject] = useState("All subjects");
   const subjects = useMemo(
@@ -109,13 +110,14 @@ function DailyTasks() {
       });
     return [...totals.entries()].sort((a, b) => b[1].minutes - a[1].minutes);
   }, [scopedTasks]);
-  const byDay = useMemo(() => {
+  const historyDays = useMemo(() => {
     const grouped = new Map<string, DailyTask[]>();
-    scopedTasks.forEach((task) =>
-      grouped.set(task.date, [...(grouped.get(task.date) ?? []), task]),
-    );
+    tasks.forEach((task) => grouped.set(task.date, [...(grouped.get(task.date) ?? []), task]));
     return [...grouped.entries()].sort(([left], [right]) => right.localeCompare(left));
-  }, [scopedTasks]);
+  }, [tasks]);
+  const activeHistoryDay =
+    historyDays.find(([date]) => date === selectedHistoryDate) ?? historyDays[0];
+  const isLatestHistoryDay = activeHistoryDay?.[0] === historyDays[0]?.[0];
   const progress = todaySummary.total
     ? Math.round((todaySummary.completed / todaySummary.total) * 100)
     : 0;
@@ -181,6 +183,7 @@ function DailyTasks() {
           <TabsList className="bg-white/5">
             <TabsTrigger value="tasks">Tasks</TabsTrigger>
             <TabsTrigger value="analytics">Analytics</TabsTrigger>
+            <TabsTrigger value="history">History</TabsTrigger>
           </TabsList>
           <TabsContent value="tasks" className="mt-5 space-y-5">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -344,38 +347,85 @@ function DailyTasks() {
                 )}
               </section>
             </div>
-            <section className="rounded-xl border border-white/10 bg-[#1b1b1b] p-5">
-              <h2 className="text-sm font-semibold">Day-wise history</h2>
-              {byDay.length ? (
-                <div className="mt-4 space-y-3">
-                  {byDay.map(([date, dayTasks]) => {
-                    const summary = summarizeTasks(dayTasks);
-                    return (
-                      <div
-                        key={date}
-                        className="rounded-lg border border-white/10 bg-white/[0.03] px-4 py-3"
-                      >
-                        <div className="flex flex-wrap justify-between gap-2 text-sm">
-                          <span className="font-medium">
+          </TabsContent>
+          <TabsContent value="history" className="mt-5">
+            {historyDays.length && activeHistoryDay ? (
+              <div className="grid gap-5 lg:grid-cols-[13rem_minmax(0,1fr)]">
+                <aside className="overflow-hidden rounded-xl border border-white/10 bg-[#1b1b1b]">
+                  <p className="px-4 pt-4 text-[11px] font-semibold tracking-[0.16em] text-zinc-500 uppercase">
+                    Days
+                  </p>
+                  <div className="mt-3 max-h-[28rem] overflow-y-auto p-2">
+                    {historyDays.map(([date, dayTasks]) => {
+                      const summary = summarizeTasks(dayTasks);
+                      return (
+                        <button
+                          key={date}
+                          type="button"
+                          onClick={() => setSelectedHistoryDate(date)}
+                          className={`w-full rounded-lg px-3 py-2.5 text-left transition-colors ${activeHistoryDay[0] === date ? "bg-blue-600 text-white" : "text-zinc-300 hover:bg-white/10"}`}
+                        >
+                          <span className="block text-sm font-medium">
                             {new Date(`${date}T00:00:00`).toLocaleDateString(undefined, {
-                              weekday: "long",
                               day: "numeric",
                               month: "short",
                             })}
                           </span>
-                          <span className="text-zinc-400">
-                            {summary.completed} completed · {summary.pending} pending ·{" "}
-                            {formatDuration(summary.minutes)}
+                          <span
+                            className={`mt-0.5 block text-xs ${activeHistoryDay[0] === date ? "text-blue-100" : "text-zinc-500"}`}
+                          >
+                            {summary.completed}/{summary.total} completed
                           </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="mt-3 text-sm text-zinc-500">No task data in this range.</p>
-              )}
-            </section>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </aside>
+                <section className="rounded-xl border border-white/10 bg-[#1b1b1b] p-5">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <h2 className="text-lg font-semibold">
+                        {new Date(`${activeHistoryDay[0]}T00:00:00`).toLocaleDateString(undefined, {
+                          weekday: "long",
+                          day: "numeric",
+                          month: "long",
+                        })}
+                      </h2>
+                      <p className="mt-1 text-sm text-zinc-500">
+                        {formatDuration(summarizeTasks(activeHistoryDay[1]).minutes)} study time
+                      </p>
+                    </div>
+                    {!isLatestHistoryDay && (
+                      <span className="rounded-full bg-white/5 px-3 py-1 text-xs text-zinc-500">
+                        Past day · read only
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-5 space-y-2">
+                    {[...activeHistoryDay[1]]
+                      .sort((a, b) => Number(a.completed) - Number(b.completed))
+                      .map((task) => (
+                        <TaskRow
+                          key={task.id}
+                          task={task}
+                          onComplete={setCompleting}
+                          onReopen={reopen}
+                          onEdit={() => {
+                            setEditing(task);
+                            setFormOpen(true);
+                          }}
+                          onDelete={() => persist(tasks.filter((item) => item.id !== task.id))}
+                          readOnly={!isLatestHistoryDay}
+                        />
+                      ))}
+                  </div>
+                </section>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-dashed border-white/15 px-6 py-14 text-center text-zinc-400">
+                No task history yet.
+              </div>
+            )}
           </TabsContent>
         </Tabs>
         <TaskFormDialog
@@ -401,19 +451,22 @@ function TaskRow({
   onReopen,
   onEdit,
   onDelete,
+  readOnly = false,
 }: {
   task: DailyTask;
   onComplete: (task: DailyTask) => void;
   onReopen: (id: string) => void;
   onEdit: () => void;
   onDelete: () => void;
+  readOnly?: boolean;
 }) {
   return (
     <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-[#1b1b1b] px-3 py-3">
       <button
         type="button"
+        disabled={readOnly}
         onClick={() => (task.completed ? onReopen(task.id) : onComplete(task))}
-        className={`grid h-6 w-6 shrink-0 place-items-center rounded-md border ${task.completed ? "border-emerald-400 bg-emerald-500 text-white" : "border-white/20 text-transparent hover:border-emerald-400"}`}
+        className={`grid h-6 w-6 shrink-0 place-items-center rounded-md border disabled:cursor-default ${task.completed ? "border-emerald-400 bg-emerald-500 text-white" : "border-white/20 text-transparent hover:border-emerald-400"}`}
       >
         {task.completed && <Check className="h-4 w-4" />}
       </button>
@@ -432,13 +485,16 @@ function TaskRow({
           {task.completed && task.minutesSpent ? ` · ${formatDuration(task.minutesSpent)}` : ""}
         </p>
       </div>
-      <Button size="icon" variant="ghost" onClick={onEdit}>
-        <Pencil />
-      </Button>
-      <Button size="icon" variant="ghost" onClick={onDelete}>
-        <Trash2 />
-      </Button>
-      {task.completed && <RotateCcw className="hidden" />}
+      {!readOnly && (
+        <>
+          <Button size="icon" variant="ghost" onClick={onEdit}>
+            <Pencil />
+          </Button>
+          <Button size="icon" variant="ghost" onClick={onDelete}>
+            <Trash2 />
+          </Button>
+        </>
+      )}
     </div>
   );
 }
