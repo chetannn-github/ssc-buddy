@@ -269,6 +269,28 @@
   background: #181818;
 }
 
+.task-history-scroll {
+  scrollbar-color: #666 #171717;
+}
+
+.task-history-scroll::-webkit-scrollbar {
+  width: 10px;
+}
+
+.task-history-scroll::-webkit-scrollbar-track {
+  background: #171717;
+}
+
+.task-history-scroll::-webkit-scrollbar-thumb {
+  border: 2px solid #171717;
+  border-radius: 999px;
+  background: #666;
+}
+
+.task-history-scroll::-webkit-scrollbar-thumb:hover {
+  background: #888;
+}
+
 .test-dark-dialog {
   --background: oklch(0.18 0 0);
   --foreground: oklch(0.92 0 0);

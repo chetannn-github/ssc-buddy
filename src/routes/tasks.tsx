@@ -34,6 +34,7 @@ const rangeLabels: Record<RangeKey, string> = {
   "3months": "Last 3 months",
   year: "This year",
 };
+const historyRangeOptions: RangeKey[] = ["week", "month", "3months", "year"];
 
 function AnimatedBar({ value, tone }: { value: number; tone: string }) {
   const target = Math.max(0, Math.min(100, value));
@@ -59,6 +60,7 @@ function DailyTasks() {
   const [editing, setEditing] = useState<DailyTask | null>(null);
   const [completing, setCompleting] = useState<DailyTask | null>(null);
   const [selectedHistoryDate, setSelectedHistoryDate] = useState<string | null>(null);
+  const [historyRange, setHistoryRange] = useState<RangeKey>("week");
   const [range, setRange] = useState<RangeKey>("week");
   const [subject, setSubject] = useState("All subjects");
   const subjects = useMemo(
@@ -111,13 +113,15 @@ function DailyTasks() {
     return [...totals.entries()].sort((a, b) => b[1].minutes - a[1].minutes);
   }, [scopedTasks]);
   const historyDays = useMemo(() => {
+    const bounds = rangeBounds(historyRange);
     const grouped = new Map<string, DailyTask[]>();
-    tasks.forEach((task) => grouped.set(task.date, [...(grouped.get(task.date) ?? []), task]));
+    tasks
+      .filter((task) => task.date < today && task.date >= bounds.from && task.date <= bounds.to)
+      .forEach((task) => grouped.set(task.date, [...(grouped.get(task.date) ?? []), task]));
     return [...grouped.entries()].sort(([left], [right]) => right.localeCompare(left));
-  }, [tasks]);
+  }, [historyRange, tasks, today]);
   const activeHistoryDay =
     historyDays.find(([date]) => date === selectedHistoryDate) ?? historyDays[0];
-  const isLatestHistoryDay = activeHistoryDay?.[0] === historyDays[0]?.[0];
   const progress = todaySummary.total
     ? Math.round((todaySummary.completed / todaySummary.total) * 100)
     : 0;
@@ -349,13 +353,25 @@ function DailyTasks() {
             </div>
           </TabsContent>
           <TabsContent value="history" className="mt-5">
+            <div className="mb-4 flex flex-wrap gap-2">
+              {historyRangeOptions.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => setHistoryRange(option)}
+                  className={`h-9 rounded-md border px-3 text-sm transition-colors ${historyRange === option ? "border-blue-500 bg-blue-600 text-white" : "border-white/15 bg-[#1b1b1b] text-zinc-300 hover:bg-white/10"}`}
+                >
+                  {rangeLabels[option]}
+                </button>
+              ))}
+            </div>
             {historyDays.length && activeHistoryDay ? (
               <div className="grid gap-5 lg:grid-cols-[13rem_minmax(0,1fr)]">
                 <aside className="overflow-hidden rounded-xl border border-white/10 bg-[#1b1b1b]">
                   <p className="px-4 pt-4 text-[11px] font-semibold tracking-[0.16em] text-zinc-500 uppercase">
                     Days
                   </p>
-                  <div className="mt-3 max-h-[28rem] overflow-y-auto p-2">
+                  <div className="task-history-scroll mt-3 max-h-[28rem] overflow-y-auto p-2">
                     {historyDays.map(([date, dayTasks]) => {
                       const summary = summarizeTasks(dayTasks);
                       return (
@@ -395,11 +411,6 @@ function DailyTasks() {
                         {formatDuration(summarizeTasks(activeHistoryDay[1]).minutes)} study time
                       </p>
                     </div>
-                    {!isLatestHistoryDay && (
-                      <span className="rounded-full bg-white/5 px-3 py-1 text-xs text-zinc-500">
-                        Past day · read only
-                      </span>
-                    )}
                   </div>
                   <div className="mt-5 space-y-2">
                     {[...activeHistoryDay[1]]
@@ -415,7 +426,7 @@ function DailyTasks() {
                             setFormOpen(true);
                           }}
                           onDelete={() => persist(tasks.filter((item) => item.id !== task.id))}
-                          readOnly={!isLatestHistoryDay}
+                          readOnly
                         />
                       ))}
                   </div>
