@@ -56,6 +56,7 @@ function AnimatedBar({ value, tone }: { value: number; tone: string }) {
 
 function DailyTasks() {
   const [tasks, setTasks] = useState<DailyTask[]>(() => loadDailyTasks());
+  const [activeTab, setActiveTab] = useState("tasks");
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<DailyTask | null>(null);
   const [completing, setCompleting] = useState<DailyTask | null>(null);
@@ -183,12 +184,56 @@ function DailyTasks() {
             <Plus /> Add task
           </Button>
         </div>
-        <Tabs defaultValue="tasks" className="mt-7">
-          <TabsList className="bg-white/5">
-            <TabsTrigger value="tasks">Tasks</TabsTrigger>
-            <TabsTrigger value="analytics">Analytics</TabsTrigger>
-            <TabsTrigger value="history">History</TabsTrigger>
-          </TabsList>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-7">
+          <div className="flex flex-wrap items-center gap-3">
+            <TabsList className="bg-white/5">
+              <TabsTrigger value="tasks">Tasks</TabsTrigger>
+              <TabsTrigger value="analytics">Analytics</TabsTrigger>
+              <TabsTrigger value="history">History</TabsTrigger>
+            </TabsList>
+            {activeTab === "analytics" && (
+              <div className="ml-auto flex flex-wrap items-center gap-2">
+                <Select value={range} onValueChange={(value) => setRange(value as RangeKey)}>
+                  <SelectTrigger className="w-36 border-white/15 bg-[#1b1b1b] text-zinc-100">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="border-white/15 bg-[#1b1b1b] text-zinc-100">
+                    {(Object.keys(rangeLabels) as RangeKey[]).map((item) => (
+                      <SelectItem
+                        key={item}
+                        value={item}
+                        className="focus:bg-white/10 focus:text-zinc-100"
+                      >
+                        {rangeLabels[item]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={subject} onValueChange={setSubject}>
+                  <SelectTrigger className="w-44 border-white/15 bg-[#1b1b1b] text-zinc-100">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="border-white/15 bg-[#1b1b1b] text-zinc-100">
+                    <SelectItem
+                      value="All subjects"
+                      className="focus:bg-white/10 focus:text-zinc-100"
+                    >
+                      All subjects
+                    </SelectItem>
+                    {allSubjects.map((item) => (
+                      <SelectItem
+                        key={item}
+                        value={item}
+                        className="focus:bg-white/10 focus:text-zinc-100"
+                      >
+                        {item}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
           <TabsContent value="tasks" className="mt-5 space-y-5">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {[
@@ -240,42 +285,6 @@ function DailyTasks() {
             </div>
           </TabsContent>
           <TabsContent value="analytics" className="mt-5 space-y-5">
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex flex-wrap gap-2">
-                {(Object.keys(rangeLabels) as RangeKey[]).map((item) => (
-                  <button
-                    key={item}
-                    type="button"
-                    onClick={() => setRange(item)}
-                    className={`h-9 rounded-md border px-3 text-sm transition-colors ${range === item ? "border-white/25 bg-white/10 text-zinc-100" : "border-white/15 bg-[#1b1b1b] text-zinc-300 hover:bg-white/10"}`}
-                  >
-                    {rangeLabels[item]}
-                  </button>
-                ))}
-              </div>
-              <Select value={subject} onValueChange={setSubject}>
-                <SelectTrigger className="ml-auto w-44 border-white/15 bg-[#1b1b1b] text-zinc-100">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="border-white/15 bg-[#1b1b1b] text-zinc-100">
-                  <SelectItem
-                    value="All subjects"
-                    className="focus:bg-white/10 focus:text-zinc-100"
-                  >
-                    All subjects
-                  </SelectItem>
-                  {allSubjects.map((item) => (
-                    <SelectItem
-                      key={item}
-                      value={item}
-                      className="focus:bg-white/10 focus:text-zinc-100"
-                    >
-                      {item}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               {[
                 ["Time spent", formatDuration(scopedSummary.minutes)],

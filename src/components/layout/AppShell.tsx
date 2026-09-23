@@ -42,6 +42,7 @@ type Props = {
 const nav = [
   { title: "Track", url: "/track", icon: RouteIcon },
   { title: "Progress", url: "/progress", icon: BarChart3 },
+  { title: "Daily tasks", url: "/tasks", icon: ListTodo },
   { title: "Practice session", url: "/test", icon: FilePenLine },
 ] as const;
 
