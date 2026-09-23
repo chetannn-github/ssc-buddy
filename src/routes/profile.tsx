@@ -133,7 +133,7 @@ function ActivityHeatmap({
   tracker: TrackerData | null;
   range: ActivityRange;
 }) {
-  const { days, monthLabels, totalActivity, activeDays, maxStreak } = useMemo(() => {
+  const { days, months, totalActivity, activeDays, maxStreak } = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const datedActivity = [
@@ -229,16 +229,6 @@ function ActivityHeatmap({
     });
     const values = entries.map((date) => Math.max(0, activity.get(localDay(date)) ?? 0));
     const maximum = Math.max(...values, 1);
-    const labels = entries
-      .map((date, index) => ({ date, index }))
-      .filter(
-        ({ date, index }) => index === 0 || date.getMonth() !== entries[index - 1]?.getMonth(),
-      )
-      .map(({ date, index }) => ({
-        label: date.toLocaleDateString(undefined, { month: "short" }),
-        index,
-      }));
-
     let longest = 0;
     let current = 0;
     values.forEach((value) => {
@@ -246,14 +236,31 @@ function ActivityHeatmap({
       longest = Math.max(longest, current);
     });
 
-    return {
-      days: entries.map((date, index) => ({
+    const mappedDays = entries.map((date, index) => ({
         date,
         value: values[index] ?? 0,
         maximum,
         details: details.get(localDay(date)) ?? [],
-      })),
-      monthLabels: labels,
+      }));
+    const monthGroups = mappedDays.reduce<
+      { key: string; label: string; days: typeof mappedDays }[]
+    >((groups, day) => {
+      const key = `${day.date.getFullYear()}-${day.date.getMonth()}`;
+      const lastGroup = groups.at(-1);
+      if (lastGroup?.key === key) lastGroup.days.push(day);
+      else {
+        groups.push({
+          key,
+          label: day.date.toLocaleDateString(undefined, { month: "short" }),
+          days: [day],
+        });
+      }
+      return groups;
+    }, []);
+
+    return {
+      days: mappedDays,
+      months: monthGroups,
       totalActivity: values.reduce((sum, value) => sum + value, 0),
       activeDays: values.filter(Boolean).length,
       maxStreak: longest,
@@ -283,43 +290,44 @@ function ActivityHeatmap({
 
       <div className="mt-5">
         <div>
-          <div className="relative mb-2 h-4 text-[10px] text-zinc-400">
-            {monthLabels.map(({ label, index }) => (
-              <span
-                key={`${label}-${index}`}
-                className="absolute"
-                style={{ left: `${(index / Math.max(1, days.length - 1)) * 100}%` }}
+          <div className="flex items-start gap-2.5">
+            {months.map((month, monthIndex) => (
+              <div
+                key={month.key}
+                className="min-w-0"
+                style={{ flex: `${Math.ceil(month.days.length / 7)} 1 0%` }}
               >
-                {label}
-              </span>
+                <div className="grid grid-flow-col grid-rows-7 gap-[3px] [grid-auto-columns:minmax(0,1fr)]">
+                  {month.days.map(({ date, value, maximum }) => {
+                    const intensity =
+                      value === 0 ? 0 : Math.min(4, Math.ceil((value / maximum) * 4));
+                    return (
+                      <button
+                        type="button"
+                        key={localDay(date)}
+                        onClick={() => setSelectedDay(localDay(date))}
+                        aria-label={`${formatDate(localDay(date))}: ${value} activit${value === 1 ? "y" : "ies"}`}
+                        className={cn(
+                          "group relative aspect-square w-full rounded-[3px] ring-1 ring-inset ring-white/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300",
+                          intensity === 0 && "bg-zinc-700",
+                          intensity === 1 && "bg-emerald-200",
+                          intensity === 2 && "bg-emerald-300",
+                          intensity === 3 && "bg-emerald-500",
+                          intensity === 4 && "bg-emerald-700",
+                        )}
+                      >
+                        <span className="pointer-events-none absolute bottom-[calc(100%+0.45rem)] left-1/2 z-20 hidden -translate-x-1/2 whitespace-nowrap rounded-md border border-white/10 bg-[#1d1d1d] px-2 py-1 text-[10px] font-medium text-zinc-200 shadow-lg group-hover:block group-focus-visible:block">
+                          {value} activit{value === 1 ? "y" : "ies"} on {formatHeatmapTooltipDate(date)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {monthIndex > 0 && (
+                  <p className="mt-2 text-center text-[10px] text-zinc-400">{month.label}</p>
+                )}
+              </div>
             ))}
-          </div>
-          <div className="grid grid-flow-col grid-rows-7 gap-[3px] [grid-auto-columns:minmax(0,1fr)]">
-            {days.map(({ date, value, maximum }, index) => {
-              const intensity = value === 0 ? 0 : Math.min(4, Math.ceil((value / maximum) * 4));
-              const startsMonth = index > 0 && date.getMonth() !== days[index - 1]?.date.getMonth();
-              return (
-                <button
-                  type="button"
-                  key={localDay(date)}
-                  onClick={() => setSelectedDay(localDay(date))}
-                  aria-label={`${formatDate(localDay(date))}: ${value} activit${value === 1 ? "y" : "ies"}`}
-                  className={cn(
-                    "group relative aspect-square w-full rounded-[3px] ring-1 ring-inset ring-white/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300",
-                    startsMonth && "ml-px",
-                    intensity === 0 && "bg-zinc-700",
-                    intensity === 1 && "bg-emerald-200",
-                    intensity === 2 && "bg-emerald-300",
-                    intensity === 3 && "bg-emerald-500",
-                    intensity === 4 && "bg-emerald-700",
-                  )}
-                >
-                  <span className="pointer-events-none absolute bottom-[calc(100%+0.45rem)] left-1/2 z-20 hidden -translate-x-1/2 whitespace-nowrap rounded-md border border-white/10 bg-[#1d1d1d] px-2 py-1 text-[10px] font-medium text-zinc-200 shadow-lg group-hover:block group-focus-visible:block">
-                    {value} activit{value === 1 ? "y" : "ies"} on {formatHeatmapTooltipDate(date)}
-                  </span>
-                </button>
-              );
-            })}
           </div>
           {activeDay && (
             <DayActivityDetails date={localDay(activeDay.date)} items={activeDay.details} />
