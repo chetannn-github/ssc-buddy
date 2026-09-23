@@ -516,7 +516,7 @@ function TargetProgress({
       <div className="border-t border-white/10 px-4 pt-3 text-[11px] font-semibold tracking-[0.16em] text-zinc-500 uppercase sm:px-5">
         Study tracker
       </div>
-      <div className="grid grid-cols-3 divide-x divide-white/10 px-2 py-2 sm:px-3">
+      <div className="grid grid-cols-3 divide-x divide-y divide-white/10 px-2 py-2 sm:grid-cols-6 sm:divide-y-0 sm:px-3">
         {trackerStats.map(({ label, value }) => (
           <StatCell key={label} label={label}>
             <AnimatedNumber value={value} />
