@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as MockTestsRouteImport } from './routes/mock-tests'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as ProgressRouteImport } from './routes/progress'
+import { Route as QuestionBankRouteImport } from './routes/question-bank'
 import { Route as TasksRouteImport } from './routes/tasks'
 import { Route as TestRouteImport } from './routes/test'
 import { Route as TrackRouteImport } from './routes/track'
@@ -37,6 +38,11 @@ const ProfileRoute = ProfileRouteImport.update({
 const ProgressRoute = ProgressRouteImport.update({
   id: '/progress',
   path: '/progress',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const QuestionBankRoute = QuestionBankRouteImport.update({
+  id: '/question-bank',
+  path: '/question-bank',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TasksRoute = TasksRouteImport.update({
@@ -70,6 +76,7 @@ export interface FileRoutesByFullPath {
   '/mock-tests': typeof MockTestsRoute
   '/profile': typeof ProfileRoute
   '/progress': typeof ProgressRoute
+  '/question-bank': typeof QuestionBankRoute
   '/tasks': typeof TasksRoute
   '/test': typeof TestRoute
   '/track': typeof TrackRoute
@@ -81,6 +88,7 @@ export interface FileRoutesByTo {
   '/mock-tests': typeof MockTestsRoute
   '/profile': typeof ProfileRoute
   '/progress': typeof ProgressRoute
+  '/question-bank': typeof QuestionBankRoute
   '/tasks': typeof TasksRoute
   '/test': typeof TestRoute
   '/track': typeof TrackRoute
@@ -93,6 +101,7 @@ export interface FileRoutesById {
   '/mock-tests': typeof MockTestsRoute
   '/profile': typeof ProfileRoute
   '/progress': typeof ProgressRoute
+  '/question-bank': typeof QuestionBankRoute
   '/tasks': typeof TasksRoute
   '/test': typeof TestRoute
   '/track': typeof TrackRoute
@@ -106,6 +115,7 @@ export interface FileRouteTypes {
     | '/mock-tests'
     | '/profile'
     | '/progress'
+    | '/question-bank'
     | '/tasks'
     | '/test'
     | '/track'
@@ -117,6 +127,7 @@ export interface FileRouteTypes {
     | '/mock-tests'
     | '/profile'
     | '/progress'
+    | '/question-bank'
     | '/tasks'
     | '/test'
     | '/track'
@@ -128,6 +139,7 @@ export interface FileRouteTypes {
     | '/mock-tests'
     | '/profile'
     | '/progress'
+    | '/question-bank'
     | '/tasks'
     | '/test'
     | '/track'
@@ -140,6 +152,7 @@ export interface RootRouteChildren {
   MockTestsRoute: typeof MockTestsRoute
   ProfileRoute: typeof ProfileRoute
   ProgressRoute: typeof ProgressRoute
+  QuestionBankRoute: typeof QuestionBankRoute
   TasksRoute: typeof TasksRoute
   TestRoute: typeof TestRoute
   TrackRoute: typeof TrackRoute
@@ -175,6 +188,13 @@ declare module '@tanstack/react-router' {
       path: '/progress'
       fullPath: '/progress'
       preLoaderRoute: typeof ProgressRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/question-bank': {
+      id: '/question-bank'
+      path: '/question-bank'
+      fullPath: '/question-bank'
+      preLoaderRoute: typeof QuestionBankRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/tasks': {
@@ -220,6 +240,7 @@ const rootRouteChildren: RootRouteChildren = {
   MockTestsRoute: MockTestsRoute,
   ProfileRoute: ProfileRoute,
   ProgressRoute: ProgressRoute,
+  QuestionBankRoute: QuestionBankRoute,
   TasksRoute: TasksRoute,
   TestRoute: TestRoute,
   TrackRoute: TrackRoute,
