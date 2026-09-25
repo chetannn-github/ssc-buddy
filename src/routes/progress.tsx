@@ -16,6 +16,16 @@ import type { TestEntry, TrackerData } from "@/lib/tracker";
 
 type TestCategory = "Sectional" | "Pre" | "Mains";
 
+type ChartPoint = {
+  label: string;
+  marks: number;
+  accuracy: number;
+  total: number;
+  date: string;
+  subject: string;
+  category: string;
+};
+
 export const Route = createFileRoute("/progress")({
   head: () => ({ meta: [{ title: "Progress" }] }),
   component: Progress,
@@ -49,7 +59,7 @@ function ChartCard({
   suffix,
 }: {
   title: string;
-  data: Array<{ label: string; marks: number; accuracy: number }>;
+  data: ChartPoint[];
   dataKey: "marks" | "accuracy";
   color: string;
   suffix: string;
@@ -68,16 +78,7 @@ function ChartCard({
               axisLine={false}
             />
             <YAxis tick={{ fill: "#71717a", fontSize: 11 }} tickLine={false} axisLine={false} />
-            <Tooltip
-              contentStyle={{
-                background: "#202020",
-                border: "1px solid rgba(255,255,255,0.1)",
-                borderRadius: 8,
-              }}
-              labelStyle={{ color: "#e4e4e7" }}
-              itemStyle={{ color }}
-              formatter={(value: number) => [`${value}${suffix}`, title]}
-            />
+            <Tooltip content={<ProgressTooltip title={title} color={color} suffix={suffix} />} />
             <Line
               type="monotone"
               dataKey={dataKey}
@@ -90,6 +91,57 @@ function ChartCard({
         </ResponsiveContainer>
       </div>
     </section>
+  );
+}
+
+function ProgressTooltip({
+  active,
+  payload,
+  title,
+  color,
+  suffix,
+}: {
+  active?: boolean;
+  payload?: Array<{ payload: ChartPoint }>;
+  title: string;
+  color: string;
+  suffix: string;
+}) {
+  const point = payload?.[0]?.payload;
+  if (!active || !point) return null;
+  const metric = title === "Marks trend" ? point.marks : point.accuracy;
+  const date = new Date(point.date).toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+  return (
+    <div className="min-w-48 rounded-lg border border-white/10 bg-[#202020] px-3 py-2.5 shadow-xl">
+      <div className="flex items-center justify-between gap-5">
+        <p className="text-xs font-semibold text-zinc-100">Test {point.label}</p>
+        <span className="text-[11px] text-zinc-500">{date}</span>
+      </div>
+      <p className="mt-1 truncate text-xs text-zinc-400">
+        {point.subject} · {point.category}
+      </p>
+      <div className="mt-3 grid grid-cols-2 gap-3 border-t border-white/10 pt-2.5">
+        <div>
+          <p className="text-[10px] tracking-wide text-zinc-500 uppercase">
+            {title.replace(" trend", "")}
+          </p>
+          <p className="mt-0.5 text-sm font-semibold" style={{ color }}>
+            {metric}
+            {suffix}
+          </p>
+        </div>
+        <div>
+          <p className="text-[10px] tracking-wide text-zinc-500 uppercase">Full result</p>
+          <p className="mt-0.5 text-sm font-semibold text-zinc-200">
+            {point.marks}/{point.total} · {point.accuracy}%
+          </p>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -202,10 +254,17 @@ function Progress() {
     };
   }, [tests]);
 
-  const chartData = [...tests].reverse().map((test, index) => ({
+  const chartData: ChartPoint[] = [...tests].reverse().map((test, index) => ({
     label: `${index + 1}`,
     marks: test.score,
     accuracy: test.accuracy,
+    total: test.total,
+    date: test.date,
+    subject:
+      category === "Sectional"
+        ? (tracker.subjects.find((subject) => subject.id === test.subjectId)?.name ?? "—")
+        : category,
+    category,
   }));
 
   return (
