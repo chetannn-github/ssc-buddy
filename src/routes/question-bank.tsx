@@ -118,7 +118,7 @@ function QuestionBank() {
                   </div>
                   <Button asChild>
                     <Link
-                      to="/question-bank/view"
+                      to="/question-view"
                       search={{
                         subject: entry.subject.name,
                         chapter: entry.chapter,

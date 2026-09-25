@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 
 type ViewerSearch = { subject: string; chapter: string; exercise: string };
 
-export const Route = createFileRoute("/question-bank/view")({
+export const Route = createFileRoute("/question-view")({
   validateSearch: (search: Record<string, unknown>): ViewerSearch => ({
     subject: typeof search["subject"] === "string" ? search["subject"] : "",
     chapter: typeof search["chapter"] === "string" ? search["chapter"] : "",

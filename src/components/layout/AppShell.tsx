@@ -1027,6 +1027,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
     path === "/mock-tests" ||
     path === "/test" ||
     path.startsWith("/question-bank") ||
+    path === "/question-view" ||
     path.startsWith("/history");
   return (
     <div
