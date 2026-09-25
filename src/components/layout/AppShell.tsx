@@ -40,10 +40,10 @@ type Props = {
 };
 
 const nav = [
-  { title: "Track", url: "/track", icon: RouteIcon },
-  { title: "Progress", url: "/progress", icon: BarChart3 },
   { title: "Daily tasks", url: "/tasks", icon: ListTodo },
+  { title: "Track", url: "/track", icon: RouteIcon },
   { title: "Practice session", url: "/test", icon: FilePenLine },
+  { title: "Progress", url: "/progress", icon: BarChart3 },
 ] as const;
 
 const MANIFESTATION_COMPLETION_KEY = "ssc-buddy-manifestation-completed";

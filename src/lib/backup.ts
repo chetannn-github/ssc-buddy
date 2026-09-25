@@ -12,16 +12,18 @@ import {
 import { loadPracticeProfile, savePracticeProfile, type PracticeProfile } from "@/lib/profile";
 import { loadTrackerData, saveTrackerData } from "@/lib/tracker-store";
 import type { TrackerData } from "@/lib/tracker";
+import { loadDailyTasks, saveDailyTasks, type DailyTask } from "@/lib/daily-tasks";
 
 type PracticeBackup = {
   format: "mcq-practice-backup";
-  version: 1;
+  version: 1 | 2;
   exportedAt: string;
   profile: PracticeProfile | null;
   subjects: Subject[];
   marking: MarkingScheme | null;
   history: TestRecord[];
   tracker: TrackerData;
+  dailyTasks: DailyTask[];
 };
 
 function isProfile(value: unknown): value is PracticeProfile {
@@ -40,13 +42,14 @@ function isProfile(value: unknown): value is PracticeProfile {
 export function downloadPracticeBackup() {
   const backup: PracticeBackup = {
     format: "mcq-practice-backup",
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
     profile: loadPracticeProfile(),
     subjects: loadSubjects(),
     marking: loadMarking(),
     history: loadHistory(),
     tracker: loadTrackerData(),
+    dailyTasks: loadDailyTasks(),
   };
   const url = URL.createObjectURL(
     new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" }),
@@ -67,7 +70,7 @@ export async function restorePracticeBackup(file: File) {
   }
   if (
     parsed.format !== "mcq-practice-backup" ||
-    parsed.version !== 1 ||
+    (parsed.version !== 1 && parsed.version !== 2) ||
     !Array.isArray(parsed.subjects) ||
     !Array.isArray(parsed.history) ||
     (parsed.profile !== null && !isProfile(parsed.profile))
@@ -81,6 +84,7 @@ export async function restorePracticeBackup(file: File) {
     saveMarking(parsed.marking as MarkingScheme);
   if (parsed.profile) savePracticeProfile(parsed.profile);
   if (parsed.tracker && typeof parsed.tracker === "object") saveTrackerData(parsed.tracker);
+  if (Array.isArray(parsed.dailyTasks)) saveDailyTasks(parsed.dailyTasks);
   window.dispatchEvent(new Event("cbt-backup-restored"));
   return parsed.profile ?? null;
 }

@@ -153,7 +153,7 @@ export function CompleteTaskDialog({
             <Label htmlFor="task-hours">Hours</Label>
             <Input
               id="task-hours"
-              className="border-white/10 bg-[#181818] text-zinc-100"
+              className="border-white/10 bg-[#181818] text-zinc-100 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               type="number"
               min={0}
               max={24}
@@ -165,7 +165,7 @@ export function CompleteTaskDialog({
             <Label htmlFor="task-minutes">Minutes</Label>
             <Input
               id="task-minutes"
-              className="border-white/10 bg-[#181818] text-zinc-100"
+              className="border-white/10 bg-[#181818] text-zinc-100 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               type="number"
               min={0}
               max={59}
@@ -173,6 +173,21 @@ export function CompleteTaskDialog({
               onChange={(event) => setMinutes(event.target.value)}
             />
           </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {[30, 45, 60, 90, 120].map((duration) => (
+            <button
+              key={duration}
+              type="button"
+              onClick={() => {
+                setHours(String(Math.floor(duration / 60)));
+                setMinutes(String(duration % 60));
+              }}
+              className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-zinc-300 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              {duration >= 60 ? `${duration / 60}h` : `${duration}m`}
+            </button>
+          ))}
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
