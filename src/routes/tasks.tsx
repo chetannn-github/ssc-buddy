@@ -414,7 +414,7 @@ function DailyTasks() {
             {historyDays.length && activeHistoryDay ? (
               <div className="space-y-4">
                 <Select value={activeHistoryDay[0]} onValueChange={setSelectedHistoryDate}>
-                  <SelectTrigger className="w-full border-white/15 bg-[#1b1b1b] text-zinc-100 sm:w-64">
+                  <SelectTrigger className="w-full border-white/15 bg-[#1b1b1b] text-zinc-100 lg:hidden">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="task-history-scroll border-white/15 bg-[#1b1b1b] text-zinc-100">
