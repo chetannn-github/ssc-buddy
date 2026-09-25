@@ -31,7 +31,7 @@ function QuestionViewer() {
     <AppShell title="Question viewer">
       <div className="exam-dark -mx-4 -my-6 min-h-[calc(100vh-4rem)] bg-[#121212] px-4 py-6 text-zinc-100 sm:-mx-6 sm:px-6">
         {question ? (
-          <div className="mx-auto grid max-w-6xl gap-4 lg:grid-cols-[1fr_320px]">
+          <div className="mx-auto grid max-w-7xl gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
             <section className="rounded-xl border border-white/10 bg-[#1b1b1b] p-5 sm:p-6">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-3">
                 <div>

@@ -274,7 +274,17 @@ function ActivityHeatmap({
     };
   }, [records, tracker, range]);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const heatmapScrollRef = useRef<HTMLDivElement>(null);
   const activeDay = days.find(({ date }) => localDay(date) === selectedDay) ?? days.at(-1);
+
+  useEffect(() => {
+    const scroller = heatmapScrollRef.current;
+    if (!scroller || !window.matchMedia("(max-width: 639px)").matches) return;
+    const frame = requestAnimationFrame(() => {
+      scroller.scrollLeft = scroller.scrollWidth - scroller.clientWidth;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [months.length]);
 
   return (
     <section className="overflow-visible py-5 text-zinc-100 sm:py-6">
@@ -297,42 +307,47 @@ function ActivityHeatmap({
 
       <div className="mt-5">
         <div>
-          <div className="flex items-start gap-2.5">
-            {months.map((month) => (
-              <div key={month.key} className="min-w-0" style={{ flex: "5 1 0%" }}>
-                <div
-                  className="grid grid-flow-col grid-rows-7 gap-[3px]"
-                  style={{ gridTemplateColumns: "repeat(5, minmax(0, 1fr))" }}
-                >
-                  {month.days.map(({ date, value, maximum }) => {
-                    const intensity =
-                      value === 0 ? 0 : Math.min(4, Math.ceil((value / maximum) * 4));
-                    return (
-                      <button
-                        type="button"
-                        key={localDay(date)}
-                        onClick={() => setSelectedDay(localDay(date))}
-                        aria-label={`${formatDate(localDay(date))}: ${value} activit${value === 1 ? "y" : "ies"}`}
-                        className={cn(
-                          "group relative aspect-square w-full rounded-[3px] ring-1 ring-inset ring-white/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300",
-                          intensity === 0 && "bg-zinc-700",
-                          intensity === 1 && "bg-emerald-200",
-                          intensity === 2 && "bg-emerald-300",
-                          intensity === 3 && "bg-emerald-500",
-                          intensity === 4 && "bg-emerald-700",
-                        )}
-                      >
-                        <span className="pointer-events-none absolute bottom-[calc(100%+0.45rem)] left-1/2 z-20 hidden -translate-x-1/2 whitespace-nowrap rounded-md border border-white/10 bg-[#1d1d1d] px-2 py-1 text-[10px] font-medium text-zinc-200 shadow-lg group-hover:block group-focus-visible:block">
-                          {value} activit{value === 1 ? "y" : "ies"} on{" "}
-                          {formatHeatmapTooltipDate(date)}
-                        </span>
-                      </button>
-                    );
-                  })}
+          <div
+            ref={heatmapScrollRef}
+            className="overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          >
+            <div className="flex w-max items-start gap-2.5 sm:w-full">
+              {months.map((month) => (
+                <div key={month.key} className="w-[76px] shrink-0 sm:min-w-0 sm:flex-1 sm:w-auto">
+                  <div
+                    className="grid grid-flow-col grid-rows-7 gap-[3px]"
+                    style={{ gridTemplateColumns: "repeat(5, minmax(0, 1fr))" }}
+                  >
+                    {month.days.map(({ date, value, maximum }) => {
+                      const intensity =
+                        value === 0 ? 0 : Math.min(4, Math.ceil((value / maximum) * 4));
+                      return (
+                        <button
+                          type="button"
+                          key={localDay(date)}
+                          onClick={() => setSelectedDay(localDay(date))}
+                          aria-label={`${formatDate(localDay(date))}: ${value} activit${value === 1 ? "y" : "ies"}`}
+                          className={cn(
+                            "group relative aspect-square w-full rounded-[3px] ring-1 ring-inset ring-white/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300",
+                            intensity === 0 && "bg-zinc-700",
+                            intensity === 1 && "bg-emerald-200",
+                            intensity === 2 && "bg-emerald-300",
+                            intensity === 3 && "bg-emerald-500",
+                            intensity === 4 && "bg-emerald-700",
+                          )}
+                        >
+                          <span className="pointer-events-none absolute bottom-[calc(100%+0.45rem)] left-1/2 z-20 hidden -translate-x-1/2 whitespace-nowrap rounded-md border border-white/10 bg-[#1d1d1d] px-2 py-1 text-[10px] font-medium text-zinc-200 shadow-lg group-hover:block group-focus-visible:block">
+                            {value} activit{value === 1 ? "y" : "ies"} on{" "}
+                            {formatHeatmapTooltipDate(date)}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-2 text-center text-[10px] text-zinc-400">{month.label}</p>
                 </div>
-                <p className="mt-2 text-center text-[10px] text-zinc-400">{month.label}</p>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
           {activeDay && (
             <DayActivityDetails date={localDay(activeDay.date)} items={activeDay.details} />

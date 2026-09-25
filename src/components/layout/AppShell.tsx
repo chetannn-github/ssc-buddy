@@ -1095,7 +1095,8 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
       </header>
       <main
         className={cn(
-          "mx-auto w-full max-w-5xl flex-1 px-4 py-6 sm:px-6",
+          "mx-auto w-full flex-1 px-4 py-6 sm:px-6",
+          path === "/question-view" ? "max-w-7xl" : "max-w-5xl",
           (path === "/" ||
             path === "/profile" ||
             path === "/progress" ||
