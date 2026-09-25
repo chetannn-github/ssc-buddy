@@ -19,6 +19,7 @@ import { Route as TestRouteImport } from './routes/test'
 import { Route as TrackRouteImport } from './routes/track'
 import { Route as HistoryIndexRouteImport } from './routes/history.index'
 import { Route as HistoryIdRouteImport } from './routes/history.$id'
+import { Route as QuestionBankViewRouteImport } from './routes/question-bank/view'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -70,17 +71,23 @@ const HistoryIdRoute = HistoryIdRouteImport.update({
   path: '/history/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const QuestionBankViewRoute = QuestionBankViewRouteImport.update({
+  id: '/view',
+  path: '/view',
+  getParentRoute: () => QuestionBankRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/mock-tests': typeof MockTestsRoute
   '/profile': typeof ProfileRoute
   '/progress': typeof ProgressRoute
-  '/question-bank': typeof QuestionBankRoute
+  '/question-bank': typeof QuestionBankRouteWithChildren
   '/tasks': typeof TasksRoute
   '/test': typeof TestRoute
   '/track': typeof TrackRoute
   '/history/$id': typeof HistoryIdRoute
+  '/question-bank/view': typeof QuestionBankViewRoute
   '/history/': typeof HistoryIndexRoute
 }
 export interface FileRoutesByTo {
@@ -88,11 +95,12 @@ export interface FileRoutesByTo {
   '/mock-tests': typeof MockTestsRoute
   '/profile': typeof ProfileRoute
   '/progress': typeof ProgressRoute
-  '/question-bank': typeof QuestionBankRoute
+  '/question-bank': typeof QuestionBankRouteWithChildren
   '/tasks': typeof TasksRoute
   '/test': typeof TestRoute
   '/track': typeof TrackRoute
   '/history/$id': typeof HistoryIdRoute
+  '/question-bank/view': typeof QuestionBankViewRoute
   '/history': typeof HistoryIndexRoute
 }
 export interface FileRoutesById {
@@ -101,11 +109,12 @@ export interface FileRoutesById {
   '/mock-tests': typeof MockTestsRoute
   '/profile': typeof ProfileRoute
   '/progress': typeof ProgressRoute
-  '/question-bank': typeof QuestionBankRoute
+  '/question-bank': typeof QuestionBankRouteWithChildren
   '/tasks': typeof TasksRoute
   '/test': typeof TestRoute
   '/track': typeof TrackRoute
   '/history/$id': typeof HistoryIdRoute
+  '/question-bank/view': typeof QuestionBankViewRoute
   '/history/': typeof HistoryIndexRoute
 }
 export interface FileRouteTypes {
@@ -120,6 +129,7 @@ export interface FileRouteTypes {
     | '/test'
     | '/track'
     | '/history/$id'
+    | '/question-bank/view'
     | '/history/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -132,6 +142,7 @@ export interface FileRouteTypes {
     | '/test'
     | '/track'
     | '/history/$id'
+    | '/question-bank/view'
     | '/history'
   id:
     | '__root__'
@@ -144,6 +155,7 @@ export interface FileRouteTypes {
     | '/test'
     | '/track'
     | '/history/$id'
+    | '/question-bank/view'
     | '/history/'
   fileRoutesById: FileRoutesById
 }
@@ -152,7 +164,7 @@ export interface RootRouteChildren {
   MockTestsRoute: typeof MockTestsRoute
   ProfileRoute: typeof ProfileRoute
   ProgressRoute: typeof ProgressRoute
-  QuestionBankRoute: typeof QuestionBankRoute
+  QuestionBankRoute: typeof QuestionBankRouteWithChildren
   TasksRoute: typeof TasksRoute
   TestRoute: typeof TestRoute
   TrackRoute: typeof TrackRoute
@@ -232,15 +244,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof HistoryIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/question-bank/view': {
+      id: '/question-bank/view'
+      path: '/view'
+      fullPath: '/question-bank/view'
+      preLoaderRoute: typeof QuestionBankViewRouteImport
+      parentRoute: typeof QuestionBankRoute
+    }
   }
 }
+
+interface QuestionBankRouteChildren {
+  QuestionBankViewRoute: typeof QuestionBankViewRoute
+}
+
+const QuestionBankRouteChildren: QuestionBankRouteChildren = {
+  QuestionBankViewRoute: QuestionBankViewRoute,
+}
+
+const QuestionBankRouteWithChildren = QuestionBankRoute._addFileChildren(
+  QuestionBankRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   MockTestsRoute: MockTestsRoute,
   ProfileRoute: ProfileRoute,
   ProgressRoute: ProgressRoute,
-  QuestionBankRoute: QuestionBankRoute,
+  QuestionBankRoute: QuestionBankRouteWithChildren,
   TasksRoute: TasksRoute,
   TestRoute: TestRoute,
   TrackRoute: TrackRoute,
