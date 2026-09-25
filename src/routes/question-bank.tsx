@@ -102,9 +102,15 @@ function QuestionBank() {
           {exercises.length ? (
             <div className="mt-5 space-y-3">
               {exercises.map((entry) => (
-                <article
+                <Link
                   key={exerciseId(entry)}
-                  className="flex flex-wrap items-center gap-4 rounded-xl border border-white/10 bg-[#1b1b1b] p-4"
+                  to="/question-view"
+                  search={{
+                    subject: entry.subject.name,
+                    chapter: entry.chapter,
+                    exercise: entry.exercise.name,
+                  }}
+                  className="flex flex-wrap items-center gap-4 rounded-xl border border-white/10 bg-[#1b1b1b] p-4 transition-all hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[0.06] focus-visible:outline-2 focus-visible:outline-primary"
                 >
                   <span className="grid h-10 w-10 place-items-center rounded-lg bg-white/5 text-zinc-300">
                     <BookOpen className="h-4 w-4" />
@@ -116,19 +122,7 @@ function QuestionBank() {
                       {entry.exercise.questions?.length ?? 0} questions
                     </p>
                   </div>
-                  <Button asChild>
-                    <Link
-                      to="/question-view"
-                      search={{
-                        subject: entry.subject.name,
-                        chapter: entry.chapter,
-                        exercise: entry.exercise.name,
-                      }}
-                    >
-                      View questions
-                    </Link>
-                  </Button>
-                </article>
+                </Link>
               ))}
             </div>
           ) : (
