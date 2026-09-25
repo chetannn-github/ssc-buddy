@@ -17,7 +17,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { TASK_TYPES, type DailyTask, type TaskDraft, type TaskType } from "@/lib/daily-tasks";
+import {
+  TASK_TYPES,
+  todayKey,
+  type DailyTask,
+  type TaskDraft,
+  type TaskType,
+} from "@/lib/daily-tasks";
 
 export function TaskFormDialog({
   open,
@@ -35,15 +41,21 @@ export function TaskFormDialog({
   const [name, setName] = useState("");
   const [subject, setSubject] = useState("Other");
   const [type, setType] = useState<TaskType>("Lecture");
+  const [schedule, setSchedule] = useState<"today" | "tomorrow">("today");
   useEffect(() => {
     if (!open) return;
     setName(task?.name ?? "");
     setSubject(task?.subject ?? subjects[0] ?? "Other");
     setType(task?.type ?? "Lecture");
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    setSchedule(task?.date === todayKey(tomorrow) ? "tomorrow" : "today");
   }, [open, task, subjects]);
   const submit = () => {
     if (!name.trim()) return;
-    onSubmit({ name: name.trim(), subject, type });
+    const date = new Date();
+    if (schedule === "tomorrow") date.setDate(date.getDate() + 1);
+    onSubmit({ name: name.trim(), subject, type, date: task?.date ?? todayKey(date) });
     onOpenChange(false);
   };
   const subjectOptions = [...new Set([...subjects, "Other"])];
@@ -107,6 +119,23 @@ export function TaskFormDialog({
               </Select>
             </div>
           </div>
+          {!task && (
+            <div className="space-y-2">
+              <Label>Schedule for</Label>
+              <div className="flex gap-2">
+                {(["today", "tomorrow"] as const).map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => setSchedule(option)}
+                    className={`rounded-md border px-3 py-1.5 text-sm capitalize transition-colors ${schedule === option ? "border-white/25 bg-white/10 text-zinc-100" : "border-white/10 bg-[#181818] text-zinc-400 hover:bg-white/5"}`}
+                  >
+                    {option}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>

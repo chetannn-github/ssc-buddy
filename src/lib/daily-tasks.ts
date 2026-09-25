@@ -13,7 +13,7 @@ export type DailyTask = {
   minutesSpent: number | null;
 };
 
-export type TaskDraft = Pick<DailyTask, "name" | "subject" | "type">;
+export type TaskDraft = Pick<DailyTask, "name" | "subject" | "type" | "date">;
 export type RangeKey = "today" | "week" | "month" | "3months" | "year";
 
 const STORAGE_KEY = "ssc-buddy:tasks:v2";

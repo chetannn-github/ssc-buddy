@@ -57,6 +57,7 @@ function AnimatedBar({ value, tone }: { value: number; tone: string }) {
 function DailyTasks() {
   const [tasks, setTasks] = useState<DailyTask[]>(() => loadDailyTasks());
   const [activeTab, setActiveTab] = useState("tasks");
+  const [taskDay, setTaskDay] = useState<"today" | "tomorrow">("today");
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<DailyTask | null>(null);
   const [completing, setCompleting] = useState<DailyTask | null>(null);
@@ -73,10 +74,17 @@ function DailyTasks() {
     saveDailyTasks(next);
   };
   const today = todayKey();
-  const todayTasks = tasks
-    .filter((task) => task.date === today)
+  const tomorrowDate = useMemo(() => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return todayKey(tomorrow);
+  }, []);
+  const tomorrowTaskCount = tasks.filter((task) => task.date === tomorrowDate).length;
+  const activeTaskDate = taskDay === "today" ? today : tomorrowDate;
+  const dayTasks = tasks
+    .filter((task) => task.date === activeTaskDate)
     .sort((a, b) => Number(a.completed) - Number(b.completed));
-  const todaySummary = summarizeTasks(todayTasks);
+  const daySummary = summarizeTasks(dayTasks);
   const scopedTasks = useMemo(() => {
     const bounds = rangeBounds(range);
     return tasks.filter(
@@ -123,8 +131,8 @@ function DailyTasks() {
   }, [historyRange, tasks, today]);
   const activeHistoryDay =
     historyDays.find(([date]) => date === selectedHistoryDate) ?? historyDays[0];
-  const progress = todaySummary.total
-    ? Math.round((todaySummary.completed / todaySummary.total) * 100)
+  const progress = daySummary.total
+    ? Math.round((daySummary.completed / daySummary.total) * 100)
     : 0;
   const createOrUpdate = (draft: TaskDraft) => {
     if (editing)
@@ -136,7 +144,7 @@ function DailyTasks() {
           id: crypto.randomUUID(),
           ...draft,
           createdAt: now.toISOString(),
-          date: todayKey(now),
+          date: draft.date,
           completed: false,
           completedAt: null,
           minutesSpent: null,
@@ -233,6 +241,17 @@ function DailyTasks() {
                 </Select>
               </div>
             )}
+            {activeTab === "tasks" && tomorrowTaskCount > 0 && (
+              <button
+                type="button"
+                onClick={() =>
+                  setTaskDay((current) => (current === "today" ? "tomorrow" : "today"))
+                }
+                className="ml-auto h-9 rounded-md border border-white/15 bg-[#1b1b1b] px-3 text-sm text-zinc-300 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                {taskDay === "today" ? `Tomorrow (${tomorrowTaskCount})` : "Today"}
+              </button>
+            )}
             {activeTab === "history" && (
               <div className="ml-auto flex items-center gap-2">
                 <Select
@@ -286,10 +305,13 @@ function DailyTasks() {
           <TabsContent value="tasks" className="mt-4 space-y-3">
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {[
-                ["Today's tasks", String(todaySummary.total)],
-                ["Completed", String(todaySummary.completed)],
-                ["Pending", String(todaySummary.pending)],
-                ["Study time", formatDuration(todaySummary.minutes)],
+                [
+                  taskDay === "today" ? "Today's tasks" : "Tomorrow's tasks",
+                  String(daySummary.total),
+                ],
+                ["Completed", String(daySummary.completed)],
+                ["Pending", String(daySummary.pending)],
+                ["Study time", formatDuration(daySummary.minutes)],
               ].map(([label, value]) => (
                 <div
                   key={label}
@@ -302,9 +324,11 @@ function DailyTasks() {
             </div>
             <div className="rounded-lg border border-white/10 bg-[#1b1b1b] px-3 py-2.5">
               <div className="flex justify-between text-sm">
-                <span className="text-zinc-400">Today's progress</span>
+                <span className="text-zinc-400">
+                  {taskDay === "today" ? "Today's progress" : "Tomorrow's progress"}
+                </span>
                 <span>
-                  {todaySummary.completed} / {todaySummary.total} completed
+                  {daySummary.completed} / {daySummary.total} completed
                 </span>
               </div>
               <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
@@ -312,8 +336,8 @@ function DailyTasks() {
               </div>
             </div>
             <div className="space-y-1.5">
-              {todayTasks.length ? (
-                todayTasks.map((task) => (
+              {dayTasks.length ? (
+                dayTasks.map((task) => (
                   <TaskRow
                     key={task.id}
                     task={task}
@@ -328,7 +352,7 @@ function DailyTasks() {
                 ))
               ) : (
                 <div className="rounded-lg border border-dashed border-white/15 px-4 py-10 text-center text-sm text-zinc-400">
-                  No tasks for today. Add your first study task.
+                  No tasks for {taskDay}. Add your first study task.
                 </div>
               )}
             </div>
