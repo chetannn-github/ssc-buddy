@@ -616,11 +616,9 @@ export function SetupScreen({
             <p
               className={cn("text-xs", countTooHigh ? "text-destructive" : "text-muted-foreground")}
             >
-              {isJsonExercise
-                ? `This JSON exercise contains ${activeExercise?.questions?.length ?? 0} questions.`
-                : countTooHigh
-                  ? `Only ${available} questions remain (Q${parsedStart}–Q${chapterTotal}).`
-                  : `Q${parsedStart}–${parsedStart + parsedCount - 1}.`}
+              {countTooHigh
+                ? `Only ${available} questions remain (Q${parsedStart}–Q${chapterTotal}).`
+                : `Questions Q${parsedStart}–Q${parsedStart + parsedCount - 1}.`}
             </p>
           </div>
         ) : (
