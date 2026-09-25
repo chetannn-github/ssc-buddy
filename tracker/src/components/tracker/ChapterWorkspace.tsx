@@ -467,15 +467,29 @@ function ChapterRow({
         dragging && "scale-[0.98] border-dashed border-accent-blue/50 bg-accent-blue/10 opacity-45",
       )}
     >
-      <button type="button" onClick={onOpen} className="min-w-0 flex-1 text-left">
+      <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
-          <span className="truncate text-sm font-medium">{chapter.name}</span>
-          {pinned && <Star className="h-3.5 w-3.5 shrink-0 fill-accent-blue text-accent-blue" />}
+          <button type="button" onClick={onOpen} className="min-w-0 flex-1 text-left">
+            <span className="truncate text-sm font-medium">{chapter.name}</span>
+          </button>
+          {!reordering && (
+            <button
+              type="button"
+              onClick={onPin}
+              aria-label={pinned ? "Unpin chapter" : "Pin chapter"}
+              className={cn(
+                "grid h-5 w-5 shrink-0 place-items-center rounded text-muted-foreground transition-colors hover:text-accent-blue",
+                pinned && "text-accent-blue",
+              )}
+            >
+              <Star className={cn("h-3.5 w-3.5", pinned && "fill-current")} />
+            </button>
+          )}
         </div>
-        <div className="mt-1">
+        <button type="button" onClick={onOpen} className="mt-1 block w-full text-left">
           <Bar value={pct(done, total)} tone={mode === "revision" ? "green" : "blue"} />
-        </div>
-      </button>
+        </button>
+      </div>
       <span className="w-18 shrink-0 text-right font-mono text-xs text-muted-foreground">
         {done}/{total}
       </span>
@@ -491,20 +505,7 @@ function ChapterRow({
             <GripVertical className="h-4 w-4" />
           </span>
         </div>
-      ) : (
-        <button
-          type="button"
-          onClick={onPin}
-          aria-label={pinned ? "Unpin chapter" : "Pin chapter"}
-          className={
-            pinned
-              ? "grid h-7 w-7 place-items-center rounded-full bg-track text-accent-blue"
-              : "grid h-7 w-7 place-items-center rounded-full bg-track text-muted-foreground hover:text-foreground"
-          }
-        >
-          <Star className={pinned ? "h-4 w-4 fill-current" : "h-4 w-4"} />
-        </button>
-      )}
+      ) : null}
     </div>
   );
 }

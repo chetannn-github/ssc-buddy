@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Check, Pencil, Plus, Trash2 } from "lucide-react";
+import { Check, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -541,9 +541,10 @@ function TaskRow({
         type="button"
         disabled={readOnly}
         onClick={() => (task.completed ? onReopen(task.id) : onComplete(task))}
-        className={`grid h-6 w-6 shrink-0 place-items-center rounded-md border disabled:cursor-default ${task.completed ? "border-emerald-400 bg-emerald-500 text-white" : "border-white/20 text-transparent hover:border-emerald-400"}`}
+        className={`grid h-6 w-6 shrink-0 place-items-center rounded-md border disabled:cursor-default ${task.completed ? "border-emerald-400 bg-emerald-500 text-white" : readOnly ? "border-red-500/50 bg-red-500/10 text-red-400" : "border-white/20 text-transparent hover:border-emerald-400"}`}
       >
         {task.completed && <Check className="h-4 w-4" />}
+        {!task.completed && readOnly && <X className="h-4 w-4" />}
       </button>
       <div className="min-w-0 flex-1">
         <p
