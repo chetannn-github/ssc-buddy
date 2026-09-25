@@ -1,5 +1,5 @@
 import { ChevronRight, GripVertical, ListOrdered, Star, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTracker } from "@/lib/tracker-store";
 import { cn } from "@/lib/utils";
 import {
@@ -537,8 +537,19 @@ function ChapterDrawer({
   const [name, setName] = useState(chapter.name);
   const [total, setTotal] = useState(String(chapter.total));
   const [editing, setEditing] = useState(false);
+  const [entered, setEntered] = useState(false);
+  const [closing, setClosing] = useState(false);
   const pinned = data.pinnedChapterIds.includes(chapter.id);
   const revision = data.revision[subject.id];
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setEntered(true));
+    return () => cancelAnimationFrame(frame);
+  }, []);
+  const requestClose = () => {
+    if (closing) return;
+    setClosing(true);
+    window.setTimeout(onClose, 300);
+  };
   const save = () =>
     update((draft) => {
       const target = draft.subjects
@@ -565,11 +576,17 @@ function ChapterDrawer({
     });
   return (
     <div
-      className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-[2px]"
-      onClick={onClose}
+      className={cn(
+        "fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-[2px] transition-opacity duration-300",
+        closing ? "opacity-0" : "opacity-100",
+      )}
+      onClick={requestClose}
     >
       <aside
-        className="chapter-drawer h-full w-full max-w-md overflow-y-auto border-l border-white/10 bg-[#1c1c1c] p-5 text-zinc-100 shadow-2xl"
+        className={cn(
+          "chapter-drawer h-full w-full max-w-md overflow-y-auto border-l border-white/10 bg-[#1c1c1c] p-5 text-zinc-100 shadow-2xl transition-transform duration-300 ease-out motion-reduce:transition-none",
+          entered && !closing ? "translate-x-0" : "translate-x-full",
+        )}
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex justify-between gap-3">
@@ -579,7 +596,7 @@ function ChapterDrawer({
             </p>
             <h2 className="mt-1 text-2xl font-semibold">{chapter.name}</h2>
           </div>
-          <button type="button" onClick={onClose} className="text-zinc-400 hover:text-white">
+          <button type="button" onClick={requestClose} className="text-zinc-400 hover:text-white">
             <X />
           </button>
         </div>
