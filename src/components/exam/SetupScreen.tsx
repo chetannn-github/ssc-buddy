@@ -363,13 +363,13 @@ export function SetupScreen({
   if (isLoading) return <PageLoader label="Preparing your test" />;
 
   return (
-    <div className="card-surface space-y-3.5 p-3.5 sm:p-4">
+    <div className="card-surface space-y-2.5 p-3 sm:p-3.5">
       {/* Subject & chapter */}
       <section className="space-y-1.5">
         <Label className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">
           Topic
         </Label>
-        <div className="grid gap-2.5 sm:grid-cols-2">
+        <div className="grid gap-2 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Select
               value={subject}
@@ -505,7 +505,7 @@ export function SetupScreen({
         <Label className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">
           Timing
         </Label>
-        <div className="grid gap-2.5 sm:grid-cols-2">
+        <div className="grid gap-2 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Input
               inputMode="numeric"

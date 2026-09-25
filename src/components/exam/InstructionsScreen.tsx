@@ -34,30 +34,30 @@ export function InstructionsScreen({
 
   return (
     <div className="card-surface mx-auto max-w-3xl overflow-hidden">
-      <div className="border-b border-border px-6 py-5 sm:px-8">
+      <div className="border-b border-border px-5 py-4 sm:px-6">
         <p className="text-xs font-semibold tracking-[0.14em] text-primary uppercase">
           Before you begin
         </p>
-        <h2 className="mt-1 text-2xl font-semibold">Test instructions</h2>
+        <h2 className="mt-0.5 text-xl font-semibold">Test instructions</h2>
         <p className="mt-1 text-sm text-muted-foreground">{testTitle}</p>
       </div>
 
-      <div className="grid gap-3 border-b border-border bg-muted/35 p-4 sm:grid-cols-3 sm:px-8">
-        <div className="flex items-center gap-3 rounded-lg bg-background/70 p-3">
+      <div className="grid gap-2 border-b border-border bg-muted/35 p-3 sm:grid-cols-3 sm:px-6">
+        <div className="flex items-center gap-2.5 rounded-lg bg-background/70 p-2.5">
           <Clock3 className="h-5 w-5 text-primary" />
           <div>
             <p className="text-xs text-muted-foreground">Duration</p>
             <p className="text-sm font-semibold">{minutes} minutes</p>
           </div>
         </div>
-        <div className="flex items-center gap-3 rounded-lg bg-background/70 p-3">
+        <div className="flex items-center gap-2.5 rounded-lg bg-background/70 p-2.5">
           <ListChecks className="h-5 w-5 text-primary" />
           <div>
             <p className="text-xs text-muted-foreground">Questions</p>
             <p className="text-sm font-semibold">{questionCount ?? "Practice as needed"}</p>
           </div>
         </div>
-        <div className="flex items-center gap-3 rounded-lg bg-background/70 p-3">
+        <div className="flex items-center gap-2.5 rounded-lg bg-background/70 p-2.5">
           <CheckCircle2 className="h-5 w-5 text-primary" />
           <div>
             <p className="text-xs text-muted-foreground">Marking</p>
@@ -66,10 +66,10 @@ export function InstructionsScreen({
         </div>
       </div>
 
-      <div className="space-y-5 px-6 py-6 text-sm sm:px-8">
+      <div className="space-y-3.5 px-5 py-4 text-sm sm:px-6">
         <section>
           <h3 className="font-semibold">How this test works</h3>
-          <ul className="mt-2 space-y-2 text-muted-foreground">
+          <ul className="mt-1.5 space-y-1.5 text-muted-foreground">
             <li>
               • The timer starts only after you select{" "}
               <strong className="text-foreground">Start test</strong>.
@@ -87,7 +87,7 @@ export function InstructionsScreen({
         <section>
           <h3 className="font-semibold">Test appearance</h3>
           <p className="mt-1 text-sm text-muted-foreground">Choose a mode before you start.</p>
-          <div className="mt-3 flex gap-2">
+          <div className="mt-2 flex gap-2">
             <button
               type="button"
               onClick={() => selectTheme(false)}
@@ -116,14 +116,14 @@ export function InstructionsScreen({
         </section>
         <section>
           <h3 className="font-semibold">Before submitting</h3>
-          <p className="mt-2 text-muted-foreground">
+          <p className="mt-1.5 text-muted-foreground">
             Review marked and unanswered questions from the palette. You can submit anytime; when
             time ends, the test is submitted automatically.
           </p>
         </section>
       </div>
 
-      <div className="flex items-center justify-between border-t border-border px-6 py-4 sm:px-8">
+      <div className="flex items-center justify-between border-t border-border px-5 py-3 sm:px-6">
         <Button variant="ghost" onClick={onBack}>
           <ArrowLeft className="h-4 w-4" /> Back to setup
         </Button>
