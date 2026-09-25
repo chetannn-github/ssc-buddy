@@ -2,7 +2,7 @@ import { ArrowLeft, CheckCircle2, Clock3, ListChecks, Moon, Play, Sun } from "lu
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { formatMarking, type MarkingScheme } from "@/lib/exam";
+import { formatMarking, loadTestDarkMode, saveTestDarkMode, type MarkingScheme } from "@/lib/exam";
 
 type Props = {
   subject: string;
@@ -25,8 +25,12 @@ export function InstructionsScreen({
   onBack,
   onStart,
 }: Props) {
-  const [darkMode, setDarkMode] = useState<boolean | null>(null);
+  const [darkMode, setDarkMode] = useState<boolean | null>(() => loadTestDarkMode());
   const testTitle = [subject, chapter, exercise].filter(Boolean).join(" · ");
+  const selectTheme = (next: boolean) => {
+    setDarkMode(next);
+    saveTestDarkMode(next);
+  };
 
   return (
     <div className="card-surface mx-auto max-w-3xl overflow-hidden">
@@ -86,7 +90,7 @@ export function InstructionsScreen({
           <div className="mt-3 flex gap-2">
             <button
               type="button"
-              onClick={() => setDarkMode(false)}
+              onClick={() => selectTheme(false)}
               className={cn(
                 "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors",
                 darkMode === false
@@ -98,7 +102,7 @@ export function InstructionsScreen({
             </button>
             <button
               type="button"
-              onClick={() => setDarkMode(true)}
+              onClick={() => selectTheme(true)}
               className={cn(
                 "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors",
                 darkMode === true

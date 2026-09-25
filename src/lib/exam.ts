@@ -60,6 +60,7 @@ export const DEFAULT_EXERCISE = "Exercise 1";
 const HISTORY_KEY = "cbt-history";
 const SUBJECTS_KEY = "cbt-subjects";
 const MARKING_KEY = "cbt-marking";
+const TEST_THEME_KEY = "cbt-test-dark-mode";
 
 function read<T>(key: string, fallback: T): T {
   try {
@@ -88,6 +89,14 @@ export function loadMarking(): MarkingScheme | null {
 
 export function saveMarking(m: MarkingScheme) {
   write(MARKING_KEY, m);
+}
+
+export function loadTestDarkMode(): boolean | null {
+  return read<boolean | null>(TEST_THEME_KEY, null);
+}
+
+export function saveTestDarkMode(darkMode: boolean) {
+  write(TEST_THEME_KEY, darkMode);
 }
 
 /* ---------- Subjects & chapters ---------- */

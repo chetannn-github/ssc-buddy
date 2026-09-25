@@ -12,7 +12,13 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
-import { formatClock, type McqQuestion, type Option, type QuestionState } from "@/lib/exam";
+import {
+  formatClock,
+  saveTestDarkMode,
+  type McqQuestion,
+  type Option,
+  type QuestionState,
+} from "@/lib/exam";
 
 const OPTIONS: Option[] = ["A", "B", "C", "D"];
 
@@ -98,7 +104,11 @@ export function TestScreen({
   const toggleTheme = () => {
     if (themeTimer.current) clearTimeout(themeTimer.current);
     setIsThemeSwitching(true);
-    setDarkMode((current) => !current);
+    setDarkMode((current) => {
+      const next = !current;
+      saveTestDarkMode(next);
+      return next;
+    });
     themeTimer.current = setTimeout(() => setIsThemeSwitching(false), 360);
   };
 
