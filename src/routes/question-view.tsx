@@ -1,8 +1,15 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { Star } from "lucide-react";
 import { useMemo, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
-import { loadSubjects, type McqQuestion } from "@/lib/exam";
+import {
+  loadFavoriteQuestionIds,
+  loadSubjects,
+  questionFavoriteId,
+  toggleFavoriteQuestion,
+  type McqQuestion,
+} from "@/lib/exam";
 import { cn } from "@/lib/utils";
 
 type ViewerSearch = { subject: string; chapter: string; exercise: string };
@@ -19,6 +26,7 @@ export const Route = createFileRoute("/question-view")({
 function QuestionViewer() {
   const { subject: subjectName, chapter: chapterName, exercise: exerciseName } = Route.useSearch();
   const [current, setCurrent] = useState(0);
+  const [favoriteIds, setFavoriteIds] = useState(() => new Set(loadFavoriteQuestionIds()));
   const exercise = useMemo(() => {
     const subject = loadSubjects().find((item) => item.name === subjectName);
     const chapter = subject?.chapters.find((item) => item.name === chapterName);
@@ -26,6 +34,10 @@ function QuestionViewer() {
   }, [chapterName, exerciseName, subjectName]);
   const questions = exercise?.questions ?? [];
   const question = questions[current];
+  const favoriteId = question
+    ? questionFavoriteId(subjectName, chapterName, exerciseName, question, current)
+    : "";
+  const isFavorite = favoriteIds.has(favoriteId);
 
   return (
     <AppShell title="Question viewer">
@@ -66,6 +78,17 @@ function QuestionViewer() {
                 </div>
               )}
               <div className="mt-6 flex flex-wrap gap-2 border-t border-white/10 pt-4">
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "border-white/15 bg-white/5 text-zinc-200 hover:bg-white/10 hover:text-white",
+                    isFavorite && "border-amber-400/50 bg-amber-400/10 text-amber-300",
+                  )}
+                  onClick={() => setFavoriteIds(new Set(toggleFavoriteQuestion(favoriteId)))}
+                >
+                  <Star className={cn("h-4 w-4", isFavorite && "fill-current")} />
+                  {isFavorite ? "Favourite" : "Mark favourite"}
+                </Button>
                 <Button
                   variant="outline"
                   className="border-white/15 bg-white/5 text-zinc-200 hover:bg-white/10 hover:text-white"

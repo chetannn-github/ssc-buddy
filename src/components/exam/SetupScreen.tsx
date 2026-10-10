@@ -24,6 +24,7 @@ import {
   DEFAULT_EXERCISE,
   DEFAULT_MARKING,
   formatMarking,
+  loadFavoriteQuestionIds,
   loadMarking,
   loadSubjects,
   saveMarking,
@@ -137,6 +138,7 @@ export function SetupScreen({
     prefill?.questionCount ? "fixed" : "unlimited",
   );
   const [questionCount, setQuestionCount] = useState(String(prefill?.questionCount ?? 50));
+  const [questionOrder, setQuestionOrder] = useState<"sequential" | "random">("sequential");
 
   const [marking, setMarking] = useState<MarkingScheme>(DEFAULT_MARKING);
   const [editingMarking, setEditingMarking] = useState(false);
@@ -201,6 +203,34 @@ export function SetupScreen({
     !startTooHigh &&
     !countTooHigh &&
     (countMode === "unlimited" || Number(questionCount) >= 1);
+
+  const buildRandomQuestions = () => {
+    const favorites = new Set(loadFavoriteQuestionIds());
+    const pool = (orderedJsonQuestions ?? []).map((question, index) => ({ question, index }));
+    const selected: typeof pool = [];
+    const target = Math.min(parsedCount, pool.length);
+    while (selected.length < target && pool.length) {
+      const weightedTotal = pool.reduce(
+        (total, item) =>
+          total +
+          (favorites.has(`${subject}||${chapter}||${activeExerciseName}||${item.question.number ?? item.index + 1}`)
+            ? 4
+            : 1),
+        0,
+      );
+      let cursor = Math.random() * weightedTotal;
+      const picked = pool.findIndex((item) => {
+        cursor -= favorites.has(
+          `${subject}||${chapter}||${activeExerciseName}||${item.question.number ?? item.index + 1}`,
+        )
+          ? 4
+          : 1;
+        return cursor < 0;
+      });
+      selected.push(pool.splice(Math.max(0, picked), 1)[0]!);
+    }
+    return selected;
+  };
 
   const answerKeyExercises = exercises.filter((item) => !item.questions?.length);
   const questionExercises = exercises.filter((item) => item.questions?.length);
@@ -538,6 +568,7 @@ export function SetupScreen({
               min={1}
               max={maxStartNumber ?? undefined}
               value={startNumber}
+              disabled={isJsonExercise && questionOrder === "random"}
               onChange={(e) => {
                 const next = e.target.value.replace(/\D/g, "");
                 const capped = maxStartNumber
@@ -565,6 +596,8 @@ export function SetupScreen({
             >
               {startTooHigh
                 ? `This chapter has only ${chapterTotal} questions.`
+                : isJsonExercise && questionOrder === "random"
+                  ? "Random test selects questions from the entire exercise."
                 : `Numbering begins at Q${parsedStart}.` +
                   (chapterTotal ? ` Chapter total ${chapterTotal}.` : "")}
             </p>
@@ -578,11 +611,39 @@ export function SetupScreen({
           Questions
         </Label>
         <div className="flex flex-wrap gap-2">
+          {isJsonExercise && (
+            <>
+              <Button
+                type="button"
+                size="sm"
+                variant={questionOrder === "sequential" ? "default" : "outline"}
+                onClick={() => setQuestionOrder("sequential")}
+              >
+                Sequential
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={questionOrder === "random" ? "default" : "outline"}
+                onClick={() => {
+                  setQuestionOrder("random");
+                  setCountMode("fixed");
+                  setStartNumber("1");
+                  setQuestionCount((current) =>
+                    String(Math.min(Number(current) || 1, orderedJsonQuestions?.length ?? 1)),
+                  );
+                }}
+              >
+                Random
+              </Button>
+            </>
+          )}
           <Button
             type="button"
             size="sm"
             variant={countMode === "unlimited" ? "default" : "outline"}
             onClick={() => setCountMode("unlimited")}
+            disabled={isJsonExercise && questionOrder === "random"}
           >
             Unlimited
           </Button>
@@ -618,6 +679,8 @@ export function SetupScreen({
             >
               {countTooHigh
                 ? `Only ${available} questions remain (Q${parsedStart}–Q${chapterTotal}).`
+                : isJsonExercise && questionOrder === "random"
+                  ? `${parsedCount} random questions. Favourites are four times more likely to appear.`
                 : `Questions Q${parsedStart}–Q${parsedStart + parsedCount - 1}.`}
             </p>
           </div>
@@ -673,7 +736,16 @@ export function SetupScreen({
       <Button
         className="h-10 w-full sm:w-auto"
         disabled={!valid}
-        onClick={() =>
+        onClick={() => {
+          const randomSelection =
+            isJsonExercise && questionOrder === "random" ? buildRandomQuestions() : null;
+          const selectedQuestions = randomSelection
+            ? randomSelection.map((item) => item.question)
+            : isJsonExercise
+              ? countMode === "fixed"
+                ? (jsonAvailable ?? []).slice(0, parsedCount)
+                : (jsonAvailable ?? [])
+              : null;
           onStart({
             minutes: parsedMinutes,
             startNumber: parsedStart,
@@ -684,6 +756,7 @@ export function SetupScreen({
             questionCount: countMode === "fixed" ? parsedCount : null,
             maxQuestions: available,
             answerKey: (() => {
+              if (randomSelection) return randomSelection.map((item) => item.question.correctAnswer);
               if (isJsonExercise) {
                 const selected =
                   countMode === "fixed"
@@ -696,20 +769,15 @@ export function SetupScreen({
               const len = countMode === "fixed" ? parsedCount : (available ?? full.length);
               return full.slice(parsedStart - 1, parsedStart - 1 + len);
             })(),
-            questions: isJsonExercise
-              ? countMode === "fixed"
-                ? (jsonAvailable ?? []).slice(0, parsedCount)
-                : (jsonAvailable ?? [])
-              : null,
-            questionNumbers: isJsonExercise
-              ? (countMode === "fixed"
-                  ? (jsonAvailable ?? []).slice(0, parsedCount)
-                  : (jsonAvailable ?? [])
-                ).map((_, index) => parsedStart + index)
-              : null,
+            questions: selectedQuestions,
+            questionNumbers: randomSelection
+              ? randomSelection.map((item) => item.question.number ?? item.index + 1)
+              : isJsonExercise
+                ? selectedQuestions?.map((question, index) => question.number ?? parsedStart + index) ?? null
+                : null,
             darkMode: null,
           })
-        }
+        }}
       >
         Continue to instructions
       </Button>

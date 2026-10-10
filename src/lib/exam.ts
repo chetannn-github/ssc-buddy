@@ -61,6 +61,7 @@ const HISTORY_KEY = "cbt-history";
 const SUBJECTS_KEY = "cbt-subjects";
 const MARKING_KEY = "cbt-marking";
 const TEST_THEME_KEY = "cbt-test-dark-mode";
+const FAVORITE_QUESTIONS_KEY = "cbt-favorite-questions";
 
 function read<T>(key: string, fallback: T): T {
   try {
@@ -236,6 +237,35 @@ export function getExercise(
   // A named exercise must match exactly. Falling back to the first exercise
   // would apply an unrelated answer key after an exercise is deleted/renamed.
   return chapter.exercises.find((e) => e.name === exerciseName) ?? null;
+}
+
+/* ---------- Question-bank favourites ---------- */
+
+export function questionFavoriteId(
+  subject: string,
+  chapter: string,
+  exercise: string,
+  question: McqQuestion,
+  index: number,
+) {
+  return `${subject}||${chapter}||${exercise}||${question.number ?? index + 1}`;
+}
+
+export function loadFavoriteQuestionIds(): string[] {
+  return read<string[]>(FAVORITE_QUESTIONS_KEY, []);
+}
+
+export function isFavoriteQuestion(id: string): boolean {
+  return loadFavoriteQuestionIds().includes(id);
+}
+
+export function toggleFavoriteQuestion(id: string): string[] {
+  const favorites = new Set(loadFavoriteQuestionIds());
+  if (favorites.has(id)) favorites.delete(id);
+  else favorites.add(id);
+  const next = [...favorites];
+  write(FAVORITE_QUESTIONS_KEY, next);
+  return next;
 }
 
 /* ---------- History ---------- */
