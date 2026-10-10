@@ -1181,6 +1181,14 @@ export function Profile() {
           </section>
         </div>
       )}
+      {isLoggingOut && (
+        <div className="fixed inset-0 z-[100] grid place-items-center bg-[#121212] text-zinc-300">
+          <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-[#1d1d1d] px-4 py-3 shadow-2xl">
+            <LoaderCircle className="h-4 w-4 animate-spin text-emerald-400" />
+            <span className="text-sm font-medium">Signing out</span>
+          </div>
+        </div>
+      )}
     </AppShell>
   );
 }
