@@ -85,6 +85,19 @@ function snapshotLocalStorage(): Record<string, string> {
   return snapshot;
 }
 
+/** True only when this browser already contains actual study content. */
+export function hasMeaningfulLocalData() {
+  const keys = ["practice-profile", "cbt-history", "cbt-subjects", "ssc-buddy-tracker"];
+  return keys.some((key) => {
+    const raw = localStorage.getItem(key);
+    if (!raw) return false;
+    try {
+      const value = JSON.parse(raw) as unknown;
+      return Array.isArray(value) ? value.length > 0 : Boolean(value);
+    } catch { return true; }
+  });
+}
+
 function restoreSnapshot(snapshot: Record<string, string>) {
   const retained: Array<readonly [string, string | null]> = [...FIREBASE_LOCAL_KEYS].map((key) => [key, localStorage.getItem(key)] as const);
   for (let index = 0; index < localStorage.length; index += 1) {
@@ -231,6 +244,19 @@ export function startLocalSync(user: User) {
     window.clearInterval(timer);
     window.removeEventListener("ssc-study-data-changed", onDataChange);
   };
+}
+
+/** Restore the last successfully-uploaded browser snapshot after an accidental empty restore. */
+export function recoverLastLocalSnapshot() {
+  if (hasMeaningfulLocalData()) return false;
+  try {
+    const value = JSON.parse(localStorage.getItem("ssc-buddy-firebase-last-sync") ?? "null") as unknown;
+    if (!value || typeof value !== "object") return false;
+    const snapshot = value as Record<string, string>;
+    if (!Object.keys(snapshot).some((key) => ["practice-profile", "cbt-history", "cbt-subjects", "ssc-buddy-tracker"].includes(key))) return false;
+    restoreSnapshot(snapshot);
+    return true;
+  } catch { return false; }
 }
 
 export async function deleteFirebaseCloudData(user: User) {

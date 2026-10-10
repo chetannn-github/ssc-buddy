@@ -15,11 +15,13 @@ import { MotivationalMusic, MotivationalVideos } from "@/components/layout/AppSh
 import {
   downloadCloudSnapshot,
   hasCloudSnapshot,
+  hasMeaningfulLocalData,
   isFirebaseConfigured,
   observeFirebaseUser,
   startLocalSync,
   uploadLocalSnapshot,
   watchCloudSnapshot,
+  recoverLastLocalSnapshot,
 } from "@/lib/firebase-sync";
 import type { User } from "firebase/auth";
 
@@ -150,6 +152,7 @@ function RootComponent() {
 
   useEffect(() => {
     if (!isFirebaseConfigured) return;
+    recoverLastLocalSnapshot();
     return observeFirebaseUser(setSyncUser);
   }, []);
 
@@ -160,13 +163,14 @@ function RootComponent() {
       try {
         const hydrationKey = `ssc-buddy-firebase-hydrated:${syncUser.uid}`;
         if (sessionStorage.getItem(hydrationKey) !== "1") {
-          if (await hasCloudSnapshot(syncUser)) await downloadCloudSnapshot(syncUser);
+          if (!hasMeaningfulLocalData() && await hasCloudSnapshot(syncUser)) await downloadCloudSnapshot(syncUser);
           else await uploadLocalSnapshot(syncUser);
           sessionStorage.setItem(hydrationKey, "1");
         }
         if (cancelled) return;
         const stopLocalSync = startLocalSync(syncUser);
-        const stopCloudWatch = watchCloudSnapshot(syncUser, () => { void downloadCloudSnapshot(syncUser); });
+        // Don't overwrite a live browser from a remote snapshot. It can be older or empty.
+        const stopCloudWatch = watchCloudSnapshot(syncUser, () => undefined);
         syncCleanup.current = () => { stopLocalSync(); stopCloudWatch(); };
       } catch {
         // The in-browser cache remains available, and a later session retries cloud sync.

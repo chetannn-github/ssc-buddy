@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   downloadCloudSnapshot,
   hasCloudSnapshot,
+  hasMeaningfulLocalData,
   isFirebaseConfigured,
   observeFirebaseUser,
   signInFirebase,
@@ -35,7 +36,7 @@ function AuthPage() {
   }, [navigate]);
 
   const finishAuthentication = async (user: Awaited<ReturnType<typeof signInFirebase>>) => {
-    if (await hasCloudSnapshot(user)) await downloadCloudSnapshot(user);
+    if (!hasMeaningfulLocalData() && await hasCloudSnapshot(user)) await downloadCloudSnapshot(user);
     await navigate({ to: "/", replace: true });
   };
 

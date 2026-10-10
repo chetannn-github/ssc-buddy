@@ -1,0 +1,11 @@
+{
+  "expo": {
+    "name": "SSC Buddy Tasks",
+    "slug": "ssc-buddy-tasks",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "android": { "package": "com.sscbuddy.tasks" },
+    "ios": { "bundleIdentifier": "com.sscbuddy.tasks" }
+  }
+}
