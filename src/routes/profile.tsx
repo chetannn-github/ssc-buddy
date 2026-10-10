@@ -20,7 +20,14 @@ import { Input } from "@/components/ui/input";
 import { aggregateRecords } from "@/lib/analytics";
 import { loadHistory, type TestRecord } from "@/lib/exam";
 import { loadPracticeProfile, savePracticeProfile, type PracticeProfile } from "@/lib/profile";
-import { downloadPracticeBackup, restorePracticeBackup } from "@/lib/backup";
+import {
+  exportToJsonBin,
+  importFromJsonBin,
+  loadJsonBinConfig,
+  restorePracticeBackup,
+  saveJsonBinConfig,
+  type JsonBinConfig,
+} from "@/lib/backup";
 import {
   overallSyllabus,
   pct,
@@ -728,6 +735,11 @@ export function Profile() {
   });
   const [editingProfile, setEditingProfile] = useState(false);
   const [importingData, setImportingData] = useState(false);
+  const [jsonBinOpen, setJsonBinOpen] = useState(false);
+  const [jsonBinMode, setJsonBinMode] = useState<"export" | "import">("export");
+  const [jsonBinConfig, setJsonBinConfig] = useState<JsonBinConfig>({ masterKey: "" });
+  const [jsonBinBusy, setJsonBinBusy] = useState(false);
+  const [jsonBinMessage, setJsonBinMessage] = useState("");
   const [previewingAvatar, setPreviewingAvatar] = useState(false);
   const [isAvatarChanging, setIsAvatarChanging] = useState(false);
   const [loggingMockTest, setLoggingMockTest] = useState(false);
@@ -879,6 +891,35 @@ export function Profile() {
       setImportMessage("Choose a valid full backup or Tracker JSON file.");
     }
   };
+  const openJsonBin = (mode: "export" | "import") => {
+    setJsonBinMode(mode);
+    setJsonBinConfig(loadJsonBinConfig() ?? { masterKey: "" });
+    setJsonBinMessage("");
+    setJsonBinOpen(true);
+  };
+  const syncJsonBin = async () => {
+    if (!jsonBinConfig.masterKey.trim()) {
+      setJsonBinMessage("Master key is required.");
+      return;
+    }
+    setJsonBinBusy(true);
+    setJsonBinMessage("");
+    try {
+      saveJsonBinConfig(jsonBinConfig);
+      if (jsonBinMode === "export") {
+        const id = await exportToJsonBin(jsonBinConfig);
+        setJsonBinConfig((current) => ({ ...current, binId: id }));
+        setJsonBinMessage("Cloud backup saved. Local study data was cleared.");
+      } else {
+        await importFromJsonBin(jsonBinConfig);
+        window.location.reload();
+      }
+    } catch (error) {
+      setJsonBinMessage(error instanceof Error ? error.message : "Cloud sync failed.");
+    } finally {
+      setJsonBinBusy(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -977,7 +1018,7 @@ export function Profile() {
                   type="button"
                   variant="ghost"
                   className="h-9 gap-1.5 px-2.5 text-sm text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
-                  onClick={downloadPracticeBackup}
+                  onClick={() => openJsonBin("export")}
                 >
                   <Download className="h-3.5 w-3.5" /> Export
                 </Button>
@@ -985,10 +1026,7 @@ export function Profile() {
                   type="button"
                   variant="ghost"
                   className="h-9 gap-1.5 px-2.5 text-sm text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
-                  onClick={() => {
-                    setImportMessage("");
-                    setImportingData(true);
-                  }}
+                  onClick={() => openJsonBin("import")}
                 >
                   <Upload className="h-3.5 w-3.5" /> Import
                 </Button>
@@ -1097,6 +1135,69 @@ export function Profile() {
               </Button>
               <Button className="bg-emerald-600 hover:bg-emerald-500" onClick={saveProfile}>
                 <Save className="h-4 w-4" /> Save profile
+              </Button>
+            </div>
+          </section>
+        </div>
+      )}
+      {jsonBinOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 p-4 backdrop-blur-md">
+          <section className="w-full max-w-md rounded-2xl border border-white/10 bg-[#1e1e1e] p-6 text-zinc-100 shadow-2xl">
+            <h2 className="text-xl font-semibold">
+              {jsonBinMode === "export" ? "Export to cloud" : "Import from cloud"}
+            </h2>
+            <p className="mt-1 text-sm text-zinc-400">
+              {jsonBinMode === "export"
+                ? "Saves a full backup to your private JSONBin, deletes the older cloud backup, then clears local study data."
+                : "Fetches your private cloud backup and replaces local study data."}
+            </p>
+            <div className="mt-5 space-y-3">
+              <label className="block text-sm text-zinc-300">
+                JSONBin master key
+                <Input
+                  type="password"
+                  value={jsonBinConfig.masterKey}
+                  onChange={(event) => setJsonBinConfig((current) => ({ ...current, masterKey: event.target.value }))}
+                  className="mt-1.5 border-white/10 bg-[#151515] text-zinc-100"
+                  autoComplete="off"
+                />
+              </label>
+              <label className="block text-sm text-zinc-300">
+                Access key <span className="text-zinc-500">(optional for import)</span>
+                <Input
+                  type="password"
+                  value={jsonBinConfig.accessKey ?? ""}
+                  onChange={(event) => setJsonBinConfig((current) => {
+                    const { accessKey: _accessKey, ...rest } = current;
+                    return event.target.value ? { ...rest, accessKey: event.target.value } : rest;
+                  })}
+                  className="mt-1.5 border-white/10 bg-[#151515] text-zinc-100"
+                  autoComplete="off"
+                />
+              </label>
+              {jsonBinMode === "import" && (
+                <label className="block text-sm text-zinc-300">
+                  Cloud backup ID
+                  <Input
+                    value={jsonBinConfig.binId ?? ""}
+                    onChange={(event) => setJsonBinConfig((current) => {
+                      const { binId: _binId, ...rest } = current;
+                      return event.target.value ? { ...rest, binId: event.target.value } : rest;
+                    })}
+                    className="mt-1.5 border-white/10 bg-[#151515] text-zinc-100"
+                    placeholder="JSONBin ID"
+                    autoComplete="off"
+                  />
+                </label>
+              )}
+              {jsonBinMessage && <p className="text-sm text-amber-300">{jsonBinMessage}</p>}
+            </div>
+            <div className="mt-6 flex justify-end gap-2">
+              <Button variant="outline" className="border-white/10 bg-white/5 text-zinc-200" onClick={() => setJsonBinOpen(false)} disabled={jsonBinBusy}>
+                Cancel
+              </Button>
+              <Button className="bg-emerald-600 hover:bg-emerald-500" onClick={() => void syncJsonBin()} disabled={jsonBinBusy}>
+                {jsonBinBusy ? "Working…" : jsonBinMode === "export" ? "Export & clear local" : "Import & replace local"}
               </Button>
             </div>
           </section>

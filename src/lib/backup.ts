@@ -42,6 +42,9 @@ type PracticeBackup = {
 const VIDEO_LIKES_KEY = "ssc-buddy-liked-videos";
 const MUSIC_LIKES_KEY = "ssc-buddy-liked-music";
 const MANIFESTATION_COMPLETION_KEY = "ssc-buddy-manifestation-completed";
+const JSONBIN_CONFIG_KEY = "ssc-buddy-jsonbin-config";
+
+export type JsonBinConfig = { masterKey: string; accessKey?: string; binId?: string };
 
 function saveStringList(key: string, values: string[]) {
   localStorage.setItem(key, JSON.stringify([...new Set(values)]));
@@ -51,9 +54,65 @@ function snapshotLocalStorage(): Record<string, string> {
   const storage: Record<string, string> = {};
   for (let index = 0; index < localStorage.length; index += 1) {
     const key = localStorage.key(index);
-    if (key !== null) storage[key] = localStorage.getItem(key) ?? "";
+    if (key !== null && key !== JSONBIN_CONFIG_KEY) storage[key] = localStorage.getItem(key) ?? "";
   }
   return storage;
+}
+
+function restoreStorageSnapshot(storage: Record<string, string>) {
+  const config = localStorage.getItem(JSONBIN_CONFIG_KEY);
+  localStorage.clear();
+  if (config) localStorage.setItem(JSONBIN_CONFIG_KEY, config);
+  Object.entries(storage).forEach(([key, value]) => localStorage.setItem(key, value));
+  window.dispatchEvent(new Event("cbt-backup-restored"));
+}
+
+export function loadJsonBinConfig(): JsonBinConfig | null {
+  try {
+    const value = JSON.parse(localStorage.getItem(JSONBIN_CONFIG_KEY) ?? "null") as Partial<JsonBinConfig> | null;
+    return value && typeof value.masterKey === "string" && value.masterKey.trim()
+      ? { masterKey: value.masterKey.trim(), ...(value.accessKey?.trim() ? { accessKey: value.accessKey.trim() } : {}), ...(value.binId?.trim() ? { binId: value.binId.trim() } : {}) }
+      : null;
+  } catch { return null; }
+}
+
+export function saveJsonBinConfig(config: JsonBinConfig) {
+  localStorage.setItem(JSONBIN_CONFIG_KEY, JSON.stringify(config));
+}
+
+export async function exportToJsonBin(config: JsonBinConfig) {
+  const storage = snapshotLocalStorage();
+  const create = await fetch("https://api.jsonbin.io/v3/b", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Master-Key": config.masterKey, "X-Bin-Private": "true", "X-Bin-Name": "ssc-buddy-backup" },
+    body: JSON.stringify({ format: "ssc-buddy-storage", version: 1, exportedAt: new Date().toISOString(), storage }),
+  });
+  const created = (await create.json()) as { metadata?: { id?: string }; message?: string };
+  const binId = created.metadata?.id;
+  if (!create.ok || !binId) throw new Error(created.message || "Cloud export failed.");
+  if (config.binId && config.binId !== binId) {
+    const remove = await fetch(`https://api.jsonbin.io/v3/b/${encodeURIComponent(config.binId)}`, {
+      method: "DELETE", headers: { "X-Master-Key": config.masterKey },
+    });
+    if (!remove.ok) throw new Error("New backup saved, but old cloud backup could not be deleted.");
+  }
+  saveJsonBinConfig({ ...config, binId });
+  restoreStorageSnapshot({});
+  return binId;
+}
+
+export async function importFromJsonBin(config: JsonBinConfig) {
+  if (!config.binId) throw new Error("Enter the cloud backup ID first.");
+  const readKey = config.accessKey || config.masterKey;
+  const response = await fetch(`https://api.jsonbin.io/v3/b/${encodeURIComponent(config.binId)}/latest`, {
+    headers: config.accessKey ? { "X-Access-Key": readKey } : { "X-Master-Key": readKey },
+  });
+  const payload = (await response.json()) as { record?: unknown; message?: string };
+  const record = payload.record as { storage?: unknown } | undefined;
+  if (!response.ok || !record || !isStorageSnapshot(record.storage))
+    throw new Error(payload.message || "Cloud backup could not be read.");
+  saveJsonBinConfig(config);
+  restoreStorageSnapshot(record.storage);
 }
 
 function isStorageSnapshot(value: unknown): value is Record<string, string> {
@@ -111,9 +170,7 @@ export async function restorePracticeBackup(file: File) {
   if (parsed.version === 4) {
     if (!isStorageSnapshot(parsed.storage))
       throw new Error("This full backup has an invalid local storage snapshot.");
-    localStorage.clear();
-    Object.entries(parsed.storage).forEach(([key, value]) => localStorage.setItem(key, value));
-    window.dispatchEvent(new Event("cbt-backup-restored"));
+    restoreStorageSnapshot(parsed.storage);
     return loadPracticeProfile();
   }
 
