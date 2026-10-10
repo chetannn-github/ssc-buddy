@@ -467,14 +467,14 @@ function ChapterRow({
         dragging && "scale-[0.98] border-dashed border-accent-blue/50 bg-accent-blue/10 opacity-45",
       )}
     >
-      <div className="min-w-0 flex-1">
-        <button type="button" onClick={onOpen} className="min-w-0 text-left">
+      <button type="button" onClick={onOpen} className="min-w-0 flex-1 text-left">
+        <div className="min-w-0">
           <span className="truncate text-sm font-medium">{chapter.name}</span>
-        </button>
-        <button type="button" onClick={onOpen} className="mt-1 block w-full text-left">
+          <div className="mt-1">
           <Bar value={pct(done, total)} tone={mode === "revision" ? "green" : "blue"} />
-        </button>
-      </div>
+          </div>
+        </div>
+      </button>
       <span className="w-18 shrink-0 text-right font-mono text-xs text-muted-foreground">
         {done}/{total}
       </span>

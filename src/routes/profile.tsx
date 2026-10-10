@@ -309,7 +309,7 @@ function ActivityHeatmap({
         <div>
           <div
             ref={heatmapScrollRef}
-            className="overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            className="overflow-x-auto overflow-y-visible pt-8 pb-2 [scrollbar-width:thin] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-600 [&::-webkit-scrollbar-track]:bg-zinc-800 sm:[scrollbar-width:none] sm:[&::-webkit-scrollbar]:hidden"
           >
             <div className="flex w-max items-start gap-2.5 sm:w-full">
               {months.map((month) => (
@@ -318,7 +318,7 @@ function ActivityHeatmap({
                     className="grid grid-flow-col grid-rows-7 gap-[3px]"
                     style={{ gridTemplateColumns: "repeat(5, minmax(0, 1fr))" }}
                   >
-                    {month.days.map(({ date, value, maximum }) => {
+                    {month.days.map(({ date, value, maximum }, dayIndex) => {
                       const intensity =
                         value === 0 ? 0 : Math.min(4, Math.ceil((value / maximum) * 4));
                       return (
@@ -336,7 +336,10 @@ function ActivityHeatmap({
                             intensity === 4 && "bg-emerald-700",
                           )}
                         >
-                          <span className="pointer-events-none absolute bottom-[calc(100%+0.45rem)] left-1/2 z-20 hidden -translate-x-1/2 whitespace-nowrap rounded-md border border-white/10 bg-[#1d1d1d] px-2 py-1 text-[10px] font-medium text-zinc-200 shadow-lg group-hover:block group-focus-visible:block">
+                          <span className={cn(
+                            "pointer-events-none absolute bottom-[calc(100%+0.45rem)] z-20 hidden whitespace-nowrap rounded-md border border-white/10 bg-[#1d1d1d] px-2 py-1 text-[10px] font-medium text-zinc-200 shadow-lg group-hover:block group-focus-visible:block",
+                            dayIndex >= month.days.length - 2 ? "right-0" : "left-0",
+                          )}>
                             {value} activit{value === 1 ? "y" : "ies"} on{" "}
                             {formatHeatmapTooltipDate(date)}
                           </span>
@@ -698,6 +701,7 @@ export function Profile() {
   const [editingProfile, setEditingProfile] = useState(false);
   const [importingData, setImportingData] = useState(false);
   const [previewingAvatar, setPreviewingAvatar] = useState(false);
+  const [isAvatarChanging, setIsAvatarChanging] = useState(false);
   const [loggingMockTest, setLoggingMockTest] = useState(false);
   const [avatarFiles, setAvatarFiles] = useState<string[]>([]);
   const [nameDraft, setNameDraft] = useState("");
@@ -828,6 +832,8 @@ export function Profile() {
     };
     savePracticeProfile(next);
     setProfile(next);
+    setIsAvatarChanging(true);
+    window.setTimeout(() => setIsAvatarChanging(false), 550);
   };
   const importJson = async (file: File) => {
     try {
@@ -889,7 +895,7 @@ export function Profile() {
                 disabled={avatarFiles.length < 2}
                 aria-label="Change profile image"
               >
-                <RefreshCw className="h-3.5 w-3.5" />
+                <RefreshCw className={cn("h-3.5 w-3.5", isAvatarChanging && "animate-spin")} />
               </Button>
             </div>
             <div className="min-w-0 flex-1">

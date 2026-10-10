@@ -9,14 +9,13 @@ import {
   FilePenLine,
   Flame,
   GraduationCap,
+  Heart,
   ListTodo,
   Minimize2,
   Music2,
   Pause,
   Play,
   Repeat2,
-  RotateCcw,
-  RotateCw,
   Route as RouteIcon,
   Upload,
   X,
@@ -47,6 +46,27 @@ const nav = [
 ] as const;
 
 const MANIFESTATION_COMPLETION_KEY = "ssc-buddy-manifestation-completed";
+const VIDEO_LIKES_KEY = "ssc-buddy-liked-videos";
+const MUSIC_LIKES_KEY = "ssc-buddy-liked-music";
+
+function loadLikes(key: string) {
+  try {
+    const saved: unknown = JSON.parse(localStorage.getItem(key) ?? "[]");
+    return new Set(Array.isArray(saved) ? saved.filter((item): item is string => typeof item === "string") : []);
+  } catch {
+    return new Set<string>();
+  }
+}
+
+function saveLikes(key: string, likes: Set<string>) {
+  try { localStorage.setItem(key, JSON.stringify([...likes])); } catch { /* optional */ }
+}
+
+function weightedPick(items: string[], likes: Set<string>) {
+  if (!items.length) return null;
+  let cursor = Math.random() * items.reduce((sum, item) => sum + (likes.has(item) ? 4 : 1), 0);
+  return items.find((item) => ((cursor -= likes.has(item) ? 4 : 1) < 0)) ?? items[0] ?? null;
+}
 
 function localDateKey() {
   const now = new Date();
@@ -304,6 +324,7 @@ export function MotivationalVideos({
 }) {
   const [videos, setVideos] = useState<string[]>([]);
   const [selectedVideo, setSelectedVideo] = useState<string | null>(null);
+  const [likedVideos, setLikedVideos] = useState(() => loadLikes(VIDEO_LIKES_KEY));
   const [isPlaying, setIsPlaying] = useState(true);
   const [playbackOverlay, setPlaybackOverlay] = useState<"play" | "pause" | null>(null);
   const [videoDirection, setVideoDirection] = useState<"next" | "previous">("next");
@@ -314,6 +335,7 @@ export function MotivationalVideos({
   const didSwipe = useRef(false);
   const overlayTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reelTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     onOpen();
@@ -340,9 +362,7 @@ export function MotivationalVideos({
       .then((files) => {
         if (!active) return;
         setVideos(files);
-        setSelectedVideo(
-          files.length ? (files[Math.floor(Math.random() * files.length)] ?? null) : null,
-        );
+        setSelectedVideo(weightedPick(files, loadLikes(VIDEO_LIKES_KEY)));
       })
       .catch(() => active && setVideos([]));
     return () => {
@@ -366,11 +386,21 @@ export function MotivationalVideos({
     if (overlayTimer.current) clearTimeout(overlayTimer.current);
     overlayTimer.current = setTimeout(() => setPlaybackOverlay(null), 650);
   };
+  const toggleLike = () => {
+    if (!selectedVideo) return;
+    setLikedVideos((current) => {
+      const next = new Set(current);
+      if (next.has(selectedVideo)) next.delete(selectedVideo); else next.add(selectedVideo);
+      saveLikes(VIDEO_LIKES_KEY, next);
+      return next;
+    });
+  };
 
   useEffect(
     () => () => {
       if (overlayTimer.current) clearTimeout(overlayTimer.current);
       if (reelTimer.current) clearTimeout(reelTimer.current);
+      if (longPressTimer.current) clearTimeout(longPressTimer.current);
     },
     [],
   );
@@ -408,8 +438,13 @@ export function MotivationalVideos({
             onTouchStart={(event) => {
               swipeStartY.current = event.touches[0]?.clientY ?? null;
               setIsDraggingReel(true);
+              if (longPressTimer.current) clearTimeout(longPressTimer.current);
+              longPressTimer.current = setTimeout(() => {
+                if (videoRef.current) videoRef.current.playbackRate = 2;
+              }, 450);
             }}
             onTouchMove={(event) => {
+              if (longPressTimer.current) clearTimeout(longPressTimer.current);
               const start = swipeStartY.current;
               const current = event.touches[0]?.clientY;
               if (start === null || current === undefined) return;
@@ -421,6 +456,8 @@ export function MotivationalVideos({
               );
             }}
             onTouchEnd={(event) => {
+              if (longPressTimer.current) clearTimeout(longPressTimer.current);
+              if (videoRef.current) videoRef.current.playbackRate = 1;
               const start = swipeStartY.current;
               swipeStartY.current = null;
               const end = event.changedTouches[0]?.clientY;
@@ -439,6 +476,12 @@ export function MotivationalVideos({
                 showVideo(direction);
                 setDragOffset(0);
               }, 220);
+            }}
+            onTouchCancel={() => {
+              if (longPressTimer.current) clearTimeout(longPressTimer.current);
+              if (videoRef.current) videoRef.current.playbackRate = 1;
+              setIsDraggingReel(false);
+              setDragOffset(0);
             }}
           >
             <div
@@ -465,6 +508,7 @@ export function MotivationalVideos({
                   }
                   togglePlayback();
                 }}
+                onDoubleClick={toggleLike}
                 onPlay={() => setIsPlaying(true)}
                 onPause={() => setIsPlaying(false)}
               >
@@ -483,7 +527,15 @@ export function MotivationalVideos({
                 </span>
               </div>
             )}
-            <div className="pointer-events-none absolute top-1/2 right-3 flex -translate-y-1/2 flex-col gap-3 opacity-0 transition-opacity group-hover:opacity-100 sm:right-5">
+            <div className="pointer-events-none absolute top-1/2 right-3 flex -translate-y-1/2 flex-col gap-3 opacity-100 transition-opacity sm:right-5 sm:opacity-0 sm:group-hover:opacity-100">
+              <button
+                type="button"
+                onClick={toggleLike}
+                aria-label={likedVideos.has(selectedVideo) ? "Unlike video" : "Like video"}
+                className={cn("pointer-events-auto grid h-11 w-11 place-items-center rounded-full bg-black/50 backdrop-blur hover:bg-black/80", likedVideos.has(selectedVideo) ? "text-red-400" : "text-white")}
+              >
+                <Heart className={cn("h-5 w-5", likedVideos.has(selectedVideo) && "fill-current")} />
+              </button>
               {videos.length > 1 && (
                 <>
                   <button
@@ -588,6 +640,7 @@ function embeddedCoverArt(bytes: Uint8Array): Blob | null {
 export function MotivationalMusic({ onClose }: { onClose: () => void }) {
   const [tracks, setTracks] = useState<string[]>([]);
   const [selectedTrack, setSelectedTrack] = useState<string | null>(null);
+  const [likedTracks, setLikedTracks] = useState(() => loadLikes(MUSIC_LIKES_KEY));
   const [minimized, setMinimized] = useState(false);
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -609,14 +662,10 @@ export function MotivationalMusic({ onClose }: { onClose: () => void }) {
       .then((files) => {
         if (!active) return;
         setTracks(files);
-        const playlist = files[0] ? playlistName(files[0]) : "";
-        const initialTracks = files.filter((file) => playlistName(file) === playlist);
+        const initial = weightedPick(files, loadLikes(MUSIC_LIKES_KEY));
+        const playlist = initial ? playlistName(initial) : "";
         setSelectedPlaylist(playlist);
-        setSelectedTrack(
-          initialTracks.length
-            ? (initialTracks[Math.floor(Math.random() * initialTracks.length)] ?? null)
-            : null,
-        );
+        setSelectedTrack(initial);
       })
       .catch(() => active && setTracks([]));
     return () => {
@@ -680,13 +729,14 @@ export function MotivationalMusic({ onClose }: { onClose: () => void }) {
     if (audio.paused) void audio.play();
     else audio.pause();
   };
-  const seek = (seconds: number) => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    audio.currentTime = Math.max(
-      0,
-      Math.min(audio.duration || Infinity, audio.currentTime + seconds),
-    );
+  const toggleTrackLike = () => {
+    if (!selectedTrack) return;
+    setLikedTracks((current) => {
+      const next = new Set(current);
+      if (next.has(selectedTrack)) next.delete(selectedTrack); else next.add(selectedTrack);
+      saveLikes(MUSIC_LIKES_KEY, next);
+      return next;
+    });
   };
   const handleRingPointerDown = (event: PointerEvent<HTMLButtonElement>) => {
     const audio = audioRef.current;
@@ -832,6 +882,7 @@ export function MotivationalMusic({ onClose }: { onClose: () => void }) {
               <button
                 type="button"
                 onPointerDown={handleRingPointerDown}
+                onDoubleClick={toggleTrackLike}
                 className="relative grid h-24 w-24 touch-none select-none place-items-center overflow-visible rounded-full p-[3px] text-zinc-100 transition-transform hover:scale-105"
                 style={{
                   background: `conic-gradient(#ef4444 ${playbackPercent}%, rgba(255,255,255,0.12) 0)`,
@@ -866,11 +917,11 @@ export function MotivationalMusic({ onClose }: { onClose: () => void }) {
               <div className="mt-5 flex items-center justify-center gap-3">
                 <button
                   type="button"
-                  onClick={() => seek(-10)}
-                  aria-label="Back 10 seconds"
-                  className="grid h-10 w-10 place-items-center rounded-full bg-white/[0.06] text-zinc-200 hover:bg-white/10"
+                  onClick={toggleTrackLike}
+                  aria-label={likedTracks.has(selectedTrack ?? "") ? "Unlike song" : "Like song"}
+                  className={cn("grid h-10 w-10 place-items-center rounded-full bg-white/[0.06] hover:bg-white/10", likedTracks.has(selectedTrack ?? "") ? "text-red-400" : "text-zinc-200")}
                 >
-                  <RotateCcw className="h-4 w-4" />
+                  <Heart className={cn("h-4 w-4", likedTracks.has(selectedTrack ?? "") && "fill-current")} />
                 </button>
                 <button
                   type="button"
@@ -906,14 +957,6 @@ export function MotivationalMusic({ onClose }: { onClose: () => void }) {
                     <ChevronRight className="h-5 w-5" />
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={() => seek(10)}
-                  aria-label="Forward 10 seconds"
-                  className="grid h-10 w-10 place-items-center rounded-full bg-white/[0.06] text-zinc-200 hover:bg-white/10"
-                >
-                  <RotateCw className="h-4 w-4" />
-                </button>
               </div>
             </div>
             <div className="flex min-w-0 max-h-72 flex-col sm:order-1">
