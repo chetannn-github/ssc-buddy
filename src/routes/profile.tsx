@@ -311,11 +311,11 @@ function ActivityHeatmap({
         </p>
       </div>
 
-      <div className="mt-5">
+      <div className="mt-2.5">
         <div>
           <div
             ref={heatmapScrollRef}
-            className="overflow-x-auto overflow-y-visible pt-8 pb-2 [scrollbar-width:thin] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-600 [&::-webkit-scrollbar-track]:bg-zinc-800 sm:[scrollbar-width:none] sm:[&::-webkit-scrollbar]:hidden"
+            className="overflow-x-auto overflow-y-visible pt-1 pb-1.5 [scrollbar-width:thin] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-600 [&::-webkit-scrollbar-track]:bg-zinc-800 sm:[scrollbar-width:none] sm:[&::-webkit-scrollbar]:hidden"
           >
             <div className="flex w-max items-start gap-2.5 sm:w-full">
               {months.map((month) => (
