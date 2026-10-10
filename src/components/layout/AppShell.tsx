@@ -992,18 +992,22 @@ export function MotivationalMusic({ onClose }: { onClose: () => void }) {
                 )}
               </div>
             </div>
-            <div className="flex min-w-0 max-h-72 flex-col sm:order-1">
-              <div className="flex min-w-0 max-w-full gap-1 overflow-x-auto pb-2">
+            <div className="flex min-w-0 max-h-72 flex-col rounded-xl border border-white/[0.08] bg-[#121212] p-2 sm:order-1">
+              <div className="mb-2 flex items-center gap-2 px-1">
+                <span className="text-[10px] font-semibold tracking-[0.14em] text-zinc-500 uppercase">Playlists</span>
+                <span className="h-px flex-1 bg-white/[0.07]" />
+              </div>
+              <div className="flex min-w-0 max-w-full flex-wrap gap-1.5 border-b border-white/[0.07] pb-2">
                 {playlists.map((playlist) => (
                   <button
                     key={playlist}
                     type="button"
                     onClick={() => choosePlaylist(playlist)}
                     className={cn(
-                      "shrink-0 rounded-md px-2 py-1 text-[10px] transition-colors",
+                      "min-w-0 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors",
                       selectedPlaylist === playlist
-                        ? "bg-white/10 text-white"
-                        : "text-zinc-500 hover:text-zinc-200",
+                        ? "border-red-400/30 bg-red-500/15 text-red-100 shadow-[0_0_16px_rgba(239,68,68,0.08)]"
+                        : "border-transparent bg-white/[0.04] text-zinc-400 hover:border-white/10 hover:bg-white/[0.08] hover:text-zinc-100",
                     )}
                   >
                     {playlist}
