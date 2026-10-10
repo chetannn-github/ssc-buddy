@@ -47,3 +47,8 @@ export function savePracticeProfile(profile: PracticeProfile) {
   );
   window.dispatchEvent(new Event("cbt-profile-updated"));
 }
+
+export function clearPracticeProfile() {
+  localStorage.removeItem(PROFILE_KEY);
+  window.dispatchEvent(new Event("cbt-profile-updated"));
+}

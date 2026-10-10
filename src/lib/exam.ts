@@ -123,6 +123,14 @@ export function saveTestDarkMode(darkMode: boolean) {
   write(TEST_THEME_KEY, darkMode);
 }
 
+export function clearTestDarkMode() {
+  try {
+    localStorage.removeItem(TEST_THEME_KEY);
+  } catch {
+    /* storage unavailable */
+  }
+}
+
 /* ---------- Subjects & chapters ---------- */
 
 type RawQuestion = Omit<McqQuestion, "id"> & { id?: string };
@@ -312,6 +320,10 @@ export function questionFavoriteId(
 
 export function loadFavoriteQuestionIds(): string[] {
   return read<string[]>(FAVORITE_QUESTIONS_KEY, []);
+}
+
+export function saveFavoriteQuestionIds(ids: string[]) {
+  write(FAVORITE_QUESTIONS_KEY, [...new Set(ids)]);
 }
 
 export function isFavoriteQuestion(id: string): boolean {
