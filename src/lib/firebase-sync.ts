@@ -4,6 +4,8 @@ import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  GoogleAuthProvider,
+  signInWithPopup,
   signOut,
   type Auth,
   type User,
@@ -68,7 +70,15 @@ function snapshotLocalStorage(): Record<string, string> {
   const snapshot: Record<string, string> = {};
   for (let index = 0; index < localStorage.length; index += 1) {
     const key = localStorage.key(index);
-    if (key && !FIREBASE_LOCAL_KEYS.has(key) && key !== "ssc-buddy-jsonbin-config") {
+    // Firebase Auth/Firestore keep browser-specific tokens and caches in localStorage.
+    // Syncing them across devices causes an auth/cache write loop and repeated reloads.
+    if (
+      key &&
+      !FIREBASE_LOCAL_KEYS.has(key) &&
+      key !== "ssc-buddy-jsonbin-config" &&
+      !key.startsWith("firebase:") &&
+      !key.startsWith("firestore_")
+    ) {
       snapshot[key] = localStorage.getItem(key) ?? "";
     }
   }
@@ -76,7 +86,11 @@ function snapshotLocalStorage(): Record<string, string> {
 }
 
 function restoreSnapshot(snapshot: Record<string, string>) {
-  const retained = [...FIREBASE_LOCAL_KEYS].map((key) => [key, localStorage.getItem(key)] as const);
+  const retained: Array<readonly [string, string | null]> = [...FIREBASE_LOCAL_KEYS].map((key) => [key, localStorage.getItem(key)] as const);
+  for (let index = 0; index < localStorage.length; index += 1) {
+    const key = localStorage.key(index);
+    if (key?.startsWith("firebase:") || key?.startsWith("firestore_")) retained.push([key, localStorage.getItem(key)] as const);
+  }
   localStorage.clear();
   retained.forEach(([key, value]) => {
     if (value) localStorage.setItem(key, value);
@@ -130,6 +144,13 @@ export async function signInFirebase(email: string, password: string, createAcco
     ? await createUserWithEmailAndPassword(authValue, email, password)
     : await signInWithEmailAndPassword(authValue, email, password);
   return result.user;
+}
+
+export async function signInWithGoogleFirebase() {
+  const { auth: authValue } = services();
+  const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: "select_account" });
+  return (await signInWithPopup(authValue, provider)).user;
 }
 
 export async function signOutFirebase() {

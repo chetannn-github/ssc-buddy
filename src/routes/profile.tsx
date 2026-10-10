@@ -27,6 +27,7 @@ import {
   isFirebaseConfigured,
   observeFirebaseUser,
   signInFirebase,
+  signInWithGoogleFirebase,
   signOutFirebase,
   startLocalSync,
   uploadLocalSnapshot,
@@ -776,7 +777,7 @@ export function Profile() {
     cloudCleanup.current?.();
     const stopLocalSync = startLocalSync(cloudUser);
     const stopCloudWatch = watchCloudSnapshot(cloudUser, () => {
-      void downloadCloudSnapshot(cloudUser).then(() => window.location.reload());
+      void downloadCloudSnapshot(cloudUser);
     });
     cloudCleanup.current = () => { stopLocalSync(); stopCloudWatch(); };
   }, [cloudUser]);
@@ -934,6 +935,19 @@ export function Profile() {
       setCloudBusy(false);
     }
   };
+  const connectGoogleCloud = async () => {
+    setCloudBusy(true);
+    setCloudMessage("");
+    try {
+      const user = await signInWithGoogleFirebase();
+      setCloudUser(user);
+      setCloudHasData(await hasCloudSnapshot(user));
+    } catch (error) {
+      setCloudMessage(error instanceof Error ? error.message : "Could not sign in with Google.");
+    } finally {
+      setCloudBusy(false);
+    }
+  };
   const activateCloudSync = async (mode: "upload" | "download") => {
     if (!cloudUser) return;
     setCloudBusy(true);
@@ -945,11 +959,11 @@ export function Profile() {
       cloudCleanup.current?.();
       const stopLocalSync = startLocalSync(cloudUser);
       const stopCloudWatch = watchCloudSnapshot(cloudUser, () => {
-        void downloadCloudSnapshot(cloudUser).then(() => window.location.reload());
+        void downloadCloudSnapshot(cloudUser);
       });
       cloudCleanup.current = () => { stopLocalSync(); stopCloudWatch(); };
       setCloudMessage("Firebase sync is active.");
-      if (mode === "download") window.setTimeout(() => window.location.reload(), 450);
+      if (mode === "download") setCloudMessage("Cloud data loaded. Navigate once to see updated screens.");
     } catch (error) {
       setCloudMessage(error instanceof Error ? error.message : "Could not sync your data.");
     } finally {
@@ -1182,6 +1196,8 @@ export function Profile() {
                 <label className="block text-sm text-zinc-300">Email<Input type="email" value={cloudEmail} onChange={(event) => setCloudEmail(event.target.value)} className="mt-1.5 border-white/10 bg-[#151515] text-zinc-100" /></label>
                 <label className="block text-sm text-zinc-300">Password<Input type="password" value={cloudPassword} onChange={(event) => setCloudPassword(event.target.value)} className="mt-1.5 border-white/10 bg-[#151515] text-zinc-100" /></label>
                 <button type="button" onClick={() => setCloudCreateAccount((value) => !value)} className="text-sm text-emerald-400 hover:text-emerald-300">{cloudCreateAccount ? "Use existing account" : "Create a new account"}</button>
+                <div className="flex items-center gap-3 py-1 text-xs text-zinc-500 before:h-px before:flex-1 before:bg-white/10 after:h-px after:flex-1 after:bg-white/10">OR</div>
+                <Button type="button" variant="outline" className="w-full border-white/10 bg-white/5 text-zinc-100 hover:bg-white/10" onClick={() => void connectGoogleCloud()} disabled={cloudBusy}>Continue with Google</Button>
               </div>
             ) : cloudHasData === null ? (
               <div className="mt-5"><p className="text-sm text-zinc-400">Checking your cloud data…</p><Button className="mt-4 bg-emerald-600 hover:bg-emerald-500" onClick={() => void hasCloudSnapshot(cloudUser).then(setCloudHasData)}>Continue</Button></div>
