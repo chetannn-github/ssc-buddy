@@ -10,7 +10,6 @@ import {
   Flame,
   GraduationCap,
   Heart,
-  LogIn,
   ListTodo,
   Minimize2,
   Music2,
@@ -1146,15 +1145,6 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
           >
             <GraduationCap className="h-5 w-5" />
           </Link>
-          {isFirebaseConfigured && (
-            <Link
-              to={authUser ? "/profile" : "/auth"}
-              className="ml-1 flex h-9 items-center gap-1.5 rounded-full bg-white/10 px-3 text-xs font-semibold text-white transition-colors hover:bg-white/15"
-            >
-              <LogIn className="h-3.5 w-3.5" />
-              <span>{authUser ? "Account" : "Sign in"}</span>
-            </Link>
-          )}
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-base font-semibold sm:text-lg">{title}</h1>
             {subtitle && <p className="truncate text-xs opacity-75 sm:text-sm">{subtitle}</p>}
