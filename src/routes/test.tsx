@@ -71,7 +71,9 @@ function TestPage() {
     const saved: TestRecord = {
       id: newDocumentId("test"),
       date: new Date().toISOString(),
+      ...(config.subjectId ? { subjectId: config.subjectId } : {}),
       subject: config.subject,
+      ...(config.chapterId ? { chapterId: config.chapterId } : {}),
       chapter: config.chapter,
       ...(config.exercise ? { exercise: config.exercise } : {}),
       ...(config.exerciseId ? { exerciseId: config.exerciseId } : {}),

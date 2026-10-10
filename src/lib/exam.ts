@@ -22,7 +22,9 @@ export type McqQuestion = {
 export type TestRecord = {
   id: string;
   date: string;
+  subjectId?: string;
   subject: string;
+  chapterId?: string;
   chapter: string;
   exercise?: string;
   exerciseId?: string;
@@ -59,6 +61,14 @@ export type Chapter = {
 };
 
 export type Subject = { id: string; name: string; chapters: Chapter[] };
+
+/** Stable links used by CBT attempts; display labels remain on records for fast, offline rendering. */
+export type CbtSourceRef = {
+  subjectId?: string;
+  chapterId?: string;
+  exerciseId?: string;
+  questionIds?: string[];
+};
 
 export const DEFAULT_EXERCISE = "Exercise 1";
 
@@ -113,7 +123,8 @@ export function saveTestDarkMode(darkMode: boolean) {
 
 /* ---------- Subjects & chapters ---------- */
 
-type RawExercise = Omit<Exercise, "id" | "questions"> & { id?: string; questions?: McqQuestion[] };
+type RawQuestion = Omit<McqQuestion, "id"> & { id?: string };
+type RawExercise = Omit<Exercise, "id" | "questions"> & { id?: string; questions?: RawQuestion[] };
 type RawChapter = {
   id?: string;
   name: string;
@@ -123,7 +134,7 @@ type RawChapter = {
 };
 type RawSubject = { id?: string; name: string; chapters: (string | RawChapter)[] };
 
-function normalizeQuestion(question: McqQuestion, index: number): McqQuestion {
+function normalizeQuestion(question: RawQuestion, index: number): McqQuestion {
   return { ...question, id: question.id || newDocumentId(`question_${index + 1}`) };
 }
 
@@ -318,11 +329,22 @@ export function toggleFavoriteQuestion(id: string): string[] {
 
 export function loadHistory(): TestRecord[] {
   const history = read<TestRecord[]>(HISTORY_KEY, []);
+  const subjects = loadSubjects();
   const normalized = history.map((record) => {
     const questions = record.questions?.map(normalizeQuestion);
+    const subject = subjects.find((item) => item.id === record.subjectId || item.name === record.subject);
+    const chapter = subject?.chapters.find(
+      (item) => item.id === record.chapterId || item.name === record.chapter,
+    );
+    const exercise = chapter?.exercises.find(
+      (item) => item.id === record.exerciseId || item.name === record.exercise,
+    );
     return {
       ...record,
       id: record.id || newDocumentId("test"),
+      ...(subject ? { subjectId: subject.id } : {}),
+      ...(chapter ? { chapterId: chapter.id } : {}),
+      ...(exercise ? { exerciseId: exercise.id } : {}),
       ...(questions ? { questions, questionIds: record.questionIds ?? questions.map((question) => question.id) } : {}),
     };
   });
@@ -347,7 +369,29 @@ export function getRecord(id: string): TestRecord | null {
 }
 
 export function attemptKey(r: TestRecord) {
-  return `${r.subject}||${r.chapter}||${r.exercise ?? ""}||${r.startNumber}||${r.answers.length}`;
+  return `${r.subjectId ?? r.subject}||${r.chapterId ?? r.chapter}||${r.exerciseId ?? r.exercise ?? ""}||${r.startNumber}||${r.answers.length}`;
+}
+
+/** Re-evaluates from the immutable answer-key snapshot stored with the attempt. */
+export function reevaluateRecord(record: TestRecord): TestRecord {
+  const evaluations = record.answerKey
+    ? record.answers.map((answer, index) =>
+        !answer || !record.answerKey?.[index]
+          ? null
+          : answer === record.answerKey[index]
+            ? "correct"
+            : "incorrect",
+      )
+    : undefined;
+  const correct = evaluations?.filter((item) => item === "correct").length ?? null;
+  const wrong = evaluations?.filter((item) => item === "incorrect").length ?? null;
+  return {
+    ...record,
+    ...(evaluations ? { evaluations } : {}),
+    correct,
+    wrong,
+    score: computeScore(correct, wrong, record.marking),
+  };
 }
 
 /** All attempts (oldest → newest) that belong to the same test as `id`. */

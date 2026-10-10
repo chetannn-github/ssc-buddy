@@ -342,6 +342,7 @@ export function MotivationalVideos({
   const likeOverlayTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTapAt = useRef(0);
   const ignoreVideoClick = useRef(false);
+  const singleTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     onOpen();
@@ -411,6 +412,7 @@ export function MotivationalVideos({
       if (reelTimer.current) clearTimeout(reelTimer.current);
       if (longPressTimer.current) clearTimeout(longPressTimer.current);
       if (likeOverlayTimer.current) clearTimeout(likeOverlayTimer.current);
+      if (singleTapTimer.current) clearTimeout(singleTapTimer.current);
     },
     [],
   );
@@ -486,9 +488,16 @@ export function MotivationalVideos({
                 }, 350);
                 const now = Date.now();
                 if (now - lastTapAt.current < 280) {
+                  if (singleTapTimer.current) clearTimeout(singleTapTimer.current);
                   toggleLike();
                   lastTapAt.current = 0;
-                } else lastTapAt.current = now;
+                } else {
+                  lastTapAt.current = now;
+                  singleTapTimer.current = setTimeout(() => {
+                    togglePlayback();
+                    lastTapAt.current = 0;
+                  }, 280);
+                }
                 return;
               }
               didSwipe.current = true;

@@ -38,7 +38,9 @@ import {
 export type TestConfig = {
   minutes: number;
   startNumber: number;
+  subjectId: string | null;
   subject: string;
+  chapterId: string | null;
   chapter: string;
   exercise: string;
   exerciseId: string | null;
@@ -754,7 +756,9 @@ export function SetupScreen({
           onStart({
             minutes: parsedMinutes,
             startNumber: parsedStart,
+            subjectId: subjects.find((item) => item.name === subject)?.id ?? null,
             subject,
+            chapterId: chapters.find((item) => item.name === chapter)?.id ?? null,
             chapter,
             exercise: activeExerciseName || DEFAULT_EXERCISE,
             exerciseId: activeExercise?.id ?? null,
