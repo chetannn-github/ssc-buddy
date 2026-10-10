@@ -332,12 +332,16 @@ export function MotivationalVideos({
   const [isDraggingReel, setIsDraggingReel] = useState(false);
   const [isFastForward, setIsFastForward] = useState(false);
   const [videoProgress, setVideoProgress] = useState(0);
+  const [likeOverlay, setLikeOverlay] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const swipeStartY = useRef<number | null>(null);
   const didSwipe = useRef(false);
   const overlayTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reelTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const likeOverlayTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastTapAt = useRef(0);
+  const ignoreVideoClick = useRef(false);
 
   useEffect(() => {
     onOpen();
@@ -396,6 +400,9 @@ export function MotivationalVideos({
       saveLikes(VIDEO_LIKES_KEY, next);
       return next;
     });
+    setLikeOverlay(true);
+    if (likeOverlayTimer.current) clearTimeout(likeOverlayTimer.current);
+    likeOverlayTimer.current = setTimeout(() => setLikeOverlay(false), 700);
   };
 
   useEffect(
@@ -403,6 +410,7 @@ export function MotivationalVideos({
       if (overlayTimer.current) clearTimeout(overlayTimer.current);
       if (reelTimer.current) clearTimeout(reelTimer.current);
       if (longPressTimer.current) clearTimeout(longPressTimer.current);
+      if (likeOverlayTimer.current) clearTimeout(likeOverlayTimer.current);
     },
     [],
   );
@@ -472,6 +480,15 @@ export function MotivationalVideos({
               setIsDraggingReel(false);
               if (Math.abs(distance) < 90 || videos.length < 2) {
                 setDragOffset(0);
+                ignoreVideoClick.current = true;
+                window.setTimeout(() => {
+                  ignoreVideoClick.current = false;
+                }, 350);
+                const now = Date.now();
+                if (now - lastTapAt.current < 280) {
+                  toggleLike();
+                  lastTapAt.current = 0;
+                } else lastTapAt.current = now;
                 return;
               }
               didSwipe.current = true;
@@ -513,6 +530,7 @@ export function MotivationalVideos({
                 onContextMenu={(event) => event.preventDefault()}
                 onDragStart={(event) => event.preventDefault()}
                 onClick={() => {
+                  if (ignoreVideoClick.current) return;
                   if (didSwipe.current) {
                     didSwipe.current = false;
                     return;
@@ -538,15 +556,9 @@ export function MotivationalVideos({
                 Your browser does not support video playback.
               </video>
             </div>
-            {playbackOverlay && (
-              <div className="pointer-events-none absolute inset-0 grid place-items-center">
-                <span className="grid h-16 w-16 animate-in fade-in zoom-in-75 place-items-center rounded-full bg-black/65 text-white backdrop-blur-sm">
-                  {playbackOverlay === "play" ? (
-                    <Play className="h-7 w-7 fill-current" />
-                  ) : (
-                    <Pause className="h-7 w-7 fill-current" />
-                  )}
-                </span>
+            {likeOverlay && (
+              <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center">
+                <Heart className="h-20 w-20 animate-in zoom-in-50 fade-in fill-red-500 text-red-500 drop-shadow-2xl duration-300" />
               </div>
             )}
             {isFastForward && (
@@ -556,11 +568,11 @@ export function MotivationalVideos({
             )}
             <div className="pointer-events-none absolute right-0 bottom-0 left-0 z-20 h-1 bg-white/20">
               <span
-                className="block h-full bg-red-500 transition-[width] duration-150"
+                className="block h-full bg-red-500 transition-[width] duration-300 ease-out"
                 style={{ width: `${videoProgress}%` }}
               />
             </div>
-            <div className="pointer-events-none absolute top-1/2 right-3 flex -translate-y-1/2 flex-col gap-3 opacity-100 transition-opacity sm:right-5 sm:opacity-0 sm:group-hover:opacity-100">
+            <div className="pointer-events-none absolute top-1/2 right-3 hidden -translate-y-1/2 flex-col gap-3 opacity-100 transition-opacity sm:right-5 sm:flex sm:opacity-0 sm:group-hover:opacity-100">
               <button
                 type="button"
                 onClick={toggleLike}
