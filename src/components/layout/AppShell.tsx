@@ -341,6 +341,8 @@ export function MotivationalVideos({
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const likeOverlayTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTapAt = useRef(0);
+  const doubleTapPending = useRef(false);
+  const longPressActivated = useRef(false);
   const ignoreVideoClick = useRef(false);
   const singleTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -450,11 +452,18 @@ export function MotivationalVideos({
             onTouchStart={(event) => {
               swipeStartY.current = event.touches[0]?.clientY ?? null;
               setIsDraggingReel(true);
+              const now = Date.now();
+              doubleTapPending.current = now - lastTapAt.current < 340;
+              longPressActivated.current = false;
+              if (doubleTapPending.current && singleTapTimer.current) {
+                clearTimeout(singleTapTimer.current);
+              }
               if (longPressTimer.current) clearTimeout(longPressTimer.current);
               longPressTimer.current = setTimeout(() => {
                 if (videoRef.current) {
                   videoRef.current.playbackRate = 2;
                   setIsFastForward(true);
+                  longPressActivated.current = true;
                 }
               }, 450);
             }}
@@ -482,21 +491,24 @@ export function MotivationalVideos({
               setIsDraggingReel(false);
               if (Math.abs(distance) < 90 || videos.length < 2) {
                 setDragOffset(0);
+                if (longPressActivated.current) {
+                  longPressActivated.current = false;
+                  return;
+                }
                 ignoreVideoClick.current = true;
                 window.setTimeout(() => {
                   ignoreVideoClick.current = false;
                 }, 350);
-                const now = Date.now();
-                if (now - lastTapAt.current < 280) {
-                  if (singleTapTimer.current) clearTimeout(singleTapTimer.current);
+                if (doubleTapPending.current) {
                   toggleLike();
                   lastTapAt.current = 0;
+                  doubleTapPending.current = false;
                 } else {
-                  lastTapAt.current = now;
+                  lastTapAt.current = Date.now();
                   singleTapTimer.current = setTimeout(() => {
                     togglePlayback();
                     lastTapAt.current = 0;
-                  }, 280);
+                  }, 340);
                 }
                 return;
               }
