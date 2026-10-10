@@ -98,6 +98,7 @@ function read<T>(key: string, fallback: T): T {
 function write(key: string, value: unknown) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
+    window.dispatchEvent(new Event("ssc-study-data-changed"));
   } catch {
     /* storage unavailable */
   }

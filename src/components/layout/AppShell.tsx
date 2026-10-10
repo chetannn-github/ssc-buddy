@@ -1090,8 +1090,14 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
     let cancelled = false;
     const startAutomaticSync = async () => {
       try {
-        if (await hasCloudSnapshot(authUser)) await downloadCloudSnapshot(authUser);
-        else await uploadLocalSnapshot(authUser);
+        const hydrationKey = `ssc-buddy-firebase-hydrated:${authUser.uid}`;
+        // Cloud data is loaded once when this browser session starts. Never re-download it
+        // during route changes, otherwise a just-finished test can be overwritten by an older copy.
+        if (sessionStorage.getItem(hydrationKey) !== "1") {
+          if (await hasCloudSnapshot(authUser)) await downloadCloudSnapshot(authUser);
+          else await uploadLocalSnapshot(authUser);
+          sessionStorage.setItem(hydrationKey, "1");
+        }
         if (cancelled) return;
         localStorage.setItem("ssc-buddy-firebase-sync-enabled", "1");
         const stopLocalSync = startLocalSync(authUser);

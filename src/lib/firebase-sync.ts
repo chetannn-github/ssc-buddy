@@ -208,7 +208,7 @@ export function watchCloudSnapshot(user: User, onRemoteChange: () => void) {
 export function startLocalSync(user: User) {
   let previous = localStorage.getItem("ssc-buddy-firebase-last-sync") ?? "";
   let busy = false;
-  const timer = window.setInterval(async () => {
+  const sync = async () => {
     const current = JSON.stringify(snapshotLocalStorage());
     const restoredSnapshot = localStorage.getItem("ssc-buddy-firebase-last-sync") ?? "";
     // A remote update changed localStorage outside this closure. Treat it as already synced.
@@ -223,8 +223,14 @@ export function startLocalSync(user: User) {
     } finally {
       busy = false;
     }
-  }, 2_000);
-  return () => window.clearInterval(timer);
+  };
+  const onDataChange = () => { void sync(); };
+  const timer = window.setInterval(() => { void sync(); }, 2_000);
+  window.addEventListener("ssc-study-data-changed", onDataChange);
+  return () => {
+    window.clearInterval(timer);
+    window.removeEventListener("ssc-study-data-changed", onDataChange);
+  };
 }
 
 export async function deleteFirebaseCloudData(user: User) {
