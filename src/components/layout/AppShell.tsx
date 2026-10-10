@@ -993,14 +993,14 @@ export function MotivationalMusic({ onClose }: { onClose: () => void }) {
               </div>
             </div>
             <div className="flex min-w-0 max-h-72 flex-col sm:order-1">
-              <div className="flex min-w-0 max-w-full gap-1 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="flex min-w-0 max-w-full items-center gap-1 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {playlists.map((playlist) => (
                   <button
                     key={playlist}
                     type="button"
                     onClick={() => choosePlaylist(playlist)}
                     className={cn(
-                      "shrink-0 whitespace-nowrap rounded-md px-2 py-1 text-[10px] leading-4 transition-colors",
+                      "inline-flex h-7 shrink-0 items-center justify-center whitespace-nowrap rounded-md px-2 text-[10px] leading-none transition-colors",
                       selectedPlaylist === playlist
                         ? "bg-white/10 text-white"
                         : "text-zinc-400 hover:text-zinc-200",
