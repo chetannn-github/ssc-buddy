@@ -2,7 +2,6 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
   ChevronDown,
   Copy,
-  Cloud,
   FilePenLine,
   LoaderCircle,
   LogOut,
@@ -23,16 +22,8 @@ import { loadHistory, type TestRecord } from "@/lib/exam";
 import { loadPracticeProfile, savePracticeProfile, type PracticeProfile } from "@/lib/profile";
 import { restorePracticeBackup } from "@/lib/backup";
 import {
-  downloadCloudSnapshot,
-  hasCloudSnapshot,
-  isFirebaseConfigured,
-  observeFirebaseUser,
   signOutFirebase,
-  startLocalSync,
-  uploadLocalSnapshot,
-  watchCloudSnapshot,
 } from "@/lib/firebase-sync";
-import type { User } from "firebase/auth";
 import {
   overallSyllabus,
   pct,
@@ -740,12 +731,7 @@ export function Profile() {
   });
   const [editingProfile, setEditingProfile] = useState(false);
   const [importingData, setImportingData] = useState(false);
-  const [cloudOpen, setCloudOpen] = useState(false);
-  const [cloudUser, setCloudUser] = useState<User | null>(null);
-  const [cloudHasData, setCloudHasData] = useState<boolean | null>(null);
-  const [cloudBusy, setCloudBusy] = useState(false);
-  const [cloudMessage, setCloudMessage] = useState("");
-  const cloudCleanup = useRef<(() => void) | null>(null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [previewingAvatar, setPreviewingAvatar] = useState(false);
   const [isAvatarChanging, setIsAvatarChanging] = useState(false);
   const [loggingMockTest, setLoggingMockTest] = useState(false);
@@ -758,31 +744,6 @@ export function Profile() {
   const [promptCopied, setPromptCopied] = useState(false);
   const importFileRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
-
-  useEffect(() => {
-    if (!isFirebaseConfigured) return;
-    return observeFirebaseUser((user) => {
-      setCloudUser(user);
-      if (!user) setCloudHasData(null);
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!cloudUser) return;
-    void hasCloudSnapshot(cloudUser).then(setCloudHasData).catch(() => setCloudHasData(false));
-  }, [cloudUser]);
-
-  useEffect(() => () => cloudCleanup.current?.(), []);
-
-  useEffect(() => {
-    if (!cloudUser || localStorage.getItem("ssc-buddy-firebase-sync-enabled") !== "1") return;
-    cloudCleanup.current?.();
-    const stopLocalSync = startLocalSync(cloudUser);
-    const stopCloudWatch = watchCloudSnapshot(cloudUser, () => {
-      void downloadCloudSnapshot(cloudUser);
-    });
-    cloudCleanup.current = () => { stopLocalSync(); stopCloudWatch(); };
-  }, [cloudUser]);
 
   useEffect(() => {
     hasShownProfileLoader = true;
@@ -923,38 +884,14 @@ export function Profile() {
       setImportMessage("Choose a valid full backup or Tracker JSON file.");
     }
   };
-  const activateCloudSync = async (mode: "upload" | "download") => {
-    if (!cloudUser) return;
-    setCloudBusy(true);
-    setCloudMessage("");
-    try {
-      if (mode === "upload") await uploadLocalSnapshot(cloudUser);
-      else await downloadCloudSnapshot(cloudUser);
-      localStorage.setItem("ssc-buddy-firebase-sync-enabled", "1");
-      cloudCleanup.current?.();
-      const stopLocalSync = startLocalSync(cloudUser);
-      const stopCloudWatch = watchCloudSnapshot(cloudUser, () => {
-        void downloadCloudSnapshot(cloudUser);
-      });
-      cloudCleanup.current = () => { stopLocalSync(); stopCloudWatch(); };
-      setCloudMessage("Firebase sync is active.");
-      if (mode === "download") setCloudMessage("Cloud data loaded. Navigate once to see updated screens.");
-    } catch (error) {
-      setCloudMessage(error instanceof Error ? error.message : "Could not sync your data.");
-    } finally {
-      setCloudBusy(false);
-    }
-  };
   const logout = async () => {
-    setCloudBusy(true);
+    setIsLoggingOut(true);
     try {
-      cloudCleanup.current?.();
-      cloudCleanup.current = null;
       localStorage.removeItem("ssc-buddy-firebase-sync-enabled");
       await signOutFirebase();
       await navigate({ to: "/auth", replace: true });
     } finally {
-      setCloudBusy(false);
+      setIsLoggingOut(false);
     }
   };
 
@@ -1028,7 +965,7 @@ export function Profile() {
                   variant="ghost"
                   className="h-7 w-7 shrink-0 text-zinc-500 hover:bg-rose-500/10 hover:text-rose-300"
                   onClick={() => void logout()}
-                  disabled={cloudBusy}
+                  disabled={isLoggingOut}
                   aria-label="Log out"
                 >
                   <LogOut className="h-3.5 w-3.5" />
@@ -1061,14 +998,6 @@ export function Profile() {
                   }}
                 >
                   <Music2 className="h-4 w-4" /> Music
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="h-9 gap-1.5 px-2.5 text-sm text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
-                  onClick={() => { setCloudMessage(""); setCloudOpen(true); }}
-                >
-                  <Cloud className="h-3.5 w-3.5" /> Cloud sync
                 </Button>
               </div>
             </div>
@@ -1175,37 +1104,6 @@ export function Profile() {
               </Button>
               <Button className="bg-emerald-600 hover:bg-emerald-500" onClick={saveProfile}>
                 <Save className="h-4 w-4" /> Save profile
-              </Button>
-            </div>
-          </section>
-        </div>
-      )}
-      {cloudOpen && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 p-4 backdrop-blur-md">
-          <section className="w-full max-w-md rounded-2xl border border-white/10 bg-[#1c1c1c] p-6 text-zinc-100 shadow-2xl sm:p-7">
-            <div className="flex items-start gap-3">
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-400/10 text-emerald-300"><Cloud className="h-5 w-5" /></span>
-              <div><h2 className="text-lg font-semibold">Cloud sync</h2><p className="mt-0.5 text-sm text-zinc-500">Your study data is private and synced across devices.</p></div>
-            </div>
-            {!isFirebaseConfigured ? (
-              <p className="mt-5 rounded-xl border border-amber-400/20 bg-amber-400/10 p-3 text-sm text-amber-100">
-                Add Firebase Web App values to <code className="text-amber-200">.env.local</code> using <code className="text-amber-200">.env.example</code>, then restart the app.
-              </p>
-            ) : cloudHasData === null ? (
-              <div className="mt-5 rounded-xl border border-white/[.07] bg-white/[.025] p-4 text-sm text-zinc-400">Checking sync status…</div>
-            ) : (
-              <div className="mt-5 space-y-4">
-                <div className="rounded-xl border border-emerald-400/15 bg-emerald-400/[.06] p-4"><p className="flex items-center gap-2 text-sm font-medium text-emerald-200"><span className="h-2 w-2 rounded-full bg-emerald-400" />Sync active</p><p className="mt-1 text-xs text-zinc-400">{cloudUser?.email ?? "Signed-in account"}</p></div>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <Button className="bg-emerald-600 hover:bg-emerald-500" disabled={cloudBusy || !cloudUser} onClick={() => void activateCloudSync("upload")}>{cloudBusy ? "Syncing…" : "Sync this device"}</Button>
-                  <Button variant="outline" className="border-white/10 bg-white/5 text-zinc-100 hover:bg-white/10" disabled={cloudBusy || !cloudUser || !cloudHasData} onClick={() => void activateCloudSync("download")}>Restore cloud copy</Button>
-                </div>
-              </div>
-            )}
-            {cloudMessage && <p className="mt-4 text-sm text-amber-300">{cloudMessage}</p>}
-            <div className="mt-6 flex justify-end">
-              <Button variant="outline" className="border-white/10 bg-white/5 text-zinc-200" onClick={() => setCloudOpen(false)} disabled={cloudBusy}>
-                Done
               </Button>
             </div>
           </section>

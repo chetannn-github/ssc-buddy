@@ -97,6 +97,9 @@ function restoreSnapshot(snapshot: Record<string, string>) {
   });
   Object.entries(snapshot).forEach(([key, value]) => localStorage.setItem(key, value));
   window.dispatchEvent(new Event("cbt-backup-restored"));
+  window.dispatchEvent(new Event("cbt-profile-updated"));
+  window.dispatchEvent(new Event("cbt-tracker-updated"));
+  window.dispatchEvent(new Event("ssc-daily-tasks-updated"));
 }
 
 function splitSnapshot(snapshot: Record<string, string>) {
@@ -207,6 +210,9 @@ export function startLocalSync(user: User) {
   let busy = false;
   const timer = window.setInterval(async () => {
     const current = JSON.stringify(snapshotLocalStorage());
+    const restoredSnapshot = localStorage.getItem("ssc-buddy-firebase-last-sync") ?? "";
+    // A remote update changed localStorage outside this closure. Treat it as already synced.
+    if (restoredSnapshot !== previous) previous = restoredSnapshot;
     if (busy || current === previous) return;
     busy = true;
     try {

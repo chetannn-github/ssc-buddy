@@ -28,8 +28,13 @@ import { trackerActiveDates } from "@/lib/tracker";
 import { loadTrackerData, saveTrackerData } from "@/lib/tracker-store";
 import { loadPracticeProfile, savePracticeProfile, type PracticeProfile } from "@/lib/profile";
 import {
+  downloadCloudSnapshot,
+  hasCloudSnapshot,
   isFirebaseConfigured,
   observeFirebaseUser,
+  startLocalSync,
+  uploadLocalSnapshot,
+  watchCloudSnapshot,
 } from "@/lib/firebase-sync";
 import type { User } from "firebase/auth";
 import { cn } from "@/lib/utils";
@@ -1049,6 +1054,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
   const [manifestationOpen, setManifestationOpen] = useState(false);
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(!isFirebaseConfigured);
+  const syncCleanup = useRef<(() => void) | null>(null);
   const previousStreak = useRef<number | null>(null);
 
   useEffect(() => {
@@ -1078,6 +1084,26 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
   useEffect(() => {
     if (isFirebaseConfigured && authReady && !authUser) void navigate({ to: "/auth", replace: true });
   }, [authReady, authUser, navigate]);
+
+  useEffect(() => {
+    if (!authUser) return;
+    let cancelled = false;
+    const startAutomaticSync = async () => {
+      try {
+        if (await hasCloudSnapshot(authUser)) await downloadCloudSnapshot(authUser);
+        else await uploadLocalSnapshot(authUser);
+        if (cancelled) return;
+        localStorage.setItem("ssc-buddy-firebase-sync-enabled", "1");
+        const stopLocalSync = startLocalSync(authUser);
+        const stopCloudWatch = watchCloudSnapshot(authUser, () => { void downloadCloudSnapshot(authUser); });
+        syncCleanup.current = () => { stopLocalSync(); stopCloudWatch(); };
+      } catch {
+        // Offline or temporary Firebase failures retry through the local sync loop on the next session.
+      }
+    };
+    void startAutomaticSync();
+    return () => { cancelled = true; syncCleanup.current?.(); syncCleanup.current = null; };
+  }, [authUser]);
 
   useEffect(() => {
     const refresh = () => setProfile(loadPracticeProfile());
