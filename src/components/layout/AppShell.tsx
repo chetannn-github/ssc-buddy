@@ -1,5 +1,5 @@
 import type { PointerEvent, ReactNode } from "react";
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   BarChart3,
   ChevronLeft,
@@ -10,6 +10,7 @@ import {
   Flame,
   GraduationCap,
   Heart,
+  LogIn,
   ListTodo,
   Minimize2,
   Music2,
@@ -28,12 +29,8 @@ import { trackerActiveDates } from "@/lib/tracker";
 import { loadTrackerData, saveTrackerData } from "@/lib/tracker-store";
 import { loadPracticeProfile, savePracticeProfile, type PracticeProfile } from "@/lib/profile";
 import {
-  downloadCloudSnapshot,
-  hasCloudSnapshot,
   isFirebaseConfigured,
-  signInFirebase,
-  signInWithGoogleFirebase,
-  uploadLocalSnapshot,
+  observeFirebaseUser,
 } from "@/lib/firebase-sync";
 import type { User } from "firebase/auth";
 import { cn } from "@/lib/utils";
@@ -98,19 +95,13 @@ function completeTodayManifestation() {
   }
 }
 
-function ProfileOnboarding({ onComplete }: { onComplete: (profile: PracticeProfile) => void }) {
+function ProfileOnboarding({ onComplete, user }: { onComplete: (profile: PracticeProfile) => void; user: User }) {
   const [name, setName] = useState("");
   const [goal, setGoal] = useState("100");
   const [examName, setExamName] = useState("SSC CGL 2027");
   const [examDate, setExamDate] = useState("");
   const parsedGoal = Math.max(1, Math.min(100000, Number(goal) || 0));
   const canContinue = name.trim().length > 0 && Number(goal) >= 1;
-  const [accountMode, setAccountMode] = useState<"signup" | "signin">("signup");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [account, setAccount] = useState<User | null>(null);
-  const [accountBusy, setAccountBusy] = useState(false);
-  const [accountError, setAccountError] = useState("");
 
   const submit = async () => {
     if (!canContinue) return;
@@ -126,42 +117,7 @@ function ProfileOnboarding({ onComplete }: { onComplete: (profile: PracticeProfi
         examDate,
       },
     });
-    if (account) {
-      try {
-        await uploadLocalSnapshot(account);
-        localStorage.setItem("ssc-buddy-firebase-sync-enabled", "1");
-      } catch {
-        // Profile remains safely local. Cloud sync retries from the Profile screen.
-      }
-    }
     onComplete(profile);
-  };
-
-  const connectAccount = async (withGoogle = false) => {
-    if (!withGoogle && (!email.trim() || !password)) {
-      setAccountError("Enter your email and password.");
-      return;
-    }
-    setAccountBusy(true);
-    setAccountError("");
-    try {
-      const user = withGoogle
-        ? await signInWithGoogleFirebase()
-        : await signInFirebase(email.trim(), password, accountMode === "signup");
-      if (await hasCloudSnapshot(user)) {
-        await downloadCloudSnapshot(user);
-        const restored = loadPracticeProfile();
-        if (restored) {
-          onComplete(restored);
-          return;
-        }
-      }
-      setAccount(user);
-    } catch (error) {
-      setAccountError(error instanceof Error ? error.message : "Could not connect to Firebase.");
-    } finally {
-      setAccountBusy(false);
-    }
   };
 
   return (
@@ -170,21 +126,8 @@ function ProfileOnboarding({ onComplete }: { onComplete: (profile: PracticeProfi
         <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-400/15 text-emerald-300">
           <GraduationCap className="h-6 w-6" />
         </span>
-        <h2 className="mt-5 text-2xl font-semibold">{account ? "Setup your profile" : "Welcome to SSC Buddy"}</h2>
-        {!isFirebaseConfigured ? (
-          <p className="mt-4 rounded-xl border border-amber-400/20 bg-amber-400/10 p-3 text-sm text-amber-100">Firebase is not configured yet. Add the values from <code>.env.example</code> to <code>.env.local</code>, then restart.</p>
-        ) : !account ? (
-          <div className="mt-6 space-y-4">
-            <p className="text-sm text-zinc-400">{accountMode === "signup" ? "Create an account to keep your progress synced everywhere." : "Sign in to restore your synced study data."}</p>
-            <label className="block text-sm font-medium text-zinc-200">Email<Input className="mt-2 h-11 border-white/10 bg-zinc-900 text-zinc-100" type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoFocus /></label>
-            <label className="block text-sm font-medium text-zinc-200">Password<Input className="mt-2 h-11 border-white/10 bg-zinc-900 text-zinc-100" type="password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
-            <Button className="h-11 w-full bg-emerald-600 hover:bg-emerald-500" disabled={accountBusy} onClick={() => void connectAccount()}>{accountBusy ? "Please wait…" : accountMode === "signup" ? "Create account" : "Sign in"}</Button>
-            <Button type="button" variant="outline" className="h-11 w-full border-white/10 bg-white/5 text-zinc-100 hover:bg-white/10" disabled={accountBusy} onClick={() => void connectAccount(true)}>Continue with Google</Button>
-            <button type="button" className="w-full text-sm text-emerald-400 hover:text-emerald-300" onClick={() => setAccountMode((mode) => mode === "signup" ? "signin" : "signup")}>{accountMode === "signup" ? "Already have an account? Sign in" : "New here? Create an account"}</button>
-            {accountError && <p className="text-sm text-amber-300">{accountError}</p>}
-          </div>
-        ) : (
-          <>
+        <h2 className="mt-5 text-2xl font-semibold">Setup your profile</h2>
+        <p className="mt-1 text-sm text-zinc-400">Signed in as {user.email ?? "your account"}</p>
           <div className="mt-6 space-y-4">
           <label className="block text-sm font-medium text-zinc-200">
             Your name
@@ -235,8 +178,6 @@ function ProfileOnboarding({ onComplete }: { onComplete: (profile: PracticeProfi
         >
           Create my profile
         </Button>
-          </>
-        )}
       </section>
     </div>
   );
@@ -1100,12 +1041,15 @@ export function MotivationalMusic({ onClose }: { onClose: () => void }) {
 
 export function AppShell({ title, subtitle, actions, children }: Props) {
   const path = useRouterState({ select: (r) => r.location.pathname });
+  const navigate = useNavigate();
   const [records, setRecords] = useState<TestRecord[]>([]);
   const [trackerActivityDates, setTrackerActivityDates] = useState<string[]>([]);
   const [profile, setProfile] = useState<PracticeProfile | null | undefined>(undefined);
   const [celebratedStreak, setCelebratedStreak] = useState<number | null>(null);
   const [streakReady, setStreakReady] = useState(false);
   const [manifestationOpen, setManifestationOpen] = useState(false);
+  const [authUser, setAuthUser] = useState<User | null>(null);
+  const [authReady, setAuthReady] = useState(!isFirebaseConfigured);
   const previousStreak = useRef<number | null>(null);
 
   useEffect(() => {
@@ -1123,6 +1067,18 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
       window.removeEventListener("cbt-tracker-updated", refresh);
     };
   }, []);
+
+  useEffect(() => {
+    if (!isFirebaseConfigured) return;
+    return observeFirebaseUser((user) => {
+      setAuthUser(user);
+      setAuthReady(true);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (isFirebaseConfigured && authReady && !authUser) void navigate({ to: "/auth", replace: true });
+  }, [authReady, authUser, navigate]);
 
   useEffect(() => {
     const refresh = () => setProfile(loadPracticeProfile());
@@ -1190,6 +1146,15 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
           >
             <GraduationCap className="h-5 w-5" />
           </Link>
+          {isFirebaseConfigured && (
+            <Link
+              to={authUser ? "/profile" : "/auth"}
+              className="ml-1 flex h-9 items-center gap-1.5 rounded-full bg-white/10 px-3 text-xs font-semibold text-white transition-colors hover:bg-white/15"
+            >
+              <LogIn className="h-3.5 w-3.5" />
+              <span>{authUser ? "Account" : "Sign in"}</span>
+            </Link>
+          )}
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-base font-semibold sm:text-lg">{title}</h1>
             {subtitle && <p className="truncate text-xs opacity-75 sm:text-sm">{subtitle}</p>}
@@ -1249,7 +1214,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
       >
         {children}
       </main>
-      {profile === null && <ProfileOnboarding onComplete={setProfile} />}
+      {profile === null && authUser && <ProfileOnboarding user={authUser} onComplete={setProfile} />}
       {profile?.manifestation && manifestationOpen && (
         <DailyManifestation
           manifestation={profile.manifestation}
