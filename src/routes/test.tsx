@@ -5,7 +5,7 @@ import { SetupScreen, type TestConfig } from "@/components/exam/SetupScreen";
 import { InstructionsScreen } from "@/components/exam/InstructionsScreen";
 import { TestScreen } from "@/components/exam/TestScreen";
 import { AnswerKeyScreen } from "@/components/exam/AnswerKeyScreen";
-import { computeScore, saveRecord, type Option, type TestRecord } from "@/lib/exam";
+import { computeScore, newDocumentId, saveRecord, type Option, type TestRecord } from "@/lib/exam";
 
 const title = "New practice session";
 const description =
@@ -69,16 +69,18 @@ function TestPage() {
       ? evaluations.filter((verdict) => verdict === "incorrect").length
       : null;
     const saved: TestRecord = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      id: newDocumentId("test"),
       date: new Date().toISOString(),
       subject: config.subject,
       chapter: config.chapter,
       ...(config.exercise ? { exercise: config.exercise } : {}),
+      ...(config.exerciseId ? { exerciseId: config.exerciseId } : {}),
       startNumber: config.startNumber,
       durationMinutes: config.minutes,
       timeTakenSeconds,
       answers,
       ...(config.questionNumbers ? { questionNumbers: config.questionNumbers } : {}),
+      ...(config.questionIds ? { questionIds: config.questionIds } : {}),
       ...(key ? { answerKey: key } : {}),
       ...(config.questions ? { questions: config.questions } : {}),
       ...(evaluations ? { evaluations } : {}),

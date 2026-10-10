@@ -11,6 +11,7 @@ export type QuestionState = {
 export type MarkingScheme = { positive: number; negative: number };
 
 export type McqQuestion = {
+  id: string;
   number?: number;
   question: string;
   options: [string, string, string, string];
@@ -24,11 +25,13 @@ export type TestRecord = {
   subject: string;
   chapter: string;
   exercise?: string;
+  exerciseId?: string;
   startNumber: number;
   durationMinutes: number | null;
   timeTakenSeconds: number;
   answers: (Option | null)[];
   questionNumbers?: number[];
+  questionIds?: string[];
   answerKey?: (Option | null)[];
   questions?: McqQuestion[] | undefined;
 
@@ -40,6 +43,7 @@ export type TestRecord = {
 };
 
 export type Exercise = {
+  id: string;
   name: string;
   questionCount: number | null;
   answerKey: (Option | null)[] | null;
@@ -47,13 +51,14 @@ export type Exercise = {
 };
 
 export type Chapter = {
+  id: string;
   name: string;
   questionCount: number | null;
   answerKey: (Option | null)[] | null;
   exercises: Exercise[];
 };
 
-export type Subject = { name: string; chapters: Chapter[] };
+export type Subject = { id: string; name: string; chapters: Chapter[] };
 
 export const DEFAULT_EXERCISE = "Exercise 1";
 
@@ -62,6 +67,12 @@ const SUBJECTS_KEY = "cbt-subjects";
 const MARKING_KEY = "cbt-marking";
 const TEST_THEME_KEY = "cbt-test-dark-mode";
 const FAVORITE_QUESTIONS_KEY = "cbt-favorite-questions";
+const STUDY_STORE_VERSION_KEY = "cbt-study-store-version";
+
+export function newDocumentId(prefix: string) {
+  const random = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  return `${prefix}_${random}`;
+}
 
 function read<T>(key: string, fallback: T): T {
   try {
@@ -102,34 +113,52 @@ export function saveTestDarkMode(darkMode: boolean) {
 
 /* ---------- Subjects & chapters ---------- */
 
+type RawExercise = Omit<Exercise, "id" | "questions"> & { id?: string; questions?: McqQuestion[] };
 type RawChapter = {
+  id?: string;
   name: string;
   questionCount?: number | null;
   answerKey?: (Option | null)[] | null;
-  exercises?: Exercise[];
+  exercises?: RawExercise[];
 };
-type RawSubject = { name: string; chapters: (string | RawChapter)[] };
+type RawSubject = { id?: string; name: string; chapters: (string | RawChapter)[] };
+
+function normalizeQuestion(question: McqQuestion, index: number): McqQuestion {
+  return { ...question, id: question.id || newDocumentId(`question_${index + 1}`) };
+}
+
+function normalizeExercise(exercise: RawExercise): Exercise {
+  return {
+    ...exercise,
+    id: exercise.id || newDocumentId("exercise"),
+    ...(exercise.questions
+      ? { questions: exercise.questions.map(normalizeQuestion) }
+      : {}),
+  };
+}
 
 function normalizeChapter(c: string | RawChapter): Chapter {
   if (typeof c === "string") {
     return {
+      id: newDocumentId("chapter"),
       name: c,
       questionCount: null,
       answerKey: null,
-      exercises: [{ name: DEFAULT_EXERCISE, questionCount: null, answerKey: null }],
+      exercises: [{ id: newDocumentId("exercise"), name: DEFAULT_EXERCISE, questionCount: null, answerKey: null }],
     };
   }
   const exercises =
     c.exercises && c.exercises.length > 0
-      ? c.exercises
+      ? c.exercises.map(normalizeExercise)
       : [
           {
-            name: DEFAULT_EXERCISE,
+            id: newDocumentId("exercise"), name: DEFAULT_EXERCISE,
             questionCount: c.questionCount ?? null,
             answerKey: c.answerKey ?? null,
           },
         ];
   return {
+    id: c.id || newDocumentId("chapter"),
     name: c.name,
     questionCount: exercises[0]?.questionCount ?? null,
     answerKey: exercises[0]?.answerKey ?? null,
@@ -139,10 +168,27 @@ function normalizeChapter(c: string | RawChapter): Chapter {
 
 export function loadSubjects(): Subject[] {
   const raw = read<RawSubject[]>(SUBJECTS_KEY, []);
-  return raw.map((s) => ({
+  const subjects = raw.map((s) => ({
+    id: s.id || newDocumentId("subject"),
     name: s.name,
     chapters: (s.chapters ?? []).map(normalizeChapter),
   }));
+  if (JSON.stringify(raw) !== JSON.stringify(subjects)) write(SUBJECTS_KEY, subjects);
+  const favorites = read<string[]>(FAVORITE_QUESTIONS_KEY, []);
+  const migratedFavorites = favorites.map((favorite) => {
+    if (!favorite.includes("||")) return favorite;
+    const [subjectName, chapterName, exerciseName, number] = favorite.split("||");
+    const question = subjects
+      .find((subject) => subject.name === subjectName)
+      ?.chapters.find((chapter) => chapter.name === chapterName)
+      ?.exercises.find((exercise) => exercise.name === exerciseName)
+      ?.questions?.find((item, index) => String(item.number ?? index + 1) === number);
+    return question?.id ?? favorite;
+  });
+  if (JSON.stringify(favorites) !== JSON.stringify(migratedFavorites))
+    write(FAVORITE_QUESTIONS_KEY, migratedFavorites);
+  write(STUDY_STORE_VERSION_KEY, 1);
+  return subjects;
 }
 
 export function saveSubjects(subjects: Subject[]) {
@@ -152,7 +198,7 @@ export function saveSubjects(subjects: Subject[]) {
 export function addSubject(name: string): Subject[] {
   const subjects = loadSubjects();
   if (!subjects.some((s) => s.name.toLowerCase() === name.toLowerCase())) {
-    subjects.push({ name, chapters: [] });
+    subjects.push({ id: newDocumentId("subject"), name, chapters: [] });
     saveSubjects(subjects);
   }
   return loadSubjects();
@@ -173,7 +219,7 @@ export function upsertExercise(
 
   let chapter = subject.chapters.find((c) => c.name.toLowerCase() === chapterName.toLowerCase());
   if (!chapter) {
-    chapter = { name: chapterName, questionCount: null, answerKey: null, exercises: [] };
+    chapter = { id: newDocumentId("chapter"), name: chapterName, questionCount: null, answerKey: null, exercises: [] };
     subject.chapters.push(chapter);
   }
 
@@ -182,9 +228,9 @@ export function upsertExercise(
   if (existing) {
     existing.questionCount = questionCount;
     existing.answerKey = answerKey;
-    existing.questions = questions;
+    existing.questions = questions?.map(normalizeQuestion);
   } else {
-    chapter.exercises.push({ name, questionCount, answerKey, questions });
+    chapter.exercises.push({ id: newDocumentId("exercise"), name, questionCount, answerKey, questions: questions?.map(normalizeQuestion) });
   }
   chapter.questionCount = chapter.exercises[0]?.questionCount ?? null;
   chapter.answerKey = chapter.exercises[0]?.answerKey ?? null;
@@ -248,7 +294,7 @@ export function questionFavoriteId(
   question: McqQuestion,
   index: number,
 ) {
-  return `${subject}||${chapter}||${exercise}||${question.number ?? index + 1}`;
+  return question.id;
 }
 
 export function loadFavoriteQuestionIds(): string[] {
@@ -271,7 +317,17 @@ export function toggleFavoriteQuestion(id: string): string[] {
 /* ---------- History ---------- */
 
 export function loadHistory(): TestRecord[] {
-  return read<TestRecord[]>(HISTORY_KEY, []);
+  const history = read<TestRecord[]>(HISTORY_KEY, []);
+  const normalized = history.map((record) => {
+    const questions = record.questions?.map(normalizeQuestion);
+    return {
+      ...record,
+      id: record.id || newDocumentId("test"),
+      ...(questions ? { questions, questionIds: record.questionIds ?? questions.map((question) => question.id) } : {}),
+    };
+  });
+  if (JSON.stringify(history) !== JSON.stringify(normalized)) write(HISTORY_KEY, normalized);
+  return normalized;
 }
 
 export function saveRecord(record: TestRecord) {

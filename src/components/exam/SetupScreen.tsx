@@ -25,6 +25,7 @@ import {
   DEFAULT_MARKING,
   formatMarking,
   loadFavoriteQuestionIds,
+  newDocumentId,
   loadMarking,
   loadSubjects,
   saveMarking,
@@ -40,12 +41,14 @@ export type TestConfig = {
   subject: string;
   chapter: string;
   exercise: string;
+  exerciseId: string | null;
   marking: MarkingScheme;
   questionCount: number | null;
   maxQuestions: number | null;
   answerKey: (Option | null)[] | null;
   questions: McqQuestion[] | null;
   questionNumbers: number[] | null;
+  questionIds: string[] | null;
   darkMode: boolean | null;
 };
 
@@ -79,6 +82,7 @@ function parseQuestionsJson(raw: string): McqQuestion[] {
     if (q["explanation"] !== undefined && typeof q["explanation"] !== "string")
       throw new Error(`Question ${index + 1}: explanation must be text.`);
     return {
+      id: typeof q["id"] === "string" && q["id"].trim() ? q["id"] : newDocumentId("question"),
       number: index + 1,
       question: q["question"].trim(),
       options: [
@@ -306,6 +310,7 @@ export function SetupScreen({
       setJsonText(
         JSON.stringify(
           stored.questions.map((question) => ({
+            id: question.id,
             question: question.question,
             options: question.options,
             correctAnswer: optionLetters.indexOf(question.correctAnswer),
@@ -752,6 +757,7 @@ export function SetupScreen({
             subject,
             chapter,
             exercise: activeExerciseName || DEFAULT_EXERCISE,
+            exerciseId: activeExercise?.id ?? null,
             marking,
             questionCount: countMode === "fixed" ? parsedCount : null,
             maxQuestions: available,
@@ -775,6 +781,7 @@ export function SetupScreen({
               : isJsonExercise
                 ? selectedQuestions?.map((question, index) => question.number ?? parsedStart + index) ?? null
                 : null,
+            questionIds: selectedQuestions?.map((question) => question.id) ?? null,
             darkMode: null,
           })
         }}
