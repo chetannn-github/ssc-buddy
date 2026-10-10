@@ -17,7 +17,6 @@ import {
   Play,
   Repeat2,
   Route as RouteIcon,
-  Upload,
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -28,7 +27,15 @@ import { loadHistory, type TestRecord } from "@/lib/exam";
 import { trackerActiveDates } from "@/lib/tracker";
 import { loadTrackerData, saveTrackerData } from "@/lib/tracker-store";
 import { loadPracticeProfile, savePracticeProfile, type PracticeProfile } from "@/lib/profile";
-import { restorePracticeBackup } from "@/lib/backup";
+import {
+  downloadCloudSnapshot,
+  hasCloudSnapshot,
+  isFirebaseConfigured,
+  signInFirebase,
+  signInWithGoogleFirebase,
+  uploadLocalSnapshot,
+} from "@/lib/firebase-sync";
+import type { User } from "firebase/auth";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -98,10 +105,14 @@ function ProfileOnboarding({ onComplete }: { onComplete: (profile: PracticeProfi
   const [examDate, setExamDate] = useState("");
   const parsedGoal = Math.max(1, Math.min(100000, Number(goal) || 0));
   const canContinue = name.trim().length > 0 && Number(goal) >= 1;
-  const importInput = useRef<HTMLInputElement>(null);
-  const [importError, setImportError] = useState("");
+  const [accountMode, setAccountMode] = useState<"signup" | "signin">("signup");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [account, setAccount] = useState<User | null>(null);
+  const [accountBusy, setAccountBusy] = useState(false);
+  const [accountError, setAccountError] = useState("");
 
-  const submit = () => {
+  const submit = async () => {
     if (!canContinue) return;
     const profile = { name: name.trim(), questionGoal: parsedGoal };
     savePracticeProfile(profile);
@@ -115,19 +126,41 @@ function ProfileOnboarding({ onComplete }: { onComplete: (profile: PracticeProfi
         examDate,
       },
     });
+    if (account) {
+      try {
+        await uploadLocalSnapshot(account);
+        localStorage.setItem("ssc-buddy-firebase-sync-enabled", "1");
+      } catch {
+        // Profile remains safely local. Cloud sync retries from the Profile screen.
+      }
+    }
     onComplete(profile);
   };
 
-  const importBackup = async (file: File | undefined) => {
-    if (!file) return;
+  const connectAccount = async (withGoogle = false) => {
+    if (!withGoogle && (!email.trim() || !password)) {
+      setAccountError("Enter your email and password.");
+      return;
+    }
+    setAccountBusy(true);
+    setAccountError("");
     try {
-      const restored = await restorePracticeBackup(file);
-      if (restored) onComplete(restored);
-      else setImportError("Backup restored. Please finish your profile setup.");
+      const user = withGoogle
+        ? await signInWithGoogleFirebase()
+        : await signInFirebase(email.trim(), password, accountMode === "signup");
+      if (await hasCloudSnapshot(user)) {
+        await downloadCloudSnapshot(user);
+        const restored = loadPracticeProfile();
+        if (restored) {
+          onComplete(restored);
+          return;
+        }
+      }
+      setAccount(user);
     } catch (error) {
-      setImportError(error instanceof Error ? error.message : "Could not restore this backup.");
+      setAccountError(error instanceof Error ? error.message : "Could not connect to Firebase.");
     } finally {
-      if (importInput.current) importInput.current.value = "";
+      setAccountBusy(false);
     }
   };
 
@@ -137,8 +170,22 @@ function ProfileOnboarding({ onComplete }: { onComplete: (profile: PracticeProfi
         <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-400/15 text-emerald-300">
           <GraduationCap className="h-6 w-6" />
         </span>
-        <h2 className="mt-5 text-2xl font-semibold">Setup your profile</h2>
-        <div className="mt-6 space-y-4">
+        <h2 className="mt-5 text-2xl font-semibold">{account ? "Setup your profile" : "Welcome to SSC Buddy"}</h2>
+        {!isFirebaseConfigured ? (
+          <p className="mt-4 rounded-xl border border-amber-400/20 bg-amber-400/10 p-3 text-sm text-amber-100">Firebase is not configured yet. Add the values from <code>.env.example</code> to <code>.env.local</code>, then restart.</p>
+        ) : !account ? (
+          <div className="mt-6 space-y-4">
+            <p className="text-sm text-zinc-400">{accountMode === "signup" ? "Create an account to keep your progress synced everywhere." : "Sign in to restore your synced study data."}</p>
+            <label className="block text-sm font-medium text-zinc-200">Email<Input className="mt-2 h-11 border-white/10 bg-zinc-900 text-zinc-100" type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoFocus /></label>
+            <label className="block text-sm font-medium text-zinc-200">Password<Input className="mt-2 h-11 border-white/10 bg-zinc-900 text-zinc-100" type="password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
+            <Button className="h-11 w-full bg-emerald-600 hover:bg-emerald-500" disabled={accountBusy} onClick={() => void connectAccount()}>{accountBusy ? "Please wait…" : accountMode === "signup" ? "Create account" : "Sign in"}</Button>
+            <Button type="button" variant="outline" className="h-11 w-full border-white/10 bg-white/5 text-zinc-100 hover:bg-white/10" disabled={accountBusy} onClick={() => void connectAccount(true)}>Continue with Google</Button>
+            <button type="button" className="w-full text-sm text-emerald-400 hover:text-emerald-300" onClick={() => setAccountMode((mode) => mode === "signup" ? "signin" : "signup")}>{accountMode === "signup" ? "Already have an account? Sign in" : "New here? Create an account"}</button>
+            {accountError && <p className="text-sm text-amber-300">{accountError}</p>}
+          </div>
+        ) : (
+          <>
+          <div className="mt-6 space-y-4">
           <label className="block text-sm font-medium text-zinc-200">
             Your name
             <Input
@@ -184,29 +231,12 @@ function ProfileOnboarding({ onComplete }: { onComplete: (profile: PracticeProfi
         <Button
           className="mt-6 h-11 w-full bg-emerald-600 hover:bg-emerald-500"
           disabled={!canContinue}
-          onClick={submit}
+          onClick={() => void submit()}
         >
           Create my profile
         </Button>
-        <div className="mt-4 border-t border-white/10 pt-4 text-center">
-          <p className="mb-2 text-xs text-zinc-400">Already have a backup?</p>
-          <Button
-            type="button"
-            variant="ghost"
-            className="text-zinc-300 hover:bg-white/10 hover:text-white"
-            onClick={() => importInput.current?.click()}
-          >
-            <Upload className="h-4 w-4" /> Import backup
-          </Button>
-          <input
-            ref={importInput}
-            type="file"
-            accept="application/json,.json"
-            className="hidden"
-            onChange={(event) => void importBackup(event.target.files?.[0])}
-          />
-          {importError && <p className="mt-2 text-xs text-amber-300">{importError}</p>}
-        </div>
+          </>
+        )}
       </section>
     </div>
   );
