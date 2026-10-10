@@ -19,6 +19,7 @@ import { consumeLightPageLoader } from "@/lib/navigation";
 import {
   upsertExercise,
   deleteExercise,
+  addChapter,
   getExercise,
   addSubject,
   DEFAULT_EXERCISE,
@@ -270,12 +271,10 @@ export function SetupScreen({
   const createChapter = () => {
     const name = newChapter.trim();
     if (!name || !subject) return;
-    setChapterDraft(name);
-    setDraftExercise(DEFAULT_EXERCISE);
-    setDraftStep("count");
-    setDraftCount("50");
-    setDraftKey(null);
-    setIsEditing(false);
+    setSubjects(addChapter(subject, name));
+    setChapter(name);
+    setExercise("");
+    setNewChapter("");
   };
 
   const addExercise = () => {
@@ -451,7 +450,7 @@ export function SetupScreen({
 
         {chapter && (
           <div className="space-y-1.5 rounded-lg border border-border bg-background/50 p-2">
-            {answerKeyExercises.length > 0 && (
+            <div>
               <div>
                 <p className="mb-1 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
                   Answer-key exercises
@@ -474,7 +473,7 @@ export function SetupScreen({
                   </Button>
                 </div>
               </div>
-            )}
+            </div>
             <div className={answerKeyExercises.length > 0 ? "mt-3" : ""}>
               <p className="mb-1 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
                 Question-based exercises
@@ -745,7 +744,7 @@ export function SetupScreen({
             subject,
             chapterId: chapters.find((item) => item.name === chapter)?.id ?? null,
             chapter,
-            exercise: activeExerciseName || DEFAULT_EXERCISE,
+            exercise: activeExerciseName || "",
             exerciseId: activeExercise?.id ?? null,
             marking,
             questionCount: countMode === "fixed" ? parsedCount : null,
@@ -787,16 +786,6 @@ export function SetupScreen({
           </DialogHeader>
           {draftStep === "count" ? (
             <div className="space-y-3">
-              <Label htmlFor="draft-exercise" className="text-xs text-muted-foreground">
-                Exercise name
-              </Label>
-              <Input
-                id="draft-exercise"
-                value={draftExercise}
-                onChange={(e) => setDraftExercise(e.target.value)}
-                placeholder="e.g. Exercise 1"
-                disabled={isEditing}
-              />
               <Label htmlFor="draft-count" className="text-xs text-muted-foreground">
                 How many questions are in this exercise?
               </Label>
@@ -810,7 +799,7 @@ export function SetupScreen({
               <div className="flex gap-2">
                 <Button
                   onClick={() => setDraftStep("key")}
-                  disabled={Number(draftCount) < 1 || !draftExercise.trim()}
+                  disabled={Number(draftCount) < 1}
                 >
                   Next: answer key
                 </Button>

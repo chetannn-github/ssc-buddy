@@ -166,19 +166,16 @@ function normalizeChapter(c: string | RawChapter): Chapter {
       name: c,
       questionCount: null,
       answerKey: null,
-      exercises: [{ id: newDocumentId("exercise"), name: DEFAULT_EXERCISE, questionCount: null, answerKey: null }],
+      exercises: [],
     };
   }
-  const exercises =
-    c.exercises && c.exercises.length > 0
-      ? c.exercises.map(normalizeExercise)
-      : [
-          {
-            id: newDocumentId("exercise"), name: DEFAULT_EXERCISE,
-            questionCount: c.questionCount ?? null,
-            answerKey: c.answerKey ?? null,
-          },
-        ];
+  // Legacy chapter-only data gets one compatible exercise. Newly-created chapters
+  // persist as an empty exercise list until the student explicitly adds one.
+  const exercises = c.exercises !== undefined
+    ? c.exercises.map(normalizeExercise)
+    : c.questionCount !== undefined || c.answerKey !== undefined
+      ? [{ id: newDocumentId("exercise"), name: DEFAULT_EXERCISE, questionCount: c.questionCount ?? null, answerKey: c.answerKey ?? null }]
+      : [];
   return {
     id: c.id || newDocumentId("chapter"),
     name: c.name,
@@ -283,7 +280,20 @@ export function addChapter(
   questionCount: number | null = null,
   answerKey: (Option | null)[] | null = null,
 ): Subject[] {
-  return upsertExercise(subjectName, chapter, DEFAULT_EXERCISE, questionCount, answerKey);
+  const subjects = loadSubjects();
+  const subject = subjects.find((item) => item.name === subjectName);
+  if (!subject || !chapter.trim()) return subjects;
+  if (!subject.chapters.some((item) => item.name.toLowerCase() === chapter.trim().toLowerCase())) {
+    subject.chapters.push({
+      id: newDocumentId("chapter"),
+      name: chapter.trim(),
+      questionCount,
+      answerKey,
+      exercises: [],
+    });
+    saveSubjects(subjects);
+  }
+  return loadSubjects();
 }
 
 export function getChapter(subjectName: string, chapterName: string): Chapter | null {
