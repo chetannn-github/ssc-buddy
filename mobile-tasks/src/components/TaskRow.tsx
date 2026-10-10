@@ -27,8 +27,8 @@ export function TaskRow({ task, onDone, onReopen, onEdit, onDelete, compact = fa
           {task.name}
         </Text>
         <Text style={styles.meta} numberOfLines={1}>
-          {task.subject} · {task.type} · {formatMinutes(task.targetMinutes)} target
-          {task.completed ? ` · ${formatMinutes(task.minutesSpent ?? 0)} done` : ""}
+          {task.subject} · {task.type}
+          {task.completed ? ` · ${formatMinutes(task.minutesSpent ?? 0)} completed` : ""}
         </Text>
       </Pressable>
       <Pressable accessibilityLabel="Delete task" onPress={onDelete} hitSlop={10}>

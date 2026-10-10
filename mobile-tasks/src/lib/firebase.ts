@@ -61,14 +61,12 @@ export function observeSession(callback: (user: User | null) => void) {
   return onAuthStateChanged(getFirebaseAuth(), callback);
 }
 
-export async function continueWithEmail(email: string, password: string) {
+export async function continueWithEmail(email: string, password: string, createAccount: boolean) {
   const firebaseAuth = getFirebaseAuth();
-  try {
-    return (await signInWithEmailAndPassword(firebaseAuth, email, password)).user;
-  } catch (error) {
-    if ((error as { code?: string }).code !== "auth/user-not-found") throw error;
-    return (await createUserWithEmailAndPassword(firebaseAuth, email, password)).user;
-  }
+  const result = createAccount
+    ? await createUserWithEmailAndPassword(firebaseAuth, email, password)
+    : await signInWithEmailAndPassword(firebaseAuth, email, password);
+  return result.user;
 }
 
 export async function logout() {

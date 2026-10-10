@@ -9,7 +9,6 @@ export type Task = {
   createdAt: string;
   completed: boolean;
   completedAt: string | null;
-  targetMinutes: number;
   minutesSpent: number | null;
 };
 
@@ -30,7 +29,6 @@ export function summarizeTasks(tasks: Task[]) {
     total: tasks.length,
     done: done.length,
     minutes: done.reduce((total, task) => total + (task.minutesSpent ?? 0), 0),
-    targetMinutes: tasks.reduce((total, task) => total + task.targetMinutes, 0),
     percent: tasks.length ? Math.round((done.length / tasks.length) * 100) : 0,
   };
 }

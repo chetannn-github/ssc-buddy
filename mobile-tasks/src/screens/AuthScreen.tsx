@@ -16,6 +16,7 @@ export function AuthScreen({ onAuthenticated }: Props) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -24,7 +25,7 @@ export function AuthScreen({ onAuthenticated }: Props) {
     setLoading(true);
     setMessage("");
     try {
-      await continueWithEmail(email.trim(), password);
+      await continueWithEmail(email.trim(), password, mode === "signup");
       onAuthenticated();
     } catch (error) {
       setMessage(error instanceof Error ? error.message.replace("Firebase: ", "") : "Could not continue.");
@@ -58,8 +59,12 @@ export function AuthScreen({ onAuthenticated }: Props) {
       <View style={[styles.formSide, compact && styles.formCompact]}>
         {compact && <Brand />}
         <Text style={styles.kicker}>YOUR PRIVATE WORKSPACE</Text>
-        <Text style={styles.heading}>Continue to SSC Buddy</Text>
-        <Text style={styles.description}>Sign in if you already have an account. Otherwise, we’ll create one for you.</Text>
+        <Text style={styles.heading}>{mode === "signin" ? "Welcome back" : "Create your account"}</Text>
+        <Text style={styles.description}>
+          {mode === "signin"
+            ? "Sign in to continue your preparation."
+            : "Use your email and password to create a private workspace."}
+        </Text>
         {!isFirebaseConfigured ? (
           <View style={styles.warning}>
             <Text style={styles.warningText}>Add Firebase values to mobile-tasks/.env before signing in.</Text>
@@ -93,13 +98,25 @@ export function AuthScreen({ onAuthenticated }: Props) {
                 </Pressable>
               </View>
               <Pressable disabled={loading} style={[styles.continue, loading && styles.disabled]} onPress={() => void submit()}>
-                <Text style={styles.continueText}>Continue</Text>
+                <Text style={styles.continueText}>{mode === "signin" ? "Sign in" : "Create account"}</Text>
               </Pressable>
             </View>
             <View style={styles.divider}><View style={styles.dividerLine} /><Text style={styles.dividerText}>OR</Text><View style={styles.dividerLine} /></View>
             <Pressable disabled={loading} style={[styles.google, loading && styles.disabled]} onPress={() => setMessage("Google sign-in will be enabled after Google OAuth client IDs are added to .env.")}>
               <Image source={googleImage} style={styles.googleIcon} />
               <Text style={styles.googleText}>Continue with Google</Text>
+            </Pressable>
+            <Pressable
+              disabled={loading}
+              onPress={() => {
+                setMode((current) => (current === "signin" ? "signup" : "signin"));
+                setMessage("");
+              }}
+              style={styles.modeSwitch}
+            >
+              <Text style={styles.modeSwitchText}>
+                {mode === "signin" ? "New here? Create an account" : "Already have an account? Sign in"}
+              </Text>
             </Pressable>
             {!!message && <Text style={styles.message}>{message}</Text>}
           </>
@@ -131,5 +148,6 @@ const styles = StyleSheet.create({
   continue: { height: 50, borderRadius: 25, alignItems: "center", justifyContent: "center", backgroundColor: colors.accent }, continueText: { color: colors.accentDeep, fontSize: 14, fontWeight: "800" }, disabled: { opacity: 0.58 },
   divider: { flexDirection: "row", alignItems: "center", gap: 10, marginVertical: 19 }, dividerLine: { flex: 1, height: 1, backgroundColor: "#303030" }, dividerText: { color: colors.subdued, fontSize: 10, fontWeight: "700" },
   google: { height: 50, borderRadius: 25, borderWidth: 1, borderColor: "#303030", alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 9, backgroundColor: "rgba(255,255,255,0.04)" }, googleIcon: { width: 17, height: 17 }, googleText: { color: colors.text, fontSize: 14, fontWeight: "600" }, message: { color: "#fcd34d", marginTop: 14, textAlign: "center", fontSize: 13 },
+  modeSwitch: { alignSelf: "center", marginTop: 19, padding: 5 }, modeSwitchText: { color: colors.muted, fontSize: 13, fontWeight: "600" },
   loadingLayer: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(16,16,16,0.88)", alignItems: "center", justifyContent: "center" }, loadingCard: { alignItems: "center", gap: 11, borderRadius: 18, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceRaised, paddingHorizontal: 28, paddingVertical: 24 }, loadingText: { color: colors.text, fontSize: 14, fontWeight: "600" },
 });

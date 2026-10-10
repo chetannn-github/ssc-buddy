@@ -46,13 +46,7 @@ function AuthPage() {
     setLoading(true);
     setMessage("");
     try {
-      let user;
-      try {
-        user = await signInFirebase(email.trim(), password);
-      } catch (error) {
-        if ((error as { code?: string }).code !== "auth/user-not-found") throw error;
-        user = await signInFirebase(email.trim(), password, true);
-      }
+      const user = await signInFirebase(email.trim(), password, mode === "signup");
       await finishAuthentication(user);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not sign in.");
@@ -90,16 +84,19 @@ function AuthPage() {
         <div className="w-full max-w-sm">
           <div className="mb-8 lg:hidden"><span className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-400/15 text-emerald-300"><GraduationCap className="h-5 w-5" /></span><h1 className="mt-4 text-2xl font-semibold">SSC Buddy</h1></div>
           <p className="text-xs font-semibold tracking-[.18em] text-emerald-300 uppercase">Your private workspace</p>
-          <h2 className="mt-2 text-3xl font-semibold tracking-tight">Continue to SSC Buddy</h2>
-          <p className="mt-2 text-sm text-zinc-400">Sign in if you already have an account. Otherwise, we’ll create one for you.</p>
+          <h2 className="mt-2 text-3xl font-semibold tracking-tight">{mode === "signin" ? "Welcome back" : "Create your account"}</h2>
+          <p className="mt-2 text-sm text-zinc-400">{mode === "signin" ? "Sign in to continue your preparation." : "Use your email and password to create a private workspace."}</p>
           {!isFirebaseConfigured ? <p className="mt-6 rounded-xl border border-amber-400/20 bg-amber-400/10 p-3 text-sm text-amber-100">Firebase is not configured yet. Add the values from <code>.env.example</code> to <code>.env.local</code>.</p> : <>
             <form className="mt-7 space-y-4" onSubmit={(event) => void submit(event)}>
               <input className="h-12 w-full rounded-full border border-white/10 bg-white/[.04] px-5 text-sm outline-none transition focus:border-emerald-400/60" type="email" placeholder="Email" value={email} onChange={(event) => setEmail(event.target.value)} autoFocus />
               <div className="relative"><input className="h-12 w-full rounded-full border border-white/10 bg-white/[.04] px-5 pr-12 text-sm outline-none transition focus:border-emerald-400/60" type={showPassword ? "text" : "password"} placeholder="Password" value={password} onChange={(event) => setPassword(event.target.value)} /><button className="absolute top-1/2 right-4 -translate-y-1/2 text-zinc-500 hover:text-zinc-200" type="button" onClick={() => setShowPassword((visible) => !visible)}>{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div>
-              <button className="flex h-12 w-full items-center justify-center rounded-full bg-emerald-500 text-sm font-semibold text-[#06251d] transition hover:bg-emerald-400 disabled:opacity-60" disabled={loading}>Continue</button>
+              <button className="flex h-12 w-full items-center justify-center rounded-full bg-emerald-500 text-sm font-semibold text-[#06251d] transition hover:bg-emerald-400 disabled:opacity-60" disabled={loading}>{mode === "signin" ? "Sign in" : "Create account"}</button>
             </form>
             <div className="my-5 flex items-center gap-3 text-xs text-zinc-600 before:h-px before:flex-1 before:bg-white/10 after:h-px after:flex-1 after:bg-white/10">OR</div>
             <button className="flex h-12 w-full items-center justify-center gap-2 rounded-full border border-white/10 bg-white/[.04] text-sm font-medium transition hover:bg-white/[.08] disabled:opacity-60" type="button" disabled={loading} onClick={() => void signInWithGoogle()}><img src="/google.png" alt="" aria-hidden="true" className="h-4 w-4" />Continue with Google</button>
+            <button type="button" className="mt-5 w-full text-center text-sm text-zinc-400 transition hover:text-emerald-300" onClick={() => { setMode((current) => current === "signin" ? "signup" : "signin"); setMessage(""); }}>
+              {mode === "signin" ? "New here? Create an account" : "Already have an account? Sign in"}
+            </button>
             {message && <p className="mt-4 text-center text-sm text-amber-300">{message}</p>}
           </>}
         </div>
