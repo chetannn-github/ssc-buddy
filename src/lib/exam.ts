@@ -22,6 +22,8 @@ export type McqQuestion = {
 export type TestRecord = {
   id: string;
   date: string;
+  testMode?: "standard" | "random";
+  attemptGroupId?: string;
   subjectId?: string;
   subject: string;
   chapterId?: string;
@@ -331,6 +333,7 @@ export function loadHistory(): TestRecord[] {
   const history = read<TestRecord[]>(HISTORY_KEY, []);
   const subjects = loadSubjects();
   const normalized = history.map((record) => {
+    const recordId = record.id || newDocumentId("test");
     const questions = record.questions?.map(normalizeQuestion);
     const subject = subjects.find((item) => item.id === record.subjectId || item.name === record.subject);
     const chapter = subject?.chapters.find(
@@ -339,9 +342,15 @@ export function loadHistory(): TestRecord[] {
     const exercise = chapter?.exercises.find(
       (item) => item.id === record.exerciseId || item.name === record.exercise,
     );
+    const isLegacyRandom = Boolean(
+      record.questions?.length &&
+        record.questionNumbers?.some((number, index) => number !== record.startNumber + index),
+    );
+    const testMode = record.testMode ?? (isLegacyRandom ? "random" : "standard");
     return {
       ...record,
-      id: record.id || newDocumentId("test"),
+      id: recordId,
+      ...(testMode === "random" ? { testMode, attemptGroupId: record.attemptGroupId ?? recordId } : {}),
       ...(subject ? { subjectId: subject.id } : {}),
       ...(chapter ? { chapterId: chapter.id } : {}),
       ...(exercise ? { exerciseId: exercise.id } : {}),
@@ -369,6 +378,7 @@ export function getRecord(id: string): TestRecord | null {
 }
 
 export function attemptKey(r: TestRecord) {
+  if (r.testMode === "random") return r.attemptGroupId ?? r.id;
   return `${r.subjectId ?? r.subject}||${r.chapterId ?? r.chapter}||${r.exerciseId ?? r.exercise ?? ""}||${r.startNumber}||${r.answers.length}`;
 }
 

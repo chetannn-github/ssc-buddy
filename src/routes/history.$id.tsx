@@ -7,11 +7,11 @@ import { SolutionScreen } from "@/components/exam/SolutionScreen";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
-  computeScore,
   getAttemptGroup,
   getExercise,
   getRecord,
   saveRecord,
+  reevaluateRecord,
   type TestRecord,
 } from "@/lib/exam";
 
@@ -64,28 +64,21 @@ function ResultDetail() {
     const exercise = getExercise(record.subject, record.chapter, record.exercise);
     // JSON attempts keep their key with the history record, so a deleted source
     // exercise can still be evaluated accurately instead of using another set.
-    const fullAnswerKey = exercise?.answerKey ?? record.answerKey;
+    const fullAnswerKey = record.questions?.length || record.questionIds?.length
+      ? record.answerKey
+      : exercise?.answerKey ?? record.answerKey;
     if (!fullAnswerKey) return;
 
-    const answerKey = fullAnswerKey.slice(
-      record.startNumber - 1,
-      record.startNumber - 1 + record.answers.length,
-    );
-    const evaluations = record.answers.map((answer, index) => {
-      const correctAnswer = answerKey[index];
-      if (!answer || !correctAnswer) return null;
-      return answer === correctAnswer ? "correct" : "incorrect";
-    });
-    const correct = evaluations.filter((verdict) => verdict === "correct").length;
-    const wrong = evaluations.filter((verdict) => verdict === "incorrect").length;
-    const updatedRecord: TestRecord = {
+    const answerKey = record.questions?.length || record.questionIds?.length
+      ? fullAnswerKey
+      : fullAnswerKey.slice(
+          record.startNumber - 1,
+          record.startNumber - 1 + record.answers.length,
+        );
+    const updatedRecord = reevaluateRecord({
       ...record,
       answerKey,
-      evaluations,
-      correct,
-      wrong,
-      score: computeScore(correct, wrong, record.marking),
-    };
+    });
 
     saveRecord(updatedRecord);
     setRecord(updatedRecord);

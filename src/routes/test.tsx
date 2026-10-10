@@ -71,6 +71,8 @@ function TestPage() {
     const saved: TestRecord = {
       id: newDocumentId("test"),
       date: new Date().toISOString(),
+      testMode: config.testMode,
+      ...(config.testMode === "random" ? { attemptGroupId: newDocumentId("attempt-group") } : {}),
       ...(config.subjectId ? { subjectId: config.subjectId } : {}),
       subject: config.subject,
       ...(config.chapterId ? { chapterId: config.chapterId } : {}),

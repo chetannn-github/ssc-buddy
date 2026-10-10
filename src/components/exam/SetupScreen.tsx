@@ -38,6 +38,7 @@ import {
 export type TestConfig = {
   minutes: number;
   startNumber: number;
+  testMode: "standard" | "random";
   subjectId: string | null;
   subject: string;
   chapterId: string | null;
@@ -756,6 +757,7 @@ export function SetupScreen({
           onStart({
             minutes: parsedMinutes,
             startNumber: parsedStart,
+            testMode: questionOrder === "random" ? "random" : "standard",
             subjectId: subjects.find((item) => item.name === subject)?.id ?? null,
             subject,
             chapterId: chapters.find((item) => item.name === chapter)?.id ?? null,
