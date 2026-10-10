@@ -502,12 +502,16 @@ export function MotivationalVideos({
                 ref={videoRef}
                 key={`${selectedVideo}-${videoDirection}`}
                 className={cn(
-                  "h-full w-full cursor-pointer object-contain",
+                  "h-full w-full cursor-pointer touch-none select-none object-contain [-webkit-touch-callout:none]",
                   videoDirection === "next" ? "reel-slide-in-up" : "reel-slide-in-down",
                 )}
                 autoPlay
                 loop
                 playsInline
+                controlsList="nodownload noplaybackrate"
+                disablePictureInPicture
+                onContextMenu={(event) => event.preventDefault()}
+                onDragStart={(event) => event.preventDefault()}
                 onClick={() => {
                   if (didSwipe.current) {
                     didSwipe.current = false;
