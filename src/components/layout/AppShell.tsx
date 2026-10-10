@@ -27,15 +27,7 @@ import { loadHistory, type TestRecord } from "@/lib/exam";
 import { trackerActiveDates } from "@/lib/tracker";
 import { loadTrackerData, saveTrackerData } from "@/lib/tracker-store";
 import { loadPracticeProfile, savePracticeProfile, type PracticeProfile } from "@/lib/profile";
-import {
-  downloadCloudSnapshot,
-  hasCloudSnapshot,
-  isFirebaseConfigured,
-  observeFirebaseUser,
-  startLocalSync,
-  uploadLocalSnapshot,
-  watchCloudSnapshot,
-} from "@/lib/firebase-sync";
+import { isFirebaseConfigured, observeFirebaseUser } from "@/lib/firebase-sync";
 import type { User } from "firebase/auth";
 import { cn } from "@/lib/utils";
 
@@ -1054,7 +1046,6 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
   const [manifestationOpen, setManifestationOpen] = useState(false);
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(!isFirebaseConfigured);
-  const syncCleanup = useRef<(() => void) | null>(null);
   const previousStreak = useRef<number | null>(null);
 
   useEffect(() => {
@@ -1084,32 +1075,6 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
   useEffect(() => {
     if (isFirebaseConfigured && authReady && !authUser) void navigate({ to: "/auth", replace: true });
   }, [authReady, authUser, navigate]);
-
-  useEffect(() => {
-    if (!authUser) return;
-    let cancelled = false;
-    const startAutomaticSync = async () => {
-      try {
-        const hydrationKey = `ssc-buddy-firebase-hydrated:${authUser.uid}`;
-        // Cloud data is loaded once when this browser session starts. Never re-download it
-        // during route changes, otherwise a just-finished test can be overwritten by an older copy.
-        if (sessionStorage.getItem(hydrationKey) !== "1") {
-          if (await hasCloudSnapshot(authUser)) await downloadCloudSnapshot(authUser);
-          else await uploadLocalSnapshot(authUser);
-          sessionStorage.setItem(hydrationKey, "1");
-        }
-        if (cancelled) return;
-        localStorage.setItem("ssc-buddy-firebase-sync-enabled", "1");
-        const stopLocalSync = startLocalSync(authUser);
-        const stopCloudWatch = watchCloudSnapshot(authUser, () => { void downloadCloudSnapshot(authUser); });
-        syncCleanup.current = () => { stopLocalSync(); stopCloudWatch(); };
-      } catch {
-        // Offline or temporary Firebase failures retry through the local sync loop on the next session.
-      }
-    };
-    void startAutomaticSync();
-    return () => { cancelled = true; syncCleanup.current?.(); syncCleanup.current = null; };
-  }, [authUser]);
 
   useEffect(() => {
     const refresh = () => setProfile(loadPracticeProfile());

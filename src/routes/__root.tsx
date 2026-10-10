@@ -7,11 +7,21 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { MotivationalMusic, MotivationalVideos } from "@/components/layout/AppShell";
+import {
+  downloadCloudSnapshot,
+  hasCloudSnapshot,
+  isFirebaseConfigured,
+  observeFirebaseUser,
+  startLocalSync,
+  uploadLocalSnapshot,
+  watchCloudSnapshot,
+} from "@/lib/firebase-sync";
+import type { User } from "firebase/auth";
 
 function NotFoundComponent() {
   return (
@@ -134,6 +144,37 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const [musicOpen, setMusicOpen] = useState(false);
   const [videosOpen, setVideosOpen] = useState(false);
+
+  const [syncUser, setSyncUser] = useState<User | null>(null);
+  const syncCleanup = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    if (!isFirebaseConfigured) return;
+    return observeFirebaseUser(setSyncUser);
+  }, []);
+
+  useEffect(() => {
+    if (!syncUser) return;
+    let cancelled = false;
+    const startAutomaticSync = async () => {
+      try {
+        const hydrationKey = `ssc-buddy-firebase-hydrated:${syncUser.uid}`;
+        if (sessionStorage.getItem(hydrationKey) !== "1") {
+          if (await hasCloudSnapshot(syncUser)) await downloadCloudSnapshot(syncUser);
+          else await uploadLocalSnapshot(syncUser);
+          sessionStorage.setItem(hydrationKey, "1");
+        }
+        if (cancelled) return;
+        const stopLocalSync = startLocalSync(syncUser);
+        const stopCloudWatch = watchCloudSnapshot(syncUser, () => { void downloadCloudSnapshot(syncUser); });
+        syncCleanup.current = () => { stopLocalSync(); stopCloudWatch(); };
+      } catch {
+        // The in-browser cache remains available, and a later session retries cloud sync.
+      }
+    };
+    void startAutomaticSync();
+    return () => { cancelled = true; syncCleanup.current?.(); syncCleanup.current = null; };
+  }, [syncUser]);
 
   useEffect(() => {
     const openMusic = () => setMusicOpen(true);
