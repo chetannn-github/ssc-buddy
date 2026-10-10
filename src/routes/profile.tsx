@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   ChevronDown,
   Copy,
-  Download,
+  Cloud,
   FilePenLine,
   LoaderCircle,
   Music2,
@@ -20,14 +20,19 @@ import { Input } from "@/components/ui/input";
 import { aggregateRecords } from "@/lib/analytics";
 import { loadHistory, type TestRecord } from "@/lib/exam";
 import { loadPracticeProfile, savePracticeProfile, type PracticeProfile } from "@/lib/profile";
+import { restorePracticeBackup } from "@/lib/backup";
 import {
-  exportToJsonBin,
-  importFromJsonBin,
-  loadJsonBinConfig,
-  restorePracticeBackup,
-  saveJsonBinConfig,
-  type JsonBinConfig,
-} from "@/lib/backup";
+  downloadCloudSnapshot,
+  hasCloudSnapshot,
+  isFirebaseConfigured,
+  observeFirebaseUser,
+  signInFirebase,
+  signOutFirebase,
+  startLocalSync,
+  uploadLocalSnapshot,
+  watchCloudSnapshot,
+} from "@/lib/firebase-sync";
+import type { User } from "firebase/auth";
 import {
   overallSyllabus,
   pct,
@@ -735,11 +740,15 @@ export function Profile() {
   });
   const [editingProfile, setEditingProfile] = useState(false);
   const [importingData, setImportingData] = useState(false);
-  const [jsonBinOpen, setJsonBinOpen] = useState(false);
-  const [jsonBinMode, setJsonBinMode] = useState<"export" | "import">("export");
-  const [jsonBinConfig, setJsonBinConfig] = useState<JsonBinConfig>({ masterKey: "" });
-  const [jsonBinBusy, setJsonBinBusy] = useState(false);
-  const [jsonBinMessage, setJsonBinMessage] = useState("");
+  const [cloudOpen, setCloudOpen] = useState(false);
+  const [cloudUser, setCloudUser] = useState<User | null>(null);
+  const [cloudEmail, setCloudEmail] = useState("");
+  const [cloudPassword, setCloudPassword] = useState("");
+  const [cloudCreateAccount, setCloudCreateAccount] = useState(false);
+  const [cloudHasData, setCloudHasData] = useState<boolean | null>(null);
+  const [cloudBusy, setCloudBusy] = useState(false);
+  const [cloudMessage, setCloudMessage] = useState("");
+  const cloudCleanup = useRef<(() => void) | null>(null);
   const [previewingAvatar, setPreviewingAvatar] = useState(false);
   const [isAvatarChanging, setIsAvatarChanging] = useState(false);
   const [loggingMockTest, setLoggingMockTest] = useState(false);
@@ -751,6 +760,26 @@ export function Profile() {
   const [importMessage, setImportMessage] = useState("");
   const [promptCopied, setPromptCopied] = useState(false);
   const importFileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!isFirebaseConfigured) return;
+    return observeFirebaseUser((user) => {
+      setCloudUser(user);
+      if (!user) setCloudHasData(null);
+    });
+  }, []);
+
+  useEffect(() => () => cloudCleanup.current?.(), []);
+
+  useEffect(() => {
+    if (!cloudUser || localStorage.getItem("ssc-buddy-firebase-sync-enabled") !== "1") return;
+    cloudCleanup.current?.();
+    const stopLocalSync = startLocalSync(cloudUser);
+    const stopCloudWatch = watchCloudSnapshot(cloudUser, () => {
+      void downloadCloudSnapshot(cloudUser).then(() => window.location.reload());
+    });
+    cloudCleanup.current = () => { stopLocalSync(); stopCloudWatch(); };
+  }, [cloudUser]);
 
   useEffect(() => {
     hasShownProfileLoader = true;
@@ -891,33 +920,40 @@ export function Profile() {
       setImportMessage("Choose a valid full backup or Tracker JSON file.");
     }
   };
-  const openJsonBin = (mode: "export" | "import") => {
-    setJsonBinMode(mode);
-    setJsonBinConfig(loadJsonBinConfig() ?? { masterKey: "" });
-    setJsonBinMessage("");
-    setJsonBinOpen(true);
-  };
-  const syncJsonBin = async () => {
-    if (!jsonBinConfig.masterKey.trim()) {
-      setJsonBinMessage("Master key is required.");
-      return;
-    }
-    setJsonBinBusy(true);
-    setJsonBinMessage("");
+  const connectCloud = async () => {
+    if (!cloudEmail.trim() || !cloudPassword) return setCloudMessage("Enter your email and password.");
+    setCloudBusy(true);
+    setCloudMessage("");
     try {
-      saveJsonBinConfig(jsonBinConfig);
-      if (jsonBinMode === "export") {
-        const id = await exportToJsonBin(jsonBinConfig);
-        setJsonBinConfig((current) => ({ ...current, binId: id }));
-        setJsonBinMessage("Cloud backup saved. Local study data was cleared.");
-      } else {
-        await importFromJsonBin(jsonBinConfig);
-        window.location.reload();
-      }
+      const user = await signInFirebase(cloudEmail.trim(), cloudPassword, cloudCreateAccount);
+      setCloudUser(user);
+      setCloudHasData(await hasCloudSnapshot(user));
     } catch (error) {
-      setJsonBinMessage(error instanceof Error ? error.message : "Cloud sync failed.");
+      setCloudMessage(error instanceof Error ? error.message : "Could not sign in to Firebase.");
     } finally {
-      setJsonBinBusy(false);
+      setCloudBusy(false);
+    }
+  };
+  const activateCloudSync = async (mode: "upload" | "download") => {
+    if (!cloudUser) return;
+    setCloudBusy(true);
+    setCloudMessage("");
+    try {
+      if (mode === "upload") await uploadLocalSnapshot(cloudUser);
+      else await downloadCloudSnapshot(cloudUser);
+      localStorage.setItem("ssc-buddy-firebase-sync-enabled", "1");
+      cloudCleanup.current?.();
+      const stopLocalSync = startLocalSync(cloudUser);
+      const stopCloudWatch = watchCloudSnapshot(cloudUser, () => {
+        void downloadCloudSnapshot(cloudUser).then(() => window.location.reload());
+      });
+      cloudCleanup.current = () => { stopLocalSync(); stopCloudWatch(); };
+      setCloudMessage("Firebase sync is active.");
+      if (mode === "download") window.setTimeout(() => window.location.reload(), 450);
+    } catch (error) {
+      setCloudMessage(error instanceof Error ? error.message : "Could not sync your data.");
+    } finally {
+      setCloudBusy(false);
     }
   };
 
@@ -1018,17 +1054,9 @@ export function Profile() {
                   type="button"
                   variant="ghost"
                   className="h-9 gap-1.5 px-2.5 text-sm text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
-                  onClick={() => openJsonBin("export")}
+                  onClick={() => { setCloudMessage(""); setCloudOpen(true); }}
                 >
-                  <Download className="h-3.5 w-3.5" /> Export
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="h-9 gap-1.5 px-2.5 text-sm text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
-                  onClick={() => openJsonBin("import")}
-                >
-                  <Upload className="h-3.5 w-3.5" /> Import
+                  <Cloud className="h-3.5 w-3.5" /> Cloud sync
                 </Button>
               </div>
             </div>
@@ -1140,64 +1168,39 @@ export function Profile() {
           </section>
         </div>
       )}
-      {jsonBinOpen && (
+      {cloudOpen && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 p-4 backdrop-blur-md">
           <section className="w-full max-w-md rounded-2xl border border-white/10 bg-[#1e1e1e] p-6 text-zinc-100 shadow-2xl">
-            <h2 className="text-xl font-semibold">
-              {jsonBinMode === "export" ? "Export to cloud" : "Import from cloud"}
-            </h2>
-            <p className="mt-1 text-sm text-zinc-400">
-              {jsonBinMode === "export"
-                ? "Saves a full backup to your private JSONBin, deletes the older cloud backup, then clears local study data."
-                : "Fetches your private cloud backup and replaces local study data."}
-            </p>
-            <div className="mt-5 space-y-3">
-              <label className="block text-sm text-zinc-300">
-                JSONBin master key
-                <Input
-                  type="password"
-                  value={jsonBinConfig.masterKey}
-                  onChange={(event) => setJsonBinConfig((current) => ({ ...current, masterKey: event.target.value }))}
-                  className="mt-1.5 border-white/10 bg-[#151515] text-zinc-100"
-                  autoComplete="off"
-                />
-              </label>
-              <label className="block text-sm text-zinc-300">
-                Access key <span className="text-zinc-500">(optional for import)</span>
-                <Input
-                  type="password"
-                  value={jsonBinConfig.accessKey ?? ""}
-                  onChange={(event) => setJsonBinConfig((current) => {
-                    const { accessKey: _accessKey, ...rest } = current;
-                    return event.target.value ? { ...rest, accessKey: event.target.value } : rest;
-                  })}
-                  className="mt-1.5 border-white/10 bg-[#151515] text-zinc-100"
-                  autoComplete="off"
-                />
-              </label>
-              {jsonBinMode === "import" && (
-                <label className="block text-sm text-zinc-300">
-                  Cloud backup ID
-                  <Input
-                    value={jsonBinConfig.binId ?? ""}
-                    onChange={(event) => setJsonBinConfig((current) => {
-                      const { binId: _binId, ...rest } = current;
-                      return event.target.value ? { ...rest, binId: event.target.value } : rest;
-                    })}
-                    className="mt-1.5 border-white/10 bg-[#151515] text-zinc-100"
-                    placeholder="JSONBin ID"
-                    autoComplete="off"
-                  />
-                </label>
-              )}
-              {jsonBinMessage && <p className="text-sm text-amber-300">{jsonBinMessage}</p>}
-            </div>
+            <h2 className="text-xl font-semibold">Firebase cloud sync</h2>
+            {!isFirebaseConfigured ? (
+              <p className="mt-3 rounded-lg border border-amber-400/20 bg-amber-400/10 p-3 text-sm text-amber-100">
+                Add Firebase Web App values to <code className="text-amber-200">.env.local</code> using <code className="text-amber-200">.env.example</code>, then restart the app.
+              </p>
+            ) : !cloudUser ? (
+              <div className="mt-5 space-y-3">
+                <p className="text-sm text-zinc-400">Sign in with the same account on laptop and mobile.</p>
+                <label className="block text-sm text-zinc-300">Email<Input type="email" value={cloudEmail} onChange={(event) => setCloudEmail(event.target.value)} className="mt-1.5 border-white/10 bg-[#151515] text-zinc-100" /></label>
+                <label className="block text-sm text-zinc-300">Password<Input type="password" value={cloudPassword} onChange={(event) => setCloudPassword(event.target.value)} className="mt-1.5 border-white/10 bg-[#151515] text-zinc-100" /></label>
+                <button type="button" onClick={() => setCloudCreateAccount((value) => !value)} className="text-sm text-emerald-400 hover:text-emerald-300">{cloudCreateAccount ? "Use existing account" : "Create a new account"}</button>
+              </div>
+            ) : cloudHasData === null ? (
+              <div className="mt-5"><p className="text-sm text-zinc-400">Checking your cloud data…</p><Button className="mt-4 bg-emerald-600 hover:bg-emerald-500" onClick={() => void hasCloudSnapshot(cloudUser).then(setCloudHasData)}>Continue</Button></div>
+            ) : (
+              <div className="mt-5 space-y-3">
+                <p className="text-sm text-zinc-400">Connected as {cloudUser.email}.</p>
+                {cloudHasData ? <p className="text-sm text-zinc-300">Cloud data already exists. Choose which version to keep first.</p> : <p className="text-sm text-zinc-300">Your local data will be uploaded securely to Firebase.</p>}
+                <div className="flex flex-wrap gap-2">
+                  <Button className="bg-emerald-600 hover:bg-emerald-500" disabled={cloudBusy} onClick={() => void activateCloudSync("upload")}>{cloudBusy ? "Syncing…" : cloudHasData ? "Use this device" : "Start cloud sync"}</Button>
+                  {cloudHasData && <Button variant="outline" className="border-white/10 bg-white/5 text-zinc-100" disabled={cloudBusy} onClick={() => void activateCloudSync("download")}>Use cloud data</Button>}
+                  <Button variant="ghost" className="text-zinc-400" onClick={() => void signOutFirebase()}>Sign out</Button>
+                </div>
+              </div>
+            )}
+            {cloudMessage && <p className="mt-4 text-sm text-amber-300">{cloudMessage}</p>}
             <div className="mt-6 flex justify-end gap-2">
-              <Button variant="outline" className="border-white/10 bg-white/5 text-zinc-200" onClick={() => setJsonBinOpen(false)} disabled={jsonBinBusy}>
+              {!cloudUser && isFirebaseConfigured && <Button className="bg-emerald-600 hover:bg-emerald-500" onClick={() => void connectCloud()} disabled={cloudBusy}>{cloudBusy ? "Working…" : cloudCreateAccount ? "Create account" : "Sign in"}</Button>}
+              <Button variant="outline" className="border-white/10 bg-white/5 text-zinc-200" onClick={() => setCloudOpen(false)} disabled={cloudBusy}>
                 Cancel
-              </Button>
-              <Button className="bg-emerald-600 hover:bg-emerald-500" onClick={() => void syncJsonBin()} disabled={jsonBinBusy}>
-                {jsonBinBusy ? "Working…" : jsonBinMode === "export" ? "Export & clear local" : "Import & replace local"}
               </Button>
             </div>
           </section>
