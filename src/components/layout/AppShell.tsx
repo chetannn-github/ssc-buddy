@@ -330,6 +330,8 @@ export function MotivationalVideos({
   const [videoDirection, setVideoDirection] = useState<"next" | "previous">("next");
   const [dragOffset, setDragOffset] = useState(0);
   const [isDraggingReel, setIsDraggingReel] = useState(false);
+  const [isFastForward, setIsFastForward] = useState(false);
+  const [videoProgress, setVideoProgress] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
   const swipeStartY = useRef<number | null>(null);
   const didSwipe = useRef(false);
@@ -440,7 +442,10 @@ export function MotivationalVideos({
               setIsDraggingReel(true);
               if (longPressTimer.current) clearTimeout(longPressTimer.current);
               longPressTimer.current = setTimeout(() => {
-                if (videoRef.current) videoRef.current.playbackRate = 2;
+                if (videoRef.current) {
+                  videoRef.current.playbackRate = 2;
+                  setIsFastForward(true);
+                }
               }, 450);
             }}
             onTouchMove={(event) => {
@@ -458,6 +463,7 @@ export function MotivationalVideos({
             onTouchEnd={(event) => {
               if (longPressTimer.current) clearTimeout(longPressTimer.current);
               if (videoRef.current) videoRef.current.playbackRate = 1;
+              setIsFastForward(false);
               const start = swipeStartY.current;
               swipeStartY.current = null;
               const end = event.changedTouches[0]?.clientY;
@@ -480,6 +486,7 @@ export function MotivationalVideos({
             onTouchCancel={() => {
               if (longPressTimer.current) clearTimeout(longPressTimer.current);
               if (videoRef.current) videoRef.current.playbackRate = 1;
+              setIsFastForward(false);
               setIsDraggingReel(false);
               setDragOffset(0);
             }}
@@ -511,6 +518,17 @@ export function MotivationalVideos({
                 onDoubleClick={toggleLike}
                 onPlay={() => setIsPlaying(true)}
                 onPause={() => setIsPlaying(false)}
+                onLoadedMetadata={(event) => {
+                  event.currentTarget.playbackRate = 1;
+                  setIsFastForward(false);
+                  setVideoProgress(0);
+                }}
+                onTimeUpdate={(event) => {
+                  const { currentTime, duration } = event.currentTarget;
+                  setVideoProgress(
+                    Number.isFinite(duration) && duration > 0 ? (currentTime / duration) * 100 : 0,
+                  );
+                }}
               >
                 <source src={`/videos/${encodeURIComponent(selectedVideo)}`} />
                 Your browser does not support video playback.
@@ -527,6 +545,17 @@ export function MotivationalVideos({
                 </span>
               </div>
             )}
+            {isFastForward && (
+              <span className="pointer-events-none absolute top-4 right-14 z-20 rounded-full bg-red-500 px-2.5 py-1 text-xs font-bold text-white shadow-lg">
+                2×
+              </span>
+            )}
+            <div className="pointer-events-none absolute right-0 bottom-0 left-0 z-20 h-1 bg-white/20">
+              <span
+                className="block h-full bg-red-500 transition-[width] duration-150"
+                style={{ width: `${videoProgress}%` }}
+              />
+            </div>
             <div className="pointer-events-none absolute top-1/2 right-3 flex -translate-y-1/2 flex-col gap-3 opacity-100 transition-opacity sm:right-5 sm:opacity-0 sm:group-hover:opacity-100">
               <button
                 type="button"

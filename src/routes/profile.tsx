@@ -13,6 +13,7 @@ import {
   Upload,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -274,6 +275,11 @@ function ActivityHeatmap({
     };
   }, [records, tracker, range]);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [hoveredTooltip, setHoveredTooltip] = useState<{
+    text: string;
+    x: number;
+    y: number;
+  } | null>(null);
   const heatmapScrollRef = useRef<HTMLDivElement>(null);
   const activeDay = days.find(({ date }) => localDay(date) === selectedDay) ?? days.at(-1);
 
@@ -318,7 +324,7 @@ function ActivityHeatmap({
                     className="grid grid-flow-col grid-rows-7 gap-[3px]"
                     style={{ gridTemplateColumns: "repeat(5, minmax(0, 1fr))" }}
                   >
-                    {month.days.map(({ date, value, maximum }, dayIndex) => {
+                    {month.days.map(({ date, value, maximum }) => {
                       const intensity =
                         value === 0 ? 0 : Math.min(4, Math.ceil((value / maximum) * 4));
                       return (
@@ -326,6 +332,24 @@ function ActivityHeatmap({
                           type="button"
                           key={localDay(date)}
                           onClick={() => setSelectedDay(localDay(date))}
+                          onMouseEnter={(event) => {
+                            const box = event.currentTarget.getBoundingClientRect();
+                            setHoveredTooltip({
+                              text: `${value} activit${value === 1 ? "y" : "ies"} on ${formatHeatmapTooltipDate(date)}`,
+                              x: Math.max(10, Math.min(window.innerWidth - 10, box.left + box.width / 2)),
+                              y: box.top - 8,
+                            });
+                          }}
+                          onMouseLeave={() => setHoveredTooltip(null)}
+                          onFocus={(event) => {
+                            const box = event.currentTarget.getBoundingClientRect();
+                            setHoveredTooltip({
+                              text: `${value} activit${value === 1 ? "y" : "ies"} on ${formatHeatmapTooltipDate(date)}`,
+                              x: Math.max(10, Math.min(window.innerWidth - 10, box.left + box.width / 2)),
+                              y: box.top - 8,
+                            });
+                          }}
+                          onBlur={() => setHoveredTooltip(null)}
                           aria-label={`${formatDate(localDay(date))}: ${value} activit${value === 1 ? "y" : "ies"}`}
                           className={cn(
                             "group relative aspect-square w-full rounded-[3px] ring-1 ring-inset ring-white/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300",
@@ -336,13 +360,6 @@ function ActivityHeatmap({
                             intensity === 4 && "bg-emerald-700",
                           )}
                         >
-                          <span className={cn(
-                            "pointer-events-none absolute bottom-[calc(100%+0.45rem)] z-20 hidden whitespace-nowrap rounded-md border border-white/10 bg-[#1d1d1d] px-2 py-1 text-[10px] font-medium text-zinc-200 shadow-lg group-hover:block group-focus-visible:block",
-                            dayIndex >= month.days.length - 2 ? "right-0" : "left-0",
-                          )}>
-                            {value} activit{value === 1 ? "y" : "ies"} on{" "}
-                            {formatHeatmapTooltipDate(date)}
-                          </span>
                         </button>
                       );
                     })}
@@ -357,6 +374,17 @@ function ActivityHeatmap({
           )}
         </div>
       </div>
+      {hoveredTooltip && typeof document !== "undefined"
+        ? createPortal(
+            <span
+              className="pointer-events-none fixed z-[100] -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md border border-white/10 bg-[#1d1d1d] px-2 py-1 text-[10px] font-medium text-zinc-200 shadow-lg"
+              style={{ left: hoveredTooltip.x, top: hoveredTooltip.y }}
+            >
+              {hoveredTooltip.text}
+            </span>,
+            document.body,
+          )
+        : null}
       <div className="mt-3 flex items-center justify-end gap-1.5 text-[10px] text-zinc-400">
         Less
         {[0, 1, 2, 3, 4].map((intensity) => (
