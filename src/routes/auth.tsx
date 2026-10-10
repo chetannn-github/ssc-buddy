@@ -98,7 +98,7 @@ function AuthPage() {
               <button className="flex h-12 w-full items-center justify-center rounded-full bg-emerald-500 text-sm font-semibold text-[#06251d] transition hover:bg-emerald-400 disabled:opacity-60" disabled={loading}>Continue</button>
             </form>
             <div className="my-5 flex items-center gap-3 text-xs text-zinc-600 before:h-px before:flex-1 before:bg-white/10 after:h-px after:flex-1 after:bg-white/10">OR</div>
-            <button className="h-12 w-full rounded-full border border-white/10 bg-white/[.04] text-sm font-medium transition hover:bg-white/[.08] disabled:opacity-60" type="button" disabled={loading} onClick={() => void signInWithGoogle()}>Continue with Google</button>
+            <button className="flex h-12 w-full items-center justify-center gap-2 rounded-full border border-white/10 bg-white/[.04] text-sm font-medium transition hover:bg-white/[.08] disabled:opacity-60" type="button" disabled={loading} onClick={() => void signInWithGoogle()}><img src="/google.png" alt="" aria-hidden="true" className="h-4 w-4" />Continue with Google</button>
             {message && <p className="mt-4 text-center text-sm text-amber-300">{message}</p>}
           </>}
         </div>

@@ -1197,7 +1197,7 @@ export function Profile() {
                 <label className="block text-sm text-zinc-300">Password<Input type="password" value={cloudPassword} onChange={(event) => setCloudPassword(event.target.value)} className="mt-1.5 border-white/10 bg-[#151515] text-zinc-100" /></label>
                 <button type="button" onClick={() => setCloudCreateAccount((value) => !value)} className="text-sm text-emerald-400 hover:text-emerald-300">{cloudCreateAccount ? "Use existing account" : "Create a new account"}</button>
                 <div className="flex items-center gap-3 py-1 text-xs text-zinc-500 before:h-px before:flex-1 before:bg-white/10 after:h-px after:flex-1 after:bg-white/10">OR</div>
-                <Button type="button" variant="outline" className="w-full border-white/10 bg-white/5 text-zinc-100 hover:bg-white/10" onClick={() => void connectGoogleCloud()} disabled={cloudBusy}>Continue with Google</Button>
+                <Button type="button" variant="outline" className="w-full border-white/10 bg-white/5 text-zinc-100 hover:bg-white/10" onClick={() => void connectGoogleCloud()} disabled={cloudBusy}><img src="/google.png" alt="" aria-hidden="true" className="h-4 w-4" />Continue with Google</Button>
               </div>
             ) : cloudHasData === null ? (
               <div className="mt-5"><p className="text-sm text-zinc-400">Checking your cloud data…</p><Button className="mt-4 bg-emerald-600 hover:bg-emerald-500" onClick={() => void hasCloudSnapshot(cloudUser).then(setCloudHasData)}>Continue</Button></div>
