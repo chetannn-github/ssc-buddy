@@ -54,9 +54,20 @@ function QuestionViewer() {
                     Question {question.number ?? current + 1}
                   </h2>
                 </div>
-                <span className="text-sm text-zinc-400">
-                  Question {current + 1} of {questions.length}
-                </span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className={cn(
+                      "h-8 border-white/15 bg-white/5 px-2.5 text-xs text-zinc-200 hover:bg-white/10 hover:text-white",
+                      isFavorite && "border-amber-400/50 bg-amber-400/10 text-amber-300",
+                    )}
+                    onClick={() => setFavoriteIds(new Set(toggleFavoriteQuestion(favoriteId)))}
+                  >
+                    <Star className={cn("h-3.5 w-3.5", isFavorite && "fill-current")} />
+                    Favourite
+                  </Button>
+                </div>
               </div>
               <p className="mt-5 whitespace-pre-wrap text-sm leading-6 text-zinc-100">
                 {question.question}
@@ -78,17 +89,6 @@ function QuestionViewer() {
                 </div>
               )}
               <div className="mt-6 flex flex-wrap gap-2 border-t border-white/10 pt-4">
-                <Button
-                  variant="outline"
-                  className={cn(
-                    "border-white/15 bg-white/5 text-zinc-200 hover:bg-white/10 hover:text-white",
-                    isFavorite && "border-amber-400/50 bg-amber-400/10 text-amber-300",
-                  )}
-                  onClick={() => setFavoriteIds(new Set(toggleFavoriteQuestion(favoriteId)))}
-                >
-                  <Star className={cn("h-4 w-4", isFavorite && "fill-current")} />
-                  {isFavorite ? "Favourite" : "Mark favourite"}
-                </Button>
                 <Button
                   variant="outline"
                   className="border-white/15 bg-white/5 text-zinc-200 hover:bg-white/10 hover:text-white"

@@ -213,30 +213,13 @@ export function SetupScreen({
 
   const buildRandomQuestions = () => {
     const favorites = new Set(loadFavoriteQuestionIds());
-    const pool = (orderedJsonQuestions ?? []).map((question, index) => ({ question, index }));
-    const selected: typeof pool = [];
-    const target = Math.min(parsedCount, pool.length);
-    while (selected.length < target && pool.length) {
-      const weightedTotal = pool.reduce(
-        (total, item) =>
-          total +
-          (favorites.has(`${subject}||${chapter}||${activeExerciseName}||${item.question.number ?? item.index + 1}`)
-            ? 4
-            : 1),
-        0,
-      );
-      let cursor = Math.random() * weightedTotal;
-      const picked = pool.findIndex((item) => {
-        cursor -= favorites.has(
-          `${subject}||${chapter}||${activeExerciseName}||${item.question.number ?? item.index + 1}`,
-        )
-          ? 4
-          : 1;
-        return cursor < 0;
-      });
-      selected.push(pool.splice(Math.max(0, picked), 1)[0]!);
-    }
-    return selected;
+    const shuffle = <T,>(items: T[]) => [...items].sort(() => Math.random() - 0.5);
+    const all = (orderedJsonQuestions ?? []).map((question, index) => ({ question, index }));
+    const favouriteQuestions = shuffle(all.filter((item) => favorites.has(item.question.id)));
+    const ordinaryQuestions = shuffle(all.filter((item) => !favorites.has(item.question.id)));
+    const target = Math.min(parsedCount, all.length);
+    // A random paper always starts with saved favourites; ordinary questions only fill spare slots.
+    return [...favouriteQuestions, ...ordinaryQuestions].slice(0, target);
   };
 
   const answerKeyExercises = exercises.filter((item) => !item.questions?.length);
@@ -688,7 +671,7 @@ export function SetupScreen({
               {countTooHigh
                 ? `Only ${available} questions remain (Q${parsedStart}–Q${chapterTotal}).`
                 : isJsonExercise && questionOrder === "random"
-                  ? `${parsedCount} random questions. Favourites are four times more likely to appear.`
+                  ? `${parsedCount} random questions. Favourites are selected first, then ordinary questions fill remaining slots.`
                 : `Questions Q${parsedStart}–Q${parsedStart + parsedCount - 1}.`}
             </p>
           </div>
