@@ -80,39 +80,140 @@ export function saveJsonBinConfig(config: JsonBinConfig) {
   localStorage.setItem(JSONBIN_CONFIG_KEY, JSON.stringify(config));
 }
 
+// Kept far below the free-plan 100 KB cap even for multi-byte Hindi/Unicode text.
+const JSONBIN_CHUNK_BYTES = 30_000;
+
+type StorageEntry = { key: string; value: string; part?: number; total?: number };
+
+function splitStorageSnapshot(storage: Record<string, string>) {
+  const chunks: StorageEntry[][] = [];
+  let current: StorageEntry[] = [];
+  const push = (entry: StorageEntry) => {
+    const candidate = [...current, entry];
+    if (current.length && JSON.stringify(candidate).length > JSONBIN_CHUNK_BYTES) {
+      chunks.push(current);
+      current = [entry];
+    } else current = candidate;
+  };
+  for (const [key, value] of Object.entries(storage)) {
+    const size = Math.max(1, JSONBIN_CHUNK_BYTES - 2_000);
+    const total = Math.ceil(value.length / size);
+    for (let part = 0; part < total; part += 1)
+      push({ key, value: value.slice(part * size, (part + 1) * size), ...(total > 1 ? { part, total } : {}) });
+  }
+  if (current.length) chunks.push(current);
+  return chunks;
+}
+
+async function jsonBinRequest<T>(url: string, init: RequestInit, message: string): Promise<T> {
+  const response = await fetch(url, init);
+  const payload = (await response.json()) as T & { message?: string };
+  if (!response.ok) throw new Error(payload.message || message);
+  return payload;
+}
+
+type JsonBinRecord = { metadata?: { id?: string }; record?: unknown; message?: string };
+
+async function createJsonBinRecord(record: unknown, key: string, name: string) {
+  const result = await jsonBinRequest<JsonBinRecord>(
+    "https://api.jsonbin.io/v3/b",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Master-Key": key, "X-Bin-Private": "true", "X-Bin-Name": name },
+      body: JSON.stringify(record),
+    },
+    "Cloud export failed.",
+  );
+  if (!result.metadata?.id) throw new Error("Cloud backup was created without an ID.");
+  return result.metadata.id;
+}
+
+async function readJsonBinRecord(binId: string, config: JsonBinConfig) {
+  const key = config.accessKey || config.masterKey;
+  const result = await jsonBinRequest<JsonBinRecord>(
+    `https://api.jsonbin.io/v3/b/${encodeURIComponent(binId)}/latest`,
+    { headers: config.accessKey ? { "X-Access-Key": key } : { "X-Master-Key": key } },
+    "Cloud backup could not be read.",
+  );
+  return result.record;
+}
+
+async function deleteJsonBinRecord(binId: string, masterKey: string) {
+  await jsonBinRequest<JsonBinRecord>(
+    `https://api.jsonbin.io/v3/b/${encodeURIComponent(binId)}`,
+    { method: "DELETE", headers: { "X-Master-Key": masterKey } },
+    "Old cloud backup could not be deleted.",
+  );
+}
+
 export async function exportToJsonBin(config: JsonBinConfig) {
   const storage = snapshotLocalStorage();
-  const create = await fetch("https://api.jsonbin.io/v3/b", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Master-Key": config.masterKey, "X-Bin-Private": "true", "X-Bin-Name": "ssc-buddy-backup" },
-    body: JSON.stringify({ format: "ssc-buddy-storage", version: 1, exportedAt: new Date().toISOString(), storage }),
-  });
-  const created = (await create.json()) as { metadata?: { id?: string }; message?: string };
-  const binId = created.metadata?.id;
-  if (!create.ok || !binId) throw new Error(created.message || "Cloud export failed.");
-  if (config.binId && config.binId !== binId) {
-    const remove = await fetch(`https://api.jsonbin.io/v3/b/${encodeURIComponent(config.binId)}`, {
-      method: "DELETE", headers: { "X-Master-Key": config.masterKey },
-    });
-    if (!remove.ok) throw new Error("New backup saved, but old cloud backup could not be deleted.");
+  const chunkIds: string[] = [];
+  let manifestId: string | null = null;
+  try {
+    for (const [index, chunk] of splitStorageSnapshot(storage).entries()) {
+      chunkIds.push(await createJsonBinRecord({ format: "ssc-buddy-storage-chunk", version: 2, entries: chunk }, config.masterKey, `ssc-buddy-backup-${index + 1}`));
+    }
+    const binId = await createJsonBinRecord(
+      { format: "ssc-buddy-storage-manifest", version: 1, exportedAt: new Date().toISOString(), chunkIds },
+      config.masterKey,
+      "ssc-buddy-backup-manifest",
+    );
+    manifestId = binId;
+    if (config.binId && config.binId !== binId) {
+      const oldRecord = await readJsonBinRecord(config.binId, { masterKey: config.masterKey });
+      const oldChunks = isCloudManifest(oldRecord) ? oldRecord.chunkIds : [];
+      await deleteJsonBinRecord(config.binId, config.masterKey);
+      await Promise.all(oldChunks.map((id) => deleteJsonBinRecord(id, config.masterKey)));
+    }
+    saveJsonBinConfig({ ...config, binId });
+    restoreStorageSnapshot({});
+    return binId;
+  } catch (error) {
+    if (manifestId) await Promise.allSettled([deleteJsonBinRecord(manifestId, config.masterKey)]);
+    await Promise.allSettled(chunkIds.map((id) => deleteJsonBinRecord(id, config.masterKey)));
+    throw error;
   }
-  saveJsonBinConfig({ ...config, binId });
-  restoreStorageSnapshot({});
-  return binId;
 }
 
 export async function importFromJsonBin(config: JsonBinConfig) {
   if (!config.binId) throw new Error("Enter the cloud backup ID first.");
-  const readKey = config.accessKey || config.masterKey;
-  const response = await fetch(`https://api.jsonbin.io/v3/b/${encodeURIComponent(config.binId)}/latest`, {
-    headers: config.accessKey ? { "X-Access-Key": readKey } : { "X-Master-Key": readKey },
-  });
-  const payload = (await response.json()) as { record?: unknown; message?: string };
-  const record = payload.record as { storage?: unknown } | undefined;
-  if (!response.ok || !record || !isStorageSnapshot(record.storage))
-    throw new Error(payload.message || "Cloud backup could not be read.");
+  const record = await readJsonBinRecord(config.binId, config);
+  const storage = isCloudManifest(record)
+    ? restoreChunkEntries(await Promise.all(record.chunkIds.map(async (id) => {
+        const chunk = await readJsonBinRecord(id, config);
+        if (!isCloudChunk(chunk)) throw new Error("Cloud backup contains an invalid data chunk.");
+        return chunk.entries;
+      })))
+    : isCloudSnapshot(record)
+      ? record.storage
+      : null;
+  if (!storage) throw new Error("Cloud backup could not be read.");
   saveJsonBinConfig(config);
-  restoreStorageSnapshot(record.storage);
+  restoreStorageSnapshot(storage);
+}
+
+type CloudSnapshot = { format: "ssc-buddy-storage"; storage: Record<string, string> };
+type CloudChunk = { format: "ssc-buddy-storage-chunk"; entries: StorageEntry[] };
+type CloudManifest = { format: "ssc-buddy-storage-manifest"; chunkIds: string[] };
+const isCloudSnapshot = (value: unknown): value is CloudSnapshot =>
+  Boolean(value && typeof value === "object" && (value as CloudSnapshot).format === "ssc-buddy-storage" && isStorageSnapshot((value as CloudSnapshot).storage));
+const isCloudChunk = (value: unknown): value is CloudChunk =>
+  Boolean(value && typeof value === "object" && (value as CloudChunk).format === "ssc-buddy-storage-chunk" && Array.isArray((value as CloudChunk).entries));
+const isCloudManifest = (value: unknown): value is CloudManifest =>
+  Boolean(value && typeof value === "object" && (value as CloudManifest).format === "ssc-buddy-storage-manifest" && Array.isArray((value as CloudManifest).chunkIds) && (value as CloudManifest).chunkIds.every((id) => typeof id === "string"));
+
+function restoreChunkEntries(chunks: StorageEntry[][]): Record<string, string> {
+  const fragments = new Map<string, StorageEntry[]>();
+  chunks.flat().forEach((entry) => {
+    const current = fragments.get(entry.key) ?? [];
+    current.push(entry);
+    fragments.set(entry.key, current);
+  });
+  return Object.fromEntries([...fragments.entries()].map(([key, entries]) => [
+    key,
+    entries.sort((a, b) => (a.part ?? 0) - (b.part ?? 0)).map((entry) => entry.value).join(""),
+  ]));
 }
 
 function isStorageSnapshot(value: unknown): value is Record<string, string> {
