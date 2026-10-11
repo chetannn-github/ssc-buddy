@@ -1,7 +1,7 @@
-import { collection, deleteDoc, doc, getDocs, setDoc, type Unsubscribe, writeBatch } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDocs, onSnapshot, setDoc, type Unsubscribe, writeBatch } from "firebase/firestore";
 import type { User } from "firebase/auth";
 import { getFirebaseFirestore } from "@/lib/firebase-sync";
-import { loadFavoriteQuestionIds, loadHistory, loadMarking, loadSubjects, saveFavoriteQuestionIds, saveHistory, saveMarking, saveSubjects, type MarkingScheme, type Subject, type TestRecord } from "@/lib/exam";
+import { loadFavoriteQuestionIds, loadHistory, loadMarking, loadSubjects, onPracticePersist, saveFavoriteQuestionIds, saveHistory, saveMarking, saveSubjects, type MarkingScheme, type Subject, type TestRecord } from "@/lib/exam";
 
 type Item = { id: string };
 const equal = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
@@ -61,15 +61,29 @@ export async function startPracticeSync(user: User): Promise<Unsubscribe> {
   if (remoteAttempts.size) saveHistory(attempts);
   if (remoteFavourites.size) saveFavoriteQuestionIds(favourites.map((item) => item.id));
   if (marking) saveMarking(marking);
+  let applyingRemote = false;
+  const applyRemote = (fn: () => void) => {
+    applyingRemote = true;
+    fn();
+    queueMicrotask(() => { applyingRemote = false; });
+  };
+  const stops = [
+    onSnapshot(docsFor(user, "practiceSubjects"), (snapshot) => applyRemote(() => { subjects = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as Subject); saveSubjects(subjects); })),
+    onSnapshot(docsFor(user, "practiceAttempts"), (snapshot) => applyRemote(() => { attempts = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as TestRecord); saveHistory(attempts); })),
+    onSnapshot(docsFor(user, "practiceFavourites"), (snapshot) => applyRemote(() => { favourites = snapshot.docs.map((item) => ({ id: item.id })); saveFavoriteQuestionIds(favourites.map((item) => item.id)); })),
+    onSnapshot(settingsRef, (snapshot) => applyRemote(() => { const remote = snapshot.data()?.["marking"] as MarkingScheme | undefined; if (remote) { marking = remote; saveMarking(remote); } })),
+  ];
   const save = () => {
+    if (applyingRemote) return;
     const nextSubjects = loadSubjects(); const nextAttempts = loadHistory(); const nextFavourites = loadFavoriteQuestionIds().map((id) => ({ id })); const nextMarking = loadMarking();
     void syncCollection(user, "practiceSubjects", subjects, nextSubjects); subjects = nextSubjects;
     void syncCollection(user, "practiceAttempts", attempts, nextAttempts); attempts = nextAttempts;
     void syncCollection(user, "practiceFavourites", favourites, nextFavourites); favourites = nextFavourites;
     if (!equal(marking, nextMarking) && nextMarking) { marking = nextMarking; void setDoc(settingsRef, { marking: nextMarking }, { merge: true }); }
   };
-  window.addEventListener("ssc-practice-persisted", save);
+  const stopPersistObserver = onPracticePersist(save);
   return () => {
-    window.removeEventListener("ssc-practice-persisted", save);
+    stops.forEach((stop) => stop());
+    stopPersistObserver();
   };
 }

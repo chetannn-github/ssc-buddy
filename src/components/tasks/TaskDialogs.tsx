@@ -160,15 +160,13 @@ export function CompleteTaskDialog({
   onOpenChange: (open: boolean) => void;
   onComplete: (id: string, minutes: number) => void;
 }) {
-  const [hours, setHours] = useState("0");
   const [minutes, setMinutes] = useState("30");
   useEffect(() => {
     if (task) {
-      setHours("0");
       setMinutes("30");
     }
   }, [task]);
-  const total = Math.max(0, Number(hours) || 0) * 60 + Math.max(0, Number(minutes) || 0);
+  const total = Math.max(0, Math.min(1_440, Number(minutes) || 0));
   return (
     <Dialog open={Boolean(task)} onOpenChange={onOpenChange}>
       <DialogContent className="border-transparent bg-[#1b1b1b] text-zinc-100 shadow-2xl sm:max-w-sm">
@@ -177,31 +175,17 @@ export function CompleteTaskDialog({
           <DialogDescription>How much time did this task take?</DialogDescription>
         </DialogHeader>
         <p className="truncate text-sm font-medium">{task?.name}</p>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-2">
-            <Label htmlFor="task-hours">Hours</Label>
-            <Input
-              id="task-hours"
-              className="border-white/10 bg-[#181818] text-zinc-100 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-              type="number"
-              min={0}
-              max={24}
-              value={hours}
-              onChange={(event) => setHours(event.target.value)}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="task-minutes">Minutes</Label>
-            <Input
-              id="task-minutes"
-              className="border-white/10 bg-[#181818] text-zinc-100 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-              type="number"
-              min={0}
-              max={59}
-              value={minutes}
-              onChange={(event) => setMinutes(event.target.value)}
-            />
-          </div>
+        <div className="space-y-2">
+          <Label htmlFor="task-minutes">Minutes spent</Label>
+          <Input
+            id="task-minutes"
+            className="border-white/10 bg-[#181818] text-zinc-100 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            type="number"
+            min={1}
+            max={1440}
+            value={minutes}
+            onChange={(event) => setMinutes(String(Math.min(1_440, Math.max(0, Number(event.target.value) || 0))))}
+          />
         </div>
         <div className="flex flex-wrap gap-2">
           {[30, 45, 60, 90, 120].map((duration) => (
@@ -209,8 +193,7 @@ export function CompleteTaskDialog({
               key={duration}
               type="button"
               onClick={() => {
-                setHours(String(Math.floor(duration / 60)));
-                setMinutes(String(duration % 60));
+                setMinutes(String(duration));
               }}
               className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-zinc-300 transition-colors hover:bg-white/10 hover:text-white"
             >

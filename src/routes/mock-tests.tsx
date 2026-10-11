@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { loadTrackerData, saveTrackerData } from "@/lib/tracker-store";
 import type { TrackerData } from "@/lib/tracker";
-import { readTrackerSections, syncTrackerSections } from "@/lib/tracker-sync";
+import { syncTrackerSections, watchTrackerSections } from "@/lib/tracker-sync";
 import { useAuthUser } from "@/lib/auth-context";
 
 type TestType = "all" | "Sectional" | "Pre" | "Mains";
@@ -80,13 +80,10 @@ function MockTests() {
     };
   }, []);
 
-  // One-time hydration keeps this page independent without a live listener.
+  // Keep the standalone history page current without opening /track first.
   useEffect(() => {
     if (!user) return;
-    void readTrackerSections(user).then((remote) => {
-      setTracker(remote);
-      saveTrackerData(remote);
-    }).catch(() => undefined);
+    return watchTrackerSections(user, (remote) => { setTracker(remote); saveTrackerData(remote); });
   }, [user]);
 
   const tests = useMemo(

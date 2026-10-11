@@ -21,6 +21,8 @@ import {
   patchCloudPreferences,
   readCloudProfile,
   readCloudPreferences,
+  watchCloudProfile,
+  watchCloudPreferences,
 } from "@/lib/firebase-sync";
 import { PROFILE_KEY } from "@/lib/profile";
 import { startPracticeSync } from "@/lib/practice-sync";
@@ -186,10 +188,12 @@ function RootComponent() {
       }
       queueMicrotask(() => { applying = false; });
     };
+    let stop: (() => void) | undefined;
     void (async () => {
       const remote = await readCloudPreferences(syncUser);
       if (remote) apply(remote);
       else { const initial = read(); await patchCloudPreferences(syncUser, initial); last = JSON.stringify(initial); }
+      stop = watchCloudPreferences(syncUser, (value) => { if (value) apply(value); });
     })().catch(() => undefined);
     const save = () => {
       if (applying) return;
@@ -198,7 +202,7 @@ function RootComponent() {
       if (Object.keys(changed).length) { last = JSON.stringify(next); void patchCloudPreferences(syncUser, changed); }
     };
     window.addEventListener("ssc-preferences-updated", save);
-    return () => window.removeEventListener("ssc-preferences-updated", save);
+    return () => { stop?.(); window.removeEventListener("ssc-preferences-updated", save); };
   }, [syncUser]);
 
   useEffect(() => {
@@ -213,6 +217,7 @@ function RootComponent() {
   useEffect(() => {
     if (!syncUser) return;
     let disposed = false;
+    let stopWatch: (() => void) | undefined;
     let applyingRemote = false;
     let lastProfile = "";
     const clean = (profile: Record<string, unknown>) => Object.fromEntries(
@@ -264,10 +269,11 @@ function RootComponent() {
         lastProfile = JSON.stringify(clean(profile));
       }
       if (disposed) return;
+      stopWatch = watchCloudProfile(syncUser, (profile) => { if (profile) apply(profile); });
       window.addEventListener("cbt-profile-updated", save);
     };
     void start();
-    return () => { disposed = true; window.removeEventListener("cbt-profile-updated", save); };
+    return () => { disposed = true; stopWatch?.(); window.removeEventListener("cbt-profile-updated", save); };
   }, [syncUser]);
 
   useEffect(() => {

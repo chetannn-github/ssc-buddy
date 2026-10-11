@@ -13,7 +13,7 @@ import {
 import { AppShell } from "@/components/layout/AppShell";
 import { loadTrackerData, saveTrackerData } from "@/lib/tracker-store";
 import type { TestEntry, TrackerData } from "@/lib/tracker";
-import { readTrackerSections } from "@/lib/tracker-sync";
+import { watchTrackerSections } from "@/lib/tracker-sync";
 import { useAuthUser } from "@/lib/auth-context";
 
 type TestCategory = "Sectional" | "Pre" | "Mains";
@@ -212,13 +212,10 @@ function Progress() {
     };
   }, []);
 
-  // Hydrate once on opening the page. A refresh intentionally fetches newer cloud data.
+  // Keep test analytics current when a test is logged from another client.
   useEffect(() => {
     if (!user) return;
-    void readTrackerSections(user).then((remote) => {
-      setTracker(remote);
-      saveTrackerData(remote);
-    }).catch(() => undefined);
+    return watchTrackerSections(user, (remote) => { setTracker(remote); saveTrackerData(remote); });
   }, [user]);
 
   const tests = useMemo(() => {

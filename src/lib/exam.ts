@@ -95,12 +95,21 @@ function read<T>(key: string, fallback: T): T {
   }
 }
 
+const practicePersistenceSubscribers = new Set<() => void>();
+
+/** Internal persistence hook. Unlike a browser CustomEvent, listener errors
+ * cannot escape through `window.dispatchEvent` and freeze the active route. */
+export function onPracticePersist(callback: () => void) {
+  practicePersistenceSubscribers.add(callback);
+  return () => practicePersistenceSubscribers.delete(callback);
+}
+
 function write(key: string, value: unknown) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
-    // Practice persistence must not use the app-wide data event. That event is
-    // observed by legacy sync code and can recursively trigger more writes.
-    window.dispatchEvent(new Event("ssc-practice-persisted"));
+    practicePersistenceSubscribers.forEach((callback) => {
+      try { callback(); } catch { /* a sync observer must never break a write */ }
+    });
   } catch {
     /* storage unavailable */
   }

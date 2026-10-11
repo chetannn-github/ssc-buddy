@@ -26,7 +26,7 @@ import {
 } from "@/lib/daily-tasks";
 import { loadTrackerData } from "@/lib/tracker-store";
 import { isFirebaseConfigured, observeFirebaseUser } from "@/lib/firebase-sync";
-import { migrateTasksIfEmpty, readTasks, syncTaskChanges } from "@/lib/task-sync";
+import { migrateTasksIfEmpty, syncTaskChanges, watchTasks } from "@/lib/task-sync";
 
 export const Route = createFileRoute("/tasks")({ component: DailyTasks });
 
@@ -79,15 +79,16 @@ function DailyTasks() {
   }, []);
   useEffect(() => {
     if (!syncUser) return;
+    let stop = () => undefined;
     void (async () => {
       await migrateTasksIfEmpty(syncUser, tasks);
-      const remote = await readTasks(syncUser);
-      if (remote.length) {
+      stop = watchTasks(syncUser, (remote) => {
         setTasks(remote);
         saveDailyTasks(remote);
-      }
+      });
     })();
-  // Data is hydrated once when the page loads; writes are still synced explicitly.
+    return () => stop();
+  // Live task sync, mutations remain document-level.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [syncUser]);
   const persist = (next: DailyTask[]) => {

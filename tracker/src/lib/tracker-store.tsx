@@ -129,6 +129,7 @@ export function TrackerProvider({ children }: { children: ReactNode }) {
   const loaded = useRef(false);
   const [syncUser, setSyncUser] = useState<User | null>(null);
   const lastSynced = useRef<TrackerData>(defaultData());
+  const applyingRemote = useRef(false);
 
   useEffect(() => {
     try {
@@ -153,6 +154,10 @@ export function TrackerProvider({ children }: { children: ReactNode }) {
       await migrateTrackerIfEmpty(syncUser, data);
       if (disposed) return;
       stop = watchTrackerSections(syncUser, (remote) => {
+        // A Firestore snapshot is already canonical. Persisting it through the
+        // normal data effect immediately writes it back and can create a
+        // snapshot/write loop whenever a tracker tab remounts.
+        applyingRemote.current = true;
         lastSynced.current = remote;
         setData(remote);
       });
@@ -167,6 +172,10 @@ export function TrackerProvider({ children }: { children: ReactNode }) {
     try {
       localStorage.setItem(TRACKER_STORAGE_KEY, JSON.stringify(data));
       window.dispatchEvent(new Event("cbt-tracker-updated"));
+      if (applyingRemote.current) {
+        applyingRemote.current = false;
+        return;
+      }
       if (syncUser && JSON.stringify(lastSynced.current) !== JSON.stringify(data)) {
         const previous = lastSynced.current;
         lastSynced.current = data;
