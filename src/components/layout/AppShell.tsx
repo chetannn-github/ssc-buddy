@@ -1,5 +1,5 @@
 import type { PointerEvent, ReactNode } from "react";
-import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
 import {
   BarChart3,
   ChevronLeft,
@@ -27,8 +27,8 @@ import { loadHistory, type TestRecord } from "@/lib/exam";
 import { trackerActiveDates } from "@/lib/tracker";
 import { loadTrackerData, saveTrackerData } from "@/lib/tracker-store";
 import { loadPracticeProfile, savePracticeProfile, type PracticeProfile } from "@/lib/profile";
-import { isFirebaseConfigured, observeFirebaseUser } from "@/lib/firebase-sync";
 import type { User } from "firebase/auth";
+import { useAuthUser } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -1043,15 +1043,13 @@ export function MotivationalMusic({ onClose }: { onClose: () => void }) {
 
 export function AppShell({ title, subtitle, actions, children }: Props) {
   const path = useRouterState({ select: (r) => r.location.pathname });
-  const navigate = useNavigate();
   const [records, setRecords] = useState<TestRecord[]>([]);
   const [trackerActivityDates, setTrackerActivityDates] = useState<string[]>([]);
   const [profile, setProfile] = useState<PracticeProfile | null | undefined>(undefined);
   const [celebratedStreak, setCelebratedStreak] = useState<number | null>(null);
   const [streakReady, setStreakReady] = useState(false);
   const [manifestationOpen, setManifestationOpen] = useState(false);
-  const [authUser, setAuthUser] = useState<User | null>(null);
-  const [authReady, setAuthReady] = useState(!isFirebaseConfigured);
+  const authUser = useAuthUser();
   const previousStreak = useRef<number | null>(null);
 
   useEffect(() => {
@@ -1067,18 +1065,6 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
       window.removeEventListener("cbt-tracker-updated", refresh);
     };
   }, []);
-
-  useEffect(() => {
-    if (!isFirebaseConfigured) return;
-    return observeFirebaseUser((user) => {
-      setAuthUser(user);
-      setAuthReady(true);
-    });
-  }, []);
-
-  useEffect(() => {
-    if (isFirebaseConfigured && authReady && !authUser) void navigate({ to: "/auth", replace: true });
-  }, [authReady, authUser, navigate]);
 
   useEffect(() => {
     const refresh = () => setProfile(loadPracticeProfile());

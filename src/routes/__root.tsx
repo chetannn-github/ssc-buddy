@@ -4,6 +4,8 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useNavigate,
+  useRouterState,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
@@ -24,6 +26,7 @@ import {
 } from "@/lib/firebase-sync";
 import { PROFILE_KEY } from "@/lib/profile";
 import { startPracticeSync } from "@/lib/practice-sync";
+import { AuthUserContext } from "@/lib/auth-context";
 import type { User } from "firebase/auth";
 
 function NotFoundComponent() {
@@ -149,14 +152,23 @@ function RootComponent() {
   const [videosOpen, setVideosOpen] = useState(false);
 
   const [syncUser, setSyncUser] = useState<User | null>(null);
+  const [authResolved, setAuthResolved] = useState(!isFirebaseConfigured);
   const profileSyncCleanup = useRef<(() => void) | null>(null);
   const practiceSyncCleanup = useRef<(() => void) | null>(null);
   const preferencesSyncCleanup = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (!isFirebaseConfigured) return;
-    return observeFirebaseUser(setSyncUser);
+    return observeFirebaseUser((user) => { setSyncUser(user); setAuthResolved(true); });
   }, []);
+
+  const navigate = useNavigate();
+  const path = useRouterState({ select: (state) => state.location.pathname });
+  useEffect(() => {
+    if (isFirebaseConfigured && authResolved && !syncUser && path !== "/auth") {
+      void navigate({ to: "/auth", replace: true });
+    }
+  }, [authResolved, navigate, path, syncUser]);
 
   useEffect(() => {
     if (!syncUser) return;
@@ -286,16 +298,18 @@ function RootComponent() {
   }, []);
 
   return (
-    <QueryClientProvider client={queryClient}>
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <Outlet />
-      {musicOpen && <MotivationalMusic onClose={() => setMusicOpen(false)} />}
-      {videosOpen && (
-        <MotivationalVideos
-          onOpen={() => window.dispatchEvent(new Event("ssc-music-pause"))}
-          onClose={() => setVideosOpen(false)}
-        />
-      )}
-    </QueryClientProvider>
+    <AuthUserContext.Provider value={syncUser}>
+      <QueryClientProvider client={queryClient}>
+        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+        <Outlet />
+        {musicOpen && <MotivationalMusic onClose={() => setMusicOpen(false)} />}
+        {videosOpen && (
+          <MotivationalVideos
+            onOpen={() => window.dispatchEvent(new Event("ssc-music-pause"))}
+            onClose={() => setVideosOpen(false)}
+          />
+        )}
+      </QueryClientProvider>
+    </AuthUserContext.Provider>
   );
 }
