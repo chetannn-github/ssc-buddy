@@ -749,7 +749,12 @@ export function Profile() {
     hasShownProfileLoader = true;
     let loaderTimer: ReturnType<typeof setTimeout> | undefined;
     let loaderFailSafe: ReturnType<typeof setTimeout> | undefined;
+    let avatarsLoaded = false;
+    let refreshPending = false;
+    let refreshing = false;
     const refresh = async () => {
+      if (refreshing) { refreshPending = true; return; }
+      refreshing = true;
       const startedAt = Date.now();
       const saved = loadPracticeProfile();
       setRecords(loadHistory());
@@ -764,12 +769,15 @@ export function Profile() {
       // Never leave the screen blocked if a static avatar file stalls on a weak connection.
       loaderFailSafe = setTimeout(() => setIsLoading(false), 1500);
       try {
-        const response = await fetch("/avatars/manifest.json", { cache: "no-store" });
-        if (response.ok) {
-          const files = (await response.json()) as unknown;
-          if (Array.isArray(files)) {
-            setAvatarFiles(files.filter((file): file is string => typeof file === "string"));
+        if (!avatarsLoaded) {
+          const response = await fetch("/avatars/manifest.json", { cache: "no-store" });
+          if (response.ok) {
+            const files = (await response.json()) as unknown;
+            if (Array.isArray(files)) {
+              setAvatarFiles(files.filter((file): file is string => typeof file === "string"));
+            }
           }
+          avatarsLoaded = true;
         }
       } catch {
         setAvatarFiles([]);
@@ -779,20 +787,23 @@ export function Profile() {
           () => setIsLoading(false),
           Math.max(0, 700 - (Date.now() - startedAt)),
         );
+        refreshing = false;
+        if (refreshPending) {
+          refreshPending = false;
+          void refresh();
+        }
       }
     };
     refresh();
     window.addEventListener("cbt-profile-updated", refresh);
     window.addEventListener("cbt-tracker-updated", refresh);
     window.addEventListener("ssc-daily-tasks-updated", refresh);
-    window.addEventListener("storage", refresh);
     return () => {
       if (loaderTimer) clearTimeout(loaderTimer);
       if (loaderFailSafe) clearTimeout(loaderFailSafe);
       window.removeEventListener("cbt-profile-updated", refresh);
       window.removeEventListener("cbt-tracker-updated", refresh);
       window.removeEventListener("ssc-daily-tasks-updated", refresh);
-      window.removeEventListener("storage", refresh);
     };
   }, []);
 

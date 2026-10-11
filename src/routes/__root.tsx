@@ -221,7 +221,18 @@ function RootComponent() {
     );
     const apply = (profile: Record<string, unknown>) => {
       const raw = JSON.stringify(clean(profile));
-      if (localStorage.getItem(PROFILE_KEY) === raw) { lastProfile = raw; return; }
+      // `savePracticeProfile` and Firestore can serialize identical fields in a different
+      // property order. Comparing the raw JSON used to turn every profile snapshot into a
+      // fresh local event, which could repeatedly refresh the Profile route after Save.
+      try {
+        const stored = localStorage.getItem(PROFILE_KEY);
+        if (stored && JSON.stringify(clean(JSON.parse(stored) as Record<string, unknown>)) === raw) {
+          lastProfile = raw;
+          return;
+        }
+      } catch {
+        // A corrupt local value is safely replaced by the canonical cloud profile below.
+      }
       applyingRemote = true;
       localStorage.setItem(PROFILE_KEY, raw);
       lastProfile = raw;
