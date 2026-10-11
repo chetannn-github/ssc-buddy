@@ -61,7 +61,6 @@ export async function startPracticeSync(user: User): Promise<Unsubscribe> {
   if (remoteAttempts.size) saveHistory(attempts);
   if (remoteFavourites.size) saveFavoriteQuestionIds(favourites.map((item) => item.id));
   if (marking) saveMarking(marking);
-  const emit = () => window.dispatchEvent(new Event("ssc-study-data-changed"));
   const save = () => {
     const nextSubjects = loadSubjects(); const nextAttempts = loadHistory(); const nextFavourites = loadFavoriteQuestionIds().map((id) => ({ id })); const nextMarking = loadMarking();
     void syncCollection(user, "practiceSubjects", subjects, nextSubjects); subjects = nextSubjects;
@@ -69,8 +68,8 @@ export async function startPracticeSync(user: User): Promise<Unsubscribe> {
     void syncCollection(user, "practiceFavourites", favourites, nextFavourites); favourites = nextFavourites;
     if (!equal(marking, nextMarking) && nextMarking) { marking = nextMarking; void setDoc(settingsRef, { marking: nextMarking }, { merge: true }); }
   };
-  window.addEventListener("ssc-study-data-changed", save);
+  window.addEventListener("ssc-practice-persisted", save);
   return () => {
-    window.removeEventListener("ssc-study-data-changed", save);
+    window.removeEventListener("ssc-practice-persisted", save);
   };
 }

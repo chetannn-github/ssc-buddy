@@ -98,7 +98,9 @@ function read<T>(key: string, fallback: T): T {
 function write(key: string, value: unknown) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
-    window.dispatchEvent(new Event("ssc-study-data-changed"));
+    // Practice persistence must not use the app-wide data event. That event is
+    // observed by legacy sync code and can recursively trigger more writes.
+    window.dispatchEvent(new Event("ssc-practice-persisted"));
   } catch {
     /* storage unavailable */
   }
