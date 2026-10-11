@@ -10,7 +10,7 @@ if (Platform.OS === "android") {
 
   registerWidgetTaskHandler(async ({ widgetInfo, renderWidget }) => {
     if (widgetInfo.widgetName !== "DailyTasksWidget") return;
-    const raw = await AsyncStorage.getItem("ssc-buddy-mobile:tasks:v1");
+    const raw = await AsyncStorage.getItem("ssc-buddy:tasks:v2");
     let tasks = [];
     try {
       tasks = raw ? JSON.parse(raw) : [];

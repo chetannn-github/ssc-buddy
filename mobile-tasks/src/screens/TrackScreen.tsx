@@ -6,19 +6,26 @@ import { Animated, Easing, Modal, Pressable, ScrollView as NativeScrollView, Sty
 import { MockTestLogDialog, type MockTestLog } from "./MockTestLogDialog";
 import { colors } from "../theme";
 import { reportVerticalScroll } from "../navigation/bottomNavigationVisibility";
+import { migrateTrackerSections, syncTrackerSections, watchTrackerSections } from "../lib/firebase";
 
 const ScrollView = (props: any) => <NativeScrollView {...props} scrollEventThrottle={16} onScroll={(event) => { if (!props.horizontal) reportVerticalScroll(event.nativeEvent.contentOffset.y); props.onScroll?.(event); }} />;
 
 type Chapter = { id: string; name: string; total: number; completed: number };
 type Subject = { id: string; name: string; target: number; chapters: Chapter[] };
 type RevisionType = { id: string; name: string; target: number };
-type Revision = { types: RevisionType[]; done: Record<string, Record<string, number>> };
-type Data = { version: 1; subjects: Subject[]; revision: Record<string, Revision>; fullMockTargets: { pre: number; mains: number }; pinnedChapterIds: string[] };
+type Revision = { types: RevisionType[]; done: Record<string, Record<string, number>>; targets: Record<string, Record<string, number>> };
+type TrackerActivityType = "lecture" | "revision" | "mock-test";
+type TrackerActivity = { id: string; date: string; type: TrackerActivityType; count: number; subjectId?: string; chapterId?: string; revisionTypeId?: string };
+type Data = { version: 1; subjects: Subject[]; revision: Record<string, Revision>; fullMockTargets: { pre: number; mains: number }; pinnedChapterIds: string[]; activity: TrackerActivity[] };
 type Tab = "Syllabus" | "Revision" | "Mock Test";
 const STORE = "ssc-buddy-mobile:tracker:v1";
 const MOCK_STORE = "ssc-buddy-mobile:mock-tests:v1";
 const id = () => `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-const defaults: Data = { version: 1, pinnedChapterIds: [], fullMockTargets: { pre: 10, mains: 10 }, revision: {}, subjects: [
+const todayISO = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+};
+const defaults: Data = { version: 1, pinnedChapterIds: [], fullMockTargets: { pre: 10, mains: 10 }, revision: {}, activity: [], subjects: [
   { id: "english", name: "English", target: 20, chapters: [{ id: "eng-vocab", name: "Vocabulary", total: 24, completed: 16 }, { id: "eng-grammar", name: "Grammar", total: 18, completed: 7 }] },
   { id: "maths", name: "Maths", target: 20, chapters: [{ id: "math-arithmetic", name: "Arithmetic", total: 36, completed: 22 }, { id: "math-algebra", name: "Algebra", total: 20, completed: 9 }] },
   { id: "reasoning", name: "Reasoning", target: 15, chapters: [{ id: "reason-verbal", name: "Verbal reasoning", total: 16, completed: 12 }, { id: "reason-nonverbal", name: "Non-verbal reasoning", total: 14, completed: 5 }] },
@@ -32,13 +39,23 @@ function normalise(raw: unknown): Data {
   if (!old?.subjects?.length) return defaults;
   const subjects = old.subjects.map((subject, si) => ({ id: subject.id || `subject-${si}`, name: subject.name || "Subject", target: Number(subject.target) || 10, chapters: (subject.chapters || []).map((chapter, ci) => { const total = Math.max(1, Number(chapter.total) || 10); return { id: chapter.id || `chapter-${si}-${ci}`, name: chapter.name || "Untitled chapter", total, completed: Math.min(total, Math.max(0, Number(chapter.completed) || (chapter.done ? total : 0))) }; }) }));
   const revision = old.revision || {};
-  subjects.forEach((subject) => { if (!revision[subject.id]) { const source = old.subjects?.find((x) => x.id === subject.id); revision[subject.id] = { types: [{ id: "revision-1", name: "Revision", target: 1 }], done: Object.fromEntries(subject.chapters.map((chapter) => [chapter.id, { "revision-1": Math.min(1, Number(source?.chapters?.find((x) => x.id === chapter.id)?.revisions) || 0) }])) }; } });
-  return { version: 1, subjects, revision, fullMockTargets: old.fullMockTargets || defaults.fullMockTargets, pinnedChapterIds: old.pinnedChapterIds || [] };
+  subjects.forEach((subject) => { if (!revision[subject.id]) { const source = old.subjects?.find((x) => x.id === subject.id); revision[subject.id] = { types: [{ id: "revision-1", name: "Revision", target: 1 }], done: Object.fromEntries(subject.chapters.map((chapter) => [chapter.id, { "revision-1": Math.min(1, Number(source?.chapters?.find((x) => x.id === chapter.id)?.revisions) || 0) }])), targets: {} }; } });
+  const safeRevision = Object.fromEntries(Object.entries(revision).map(([subjectId, value]) => [subjectId, {
+    types: Array.isArray(value?.types) ? value.types : [],
+    done: value?.done && typeof value.done === "object" ? value.done : {},
+    targets: value?.targets && typeof value.targets === "object" ? value.targets : {},
+  }]));
+  const activity = Array.isArray(old.activity) ? old.activity.filter((entry): entry is TrackerActivity => !!entry && typeof entry === "object" && (entry.type === "lecture" || entry.type === "revision" || entry.type === "mock-test")).map((entry) => ({
+    id: String(entry.id || id()), date: String(entry.date || ""), type: entry.type, count: Number(entry.count) || 1,
+    ...(entry.subjectId ? { subjectId: String(entry.subjectId) } : {}), ...(entry.chapterId ? { chapterId: String(entry.chapterId) } : {}), ...(entry.revisionTypeId ? { revisionTypeId: String(entry.revisionTypeId) } : {}),
+  })) : [];
+  return { version: 1, subjects, revision: safeRevision, fullMockTargets: old.fullMockTargets || defaults.fullMockTargets, pinnedChapterIds: old.pinnedChapterIds || [], activity };
 }
 const pct = (done: number, total: number) => total ? Math.round(Math.min(done, total) / total * 100) : 0;
 
-export function TrackScreen({ initialTab }: { initialTab?: Tab }) {
+export function TrackScreen({ initialTab, user }: { initialTab?: Tab; user: any }) {
   const [data, setData] = useState<Data>(defaults); const [mocks, setMocks] = useState<MockTestLog[]>([]); const [tab, setTabState] = useState<Tab>(initialTab ?? "Syllabus"); const [filter, setFilter] = useState("all"); const [openSubjects, setOpenSubjects] = useState<string[]>([]);
+  const [trackerLoaded, setTrackerLoaded] = useState(false); const dataRef = useRef(data); const mocksRef = useRef(mocks);
   const [selected, setSelected] = useState<{ subjectId: string; chapterId: string } | null>(null); const [dialog, setDialog] = useState<"subject" | "chapter" | "revision" | null>(null); const [dialogSubjectId, setDialogSubjectId] = useState<string | null>(null); const [mockDialog, setMockDialog] = useState(false); const [name, setName] = useState(""); const [totalInput, setTotalInput] = useState("10"); const [reorderingSubjectId, setReorderingSubjectId] = useState("");
   const tabOpacity = useRef(new Animated.Value(1)).current; const tabOffset = useRef(new Animated.Value(0)).current; const tabTransitioning = useRef(false);
   const setTab = (next: Tab) => {
@@ -57,17 +74,50 @@ export function TrackScreen({ initialTab }: { initialTab?: Tab }) {
       ]).start(() => { tabTransitioning.current = false; });
     });
   };
-  useEffect(() => { void AsyncStorage.getItem(STORE).then((x) => { if (x) try { setData(normalise(JSON.parse(x))); } catch {} }); void AsyncStorage.getItem(MOCK_STORE).then((x) => { if (x) try { setMocks(JSON.parse(x) as MockTestLog[]); } catch {} }); }, []);
+  useEffect(() => { void (async () => { const [raw, mockRaw] = await Promise.all([AsyncStorage.getItem(STORE), AsyncStorage.getItem(MOCK_STORE)]); try { if (raw) { const next = normalise(JSON.parse(raw)); dataRef.current = next; setData(next); } } catch {} try { if (mockRaw) { const next = JSON.parse(mockRaw) as MockTestLog[]; mocksRef.current = next; setMocks(next); } } catch {} setTrackerLoaded(true); })(); }, []);
   useEffect(() => { if (initialTab) setTab(initialTab); }, [initialTab]);
-  const save = (next: Data) => { setData(next); void AsyncStorage.setItem(STORE, JSON.stringify(next)); };
+  const sectionsFor = (value: Data, mockList: MockTestLog[]) => ({
+    meta: { examName: "SSC CGL 2027", prepStartDate: "", examDate: "" },
+    subjects: value.subjects.map(({ target: _target, ...subject }) => subject),
+    revision: value.revision,
+    tests: { targets: Object.fromEntries(value.subjects.map((subject) => [subject.id, subject.target])), mocks: { pre: { target: value.fullMockTargets.pre, done: mockList.filter((item) => item.type === "Pre").length }, mains: { target: value.fullMockTargets.mains, done: mockList.filter((item) => item.type === "Mains").length } }, log: mockList.map((item) => ({ ...item, subjectId: value.subjects.find((subject) => subject.name === item.subject)?.id ?? "", notes: "" })) },
+    activity: value.activity, pinned: value.pinnedChapterIds,
+  });
+  const applySections = (sections: Record<string, any>) => {
+    if (!Array.isArray(sections.subjects)) return;
+    const tests = sections.tests ?? {}; const subjects = sections.subjects.map((subject: any) => ({ ...subject, target: Number(tests.targets?.[subject.id] ?? 10) }));
+    const next = normalise({ version: 1, subjects, revision: sections.revision ?? {}, fullMockTargets: { pre: Number(tests.mocks?.pre?.target ?? 10), mains: Number(tests.mocks?.mains?.target ?? 10) }, pinnedChapterIds: sections.pinned ?? [], activity: sections.activity ?? [] });
+    const nextMocks = Array.isArray(tests.log) ? tests.log.map((item: any) => ({ ...item, subject: subjects.find((subject: Subject) => subject.id === item.subjectId)?.name ?? item.subject ?? "General", type: item.type === "Sectional" ? "Sectional" : item.type === "Mains" ? "Mains" : "Pre" })) : [];
+    dataRef.current = next; mocksRef.current = nextMocks; setData(next); setMocks(nextMocks); void AsyncStorage.multiSet([[STORE, JSON.stringify(next)], [MOCK_STORE, JSON.stringify(nextMocks)]]);
+  };
+  useEffect(() => { if (!user || !trackerLoaded) return; let stopped = false; let unsubscribe: (() => void) | undefined; void (async () => { const initial = sectionsFor(dataRef.current, mocksRef.current); await migrateTrackerSections(user, initial); if (!stopped) unsubscribe = watchTrackerSections(user, applySections); })().catch(() => undefined); return () => { stopped = true; unsubscribe?.(); }; }, [user?.uid, trackerLoaded]);
+  const save = (next: Data) => { const previous = dataRef.current; dataRef.current = next; setData(next); void AsyncStorage.setItem(STORE, JSON.stringify(next)); if (user) void syncTrackerSections(user, sectionsFor(previous, mocksRef.current), sectionsFor(next, mocksRef.current)); };
+  const saveMocks = (next: MockTestLog[]) => { const previous = mocksRef.current; mocksRef.current = next; setMocks(next); void AsyncStorage.setItem(MOCK_STORE, JSON.stringify(next)); if (user) void syncTrackerSections(user, sectionsFor(dataRef.current, previous), sectionsFor(dataRef.current, next)); };
   const subjects = filter === "all" ? data.subjects : data.subjects.filter((x) => x.id === filter);
   const chosenSubject = data.subjects.find((x) => x.id === selected?.subjectId); const chosen = chosenSubject?.chapters.find((x) => x.id === selected?.chapterId);
   const lectures = data.subjects.flatMap((x) => x.chapters); const total = lectures.reduce((sum, x) => sum + x.total, 0); const complete = lectures.reduce((sum, x) => sum + x.completed, 0);
-  const updateChapter = (subjectId: string, chapterId: string, fn: (chapter: Chapter) => Chapter) => save({ ...data, subjects: data.subjects.map((subject) => subject.id === subjectId ? { ...subject, chapters: subject.chapters.map((chapter) => chapter.id === chapterId ? fn(chapter) : chapter) } : subject) });
-  const revision = (subjectId: string) => data.revision[subjectId] || { types: [], done: {} };
-  const setRevision = (subjectId: string, fn: (value: Revision) => Revision) => save({ ...data, revision: { ...data.revision, [subjectId]: fn(revision(subjectId)) } });
+  const updateChapter = (subjectId: string, chapterId: string, fn: (chapter: Chapter) => Chapter) => {
+    const current = data.subjects.find((subject) => subject.id === subjectId)?.chapters.find((chapter) => chapter.id === chapterId);
+    if (!current) return;
+    const changed = fn(current);
+    // Mirrors the web tracker: only newly completed lectures create an activity event.
+    const nextCompleted = Math.max(current.completed, Math.min(changed.completed, changed.total));
+    const delta = nextCompleted - current.completed;
+    const next = { ...data, subjects: data.subjects.map((subject) => subject.id === subjectId ? { ...subject, chapters: subject.chapters.map((chapter) => chapter.id === chapterId ? { ...changed, completed: nextCompleted } : chapter) } : subject) };
+    save(delta > 0 ? { ...next, activity: [{ id: id(), date: todayISO(), type: "lecture", count: delta, subjectId, chapterId }, ...data.activity] } : next);
+  };
+  const revision = (subjectId: string): Revision => data.revision[subjectId] || { types: [], done: {}, targets: {} };
+  const setRevision = (subjectId: string, fn: (value: Revision) => Revision) => {
+    const current = revision(subjectId); const changed = fn(current); const events: TrackerActivity[] = [];
+    Object.entries(changed.done).forEach(([chapterId, values]) => Object.entries(values).forEach(([revisionTypeId, value]) => {
+      const previous = Number(current.done[chapterId]?.[revisionTypeId] || 0); const next = Math.max(previous, Number(value) || 0);
+      if (next > previous) events.push({ id: id(), date: todayISO(), type: "revision", count: next - previous, subjectId, chapterId, revisionTypeId });
+    }));
+    const normalisedDone = Object.fromEntries(Object.entries(changed.done).map(([chapterId, values]) => [chapterId, Object.fromEntries(Object.entries(values).map(([typeId, value]) => [typeId, Math.max(Number(current.done[chapterId]?.[typeId] || 0), Number(value) || 0)]))]));
+    save({ ...data, revision: { ...data.revision, [subjectId]: { ...changed, done: normalisedDone, targets: changed.targets || {} } }, activity: events.length ? [...events, ...data.activity] : data.activity });
+  };
   const toggleSubject = (subjectId: string) => { setOpenSubjects((current) => current.includes(subjectId) ? [] : [subjectId]); };
-  const submitDialog = () => { if (!name.trim()) return; if (dialog === "subject") { const subjectId = id(); save({ ...data, subjects: [...data.subjects, { id: subjectId, name: name.trim(), target: 10, chapters: [] }], revision: { ...data.revision, [subjectId]: { types: [], done: {} } } }); setFilter(subjectId); } else { const subjectId = dialogSubjectId; if (subjectId && dialog === "chapter") save({ ...data, subjects: data.subjects.map((subject) => subject.id === subjectId ? { ...subject, chapters: [...subject.chapters, { id: id(), name: name.trim(), total: Math.max(1, Number(totalInput) || 1), completed: 0 }] } : subject) }); if (subjectId && dialog === "revision") setRevision(subjectId, (value) => ({ ...value, types: [...value.types, { id: id(), name: name.trim(), target: Math.max(1, Number(totalInput) || 1) }] })); } setName(""); setTotalInput("10"); setDialogSubjectId(null); setDialog(null); };
+  const submitDialog = () => { if (!name.trim()) return; if (dialog === "subject") { const subjectId = id(); save({ ...data, subjects: [...data.subjects, { id: subjectId, name: name.trim(), target: 10, chapters: [] }], revision: { ...data.revision, [subjectId]: { types: [], done: {}, targets: {} } } }); setFilter(subjectId); } else { const subjectId = dialogSubjectId; if (subjectId && dialog === "chapter") save({ ...data, subjects: data.subjects.map((subject) => subject.id === subjectId ? { ...subject, chapters: [...subject.chapters, { id: id(), name: name.trim(), total: Math.max(1, Number(totalInput) || 1), completed: 0 }] } : subject) }); if (subjectId && dialog === "revision") setRevision(subjectId, (value) => ({ ...value, types: [...value.types, { id: id(), name: name.trim(), target: Math.max(1, Number(totalInput) || 1) }] })); } setName(""); setTotalInput("10"); setDialogSubjectId(null); setDialog(null); };
   const editChapter = () => { if (!selected || !chosen || !name.trim()) return; const newTotal = Math.max(1, Number(totalInput) || chosen.total); updateChapter(selected.subjectId, selected.chapterId, (x) => ({ ...x, name: name.trim(), total: newTotal, completed: Math.min(x.completed, newTotal) })); setSelected(null); };
   const togglePin = () => { if (!chosen) return; save({ ...data, pinnedChapterIds: data.pinnedChapterIds.includes(chosen.id) ? data.pinnedChapterIds.filter((x) => x !== chosen.id) : [...data.pinnedChapterIds, chosen.id] }); };
   const pinned = data.pinnedChapterIds.flatMap((chapterId) => data.subjects.flatMap((subject) => subject.chapters.filter((chapter) => chapter.id === chapterId).map((chapter) => ({ subject, chapter }))));
@@ -82,7 +132,7 @@ export function TrackScreen({ initialTab }: { initialTab?: Tab }) {
     {tab === "Mock Test" && <><View style={s.row}><Text style={s.cardTitle}>Test targets</Text><View style={s.mockActions}><Pressable onPress={() => setMockDialog(true)} style={s.add}><MaterialCommunityIcons name="clipboard-edit-outline" color={colors.accentDeep} size={16} /><Text style={s.addText}>Log test</Text></Pressable><Pressable onPress={() => setDialog("subject")} style={s.addDark}><MaterialCommunityIcons name="plus" color={colors.text} size={16} /><Text style={s.addDarkText}>Subject</Text></Pressable></View></View><View style={s.card}><Text style={s.cardTitle}>Sectional tests</Text>{data.subjects.map((subject) => <Target key={subject.id} label={subject.name} target={subject.target} done={mocks.filter((x) => x.type === "Sectional" && x.subject === subject.name).length} onChange={(target) => save({ ...data, subjects: data.subjects.map((x) => x.id === subject.id ? { ...x, target } : x) })} />)}</View><View style={s.card}><Text style={s.cardTitle}>Full mock targets</Text><Target label="Pre" target={data.fullMockTargets.pre} done={mocks.filter((x) => x.type === "Pre").length} onChange={(pre) => save({ ...data, fullMockTargets: { ...data.fullMockTargets, pre } })} /><Target label="Mains" target={data.fullMockTargets.mains} done={mocks.filter((x) => x.type === "Mains").length} onChange={(mains) => save({ ...data, fullMockTargets: { ...data.fullMockTargets, mains } })} /></View></>}
   </Animated.View></ScrollView>
   <Modal transparent visible={dialog !== null} animationType="fade" onRequestClose={() => setDialog(null)}><Pressable style={s.backdrop} onPress={() => setDialog(null)}><Pressable style={s.dialog} onPress={() => undefined}><Text style={s.dialogTitle}>{dialog === "subject" ? "Add subject" : dialog === "chapter" ? "Add chapter" : "Add revision cycle"}</Text><Text style={s.dialogCopy}>{dialog === "chapter" ? "Every chapter has its own lecture progress." : dialog === "revision" ? "Set a revision target for every chapter." : "Create a subject for your tracker."}</Text><TextInput autoFocus style={s.input} value={name} onChangeText={setName} placeholder={dialog === "subject" ? "Subject name" : dialog === "chapter" ? "Chapter name" : "e.g. Revision 1"} placeholderTextColor={colors.subdued} />{dialog !== "subject" && <TextInput style={s.input} value={totalInput} onChangeText={setTotalInput} keyboardType="number-pad" placeholder={dialog === "chapter" ? "Total lectures" : "Revisions per chapter"} placeholderTextColor={colors.subdued} />}<Actions onCancel={() => setDialog(null)} onSave={submitDialog} label={dialog === "subject" ? "Add subject" : dialog === "chapter" ? "Add chapter" : "Add cycle"} /></Pressable></Pressable></Modal>
-  <MockTestLogDialog visible={mockDialog} onClose={() => setMockDialog(false)} onSave={(entry) => { const next = [...mocks, entry]; setMocks(next); void AsyncStorage.setItem(MOCK_STORE, JSON.stringify(next)); }} />
+  <MockTestLogDialog visible={mockDialog} onClose={() => setMockDialog(false)} onSave={(entry) => { saveMocks([...mocks, entry]); }} />
   <Modal transparent visible={Boolean(selected && chosen && chosenSubject)} animationType="slide" onRequestClose={() => setSelected(null)}><Pressable style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,.72)" }} onPress={() => setSelected(null)}><Pressable style={s.drawer} onPress={() => undefined}>{selected && chosen && chosenSubject && <><View style={s.grip} /><View style={s.row}><View><Text style={s.overline}>{chosenSubject.name} · CHAPTER</Text><Text style={s.drawerTitle}>{chosen.name}</Text></View><Pressable onPress={() => setSelected(null)}><MaterialCommunityIcons name="close" size={23} color={colors.muted} /></Pressable></View><Text style={s.overline}>LECTURES</Text><Text style={s.count}>{chosen.completed}<Text style={s.countMuted}> / {chosen.total}</Text></Text><Bar value={pct(chosen.completed, chosen.total)} /><View style={s.stepper}><Text style={s.stepText}>Completed lectures</Text><Pressable style={s.step} onPress={() => updateChapter(selected.subjectId, selected.chapterId, (item) => ({ ...item, completed: Math.max(0, item.completed - 1) }))}><MaterialCommunityIcons name="minus" size={18} color={colors.text} /></Pressable><Pressable style={s.step} onPress={() => updateChapter(selected.subjectId, selected.chapterId, (item) => ({ ...item, completed: Math.min(item.total, item.completed + 1) }))}><MaterialCommunityIcons name="plus" size={18} color={colors.text} /></Pressable></View>{tab === "Revision" ? <RevisionEditor value={revision(selected.subjectId)} chapterId={selected.chapterId} onChange={(type, value) => setRevision(selected.subjectId, (old) => ({ ...old, done: { ...old.done, [selected.chapterId]: { ...(old.done[selected.chapterId] || {}), [type.id]: value } } }))} /> : <><Text style={s.overline}>EDIT CHAPTER</Text><View style={s.editRow}><TextInput style={[s.input, s.editName]} value={name} onChangeText={setName} placeholder="Chapter name" placeholderTextColor={colors.muted} /><TextInput style={[s.input, s.editTotal]} value={totalInput} onChangeText={setTotalInput} placeholder="Lectures" keyboardType="number-pad" placeholderTextColor={colors.muted} /></View><Pressable style={s.saveEdit} onPress={editChapter}><Text style={s.saveText}>Save changes</Text></Pressable></>}<View style={s.bottom}><Pressable onPress={togglePin} style={s.pin}><MaterialCommunityIcons name={data.pinnedChapterIds.includes(chosen.id) ? "pin" : "pin-outline"} size={18} color="#fbbf24" /><Text style={s.pinText}>{data.pinnedChapterIds.includes(chosen.id) ? "Pinned" : "Pin chapter"}</Text></Pressable><Pressable onPress={() => { save({ ...data, subjects: data.subjects.map((subject) => subject.id === selected.subjectId ? { ...subject, chapters: subject.chapters.filter((item) => item.id !== selected.chapterId) } : subject), pinnedChapterIds: data.pinnedChapterIds.filter((item) => item !== selected.chapterId) }); setSelected(null); }} style={s.delete}><MaterialCommunityIcons name="trash-can-outline" size={19} color="#fca5a5" /></Pressable></View></>}</Pressable></Pressable></Modal>
   </View>;
 }

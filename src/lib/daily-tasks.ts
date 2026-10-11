@@ -16,7 +16,7 @@ export type DailyTask = {
 export type TaskDraft = Pick<DailyTask, "name" | "subject" | "type" | "date">;
 export type RangeKey = "today" | "week" | "month" | "3months" | "year";
 
-const STORAGE_KEY = "ssc-buddy:tasks:v2";
+export const TASK_STORAGE_KEY = "ssc-buddy:tasks:v2";
 
 export function todayKey(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -64,7 +64,7 @@ export function summarizeTasks(tasks: DailyTask[]) {
 
 function readTasks(): DailyTask[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(TASK_STORAGE_KEY);
     return raw ? (JSON.parse(raw) as DailyTask[]) : [];
   } catch {
     return [];
@@ -77,6 +77,6 @@ export function loadDailyTasks() {
 }
 
 export function saveDailyTasks(tasks: DailyTask[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+  localStorage.setItem(TASK_STORAGE_KEY, JSON.stringify(tasks));
   window.dispatchEvent(new Event("ssc-daily-tasks-updated"));
 }

@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Check, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import type { User } from "firebase/auth";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -24,6 +25,8 @@ import {
   type TaskDraft,
 } from "@/lib/daily-tasks";
 import { loadTrackerData } from "@/lib/tracker-store";
+import { isFirebaseConfigured, observeFirebaseUser } from "@/lib/firebase-sync";
+import { migrateTasksIfEmpty, syncTaskChanges, watchTasks } from "@/lib/task-sync";
 
 export const Route = createFileRoute("/tasks")({ component: DailyTasks });
 
@@ -56,6 +59,7 @@ function AnimatedBar({ value, tone }: { value: number; tone: string }) {
 
 function DailyTasks() {
   const [tasks, setTasks] = useState<DailyTask[]>(() => loadDailyTasks());
+  const [syncUser, setSyncUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState("tasks");
   const [taskDay, setTaskDay] = useState<"today" | "tomorrow">("today");
   const [formOpen, setFormOpen] = useState(false);
@@ -69,9 +73,30 @@ function DailyTasks() {
     () => [...new Set(loadTrackerData().subjects.map((item) => item.name))],
     [],
   );
+  useEffect(() => {
+    if (!isFirebaseConfigured) return;
+    return observeFirebaseUser(setSyncUser);
+  }, []);
+  useEffect(() => {
+    if (!syncUser) return;
+    let cancelled = false;
+    let stop: () => void = () => undefined;
+    void (async () => {
+      await migrateTasksIfEmpty(syncUser, tasks);
+      if (!cancelled) stop = watchTasks(syncUser, (remote) => {
+        setTasks(remote);
+        saveDailyTasks(remote);
+      });
+    })();
+    return () => { cancelled = true; stop(); };
+  // Subscribe once per signed-in user; mutations use the latest state in persist.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [syncUser]);
   const persist = (next: DailyTask[]) => {
+    const previous = tasks;
     setTasks(next);
     saveDailyTasks(next);
+    if (syncUser) void syncTaskChanges(syncUser, previous, next);
   };
   const today = todayKey();
   const tomorrowDate = useMemo(() => {

@@ -9,6 +9,9 @@ import {
   type ReactNode,
 } from "react";
 import { defaultData, type TrackerActivity, type TrackerData } from "./tracker";
+import { isFirebaseConfigured, observeFirebaseUser } from "../../../src/lib/firebase-sync";
+import { migrateTrackerIfEmpty, syncTrackerSections, watchTrackerSections } from "../../../src/lib/tracker-sync";
+import type { User } from "firebase/auth";
 
 export const TRACKER_STORAGE_KEY = "ssc-cgl-2027-tracker-v1";
 
@@ -124,6 +127,8 @@ export function TrackerProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<TrackerData>(() => defaultData());
   const [ready, setReady] = useState(false);
   const loaded = useRef(false);
+  const [syncUser, setSyncUser] = useState<User | null>(null);
+  const lastSynced = useRef<TrackerData>(defaultData());
 
   useEffect(() => {
     try {
@@ -136,10 +141,37 @@ export function TrackerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (!isFirebaseConfigured) return;
+    return observeFirebaseUser(setSyncUser);
+  }, []);
+
+  useEffect(() => {
+    if (!syncUser || !ready) return;
+    let disposed = false;
+    let stop: () => void = () => undefined;
+    void (async () => {
+      await migrateTrackerIfEmpty(syncUser, data);
+      if (disposed) return;
+      stop = watchTrackerSections(syncUser, (remote) => {
+        lastSynced.current = remote;
+        setData(remote);
+      });
+    })().catch(() => undefined);
+    return () => { disposed = true; stop(); };
+  // Initial migration is intentionally once per signed-in account.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [syncUser, ready]);
+
+  useEffect(() => {
     if (!loaded.current || !ready) return;
     try {
       localStorage.setItem(TRACKER_STORAGE_KEY, JSON.stringify(data));
       window.dispatchEvent(new Event("cbt-tracker-updated"));
+      if (syncUser && JSON.stringify(lastSynced.current) !== JSON.stringify(data)) {
+        const previous = lastSynced.current;
+        lastSynced.current = data;
+        void syncTrackerSections(syncUser, previous, data);
+      }
     } catch {
       /* storage full */
     }

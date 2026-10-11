@@ -9,6 +9,8 @@ import { formatMinutes, summarizeTasks, type Task } from "../domain/tasks";
 import { colors } from "../theme";
 import { MockTestLogDialog, type MockTestLog } from "./MockTestLogDialog";
 import { reportVerticalScroll } from "../navigation/bottomNavigationVisibility";
+import type { PracticeProfile } from "../lib/profile-store";
+import { watchTrackerSections } from "../lib/firebase";
 
 const ScrollView = (props: any) => <NativeScrollView {...props} scrollEventThrottle={16} onScroll={(event) => { if (!props.horizontal) reportVerticalScroll(event.nativeEvent.contentOffset.y); props.onScroll?.(event); }} />;
 
@@ -30,8 +32,8 @@ const localDayKey = (date: Date) => `${date.getFullYear()}-${String(date.getMont
 type Props = {
   user: User | null;
   tasks: Task[];
-  profileSettings: { name: string; examName: string; goal: string; manifestation: string } | null;
-  onProfileSaved: (profile: { name: string; examName: string; goal: string; manifestation: string }) => void;
+  profileSettings: PracticeProfile | null;
+  onProfileSaved: (profile: PracticeProfile) => void;
   onLogout: () => void;
   onOpenVideo: () => void;
   onOpenMusic: () => void;
@@ -42,7 +44,7 @@ export function ProfileScreen({ user, tasks, profileSettings, onProfileSaved, on
   const [profileName, setProfileName] = useState(profileSettings?.name ?? "");
   const [profileReady, setProfileReady] = useState(profileSettings !== null);
   const [examName, setExamName] = useState(profileSettings?.examName ?? "SSC CGL 2027");
-  const [goal, setGoal] = useState(profileSettings?.goal ?? "100");
+  const [goal, setGoal] = useState(String(profileSettings?.questionGoal ?? 100));
   const [manifestation, setManifestation] = useState(profileSettings?.manifestation ?? "");
   const [editing, setEditing] = useState(false);
   const [confirmLogout, setConfirmLogout] = useState(false);
@@ -66,7 +68,7 @@ export function ProfileScreen({ user, tasks, profileSettings, onProfileSaved, on
     setAvatarIndex((current) => (current + 1) % avatarImages.length);
   };
   useEffect(() => {
-    if (!profileSettings) void AsyncStorage.getItem("ssc-buddy-mobile:profile:v1").then((raw) => { if (raw) try { const saved = JSON.parse(raw) as { name?: string; examName?: string; goal?: string; manifestation?: string }; setProfileName(saved.name ?? ""); setExamName(saved.examName ?? "SSC CGL 2027"); setGoal(saved.goal ?? "100"); setManifestation(saved.manifestation ?? ""); } catch {} }).finally(() => setProfileReady(true));
+    if (!profileSettings) setProfileReady(true);
     void AsyncStorage.getItem("ssc-buddy-mobile:mock-tests:v1").then((raw) => {
       if (!raw) return;
       try { setMockTests(JSON.parse(raw) as MockTestLog[]); } catch { setMockTests([]); }
@@ -74,7 +76,7 @@ export function ProfileScreen({ user, tasks, profileSettings, onProfileSaved, on
   }, []);
   useEffect(() => {
     if (!profileSettings) return;
-    setProfileName(profileSettings.name); setExamName(profileSettings.examName); setGoal(profileSettings.goal); setManifestation(profileSettings.manifestation); setProfileReady(true);
+    setProfileName(profileSettings.name); setExamName(profileSettings.examName ?? "SSC CGL 2027"); setGoal(String(profileSettings.questionGoal)); setManifestation(profileSettings.manifestation ?? ""); setProfileReady(true);
   }, [profileSettings]);
   const saveMockTest = (entry: MockTestLog) => {
     const next = [entry, ...mockTests];
@@ -130,12 +132,12 @@ export function ProfileScreen({ user, tasks, profileSettings, onProfileSaved, on
           <Stat lastRow label="Incomplete tasks" value={String(filteredSummary.total - filteredSummary.done)} />
         </View>
       </View>
-      <ActivityHeatmap tasks={tasks} mockTests={mockTests} />
+      <ActivityHeatmap user={user} tasks={tasks} mockTests={mockTests} />
       <StudyTrackerOverview tasks={tasks} mockTests={mockTests} onOpen={onOpenTracker} />
       <MockTestLogDialog visible={loggingMockTest} onClose={() => setLoggingMockTest(false)} onSave={saveMockTest} />
       <Modal transparent visible={viewingAvatar} animationType="fade" onRequestClose={() => setViewingAvatar(false)}><Pressable style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 28, backgroundColor: "rgba(0,0,0,.88)" }} onPress={() => setViewingAvatar(false)}><Pressable style={{ width: "100%", aspectRatio: 1, maxWidth: 330, overflow: "hidden", borderRadius: 24, borderWidth: 1, borderColor: "#3f3f46", backgroundColor: "#1c1c1c" }} onPress={() => undefined}><Image source={avatarImages[avatarIndex]} style={{ width: "100%", height: "100%" }} /></Pressable></Pressable></Modal>
       <Modal transparent visible={confirmLogout} animationType="fade" onRequestClose={() => setConfirmLogout(false)}><Pressable style={styles.modalBackdrop} onPress={() => setConfirmLogout(false)}><Pressable style={styles.confirmDialog} onPress={() => undefined}><View style={styles.confirmHeader}><View style={styles.confirmIcon}><MaterialCommunityIcons name="logout" size={18} color="#fca5a5" /></View><Pressable hitSlop={10} onPress={() => setConfirmLogout(false)}><MaterialCommunityIcons name="close" size={20} color={colors.subdued} /></Pressable></View><Text style={styles.confirmTitle}>Sign out?</Text><Text style={styles.confirmCopy}>You can sign back in anytime.</Text><View style={styles.confirmActions}><Pressable style={styles.cancelButton} onPress={() => setConfirmLogout(false)}><Text style={styles.cancelButtonText}>Cancel</Text></Pressable><Pressable style={styles.logoutConfirm} onPress={onLogout}><Text style={styles.logoutConfirmText}>Sign out</Text></Pressable></View></Pressable></Pressable></Modal>
-      <Modal transparent visible={editing} animationType="fade" onRequestClose={() => setEditing(false)}><Pressable style={styles.modalBackdrop} onPress={() => setEditing(false)}><Pressable style={styles.editDialog} onPress={() => undefined}><Text style={styles.editTitle}>Setup your profile</Text><EditField label="Your name" value={profileName} onChange={setProfileName} /><EditField label="Question goal" value={goal} onChange={(value) => setGoal(value.replace(/\D/g, ""))} numeric /><EditField label="Exam name" value={examName} onChange={setExamName} /><Text style={styles.editLabel}>DAILY MANIFESTATION (OPTIONAL)</Text><TextInput multiline value={manifestation} onChangeText={(value) => setManifestation(value.toUpperCase())} placeholder="Write the sentence you want to type daily" placeholderTextColor={colors.subdued} style={styles.manifestationInput} /><View style={styles.editActions}><Pressable onPress={() => setEditing(false)}><Text style={styles.cancel}>Cancel</Text></Pressable><Pressable style={styles.saveProfile} onPress={() => { const next = { name: profileName, examName, goal, manifestation }; void AsyncStorage.setItem("ssc-buddy-mobile:profile:v1", JSON.stringify(next)); onProfileSaved(next); setEditing(false); }}><Text style={styles.saveProfileText}>Save profile</Text></Pressable></View></Pressable></Pressable></Modal>
+      <Modal transparent visible={editing} animationType="fade" onRequestClose={() => setEditing(false)}><Pressable style={styles.modalBackdrop} onPress={() => setEditing(false)}><Pressable style={styles.editDialog} onPress={() => undefined}><Text style={styles.editTitle}>Setup your profile</Text><EditField label="Your name" value={profileName} onChange={setProfileName} /><EditField label="Question goal" value={goal} onChange={(value) => setGoal(value.replace(/\D/g, ""))} numeric /><EditField label="Exam name" value={examName} onChange={setExamName} /><Text style={styles.editLabel}>DAILY MANIFESTATION (OPTIONAL)</Text><TextInput multiline value={manifestation} onChangeText={(value) => setManifestation(value.toUpperCase())} placeholder="Write the sentence you want to type daily" placeholderTextColor={colors.subdued} style={styles.manifestationInput} /><View style={styles.editActions}><Pressable onPress={() => setEditing(false)}><Text style={styles.cancel}>Cancel</Text></Pressable><Pressable style={styles.saveProfile} onPress={() => { onProfileSaved({ name: profileName, examName, questionGoal: Number(goal) || 100, manifestation }); setEditing(false); }}><Text style={styles.saveProfileText}>Save profile</Text></Pressable></View></Pressable></Pressable></Modal>
     </ScrollView>
   );
 }
@@ -144,8 +146,9 @@ function Stat({ label, value, columns = 3, lastColumn, lastRow }: { label: strin
   return <View style={[styles.stat, { paddingVertical: 8 }, columns === 2 && styles.statHalf, lastColumn && styles.statLastColumn, lastRow && styles.statLastRow]}><Text style={styles.statValue}>{value}</Text><Text style={styles.statLabel}>{label}</Text></View>;
 }
 
-function ActivityHeatmap({ tasks, mockTests }: { tasks: Task[]; mockTests: MockTestLog[] }) {
+function ActivityHeatmap({ user, tasks, mockTests }: { user: User | null; tasks: Task[]; mockTests: MockTestLog[] }) {
   const [selectedDay, setSelectedDay] = useState<string>(() => localDayKey(new Date()));
+  const [trackerActivity, setTrackerActivity] = useState<Array<{ date: string; count: number }>>([]);
   const [viewportWidth, setViewportWidth] = useState(0);
   const [contentWidth, setContentWidth] = useState(0);
   const [heatmapReady, setHeatmapReady] = useState(false);
@@ -153,11 +156,19 @@ function ActivityHeatmap({ tasks, mockTests }: { tasks: Task[]; mockTests: MockT
   const heatmapRef = useRef<ScrollView>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
   const scrollbarTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!user) { setTrackerActivity([]); return; }
+    return watchTrackerSections(user, (sections) => {
+      const entries = Array.isArray(sections.activity) ? sections.activity : [];
+      setTrackerActivity(entries.filter((entry: any) => entry && typeof entry.date === "string").map((entry: any) => ({ date: entry.date, count: Math.max(1, Number(entry.count) || 1) })));
+    });
+  }, [user?.uid]);
   const { months, total, activeDays, streak, activity } = useMemo(() => {
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const counts = new Map<string, number>();
     tasks.filter((task) => task.completed).forEach((task) => counts.set(task.date, (counts.get(task.date) ?? 0) + 1));
     mockTests.forEach((test) => counts.set(test.date, (counts.get(test.date) ?? 0) + 1));
+    trackerActivity.forEach((entry) => counts.set(entry.date, (counts.get(entry.date) ?? 0) + entry.count));
     const days = Array.from({ length: 365 }, (_, index) => {
       const date = new Date(today); date.setDate(today.getDate() - (364 - index));
       const key = localDayKey(date);
@@ -174,7 +185,7 @@ function ActivityHeatmap({ tasks, mockTests }: { tasks: Task[]; mockTests: MockT
       return result;
     }, []);
     return { months: grouped, total: [...counts.values()].reduce((sum, count) => sum + count, 0), activeDays: [...counts.values()].filter(Boolean).length, streak: longest, activity: counts, maximum };
-  }, [mockTests, tasks]);
+  }, [mockTests, tasks, trackerActivity]);
   const max = Math.max(1, ...[...activity.values()]);
   const selected = activity.get(selectedDay) ?? 0;
   const thumbWidth = viewportWidth && contentWidth ? Math.max(34, (viewportWidth * viewportWidth) / contentWidth) : 0;

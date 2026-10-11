@@ -233,7 +233,8 @@ function isProfile(value: unknown): value is PracticeProfile {
     Number.isFinite(profile.questionGoal) &&
     profile.questionGoal >= 1 &&
     (profile.avatar === undefined || typeof profile.avatar === "string") &&
-    (profile.manifestation === undefined || typeof profile.manifestation === "string")
+    (profile.manifestation === undefined || typeof profile.manifestation === "string") &&
+    (profile.examName === undefined || typeof profile.examName === "string")
   );
 }
 

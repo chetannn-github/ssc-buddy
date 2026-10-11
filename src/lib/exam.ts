@@ -122,11 +122,13 @@ export function loadTestDarkMode(): boolean | null {
 
 export function saveTestDarkMode(darkMode: boolean) {
   write(TEST_THEME_KEY, darkMode);
+  window.dispatchEvent(new Event("ssc-preferences-updated"));
 }
 
 export function clearTestDarkMode() {
   try {
     localStorage.removeItem(TEST_THEME_KEY);
+    window.dispatchEvent(new Event("ssc-preferences-updated"));
   } catch {
     /* storage unavailable */
   }

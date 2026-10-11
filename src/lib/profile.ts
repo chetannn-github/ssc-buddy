@@ -3,9 +3,11 @@ export type PracticeProfile = {
   questionGoal: number;
   avatar?: string;
   manifestation?: string;
+  /** Kept with the profile so web and mobile render the same identity. */
+  examName?: string;
 };
 
-const PROFILE_KEY = "cbt-practice-profile";
+export const PROFILE_KEY = "cbt-practice-profile";
 
 export function loadPracticeProfile(): PracticeProfile | null {
   try {
@@ -27,6 +29,9 @@ export function loadPracticeProfile(): PracticeProfile | null {
       ...(typeof profile.manifestation === "string" && profile.manifestation.trim()
         ? { manifestation: profile.manifestation.trim().toUpperCase() }
         : {}),
+      ...(typeof profile.examName === "string" && profile.examName.trim()
+        ? { examName: profile.examName.trim() }
+        : {}),
     };
   } catch {
     return null;
@@ -43,6 +48,7 @@ export function savePracticeProfile(profile: PracticeProfile) {
       ...(profile.manifestation?.trim()
         ? { manifestation: profile.manifestation.trim().toUpperCase() }
         : {}),
+      ...(profile.examName?.trim() ? { examName: profile.examName.trim() } : {}),
     }),
   );
   window.dispatchEvent(new Event("cbt-profile-updated"));

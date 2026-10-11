@@ -12,6 +12,9 @@ export type Task = {
   minutesSpent: number | null;
 };
 
+export const TASK_STORAGE_KEY = "ssc-buddy:tasks:v2";
+export const LEGACY_TASK_STORAGE_KEY = "ssc-buddy-mobile:tasks:v1";
+
 export const TASK_TYPES: TaskType[] = ["Lecture", "Revision", "Mock", "Practice Session", "Other"];
 
 export const dateKey = (date = new Date()) => date.toISOString().slice(0, 10);

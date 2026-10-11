@@ -25,6 +25,8 @@ import {
   formatMinutes,
   summarizeTasks,
   TASK_TYPES,
+  TASK_STORAGE_KEY,
+  LEGACY_TASK_STORAGE_KEY,
   tasksInLastDays,
   type Task,
   type TaskType,
@@ -34,8 +36,9 @@ import { BottomNavigation } from "./src/components/BottomNavigation";
 import { type TabKey, tabs } from "./src/navigation/tabs";
 import { ComingSoonScreen } from "./src/screens/ComingSoonScreen";
 import { AuthScreen } from "./src/screens/AuthScreen";
-import { isFirebaseConfigured, observeSession } from "./src/lib/firebase";
+import { isFirebaseConfigured, migrateTasksIfEmpty, observeSession, patchCloudProfile, readCloudProfile, syncTaskChanges, watchCloudProfile, watchTasks } from "./src/lib/firebase";
 import { logout } from "./src/lib/firebase";
+import { loadProfile, normalizeProfile, saveProfile, type PracticeProfile } from "./src/lib/profile-store";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
 import { MediaOverlay, type MediaMode } from "./src/screens/MediaOverlay";
 import { PracticeScreen } from "./src/screens/PracticeScreen";
@@ -45,24 +48,9 @@ import { reportVerticalTouch } from "./src/navigation/bottomNavigationVisibility
 import type { User } from "firebase/auth";
 import { reportVerticalScroll, resetBottomNavigation } from "./src/navigation/bottomNavigationVisibility";
 
-const STORAGE_KEY = "ssc-buddy-mobile:tasks:v1";
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
-type ProfileSettings = { name: string; examName: string; goal: string; manifestation: string };
 type TaskRange = "today" | "week" | "month" | "3months" | "year";
 const TASK_RANGE_LABELS: Record<TaskRange, string> = { today: "Today", week: "This week", month: "This month", "3months": "Last 3 months", year: "This year" };
-const demoTasks = (): Task[] => {
-  const now = new Date();
-  const today = dateKey(now);
-  const yesterday = dateKey(new Date(now.getTime() - 86_400_000));
-  const twoDaysAgo = dateKey(new Date(now.getTime() - 172_800_000));
-  const made = now.toISOString();
-  return [
-    { id: "demo-polity", name: "Polity lecture revision", subject: "General", type: "Lecture", date: today, createdAt: made, completed: true, completedAt: made, minutesSpent: 90 },
-    { id: "demo-maths", name: "Arithmetic practice set", subject: "Maths", type: "Practice Session", date: today, createdAt: made, completed: false, completedAt: null, minutesSpent: null },
-    { id: "demo-english", name: "Vocabulary revision", subject: "English", type: "Revision", date: yesterday, createdAt: made, completed: true, completedAt: made, minutesSpent: 45 },
-    { id: "demo-reasoning", name: "Reasoning mock drill", subject: "Reasoning", type: "Mock", date: twoDaysAgo, createdAt: made, completed: true, completedAt: made, minutesSpent: 60 },
-  ];
-};
 const ScrollView = (props: any) => <NativeScrollView {...props} scrollEventThrottle={16} onScroll={(event) => { if (!props.horizontal) reportVerticalScroll(event.nativeEvent.contentOffset.y); props.onScroll?.(event); }} />;
 
 function CompletionRing({ percent }: { percent: number }) {
@@ -117,7 +105,8 @@ export default function App() {
   const [mediaMode, setMediaMode] = useState<MediaMode>(null);
   const [musicOpenRequest, setMusicOpenRequest] = useState(0);
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [profileSettings, setProfileSettings] = useState<ProfileSettings | null>(null);
+  const [tasksLoaded, setTasksLoaded] = useState(false);
+  const [profileSettings, setProfileSettings] = useState<PracticeProfile | null>(null);
   const [appTab, setAppTab] = useState<TabKey>("tasks");
   const [trackTab, setTrackTab] = useState<"Syllabus" | "Revision" | "Mock Test">("Syllabus");
   const [dailyManifestation, setDailyManifestation] = useState("");
@@ -180,28 +169,14 @@ export default function App() {
     return () => clearTimeout(timer);
   }, []);
   useEffect(() => {
-    void AsyncStorage.getItem("ssc-buddy-mobile:profile:v1").then((raw) => {
-      if (!raw) return setProfileSettings({ name: "", examName: "SSC CGL 2027", goal: "100", manifestation: "" });
-      try {
-        const saved = JSON.parse(raw) as Partial<ProfileSettings>;
-        setProfileSettings({ name: saved.name ?? "", examName: saved.examName ?? "SSC CGL 2027", goal: saved.goal ?? "100", manifestation: saved.manifestation ?? "" });
-      } catch {
-        setProfileSettings({ name: "", examName: "SSC CGL 2027", goal: "100", manifestation: "" });
-      }
-    });
+    void loadProfile().then(setProfileSettings);
   }, []);
   useEffect(() => {
     if (!authenticated || manifestationLoaded.current) return;
     manifestationLoaded.current = true;
-    void AsyncStorage.getItem("ssc-buddy-mobile:profile:v1").then((raw) => {
-      if (!raw) return;
-      try {
-        const saved = JSON.parse(raw) as { manifestation?: string };
-        const phrase = saved.manifestation?.trim().toUpperCase() ?? "";
-        if (phrase) setDailyManifestation(phrase);
-      } catch {}
-    });
-  }, [authenticated]);
+    const phrase = profileSettings?.manifestation?.trim().toUpperCase() ?? "";
+    if (phrase) setDailyManifestation(phrase);
+  }, [authenticated, profileSettings]);
   useEffect(() => {
     if (authenticated) return;
     manifestationLoaded.current = false;
@@ -211,22 +186,82 @@ export default function App() {
   }, [authenticated]);
 
   useEffect(() => {
-    void AsyncStorage.getItem(STORAGE_KEY).then((raw) => {
-      const stored = raw ? (JSON.parse(raw) as Task[]) : demoTasks();
-      setTasks(
-        stored.map((storedTask) => {
-          const { targetMinutes: _legacyTarget, ...task } = storedTask as Task & {
-            targetMinutes?: number;
-          };
-          return task;
-        }),
-      );
-    });
+    if (!authenticated || !user || !profileSettings) return;
+    let cancelled = false;
+    let applyingRemote = false;
+    let unsubscribe: (() => void) | undefined;
+    const apply = async (raw: Record<string, unknown>) => {
+      try {
+        const next = await saveProfile(normalizeProfile(raw));
+        if (!cancelled) setProfileSettings(next);
+      } catch {}
+    };
+    const start = async () => {
+      try {
+        const remote = await readCloudProfile(user);
+        if (cancelled) return;
+        if (remote) { applyingRemote = true; await apply(remote); applyingRemote = false; }
+        else await patchCloudProfile(user, profileSettings);
+        if (cancelled) return;
+        unsubscribe = watchCloudProfile(user, (value) => {
+          if (value && !applyingRemote) void apply(value);
+        });
+      } catch {}
+    };
+    void start();
+    return () => { cancelled = true; unsubscribe?.(); };
+  }, [authenticated, user?.uid]);
+
+  const saveSharedProfile = (next: PracticeProfile) => {
+    const normalized = normalizeProfile(next);
+    const previous: Partial<PracticeProfile> = profileSettings ?? {};
+    const changed = Object.fromEntries(
+      Object.entries(normalized).filter(([key, value]) => previous[key as keyof PracticeProfile] !== value),
+    );
+    setProfileSettings(normalized);
+    void saveProfile(normalized);
+    if (user && Object.keys(changed).length) void patchCloudProfile(user, changed);
+  };
+
+  useEffect(() => {
+    void (async () => {
+      const raw = await AsyncStorage.getItem(TASK_STORAGE_KEY) ?? await AsyncStorage.getItem(LEGACY_TASK_STORAGE_KEY);
+      const stored = raw ? (JSON.parse(raw) as Task[]) : [];
+      const normalized = stored.map((storedTask) => {
+        const { targetMinutes: _legacyTarget, ...task } = storedTask as Task & { targetMinutes?: number };
+        return task;
+      }).filter((task) => !task.id.startsWith("demo-"));
+      setTasks(normalized);
+      await AsyncStorage.setItem(TASK_STORAGE_KEY, JSON.stringify(normalized));
+      setTasksLoaded(true);
+    })();
   }, []);
+  useEffect(() => {
+    if (!authenticated || !user || !tasksLoaded) return;
+    let cancelled = false;
+    let unsubscribe: (() => void) | undefined;
+    void (async () => {
+      try {
+        await migrateTasksIfEmpty(user, tasks);
+        if (cancelled) return;
+        unsubscribe = watchTasks(user, (remote) => {
+          const next = remote as Task[];
+          setTasks(next);
+          void AsyncStorage.setItem(TASK_STORAGE_KEY, JSON.stringify(next));
+          refreshDailyTasksWidget(next);
+        });
+      } catch {}
+    })();
+    return () => { cancelled = true; unsubscribe?.(); };
+  // Initial migration must only run once per authenticated account.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authenticated, user?.uid, tasksLoaded]);
   const persist = (next: Task[]) => {
+    const previous = tasks;
     setTasks(next);
-    void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    void AsyncStorage.setItem(TASK_STORAGE_KEY, JSON.stringify(next));
     refreshDailyTasksWidget(next);
+    if (user) void syncTaskChanges(user, previous, next);
   };
   const today = dateKey();
   const tomorrow = dateKey(new Date(Date.now() + 86_400_000));
@@ -395,7 +430,7 @@ export default function App() {
           user={user}
           tasks={tasks}
           profileSettings={profileSettings}
-          onProfileSaved={setProfileSettings}
+          onProfileSaved={saveSharedProfile}
           onOpenVideo={() => setMediaMode("video")}
           onOpenMusic={() => { setMediaMode("music"); setMusicOpenRequest((value) => value + 1); }}
           onOpenTracker={(tab) => {
@@ -407,9 +442,9 @@ export default function App() {
           }}
         />
       ) : appTab === "track" ? (
-        <TrackScreen initialTab={trackTab} />
+        <TrackScreen initialTab={trackTab} user={user} />
       ) : appTab === "practice" ? (
-        <PracticeScreen />
+        <PracticeScreen user={user} />
       ) : appTab === "progress" ? (
         <ProgressScreen />
       ) : appTab === "tasks" ? (

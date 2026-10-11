@@ -834,6 +834,7 @@ export function Profile() {
       questionGoal: Math.min(100000, Number(goalDraft)),
       ...(profile?.avatar ? { avatar: profile.avatar } : {}),
       ...(manifestationDraft.trim() ? { manifestation: manifestationDraft.trim() } : {}),
+      ...(examNameDraft.trim() ? { examName: examNameDraft.trim() } : {}),
     };
     savePracticeProfile(next);
     if (tracker) {
@@ -862,6 +863,7 @@ export function Profile() {
       questionGoal,
       avatar: nextAvatar,
       ...(profile?.manifestation ? { manifestation: profile.manifestation } : {}),
+      ...(profile?.examName ? { examName: profile.examName } : {}),
     };
     savePracticeProfile(next);
     setProfile(next);

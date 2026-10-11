@@ -1,6 +1,14 @@
 // @ts-nocheck
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  Manrope_400Regular,
+  Manrope_500Medium,
+  Manrope_600SemiBold,
+  Manrope_700Bold,
+  Manrope_800ExtraBold,
+  useFonts,
+} from "@expo-google-fonts/manrope";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
@@ -15,6 +23,7 @@ import {
 
 import { colors } from "../theme";
 import { reportVerticalScroll } from "../navigation/bottomNavigationVisibility";
+import { migratePracticeEntities, patchPracticeSettings, readPracticeSettings, syncPracticeEntities, watchPracticeEntities, watchPracticeSettings } from "../lib/firebase";
 
 const ScrollView = (props: any) => (
   <NativeScrollView
@@ -78,6 +87,9 @@ type Phase = "setup" | "key" | "instructions" | "test" | "history" | "bank";
 const STORE = "ssc-buddy-mobile:practice-bank:v1";
 const HISTORY = "ssc-buddy-mobile:practice-history:v1";
 const choices: Option[] = ["A", "B", "C", "D"];
+const examAccent = "#60a5fa";
+const examAccentSurface = "#162c45";
+const examAccentDeep = "#081a31";
 const makeId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 const defaultBank: Bank = {
   marking: { positive: 2, negative: 0.5 },
@@ -121,7 +133,14 @@ const defaultBank: Bank = {
   ],
 };
 
-export function PracticeScreen() {
+export function PracticeScreen({ user }: { user: any }) {
+  useFonts({
+    Manrope_400Regular,
+    Manrope_500Medium,
+    Manrope_600SemiBold,
+    Manrope_700Bold,
+    Manrope_800ExtraBold,
+  });
   const [bank, setBank] = useState<Bank>(defaultBank);
   const [history, setHistory] = useState<Record[]>([]);
   const [reattemptOf, setReattemptOf] = useState<string | null>(null);
@@ -140,6 +159,7 @@ export function PracticeScreen() {
   const [current, setCurrent] = useState(0);
   const [remaining, setRemaining] = useState(0);
   const [dialog, setDialog] = useState<"subject" | "chapter" | "exercise" | null>(null);
+  const [editingExerciseId, setEditingExerciseId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [exerciseKind, setExerciseKind] = useState<"key" | "questions">("key");
   const [json, setJson] = useState("");
@@ -148,34 +168,63 @@ export function PracticeScreen() {
   const [bankSubject, setBankSubject] = useState("all");
   const [viewingQuestions, setViewingQuestions] = useState<Exercise | null>(null);
   const [favourites, setFavourites] = useState<string[]>([]);
+  const [practiceLoaded, setPracticeLoaded] = useState(false);
+  const bankRef = useRef(bank); const historyRef = useRef(history); const favouritesRef = useRef(favourites);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   useEffect(() => {
-    void AsyncStorage.getItem(STORE).then((raw) => {
-      if (raw)
-        try {
-          setBank(JSON.parse(raw) as Bank);
-        } catch {}
-    });
-    void AsyncStorage.getItem(HISTORY).then((raw) => {
-      if (raw)
-        try {
-          setHistory(JSON.parse(raw) as Record[]);
-        } catch {}
-    });
-    void AsyncStorage.getItem("ssc-buddy-mobile:favourite-questions:v1").then((raw) => {
-      if (raw)
-        try {
-          setFavourites(JSON.parse(raw) as string[]);
-        } catch {}
-    });
+    void (async () => {
+      const [bankRaw, historyRaw, favouritesRaw] = await Promise.all([AsyncStorage.getItem(STORE), AsyncStorage.getItem(HISTORY), AsyncStorage.getItem("ssc-buddy-mobile:favourite-questions:v1")]);
+      try { if (bankRaw) { const next = JSON.parse(bankRaw) as Bank; bankRef.current = next; setBank(next); } } catch {}
+      try { if (historyRaw) { const next = JSON.parse(historyRaw) as Record[]; historyRef.current = next; setHistory(next); } } catch {}
+      try { if (favouritesRaw) { const next = JSON.parse(favouritesRaw) as string[]; favouritesRef.current = next; setFavourites(next); } } catch {}
+      setPracticeLoaded(true);
+    })();
     return () => {
       if (timer.current) clearInterval(timer.current);
     };
   }, []);
   const saveBank = (next: Bank) => {
+    const previous = bankRef.current;
+    bankRef.current = next;
     setBank(next);
     void AsyncStorage.setItem(STORE, JSON.stringify(next));
+    if (user) void syncPracticeEntities(user, "practiceSubjects", previous.subjects as any, next.subjects as any);
   };
+  const saveHistory = (next: Record[]) => {
+    const previous = historyRef.current;
+    historyRef.current = next;
+    setHistory(next);
+    void AsyncStorage.setItem(HISTORY, JSON.stringify(next));
+    if (user) void syncPracticeEntities(user, "practiceAttempts", previous as any, next as any);
+  };
+  const saveFavourites = (next: string[]) => {
+    const previous = favouritesRef.current;
+    favouritesRef.current = next;
+    setFavourites(next);
+    void AsyncStorage.setItem("ssc-buddy-mobile:favourite-questions:v1", JSON.stringify(next));
+    if (user) void syncPracticeEntities(user, "practiceFavourites", previous.map((id) => ({ id })) as any, next.map((id) => ({ id })) as any);
+  };
+  useEffect(() => {
+    if (!user || !practiceLoaded) return;
+    let stopped = false; const stops: Array<() => void> = [];
+    void (async () => {
+      await Promise.all([
+        migratePracticeEntities(user, "practiceSubjects", bankRef.current.subjects as any),
+        migratePracticeEntities(user, "practiceAttempts", historyRef.current as any),
+        migratePracticeEntities(user, "practiceFavourites", favouritesRef.current.map((id) => ({ id })) as any),
+      ]);
+      if (stopped) return;
+      const settings = await readPracticeSettings(user);
+      if (!settings) await patchPracticeSettings(user, { marking: bankRef.current.marking });
+      stops.push(
+        watchPracticeEntities(user, "practiceSubjects", (items) => { const next = { ...bankRef.current, subjects: items as any }; bankRef.current = next; setBank(next); void AsyncStorage.setItem(STORE, JSON.stringify(next)); }),
+        watchPracticeEntities(user, "practiceAttempts", (items) => { const next = items.map((item) => ({ ...item, minutes: Number(item.minutes ?? item.durationMinutes ?? Math.round(Number(item.timeTakenSeconds ?? 0) / 60)), key: item.key ?? item.answerKey ?? [], correct: Number(item.correct ?? 0), wrong: Number(item.wrong ?? 0), score: Number(item.score ?? 0), subject: String(item.subject ?? ""), chapter: String(item.chapter ?? ""), exercise: String(item.exercise ?? "") })) as Record[]; historyRef.current = next; setHistory(next); void AsyncStorage.setItem(HISTORY, JSON.stringify(next)); }),
+        watchPracticeEntities(user, "practiceFavourites", (items) => { const next = items.map((item) => item.id); favouritesRef.current = next; setFavourites(next); void AsyncStorage.setItem("ssc-buddy-mobile:favourite-questions:v1", JSON.stringify(next)); }),
+        watchPracticeSettings(user, (settings) => { const marking = settings?.marking as Bank["marking"] | undefined; if (marking) { const next = { ...bankRef.current, marking }; bankRef.current = next; setBank(next); void AsyncStorage.setItem(STORE, JSON.stringify(next)); } }),
+      );
+    })().catch(() => undefined);
+    return () => { stopped = true; stops.forEach((stop) => stop()); };
+  }, [user?.uid, practiceLoaded]);
   const subject = bank.subjects.find((item) => item.id === subjectId) ?? bank.subjects[0];
   const chapter = subject?.chapters.find((item) => item.id === chapterId) ?? subject?.chapters[0];
   const exercise =
@@ -213,6 +262,31 @@ export function PracticeScreen() {
     setChapterId(item?.chapters[0]?.id ?? "");
     setExerciseId(item?.chapters[0]?.exercises[0]?.id ?? "");
     setMenu(null);
+  };
+  const editExercise = () => {
+    if (!exercise) return;
+    setEditingExerciseId(exercise.id);
+    setDraft(exercise.name);
+    setCount(String(exercise.questionCount));
+    setExerciseKind(exercise.questions?.length ? "questions" : "key");
+    setAnswerKey(exercise.answerKey);
+    setJson(
+      exercise.questions
+        ? JSON.stringify(
+            exercise.questions.map((question) => ({
+              id: question.id,
+              question: question.question,
+              options: question.options,
+              correctAnswer: choices.indexOf(question.correctAnswer),
+              ...(question.explanation ? { explanation: question.explanation } : {}),
+            })),
+            null,
+            2,
+          )
+        : "",
+    );
+    setJsonError("");
+    setDialog("exercise");
   };
   const begin = () => {
     if (!exercise || !subject || !chapter)
@@ -271,8 +345,7 @@ export function PracticeScreen() {
       attemptOf: reattemptOf ?? undefined,
     };
     const next = [saved, ...history];
-    setHistory(next);
-    void AsyncStorage.setItem(HISTORY, JSON.stringify(next));
+    saveHistory(next);
     setReattemptOf(null);
     setPhase("history");
   };
@@ -360,13 +433,14 @@ export function PracticeScreen() {
         }
       }
       const quantity = questions?.length ?? Math.max(1, Math.min(500, Number(count) || 20));
+      const existing = chapter.exercises.find((item) => item.id === editingExerciseId);
       const next = {
-        id: makeId(),
+        id: existing?.id ?? makeId(),
         name: value,
         questionCount: quantity,
         answerKey: questions
           ? questions.map((item) => item.correctAnswer)
-          : Array(quantity).fill(null),
+          : Array.from({ length: quantity }, (_, index) => existing?.answerKey[index] ?? null),
         questions,
       };
       saveBank({
@@ -378,7 +452,14 @@ export function PracticeScreen() {
                 ...item,
                 chapters: item.chapters.map((itemChapter) =>
                   itemChapter.id === chapter.id
-                    ? { ...itemChapter, exercises: [...itemChapter.exercises, next] }
+                    ? {
+                        ...itemChapter,
+                        exercises: existing
+                          ? itemChapter.exercises.map((itemExercise) =>
+                              itemExercise.id === existing.id ? next : itemExercise,
+                            )
+                          : [...itemChapter.exercises, next],
+                      }
                     : itemChapter,
                 ),
               },
@@ -387,7 +468,7 @@ export function PracticeScreen() {
       setExerciseId(next.id);
       if (exerciseKind === "key") {
         setCount(String(quantity));
-        setAnswerKey(Array(quantity).fill(null));
+        setAnswerKey(next.answerKey);
         setSavingNewKey(true);
         openKeyEditor = true;
       }
@@ -395,6 +476,7 @@ export function PracticeScreen() {
     setDraft("");
     setJson("");
     setJsonError("");
+    setEditingExerciseId(null);
     setDialog(null);
     if (openKeyEditor) setPhase("key");
   };
@@ -408,13 +490,11 @@ export function PracticeScreen() {
         }}
         onDelete={(id) => {
           const next = history.filter((record) => record.id !== id);
-          setHistory(next);
-          void AsyncStorage.setItem(HISTORY, JSON.stringify(next));
+          saveHistory(next);
         }}
         onUpdate={(updated) => {
           const next = history.map((record) => (record.id === updated.id ? updated : record));
-          setHistory(next);
-          void AsyncStorage.setItem(HISTORY, JSON.stringify(next));
+          saveHistory(next);
         }}
         onReattempt={(record) => {
           setReattemptOf(record.attemptOf ?? record.id);
@@ -444,11 +524,7 @@ export function PracticeScreen() {
           const next = favourites.includes(questionId)
             ? favourites.filter((id) => id !== questionId)
             : [...favourites, questionId];
-          setFavourites(next);
-          void AsyncStorage.setItem(
-            "ssc-buddy-mobile:favourite-questions:v1",
-            JSON.stringify(next),
-          );
+          saveFavourites(next);
         }}
         viewing={viewingQuestions}
         onView={setViewingQuestions}
@@ -564,6 +640,14 @@ export function PracticeScreen() {
           onAdd={() => setDialog("exercise")}
           disabled={!chapter}
         />
+        {exercise ? (
+          <Pressable onPress={editExercise} style={s.exerciseEdit}>
+            <MaterialCommunityIcons name="pencil-outline" size={15} color={colors.accent} />
+            <Text style={s.exerciseEditText} numberOfLines={1}>
+              Edit {exercise.questions?.length ? "questions" : "answer key"} · {exercise.name}
+            </Text>
+          </Pressable>
+        ) : null}
         <View style={s.card}>
           <Text style={s.label}>TIMING</Text>
           <TextInput
@@ -678,7 +762,7 @@ export function PracticeScreen() {
         <MarkingCard marking={bank.marking} onSave={(marking) => saveBank({ ...bank, marking })} />
         <Pressable style={s.primary} onPress={begin}>
           <Text style={s.primaryText}>Continue to instructions</Text>
-          <MaterialCommunityIcons name="arrow-right" size={19} color={colors.accentDeep} />
+          <MaterialCommunityIcons name="arrow-right" size={19} color={examAccentDeep} />
         </Pressable>
       </ScrollView>
       <AddDialog
@@ -699,9 +783,11 @@ export function PracticeScreen() {
         json={json}
         onJson={setJson}
         error={jsonError}
+        editing={editingExerciseId !== null}
         onClose={() => {
           setDialog(null);
           setJsonError("");
+          setEditingExerciseId(null);
         }}
         onSave={add}
       />
@@ -936,7 +1022,7 @@ function Instructions({
           </Text>
         </View>
         <Pressable style={s.primary} onPress={onStart}>
-          <MaterialCommunityIcons name="play" color={colors.accentDeep} size={18} />
+          <MaterialCommunityIcons name="play" color={examAccentDeep} size={18} />
           <Text style={s.primaryText}>Start test</Text>
         </Pressable>
       </ScrollView>
@@ -1333,7 +1419,7 @@ function HistoryDetail({
             <Text style={s.outlineActionText}>Reevaluate</Text>
           </Pressable>
           <Pressable onPress={onReattempt} style={s.primarySmall}>
-            <MaterialCommunityIcons name="reload" size={16} color={colors.accentDeep} />
+            <MaterialCommunityIcons name="reload" size={16} color={examAccentDeep} />
             <Text style={s.primaryText}>Reattempt</Text>
           </Pressable>
         </View>
@@ -1407,7 +1493,7 @@ function SolutionView({ record, onBack }: { record: Record; onBack: () => void }
           <MaterialCommunityIcons
             name={reattemptMode ? "check-circle" : "reload"}
             size={15}
-            color={reattemptMode ? colors.accentDeep : colors.muted}
+            color={reattemptMode ? examAccentDeep : colors.muted}
           />
           <Text style={[s.solutionModeText, reattemptMode && s.solutionModeTextActive]}>
             Reattempt mode
@@ -1597,6 +1683,7 @@ function AddDialog({
   json,
   onJson,
   error,
+  editing,
   onClose,
   onSave,
 }: {
@@ -1611,6 +1698,7 @@ function AddDialog({
   json: string;
   onJson: (value: string) => void;
   error: string;
+  editing: boolean;
   onClose: () => void;
   onSave: () => void;
 }) {
@@ -1620,7 +1708,7 @@ function AddDialog({
       <Pressable style={[s.backdrop, exercise && s.sheetBackdrop]} onPress={onClose}>
         <Pressable style={[s.dialog, exercise && s.exerciseSheet]} onPress={() => undefined}>
           {exercise ? <View style={s.sheetHandle} /> : null}
-          <Text style={s.dialogTitle}>{title}</Text>
+          <Text style={s.dialogTitle}>{editing ? "Update exercise" : title}</Text>
           <TextInput
             autoFocus
             value={value}
@@ -1632,22 +1720,35 @@ function AddDialog({
           {exercise && (
             <>
               <Text style={[s.label, { marginTop: 16 }]}>EXERCISE TYPE</Text>
-              <View style={s.modeRow}>
-                <Pressable
-                  onPress={() => onKind("key")}
-                  style={[s.mode, kind === "key" && s.modeActive]}
-                >
-                  <Text style={[s.modeText, kind === "key" && s.modeTextActive]}>Answer key</Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => onKind("questions")}
-                  style={[s.mode, kind === "questions" && s.modeActive]}
-                >
-                  <Text style={[s.modeText, kind === "questions" && s.modeTextActive]}>
-                    Question JSON
+              {editing ? (
+                <View style={s.exerciseTypeLocked}>
+                  <MaterialCommunityIcons
+                    name={kind === "questions" ? "code-json" : "format-list-numbered"}
+                    size={16}
+                    color={colors.accent}
+                  />
+                  <Text style={s.exerciseTypeLockedText}>
+                    {kind === "questions" ? "Question-based exercise" : "Answer-key exercise"}
                   </Text>
-                </Pressable>
-              </View>
+                </View>
+              ) : (
+                <View style={s.modeRow}>
+                  <Pressable
+                    onPress={() => onKind("key")}
+                    style={[s.mode, kind === "key" && s.modeActive]}
+                  >
+                    <Text style={[s.modeText, kind === "key" && s.modeTextActive]}>Answer key</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => onKind("questions")}
+                    style={[s.mode, kind === "questions" && s.modeActive]}
+                  >
+                    <Text style={[s.modeText, kind === "questions" && s.modeTextActive]}>
+                      Question JSON
+                    </Text>
+                  </Pressable>
+                </View>
+              )}
               {kind === "key" ? (
                 <>
                   <TextInput
@@ -1689,7 +1790,13 @@ function AddDialog({
             </Pressable>
             <Pressable style={s.primarySmall} onPress={onSave}>
               <Text style={s.primaryText}>
-                {exercise && kind === "key" ? "Next: answer key" : "Add"}
+                {exercise && kind === "key"
+                  ? editing
+                    ? "Update answer key"
+                    : "Next: answer key"
+                  : editing
+                    ? "Update exercise"
+                    : "Add"}
               </Text>
             </Pressable>
           </View>
@@ -1992,8 +2099,13 @@ const s = StyleSheet.create({
     paddingBottom: 13,
   },
   headerActions: { flexDirection: "row", alignItems: "center", gap: 8 },
-  eyebrow: { color: "#818cf8", fontSize: 10, fontWeight: "800", letterSpacing: 1.7 },
-  title: { color: colors.text, fontSize: 24, fontWeight: "800", marginTop: 4 },
+  eyebrow: {
+    color: "#93a4be",
+    fontFamily: "Manrope_700Bold",
+    fontSize: 10,
+    letterSpacing: 1.7,
+  },
+  title: { color: colors.text, fontFamily: "Manrope_800ExtraBold", fontSize: 24, marginTop: 4 },
   content: { padding: 20, paddingTop: 5, gap: 12, paddingBottom: 75 },
   linkButton: { padding: 8, borderRadius: 11, backgroundColor: "#252525" },
   label: {
@@ -2015,7 +2127,7 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  selectText: { color: colors.text, fontSize: 14, fontWeight: "600" },
+  selectText: { color: colors.text, fontFamily: "Manrope_600SemiBold", fontSize: 14 },
   menu: {
     marginTop: 5,
     borderRadius: 13,
@@ -2039,6 +2151,18 @@ const s = StyleSheet.create({
     gap: 7,
   },
   addItemText: { color: colors.accent, fontSize: 13, fontWeight: "700" },
+  exerciseEdit: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 6,
+    marginTop: -4,
+    paddingHorizontal: 9,
+    paddingVertical: 7,
+    borderRadius: 9,
+    backgroundColor: "#173c36",
+  },
+  exerciseEditText: { maxWidth: 250, color: "#a7f3d0", fontSize: 11, fontWeight: "800" },
   card: {
     borderRadius: 18,
     padding: 15,
@@ -2052,6 +2176,7 @@ const s = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 13,
     color: colors.text,
+    fontFamily: "Manrope_500Medium",
     backgroundColor: "#151515",
     borderWidth: 1,
     borderColor: "#3f3f46",
@@ -2064,9 +2189,9 @@ const s = StyleSheet.create({
     paddingVertical: 9,
     backgroundColor: "#2b2b2b",
   },
-  presetActive: { backgroundColor: "#115e59" },
-  presetText: { color: colors.muted, fontSize: 12, fontWeight: "700" },
-  presetTextActive: { color: "#ccfbf1" },
+  presetActive: { backgroundColor: examAccentSurface },
+  presetText: { color: colors.muted, fontFamily: "Manrope_700Bold", fontSize: 12 },
+  presetTextActive: { color: "#dbeafe" },
   modeRow: { flexDirection: "row", gap: 8, marginBottom: 8 },
   mode: {
     flex: 1,
@@ -2076,9 +2201,21 @@ const s = StyleSheet.create({
     borderColor: "#3f3f46",
     paddingVertical: 10,
   },
-  modeActive: { borderColor: colors.accent, backgroundColor: "#115e59" },
-  modeText: { color: colors.muted, fontSize: 12, fontWeight: "700" },
-  modeTextActive: { color: "#ccfbf1" },
+  modeActive: { borderColor: examAccent, backgroundColor: examAccentSurface },
+  modeText: { color: colors.muted, fontFamily: "Manrope_700Bold", fontSize: 12 },
+  modeTextActive: { color: "#dbeafe" },
+  exerciseTypeLocked: {
+    minHeight: 42,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: "#315d54",
+    backgroundColor: "#153c35",
+  },
+  exerciseTypeLockedText: { color: "#ccfbf1", fontSize: 12, fontWeight: "800" },
   helper: { color: colors.muted, fontSize: 12, lineHeight: 18, marginTop: 8 },
   markingHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   markingEdit: {
@@ -2113,7 +2250,7 @@ const s = StyleSheet.create({
     flexDirection: "row",
     gap: 8,
     borderRadius: 14,
-    backgroundColor: colors.accent,
+    backgroundColor: examAccent,
   },
   primarySmall: {
     alignItems: "center",
@@ -2121,10 +2258,10 @@ const s = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 15,
     paddingVertical: 11,
-    backgroundColor: colors.accent,
+    backgroundColor: examAccent,
   },
-  primaryText: { color: colors.accentDeep, fontWeight: "800", fontSize: 13 },
-  back: { color: colors.muted, fontSize: 13, fontWeight: "700" },
+  primaryText: { color: examAccentDeep, fontFamily: "Manrope_800ExtraBold", fontSize: 13 },
+  back: { color: colors.muted, fontFamily: "Manrope_700Bold", fontSize: 13 },
   keyRow: {
     minHeight: 48,
     flexDirection: "row",
@@ -2150,7 +2287,7 @@ const s = StyleSheet.create({
   },
   optionActive: { backgroundColor: colors.accent, borderColor: colors.accent },
   optionText: { color: colors.muted, fontSize: 12, fontWeight: "800" },
-  optionTextActive: { color: colors.accentDeep },
+  optionTextActive: { color: examAccentDeep },
   sessionTitle: { color: colors.text, fontSize: 15, fontWeight: "800" },
   infoGrid: { flexDirection: "row", marginTop: 18 },
   info: { flex: 1, gap: 4 },
@@ -2181,7 +2318,7 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  questionText: { color: colors.text, fontSize: 18, fontWeight: "800" },
+  questionText: { color: colors.text, fontFamily: "Manrope_700Bold", fontSize: 18 },
   answer: {
     minHeight: 54,
     flexDirection: "row",
@@ -2194,7 +2331,7 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#353535",
   },
-  answerActive: { borderColor: colors.accent, backgroundColor: "#153c35" },
+  answerActive: { borderColor: examAccent, backgroundColor: examAccentSurface },
   answerLetter: {
     width: 30,
     height: 30,
@@ -2208,14 +2345,14 @@ const s = StyleSheet.create({
     fontWeight: "800",
     marginTop: 1,
   },
-  answerLetterActive: { color: colors.accentDeep, backgroundColor: colors.accent },
+  answerLetterActive: { color: examAccentDeep, backgroundColor: examAccent },
   answerText: {
     flex: 1,
     flexShrink: 1,
     color: colors.text,
     fontSize: 14,
     lineHeight: 20,
-    fontWeight: "600",
+    fontFamily: "Manrope_600SemiBold",
     paddingTop: 4,
   },
   palette: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
@@ -2227,7 +2364,7 @@ const s = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "#2b2b2b",
   },
-  paletteCurrent: { borderWidth: 1, borderColor: "#60a5fa" },
+  paletteCurrent: { borderWidth: 1, borderColor: examAccent },
   paletteAnswered: { backgroundColor: "#115e59" },
   paletteText: { color: colors.text, fontSize: 11, fontWeight: "700" },
   nav: { flexDirection: "row", justifyContent: "space-between", marginTop: 8 },

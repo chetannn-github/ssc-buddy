@@ -66,6 +66,10 @@ function services() {
   return { auth: auth!, db: db! };
 }
 
+export function getFirebaseFirestore() {
+  return services().db;
+}
+
 function snapshotLocalStorage(): Record<string, string> {
   const snapshot: Record<string, string> = {};
   for (let index = 0; index < localStorage.length; index += 1) {
@@ -76,6 +80,20 @@ function snapshotLocalStorage(): Record<string, string> {
       key &&
       !FIREBASE_LOCAL_KEYS.has(key) &&
       key !== "ssc-buddy-jsonbin-config" &&
+      // Daily tasks live in users/{uid}/tasks as independent documents.
+      // Keeping this out of the legacy snapshot prevents full-data uploads on every toggle.
+      key !== "ssc-buddy:tasks:v2" &&
+      // Practice has entity collections (subjects, attempts and favourites), not a monolithic backup.
+      key !== "cbt-subjects" &&
+      key !== "cbt-history" &&
+      key !== "cbt-favorite-questions" &&
+      key !== "cbt-marking" &&
+      // Tracker is split into section documents under users/{uid}/tracker.
+      key !== "ssc-cgl-2027-tracker-v1" &&
+      key !== "ssc-buddy-liked-videos" &&
+      key !== "ssc-buddy-liked-music" &&
+      key !== "ssc-buddy-manifestation-completed" &&
+      key !== "cbt-test-dark-mode" &&
       !key.startsWith("firebase:") &&
       !key.startsWith("firestore_")
     ) {
@@ -148,6 +166,71 @@ function joinChunks(chunks: StorageEntry[][]) {
 
 function rootDoc(dbValue: Firestore, uid: string) {
   return doc(dbValue, "users", uid, "appData", "current");
+}
+
+/** A per-feature record shared by browser and React Native without replacing the full backup snapshot. */
+function sharedDataDoc(dbValue: Firestore, uid: string, key: string) {
+  return doc(dbValue, "users", uid, "sharedData", key);
+}
+
+function profileDoc(dbValue: Firestore, uid: string) {
+  return doc(dbValue, "users", uid, "profile", "current");
+}
+
+function preferencesDoc(dbValue: Firestore, uid: string) {
+  return doc(dbValue, "users", uid, "preferences", "current");
+}
+
+export async function readCloudPreferences(user: User) {
+  const { db: dbValue } = services();
+  return (await getDoc(preferencesDoc(dbValue, user.uid))).data() ?? null;
+}
+
+export async function patchCloudPreferences(user: User, fields: Record<string, unknown>) {
+  const { db: dbValue } = services();
+  await setDoc(preferencesDoc(dbValue, user.uid), { ...fields, updatedAt: serverTimestamp() }, { merge: true });
+}
+
+export function watchCloudPreferences(user: User, callback: (value: Record<string, unknown> | null) => void) {
+  const { db: dbValue } = services();
+  return onSnapshot(preferencesDoc(dbValue, user.uid), (snapshot) => callback(snapshot.data() ?? null));
+}
+
+export async function readCloudProfile(user: User) {
+  const { db: dbValue } = services();
+  const data = (await getDoc(profileDoc(dbValue, user.uid))).data();
+  return data ?? null;
+}
+
+/** Field-level merge: an edit never replaces unrelated profile fields. */
+export async function patchCloudProfile(user: User, fields: Record<string, unknown>) {
+  const { db: dbValue } = services();
+  await setDoc(profileDoc(dbValue, user.uid), { ...fields, updatedAt: serverTimestamp() }, { merge: true });
+}
+
+export function watchCloudProfile(user: User, callback: (profile: Record<string, unknown> | null) => void) {
+  const { db: dbValue } = services();
+  return onSnapshot(profileDoc(dbValue, user.uid), (snapshot) => callback(snapshot.data() ?? null));
+}
+
+export async function readSharedData(user: User, key: string) {
+  const { db: dbValue } = services();
+  const snapshot = await getDoc(sharedDataDoc(dbValue, user.uid, key));
+  const value = snapshot.data()?.["value"];
+  return typeof value === "string" ? value : null;
+}
+
+export async function writeSharedData(user: User, key: string, value: string) {
+  const { db: dbValue } = services();
+  await setDoc(sharedDataDoc(dbValue, user.uid, key), { value, clientId: getClientId(), updatedAt: serverTimestamp() });
+}
+
+export function watchSharedData(user: User, key: string, callback: (value: string | null) => void) {
+  const { db: dbValue } = services();
+  return onSnapshot(sharedDataDoc(dbValue, user.uid, key), (snapshot) => {
+    const value = snapshot.data()?.["value"];
+    callback(typeof value === "string" ? value : null);
+  });
 }
 
 export function observeFirebaseUser(callback: (user: User | null) => void): Unsubscribe {

@@ -60,6 +60,7 @@ function loadLikes(key: string) {
 
 function saveLikes(key: string, likes: Set<string>) {
   try { localStorage.setItem(key, JSON.stringify([...likes])); } catch { /* optional */ }
+  window.dispatchEvent(new Event("ssc-preferences-updated"));
 }
 
 function weightedPick(items: string[], likes: Set<string>) {
@@ -86,6 +87,7 @@ function hasCompletedTodayManifestation() {
 function completeTodayManifestation() {
   try {
     localStorage.setItem(MANIFESTATION_COMPLETION_KEY, localDateKey());
+    window.dispatchEvent(new Event("ssc-preferences-updated"));
   } catch {
     /* Storage only retains today's completion, never the typed text. */
   }
@@ -101,7 +103,11 @@ function ProfileOnboarding({ onComplete, user }: { onComplete: (profile: Practic
 
   const submit = async () => {
     if (!canContinue) return;
-    const profile = { name: name.trim(), questionGoal: parsedGoal };
+    const profile = {
+      name: name.trim(),
+      questionGoal: parsedGoal,
+      ...(examName.trim() ? { examName: examName.trim() } : {}),
+    };
     savePracticeProfile(profile);
     const tracker = loadTrackerData();
     saveTrackerData({

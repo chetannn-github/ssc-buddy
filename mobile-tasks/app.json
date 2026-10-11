@@ -3,6 +3,7 @@
     "name": "SSC Buddy",
     "slug": "ssc-buddy-tasks",
     "version": "1.0.0",
+    "icon": "./assets/auth.jpg",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "android": {

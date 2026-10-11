@@ -149,7 +149,7 @@ function authErrorMessage(error: unknown) {
 }
 
 function Brand() {
-  return <View style={styles.brand}><View style={styles.brandIcon}><MaterialCommunityIcons name="school-outline" size={21} color={colors.accent} /></View><Text style={styles.brandText}>SSC Buddy</Text></View>;
+  return <View style={styles.brand}><Image source={authImage} style={styles.brandIcon} /><Text style={styles.brandText}>SSC Buddy</Text></View>;
 }
 
 const styles = StyleSheet.create({
@@ -159,7 +159,7 @@ const styles = StyleSheet.create({
   visual: { flex: 1, minHeight: 580, backgroundColor: "#171717" }, visualImage: { opacity: 0.35 },
   visualOverlay: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(16,16,16,0.56)" },
   visualContent: { flex: 1, justifyContent: "space-between", padding: 46 },
-  brand: { flexDirection: "row", alignItems: "center", gap: 10 }, brandIcon: { height: 40, width: 40, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(94,234,212,0.12)" }, brandText: { color: colors.text, fontSize: 16, fontWeight: "700" },
+  brand: { flexDirection: "row", alignItems: "center", gap: 10 }, brandIcon: { height: 40, width: 40, borderRadius: 12, borderWidth: 1, borderColor: "rgba(255,255,255,.14)" }, brandText: { color: colors.text, fontSize: 16, fontWeight: "700" },
   kicker: { color: colors.accent, fontSize: 10, letterSpacing: 1.8, fontWeight: "800", marginTop: 34 },
   heroTitle: { color: colors.text, marginTop: 16, fontSize: 43, lineHeight: 50, fontWeight: "700", letterSpacing: -1 }, heroCopy: { color: colors.muted, maxWidth: 430, marginTop: 18, fontSize: 16, lineHeight: 25 }, footerCopy: { color: colors.subdued, fontSize: 13 },
   formSide: { flex: 1, justifyContent: "center", paddingHorizontal: 60, backgroundColor: colors.background }, formCompact: { paddingHorizontal: 26, backgroundColor: "transparent" },
