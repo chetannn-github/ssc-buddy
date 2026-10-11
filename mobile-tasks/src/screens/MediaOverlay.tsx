@@ -72,8 +72,12 @@ function MusicPlayer({ user, onClose, openRequest }: { user: User | null; onClos
   const [minimized, setMinimized] = useState(false);
   const [bottomNavVisible, setBottomNavVisible] = useState(true);
   const [dragProgress, setDragProgress] = useState<number | null>(null);
+  const [audioModeReady, setAudioModeReady] = useState(false);
   const source = musicSource(musicTracks[index] ?? musicTracks[0]);
-  const player = useAudioPlayer(source, { updateInterval: 500 });
+  // Keep one native player for the entire overlay lifetime. Passing `source`
+  // directly to this hook recreates its native shared object whenever a track
+  // changes, which can race Android's foreground media service in release APKs.
+  const player = useAudioPlayer(null, { updateInterval: 500 });
   const status = useAudioPlayerStatus(player);
   const artworkSpin = useRef(new Animated.Value(0)).current;
   const miniLift = useRef(new Animated.Value(0)).current;
@@ -91,28 +95,46 @@ function MusicPlayer({ user, onClose, openRequest }: { user: User | null; onClos
   useEffect(() => {
     Animated.timing(miniLift, { toValue: bottomNavVisible ? -64 : 0, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
   }, [bottomNavVisible, miniLift]);
-  useEffect(() => { player.replace(source); player.play(); }, [index, player, source]);
+  useEffect(() => {
+    try {
+      player.replace(source);
+      player.play();
+    } catch {
+      // The overlay can close while Android is releasing the native player.
+      // A later open creates a fresh player instead of crashing the app.
+    }
+  }, [player, source]);
   useEffect(() => { player.loop = repeat; }, [player, repeat]);
   useEffect(() => {
+    let active = true;
     void setAudioModeAsync({
       playsInSilentMode: true,
       interruptionMode: "doNotMix",
       shouldPlayInBackground: supportsBackgroundControls,
+    }).then(() => {
+      if (active) setAudioModeReady(true);
+    }).catch(() => {
+      if (active) setAudioModeReady(false);
     });
-  }, [player, supportsBackgroundControls]);
+    return () => { active = false; };
+  }, [supportsBackgroundControls]);
   useEffect(() => {
-    if (!supportsBackgroundControls) return;
-    player.setActiveForLockScreen(
-      true,
-      {
-        title: trackTitle(activeTrack),
-        artist: "SSC Buddy",
-        albumTitle: "Motivation",
-        artworkUrl: cover ? Image.resolveAssetSource(cover).uri : undefined,
-      },
-      { showSeekBackward: true, showSeekForward: true },
-    );
-  }, [activeTrack, cover, player, supportsBackgroundControls]);
+    if (!supportsBackgroundControls || !audioModeReady) return;
+    try {
+      player.setActiveForLockScreen(
+        true,
+        {
+          title: trackTitle(activeTrack),
+          artist: "SSC Buddy",
+          albumTitle: "Motivation",
+          artworkUrl: cover ? Image.resolveAssetSource(cover).uri : undefined,
+        },
+        { showSeekBackward: true, showSeekForward: true },
+      );
+    } catch {
+      // Playback remains usable if an OEM does not expose lock-screen controls.
+    }
+  }, [activeTrack, audioModeReady, cover, player, supportsBackgroundControls]);
   useEffect(() => {
     shouldSpin.current = status.playing;
     artworkAnimation.current?.stop();

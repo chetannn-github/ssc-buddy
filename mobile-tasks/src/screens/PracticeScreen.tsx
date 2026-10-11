@@ -179,6 +179,7 @@ export function PracticeScreen({ user }: { user: any }) {
   const [count, setCount] = useState("20");
   const [fixed, setFixed] = useState(true);
   const [random, setRandom] = useState(false);
+  const [randomSeed, setRandomSeed] = useState(0);
   const [answerKey, setAnswerKey] = useState<Array<Option | null>>([]);
   const [savingNewKey, setSavingNewKey] = useState(false);
   const [answers, setAnswers] = useState<Array<Option | null>>([]);
@@ -225,7 +226,9 @@ export function PracticeScreen({ user }: { user: any }) {
     setBank(next);
     void AsyncStorage.setItem(STORE, JSON.stringify(next.subjects));
     void AsyncStorage.setItem(MARKING, JSON.stringify(next.marking));
-    if (user) void syncPracticeEntities(user, "practiceSubjects", toCloudSubjects(previous.subjects) as any, toCloudSubjects(next.subjects) as any);
+    return user
+      ? syncPracticeEntities(user, "practiceSubjects", toCloudSubjects(previous.subjects) as any, toCloudSubjects(next.subjects) as any)
+      : Promise.resolve();
   };
   const saveHistory = (next: Record[]) => {
     const previous = historyRef.current;
@@ -288,10 +291,24 @@ export function PracticeScreen({ user }: { user: any }) {
     ? Math.max(1, Math.min(availableQuestions, Number(count) || 1))
     : availableQuestions;
   const duration = Math.max(1, Math.min(180, Number(minutes) || 1));
-  const selectedQuestions = exercise?.questions?.slice(
-    random ? 0 : startNumber - 1,
-    (random ? 0 : startNumber - 1) + questionCount,
-  );
+  const selectedQuestions = useMemo(() => {
+    const questions = exercise?.questions ?? [];
+    if (!random) return questions.slice(startNumber - 1, startNumber - 1 + questionCount);
+    const shuffle = <T,>(items: T[]) => {
+      const copy = [...items];
+      for (let index = copy.length - 1; index > 0; index -= 1) {
+        const swap = Math.floor(Math.random() * (index + 1));
+        [copy[index], copy[swap]] = [copy[swap]!, copy[index]!];
+      }
+      return copy;
+    };
+    // Favourite questions always fill the requested test first; only remaining
+    // slots are chosen from ordinary questions, matching the web behaviour.
+    const favouriteSet = new Set(favourites);
+    const favouriteQuestions = questions.filter((question) => favouriteSet.has(question.id));
+    const ordinaryQuestions = questions.filter((question) => !favouriteSet.has(question.id));
+    return [...shuffle(favouriteQuestions), ...shuffle(ordinaryQuestions)].slice(0, questionCount);
+  }, [exercise?.questions, favourites, questionCount, random, randomSeed, startNumber]);
   const title = [subject?.name, chapter?.name, exercise?.name].filter(Boolean).join(" · ");
   const selectSubject = (next: string) => {
     const item = bank.subjects.find((x) => x.id === next);
@@ -397,7 +414,7 @@ export function PracticeScreen({ user }: { user: any }) {
     setReattemptOf(null);
     setPhase("history");
   };
-  const saveKey = (nextPhase: "setup" | "instructions" = "instructions") => {
+  const saveKey = async (nextPhase: "setup" | "instructions" = "instructions") => {
     if (!exercise || !subject || !chapter) return;
     const next: Bank = {
       ...bank,
@@ -421,7 +438,10 @@ export function PracticeScreen({ user }: { user: any }) {
             },
       ),
     };
-    saveBank(next);
+    // Wait for the canonical practiceSubjects write before leaving the key
+    // editor. This makes a key edit durable even if the user immediately
+    // changes tab or closes the app.
+    await saveBank(next);
     setSavingNewKey(false);
     setPhase(nextPhase);
   };
@@ -545,7 +565,9 @@ export function PracticeScreen({ user }: { user: any }) {
           saveHistory(next);
         }}
         onReattempt={(record) => {
-          setReattemptOf(record.attemptOf ?? record.id);
+          setReattemptOf(
+            record.testMode === "random" ? (record.attemptGroupId ?? record.id) : record.id,
+          );
           const nextSubject = bank.subjects.find((item) => item.name === record.subject);
           const nextChapter = nextSubject?.chapters.find((item) => item.name === record.chapter);
           const nextExercise = nextChapter?.exercises.find((item) => item.name === record.exercise);
@@ -555,7 +577,7 @@ export function PracticeScreen({ user }: { user: any }) {
           setMinutes(String(record.duration ?? Math.max(1, record.minutes)));
           setCount(String(record.answers.length));
           setStart("1");
-          setRandom(false);
+          setRandom(record.testMode === "random");
           setFixed(true);
           setPhase("setup");
         }}
@@ -737,6 +759,7 @@ export function PracticeScreen({ user }: { user: any }) {
                 setRandom(true);
                 setFixed(true);
                 setStart("1");
+                setRandomSeed((seed) => seed + 1);
               }}
               style={[s.mode, random && s.modeActive, !exercise?.questions?.length && s.disabled]}
             >
@@ -1133,7 +1156,7 @@ function TestScreen({
           ))}
         </View>
         <Text style={s.sectionTitle}>QUESTION PALETTE</Text>
-        <View style={s.palette}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.palette}>
           {Array.from({ length: count }, (_, index) => (
             <Pressable
               key={index}
@@ -1147,7 +1170,7 @@ function TestScreen({
               <Text style={s.paletteText}>{index + 1}</Text>
             </Pressable>
           ))}
-        </View>
+        </ScrollView>
         <View style={s.nav}>
           <Pressable
             disabled={current === 0}
@@ -1185,6 +1208,7 @@ function History({
 }) {
   const [subject, setSubject] = useState("All subjects");
   const [chapter, setChapter] = useState("All chapters");
+  const [filterMenu, setFilterMenu] = useState<"subject" | "chapter" | null>(null);
   const [selected, setSelected] = useState<{ record: Record; attempts: Record[] } | null>(null);
   const subjects = Array.from(new Set(records.map((record) => record.subject))).sort();
   const chapters = Array.from(
@@ -1201,7 +1225,11 @@ function History({
   );
   const visibleGroups = Array.from(
     visible.reduce((groups, record) => {
-      const key = record.attemptOf ?? record.id;
+      // Same identity contract as the web: ordinary attempts are grouped by
+      // their exact exercise/config; random tests use their persisted group ID.
+      const key = record.testMode === "random"
+        ? (record.attemptGroupId ?? record.id)
+        : `${record.subjectId || record.subject}||${record.chapterId || record.chapter}||${record.exerciseId || record.exercise}||${record.startNumber}||${record.answers.length}`;
       groups.set(key, [...(groups.get(key) ?? []), record]);
       return groups;
     }, new Map<string, Record[]>()),
@@ -1260,6 +1288,7 @@ function History({
     );
   return (
     <View style={s.page}>
+      {filterMenu ? <Pressable style={s.historyFilterDismiss} onPress={() => setFilterMenu(null)} /> : null}
       <View style={s.header}>
         <View>
           <Text style={s.eyebrow}>PRACTICE</Text>
@@ -1271,50 +1300,20 @@ function History({
       </View>
       <ScrollView contentContainerStyle={s.content}>
         <View style={s.historyFilters}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={s.filterScroll}
-          >
-            <FilterChip
-              label="All subjects"
-              active={subject === "All subjects"}
-              onPress={() => {
-                setSubject("All subjects");
-                setChapter("All chapters");
-              }}
-            />
-            {subjects.map((item) => (
-              <FilterChip
-                key={item}
-                label={item}
-                active={subject === item}
-                onPress={() => {
-                  setSubject(item);
-                  setChapter("All chapters");
-                }}
-              />
-            ))}
-          </ScrollView>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={s.filterScroll}
-          >
-            <FilterChip
-              label="All chapters"
-              active={chapter === "All chapters"}
-              onPress={() => setChapter("All chapters")}
-            />
-            {chapters.map((item) => (
-              <FilterChip
-                key={item}
-                label={item}
-                active={chapter === item}
-                onPress={() => setChapter(item)}
-              />
-            ))}
-          </ScrollView>
+          <HistoryFilter
+            label={subject}
+            open={filterMenu === "subject"}
+            onPress={() => setFilterMenu(filterMenu === "subject" ? null : "subject")}
+            options={["All subjects", ...subjects]}
+            onSelect={(next) => { setSubject(next); setChapter("All chapters"); setFilterMenu(null); }}
+          />
+          <HistoryFilter
+            label={chapter}
+            open={filterMenu === "chapter"}
+            onPress={() => setFilterMenu(filterMenu === "chapter" ? null : "chapter")}
+            options={["All chapters", ...chapters]}
+            onSelect={(next) => { setChapter(next); setFilterMenu(null); }}
+          />
         </View>
         {visibleGroups.length ? (
           visibleGroups.map((group) => {
@@ -1344,7 +1343,7 @@ function History({
                   </View>
                   <MaterialCommunityIcons name="chevron-right" size={20} color={colors.subdued} />
                 </View>
-                <View style={s.resultRow}>
+                <View style={s.historyResultRow}>
                   <Info icon="check" label="Correct" value={String(record.correct)} />
                   <Info icon="close" label="Wrong" value={String(record.wrong)} />
                   <Info
@@ -1367,19 +1366,15 @@ function History({
     </View>
   );
 }
-function FilterChip({
-  label,
-  active,
-  onPress,
-}: {
-  label: string;
-  active: boolean;
-  onPress: () => void;
-}) {
+function HistoryFilter({ label, open, onPress, options, onSelect }: { label: string; open: boolean; onPress: () => void; options: string[]; onSelect: (value: string) => void }) {
   return (
-    <Pressable onPress={onPress} style={[s.filterChip, active && s.filterChipActive]}>
-      <Text style={[s.filterChipText, active && s.filterChipTextActive]}>{label}</Text>
-    </Pressable>
+    <View style={s.historyFilterWrap}>
+      <Pressable onPress={onPress} style={[s.historyFilterButton, open && s.historyFilterButtonOpen]}>
+        <Text numberOfLines={1} style={s.historyFilterText}>{label}</Text>
+        <MaterialCommunityIcons name={open ? "chevron-up" : "chevron-down"} size={17} color={colors.muted} />
+      </Pressable>
+      {open ? <View style={s.historyFilterMenu}>{options.map((option) => <Pressable key={option} onPress={() => onSelect(option)} style={[s.historyFilterOption, option === label && s.historyFilterOptionActive]}><Text numberOfLines={1} style={[s.historyFilterOptionText, option === label && s.historyFilterOptionTextActive]}>{option}</Text></Pressable>)}</View> : null}
+    </View>
   );
 }
 function HistoryDetail({
@@ -1439,8 +1434,8 @@ function HistoryDetail({
           <Text style={s.eyebrow}>
             {record.subject} · {record.chapter}
           </Text>
-          <Text style={s.detailTitle}>{record.exercise}</Text>
-          <Text style={s.historyDate}>{friendlyRecordDate(record.createdAt)}</Text>
+          <Text numberOfLines={1} style={s.detailTitle}>{record.exercise}</Text>
+          <Text style={s.detailDate}>{friendlyRecordDate(record.createdAt)}</Text>
           <View style={s.detailScore}>
             <Text style={s.detailScoreValue}>{record.score}</Text>
             <Text style={s.detailScoreLabel}>
@@ -1454,21 +1449,21 @@ function HistoryDetail({
           </View>
         </View>
         <View style={s.detailActions}>
-          <Pressable onPress={() => setSolution(true)} style={s.outlineAction}>
+          <Pressable onPress={() => setSolution(true)} style={s.detailAction}>
             <MaterialCommunityIcons
               name="book-open-page-variant-outline"
               size={16}
               color={colors.text}
             />
-            <Text style={s.outlineActionText}>Solution</Text>
+            <Text style={s.detailActionText}>Solution</Text>
           </Pressable>
-          <Pressable onPress={onReevaluate} style={s.outlineAction}>
-            <MaterialCommunityIcons name="refresh" size={16} color={colors.text} />
-            <Text style={s.outlineActionText}>Reevaluate</Text>
+          <Pressable onPress={onReevaluate} style={s.detailAction}>
+            <MaterialCommunityIcons name="refresh" size={15} color={colors.text} />
+            <Text style={s.detailActionText}>Recheck</Text>
           </Pressable>
-          <Pressable onPress={onReattempt} style={s.primarySmall}>
-            <MaterialCommunityIcons name="reload" size={16} color={examAccentDeep} />
-            <Text style={s.primaryText}>Reattempt</Text>
+          <Pressable onPress={onReattempt} style={s.detailPrimaryAction}>
+            <MaterialCommunityIcons name="reload" size={15} color={examAccentDeep} />
+            <Text style={s.detailPrimaryText}>Reattempt</Text>
           </Pressable>
         </View>
         <Text style={s.sectionTitle}>ANSWER REVIEW</Text>
@@ -1504,6 +1499,7 @@ function HistoryDetail({
 }
 function SolutionView({ record, onBack }: { record: Record; onBack: () => void }) {
   const questions = record.questions ?? [];
+  const questionCount = Math.max(record.answers.length, record.key.length, questions.length);
   const [current, setCurrent] = useState(0);
   const [reattemptMode, setReattemptMode] = useState(false);
   const [reattemptAnswers, setReattemptAnswers] = useState<Array<Option | null>>(
@@ -1549,20 +1545,21 @@ function SolutionView({ record, onBack }: { record: Record; onBack: () => void }
         </Pressable>
       </View>
       <ScrollView contentContainerStyle={s.content}>
-        {questions.length ? (
+        {questionCount ? (
           <>
             <View style={s.questionCard}>
               <Text style={s.questionText}>
-                Q. {current + 1} · {question?.question}
+                Q. {record.questionNumbers?.[current] ?? current + 1}
+                {question?.question ? ` · ${question.question}` : ""}
               </Text>
-              {question?.options.map((optionText, optionIndex) => {
+              {(question?.options ?? choices.map((option) => `Option ${option}`)).map((optionText, optionIndex) => {
                 const optionKey = choices[optionIndex];
                 const isCorrect = answerKey === optionKey;
                 const wasFirstAttempt = firstAnswer === optionKey;
                 const isReattempt = reattemptAnswer === optionKey;
                 return (
                   <Pressable
-                    key={`${question.id}-${optionKey}`}
+                  key={`${question?.id ?? `answer-key-${current}`}-${optionKey}`}
                     disabled={!reattemptMode}
                     onPress={() => pickAnswer(optionKey)}
                     style={[
@@ -1644,15 +1641,17 @@ function SolutionView({ record, onBack }: { record: Record; onBack: () => void }
             </View>
             <Text style={s.sectionTitle}>QUESTION PALETTE</Text>
             <View style={s.palette}>
-              {questions.map((item, index) => (
+              {Array.from({ length: questionCount }, (_, index) => index).map((index) => (
                 <Pressable
-                  key={item.id}
+                  key={questions[index]?.id ?? `answer-key-palette-${index}`}
                   onPress={() => goToQuestion(index)}
                   style={[
                     s.paletteItem,
                     index === current && s.paletteCurrent,
-                    (reattemptMode ? reattemptAnswers[index] : record.answers[index]) &&
-                      s.paletteAnswered,
+                    !reattemptMode && !record.answers[index] && s.solutionPaletteSkipped,
+                    !reattemptMode && record.answers[index] === record.key[index] && s.solutionPaletteCorrect,
+                    !reattemptMode && record.answers[index] && record.answers[index] !== record.key[index] && s.solutionPaletteWrong,
+                    reattemptMode && reattemptAnswers[index] && s.paletteAnswered,
                   ]}
                 >
                   <Text style={s.paletteText}>{index + 1}</Text>
@@ -1668,9 +1667,9 @@ function SolutionView({ record, onBack }: { record: Record; onBack: () => void }
                 <Text style={s.outlineText}>Previous</Text>
               </Pressable>
               <Pressable
-                disabled={current === questions.length - 1}
+                disabled={current === questionCount - 1}
                 onPress={() => goToQuestion(current + 1)}
-                style={[s.primarySmall, current === questions.length - 1 && s.disabled]}
+                style={[s.primarySmall, current === questionCount - 1 && s.disabled]}
               >
                 <Text style={s.primaryText}>Next</Text>
               </Pressable>
@@ -2414,6 +2413,9 @@ const s = StyleSheet.create({
   },
   paletteCurrent: { borderWidth: 1, borderColor: examAccent },
   paletteAnswered: { backgroundColor: "#115e59" },
+  solutionPaletteCorrect: { backgroundColor: "#166534" },
+  solutionPaletteWrong: { backgroundColor: "#991b1b" },
+  solutionPaletteSkipped: { backgroundColor: "#3f3f46" },
   paletteText: { color: colors.text, fontSize: 11, fontWeight: "700" },
   nav: { flexDirection: "row", justifyContent: "space-between", marginTop: 8 },
   outline: {
@@ -2425,53 +2427,52 @@ const s = StyleSheet.create({
   },
   outlineText: { color: colors.text, fontWeight: "700", fontSize: 13 },
   resultRow: { flexDirection: "row", marginTop: 17 },
-  historyFilters: { gap: 8 },
-  filterScroll: { gap: 7, paddingRight: 20 },
-  filterChip: {
-    borderRadius: 11,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: "#252525",
-    borderWidth: 1,
-    borderColor: "#383838",
-  },
-  filterChipActive: { backgroundColor: "#153c35", borderColor: colors.accent },
-  filterChipText: { color: colors.muted, fontSize: 12, fontWeight: "700" },
-  filterChipTextActive: { color: "#ccfbf1" },
+  historyFilterDismiss: { position: "absolute", zIndex: 10, top: 0, right: 0, bottom: 0, left: 0 },
+  historyFilters: { zIndex: 20, flexDirection: "row", gap: 8 },
+  historyFilterWrap: { flex: 1, position: "relative", zIndex: 20 },
+  historyFilterButton: { height: 42, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 6, borderRadius: 12, paddingHorizontal: 12, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  historyFilterButtonOpen: { borderColor: examAccent, backgroundColor: "#17243a" },
+  historyFilterText: { flex: 1, color: colors.text, fontSize: 12, fontWeight: "700" },
+  historyFilterMenu: { position: "absolute", zIndex: 40, elevation: 40, top: 47, right: 0, left: 0, maxHeight: 210, overflow: "hidden", borderRadius: 12, backgroundColor: "#292929", borderWidth: 1, borderColor: "#454545", shadowColor: "#000", shadowOpacity: 0.5, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } },
+  historyFilterOption: { paddingHorizontal: 12, paddingVertical: 10 },
+  historyFilterOptionActive: { backgroundColor: "#383838" },
+  historyFilterOptionText: { color: "#d4d4d8", fontSize: 12 },
+  historyFilterOptionTextActive: { color: colors.text, fontWeight: "800" },
   historyCard: {
-    borderRadius: 18,
-    padding: 14,
+    borderRadius: 14,
+    padding: 11,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  historyCardTop: { flexDirection: "row", alignItems: "center", gap: 12 },
+  historyCardTop: { flexDirection: "row", alignItems: "center", gap: 10 },
   scoreRing: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 5,
+    borderWidth: 1,
     borderColor: colors.accent,
     backgroundColor: "#172b27",
   },
-  scoreRingValue: { color: colors.text, fontSize: 17, fontWeight: "900" },
-  scoreRingLabel: { color: colors.muted, fontSize: 8, marginTop: -1 },
+  scoreRingValue: { color: colors.text, fontSize: 14, fontWeight: "900" },
+  scoreRingLabel: { color: colors.muted, fontSize: 7, marginTop: -1 },
   historyCopy: { flex: 1, minWidth: 0 },
-  historyChapter: { color: colors.muted, fontSize: 12, marginTop: 3 },
-  historyDate: { color: colors.subdued, fontSize: 11, marginTop: 5 },
+  historyChapter: { color: colors.muted, fontSize: 11, marginTop: 2 },
+  historyDate: { color: colors.subdued, fontSize: 10, marginTop: 3 },
   attemptBadge: {
     alignSelf: "flex-start",
-    marginTop: 5,
+    marginTop: 3,
     borderRadius: 7,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
     color: colors.accent,
     fontSize: 10,
     fontWeight: "800",
     backgroundColor: "#153c35",
   },
+  historyResultRow: { flexDirection: "row", marginTop: 10 },
   attemptsRow: { gap: 7, paddingRight: 20 },
   attemptChip: {
     borderRadius: 10,
@@ -2486,29 +2487,22 @@ const s = StyleSheet.create({
   attemptChipTextActive: { color: "#ccfbf1" },
   backRow: { flexDirection: "row", alignItems: "center", gap: 5 },
   detailHero: {
-    borderRadius: 19,
-    padding: 18,
+    borderRadius: 15,
+    padding: 14,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  detailTitle: { color: colors.text, fontSize: 21, fontWeight: "800", marginTop: 5 },
-  detailScore: { alignItems: "center", marginTop: 20, marginBottom: 3 },
-  detailScoreValue: { color: colors.accent, fontSize: 42, fontWeight: "900" },
-  detailScoreLabel: { color: colors.muted, fontSize: 11, marginTop: -3 },
-  detailActions: { flexDirection: "row", gap: 9 },
-  outlineAction: {
-    flex: 1,
-    minHeight: 45,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#484848",
-  },
-  outlineActionText: { color: colors.text, fontSize: 12, fontWeight: "800" },
+  detailTitle: { color: colors.text, fontSize: 17, fontWeight: "800", marginTop: 3 },
+  detailDate: { color: colors.subdued, fontSize: 10, marginTop: 3 },
+  detailScore: { flexDirection: "row", alignItems: "baseline", gap: 8, marginTop: 13, marginBottom: 0 },
+  detailScoreValue: { color: colors.accent, fontSize: 29, fontWeight: "900" },
+  detailScoreLabel: { color: colors.muted, fontSize: 10 },
+  detailActions: { flexDirection: "row", gap: 7 },
+  detailAction: { flex: 1, minHeight: 38, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, borderRadius: 10, borderWidth: 1, borderColor: "#484848", backgroundColor: "rgba(255,255,255,.02)" },
+  detailActionText: { color: colors.text, fontSize: 10, fontWeight: "800" },
+  detailPrimaryAction: { flex: 1.1, minHeight: 38, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, borderRadius: 10, backgroundColor: examAccent },
+  detailPrimaryText: { color: examAccentDeep, fontSize: 10, fontWeight: "900" },
   reviewRow: {
     flexDirection: "row",
     gap: 10,

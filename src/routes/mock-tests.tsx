@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { loadTrackerData, saveTrackerData } from "@/lib/tracker-store";
 import type { TrackerData } from "@/lib/tracker";
+import { syncTrackerSections, watchTrackerSections } from "@/lib/tracker-sync";
+import { useAuthUser } from "@/lib/auth-context";
 
 type TestType = "all" | "Sectional" | "Pre" | "Mains";
 
@@ -66,6 +68,7 @@ function FilterMenu<T extends string>({
 
 function MockTests() {
   const [tracker, setTracker] = useState<TrackerData>(() => loadTrackerData());
+  const user = useAuthUser();
   const [type, setType] = useState<TestType>("all");
   const [subjectId, setSubjectId] = useState("all");
 
@@ -76,6 +79,13 @@ function MockTests() {
       window.removeEventListener("cbt-tracker-updated", refresh);
     };
   }, []);
+
+  // Keep the standalone history page on the same canonical tracker documents
+  // as mobile, even when the user has not opened /track in this browser tab.
+  useEffect(() => {
+    if (!user) return;
+    return watchTrackerSections(user, setTracker);
+  }, [user]);
 
   const tests = useMemo(
     () =>
@@ -95,14 +105,16 @@ function MockTests() {
   );
 
   const deleteTest = (id: string) => {
-    const next = saveTrackerData({
+    const next = {
       ...tracker,
       tests: {
         ...tracker.tests,
         log: tracker.tests.log.filter((test) => test.id !== id),
       },
-    });
+    };
+    saveTrackerData(next);
     setTracker(next);
+    if (user) void syncTrackerSections(user, tracker, next);
   };
 
   return (

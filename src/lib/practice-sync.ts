@@ -59,5 +59,13 @@ export async function startPracticeSync(user: User): Promise<Unsubscribe> {
     if (!equal(marking, nextMarking) && nextMarking) { marking = nextMarking; void setDoc(settingsRef, { marking: nextMarking }, { merge: true }); }
   };
   window.addEventListener("ssc-study-data-changed", save);
-  return () => { stops.forEach((stop) => stop()); window.removeEventListener("ssc-study-data-changed", save); };
+  // A key edit can occur while the initial Firestore listeners are still
+  // attaching (for example immediately after opening /test). Reconcile the
+  // entity-level cache as a safety net so that update cannot be missed.
+  const reconciliationTimer = window.setInterval(save, 1_200);
+  return () => {
+    window.clearInterval(reconciliationTimer);
+    stops.forEach((stop) => stop());
+    window.removeEventListener("ssc-study-data-changed", save);
+  };
 }

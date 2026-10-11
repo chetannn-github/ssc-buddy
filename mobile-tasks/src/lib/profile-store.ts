@@ -11,7 +11,7 @@ export type PracticeProfile = {
   examName?: string;
 };
 
-export const defaultProfile = (): PracticeProfile => ({ name: "", questionGoal: 100, examName: "SSC CGL 2027", manifestation: "" });
+export const defaultProfile = (): PracticeProfile => ({ name: "", questionGoal: 100, manifestation: "" });
 
 export function normalizeProfile(value: unknown): PracticeProfile {
   const profile = (value && typeof value === "object" ? value : {}) as Record<string, unknown>;
@@ -22,7 +22,7 @@ export function normalizeProfile(value: unknown): PracticeProfile {
     questionGoal: Math.max(1, Math.min(100000, Math.round(Number.isFinite(questionGoal) ? questionGoal : 100))),
     ...(typeof profile.avatar === "string" && profile.avatar ? { avatar: profile.avatar } : {}),
     ...(typeof profile.manifestation === "string" && profile.manifestation.trim() ? { manifestation: profile.manifestation.trim().toUpperCase() } : {}),
-    examName: typeof profile.examName === "string" && profile.examName.trim() ? profile.examName.trim() : "SSC CGL 2027",
+    ...(typeof profile.examName === "string" && profile.examName.trim() ? { examName: profile.examName.trim() } : {}),
   };
 }
 

@@ -51,6 +51,17 @@ import { reportVerticalScroll, resetBottomNavigation } from "./src/navigation/bo
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 type TaskRange = "today" | "week" | "month" | "3months" | "year";
 const TASK_RANGE_LABELS: Record<TaskRange, string> = { today: "Today", week: "This week", month: "This month", "3months": "Last 3 months", year: "This year" };
+const MANIFESTATION_COMPLETION_PREFIX = "ssc-buddy:manifestation-completion";
+
+function manifestationDayKey() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
+function manifestationCompletionKey(userId?: string) {
+  return `${MANIFESTATION_COMPLETION_PREFIX}:${userId ?? "local"}`;
+}
+
 const ScrollView = (props: any) => <NativeScrollView {...props} scrollEventThrottle={16} onScroll={(event) => { if (!props.horizontal) reportVerticalScroll(event.nativeEvent.contentOffset.y); props.onScroll?.(event); }} />;
 
 function CompletionRing({ percent }: { percent: number }) {
@@ -113,7 +124,6 @@ export default function App() {
   const [manifestationEntry, setManifestationEntry] = useState("");
   const [manifestationRepeats, setManifestationRepeats] = useState(0);
   const [manifestationError, setManifestationError] = useState("");
-  const manifestationLoaded = useRef(false);
   const [tab, setTab] = useState<"Tasks" | "Analytics" | "History">("Tasks");
   const [taskDay, setTaskDay] = useState<"today" | "tomorrow">("today");
   const [analyticsRange, setAnalyticsRange] = useState<TaskRange>("week");
@@ -133,7 +143,9 @@ export default function App() {
   const [completion, setCompletion] = useState<Task | null>(null);
   const [spent, setSpent] = useState("60");
   const activeAppTab = tabs.find((item) => item.key === appTab) ?? tabs[0];
-  const subjectOptions = [...new Set(["General", "English", "Maths", "Reasoning", "GK", "Other", ...tasks.map((task) => task.subject)])];
+  // General is a neutral category, not seeded study content. Every other
+  // option comes only from tasks the user has already created.
+  const subjectOptions = [...new Set(["General", ...tasks.map((task) => task.subject).filter(Boolean)])];
   const refreshDailyTasksWidget = (next: Task[]) => {
     if (Platform.OS !== "android") return;
     try {
@@ -145,17 +157,6 @@ export default function App() {
       });
     } catch {}
   };
-  const pinDailyTasksWidget = async () => {
-    if (Platform.OS !== "android") return;
-    try {
-      const { requestPinWidget } = require("react-native-android-widget");
-      const accepted = await requestPinWidget({ widgetName: "DailyTasksWidget" });
-      if (!accepted) Alert.alert("Widget unavailable", "Your launcher does not support adding this widget directly.");
-    } catch {
-      Alert.alert("Build required", "Install the Android development build or APK to add the home-screen widget.");
-    }
-  };
-
   useEffect(() => {
     if (!isFirebaseConfigured) return;
     return observeSession((user) => {
@@ -172,14 +173,21 @@ export default function App() {
     void loadProfile().then(setProfileSettings);
   }, []);
   useEffect(() => {
-    if (!authenticated || manifestationLoaded.current) return;
-    manifestationLoaded.current = true;
+    if (!authenticated || !profileSettings) return;
     const phrase = profileSettings?.manifestation?.trim().toUpperCase() ?? "";
-    if (phrase) setDailyManifestation(phrase);
-  }, [authenticated, profileSettings]);
+    if (!phrase) {
+      setDailyManifestation("");
+      return;
+    }
+    let cancelled = false;
+    const expectedCompletion = `${manifestationDayKey()}|${phrase}`;
+    void AsyncStorage.getItem(manifestationCompletionKey(user?.uid)).then((savedCompletion) => {
+      if (!cancelled && savedCompletion !== expectedCompletion) setDailyManifestation(phrase);
+    });
+    return () => { cancelled = true; };
+  }, [authenticated, profileSettings?.manifestation, user?.uid]);
   useEffect(() => {
     if (authenticated) return;
-    manifestationLoaded.current = false;
     setDailyManifestation("");
     setManifestationEntry("");
     setManifestationRepeats(0);
@@ -458,15 +466,6 @@ export default function App() {
           <Text style={styles.headerCopy}>Plan, track, and review.</Text>
         </View>
         <View style={styles.headerActions}>
-          {Platform.OS === "android" ? (
-            <Pressable
-              accessibilityLabel="Add Daily Tasks widget to home screen"
-              onPress={pinDailyTasksWidget}
-              style={styles.widgetButton}
-            >
-              <MaterialCommunityIcons name="view-dashboard-outline" size={19} color="#a7f3d0" />
-            </Pressable>
-          ) : null}
           <Pressable style={styles.add} onPress={openNew}>
             <Text style={styles.addText}>＋ Add task</Text>
           </Pressable>
@@ -649,7 +648,13 @@ export default function App() {
         onChange={(value) => { setManifestationEntry(value.toUpperCase()); setManifestationError(""); }}
         onContinue={() => {
           if (manifestationEntry.trim().replace(/\s+/g, " ").toLowerCase() !== dailyManifestation.trim().replace(/\s+/g, " ").toLowerCase()) { setManifestationError("Type the sentence exactly to continue."); return; }
-          if (manifestationRepeats === 2) { setDailyManifestation(""); setManifestationEntry(""); setManifestationRepeats(0); return; }
+          if (manifestationRepeats === 2) {
+            void AsyncStorage.setItem(manifestationCompletionKey(user?.uid), `${manifestationDayKey()}|${dailyManifestation}`);
+            setDailyManifestation("");
+            setManifestationEntry("");
+            setManifestationRepeats(0);
+            return;
+          }
           setManifestationRepeats((value) => value + 1);
           setManifestationEntry("");
         }}
@@ -779,16 +784,6 @@ const styles = StyleSheet.create({
   title: { color: "#fafafa", fontSize: 25, fontWeight: "700", marginTop: 3 },
   headerCopy: { color: "#a1a1aa", fontSize: 12, marginTop: 3 },
   add: { backgroundColor: "#5eead4", borderRadius: 16, paddingHorizontal: 14, paddingVertical: 10 },
-  widgetButton: {
-    width: 42,
-    height: 42,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: "#315d54",
-    backgroundColor: "#18332e",
-  },
   addText: { color: "#042f2e", fontWeight: "800" },
   tabs: {
     flexDirection: "row",

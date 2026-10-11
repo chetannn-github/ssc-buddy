@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getApp, getApps, initializeApp } from "firebase/app";
-import { collection, deleteDoc, doc, getDoc, getDocs, getFirestore, onSnapshot, serverTimestamp, setDoc, writeBatch, type Firestore } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDoc, getDocs, getFirestore, onSnapshot, runTransaction, serverTimestamp, setDoc, writeBatch, type Firestore } from "firebase/firestore";
 import * as FirebaseAuth from "firebase/auth";
 import {
   createUserWithEmailAndPassword,
@@ -120,6 +120,17 @@ export async function syncTaskChanges(user: User, previous: CloudTask[], next: C
 
 type PracticeEntity = { id: string; [key: string]: unknown };
 const practiceCollection = (user: User, name: string) => collection(getFirebaseFirestore(), "users", user.uid, name);
+const practiceWriteQueues = new Map<string, Promise<void>>();
+
+function withoutUndefined<T>(value: T): T {
+  if (Array.isArray(value)) return value.map(withoutUndefined) as T;
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value as Record<string, unknown>)
+      .filter(([, item]) => item !== undefined)
+      .map(([key, item]) => [key, withoutUndefined(item)])) as T;
+  }
+  return value;
+}
 
 export async function migratePracticeEntities(user: User, name: string, entities: PracticeEntity[]) {
   const remote = await getDocs(practiceCollection(user, name));
@@ -130,13 +141,25 @@ export async function migratePracticeEntities(user: User, name: string, entities
 }
 
 export async function syncPracticeEntities(user: User, name: string, before: PracticeEntity[], next: PracticeEntity[]) {
-  const same = (left: PracticeEntity, right: PracticeEntity) => JSON.stringify(left) === JSON.stringify(right);
-  const previous = new Map(before.map((entity) => [entity.id, entity]));
-  const after = new Map(next.map((entity) => [entity.id, entity]));
-  await Promise.all([
-    ...next.filter((entity) => !previous.has(entity.id) || !same(previous.get(entity.id)!, entity)).map((entity) => setDoc(doc(practiceCollection(user, name), entity.id), entity)),
-    ...before.filter((entity) => !after.has(entity.id)).map((entity) => deleteDoc(doc(practiceCollection(user, name), entity.id))),
-  ]);
+  const queueKey = `${user.uid}:${name}`;
+  const previousJob = practiceWriteQueues.get(queueKey) ?? Promise.resolve();
+  const job = previousJob.catch(() => undefined).then(async () => {
+    const cleanBefore = before.map(withoutUndefined);
+    const cleanNext = next.map(withoutUndefined);
+    const same = (left: PracticeEntity, right: PracticeEntity) => JSON.stringify(left) === JSON.stringify(right);
+    const previous = new Map(cleanBefore.map((entity) => [entity.id, entity]));
+    const after = new Map(cleanNext.map((entity) => [entity.id, entity]));
+    await Promise.all([
+      ...cleanNext.filter((entity) => !previous.has(entity.id) || !same(previous.get(entity.id)!, entity)).map((entity) => setDoc(doc(practiceCollection(user, name), entity.id), entity)),
+      ...cleanBefore.filter((entity) => !after.has(entity.id)).map((entity) => deleteDoc(doc(practiceCollection(user, name), entity.id))),
+    ]);
+  });
+  practiceWriteQueues.set(queueKey, job);
+  try {
+    await job;
+  } finally {
+    if (practiceWriteQueues.get(queueKey) === job) practiceWriteQueues.delete(queueKey);
+  }
 }
 
 export function watchPracticeEntities(user: User, name: string, callback: (entities: PracticeEntity[]) => void) {
@@ -197,9 +220,17 @@ export async function appendTrackerTest(user: User, test: TrackerTestLog, subjec
   } }, { merge: true });
 }
 export async function deleteTrackerTest(user: User, id: string) {
-  const reference = trackerTestsDoc(user); const current = (await getDoc(reference)).data()?.value as Record<string, unknown> | undefined;
-  const log = Array.isArray(current?.log) ? current.log.filter((item) => (item as { id?: unknown })?.id !== id) : [];
-  await setDoc(reference, { value: { ...(current ?? {}), log } }, { merge: true });
+  const reference = trackerTestsDoc(user);
+  // A transaction prevents an outdated foreground snapshot from putting a
+  // deleted test back into the canonical `tracker/tests` document.
+  await runTransaction(getFirebaseFirestore(), async (transaction) => {
+    const current = await transaction.get(reference);
+    const value = current.exists() ? current.data()?.value as Record<string, unknown> | undefined : undefined;
+    const log = Array.isArray(value?.log)
+      ? value.log.filter((item) => String((item as { id?: unknown })?.id ?? "") !== String(id))
+      : [];
+    transaction.set(reference, { value: { ...(value ?? {}), log } }, { merge: true });
+  });
 }
 
 /** Same Firestore contract as the web app: users/{uid}/sharedData/{storageKey}. */

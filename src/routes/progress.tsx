@@ -13,6 +13,8 @@ import {
 import { AppShell } from "@/components/layout/AppShell";
 import { loadTrackerData } from "@/lib/tracker-store";
 import type { TestEntry, TrackerData } from "@/lib/tracker";
+import { watchTrackerSections } from "@/lib/tracker-sync";
+import { useAuthUser } from "@/lib/auth-context";
 
 type TestCategory = "Sectional" | "Pre" | "Mains";
 
@@ -198,6 +200,7 @@ function FilterMenu<T extends string>({
 
 function Progress() {
   const [tracker, setTracker] = useState<TrackerData>(() => loadTrackerData());
+  const user = useAuthUser();
   const [category, setCategory] = useState<TestCategory>("Sectional");
   const [subjectId, setSubjectId] = useState("all");
 
@@ -208,6 +211,13 @@ function Progress() {
       window.removeEventListener("cbt-tracker-updated", refresh);
     };
   }, []);
+
+  // Progress is reachable without opening /track. Subscribe here as well so
+  // test logs made in the mobile app are rendered from the same tracker docs.
+  useEffect(() => {
+    if (!user) return;
+    return watchTrackerSections(user, setTracker);
+  }, [user]);
 
   const tests = useMemo(() => {
     return (
