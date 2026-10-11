@@ -6,7 +6,7 @@ import type { MockTestLog } from "./MockTestLogDialog";
 import { colors } from "../theme";
 import { reportVerticalScroll } from "../navigation/bottomNavigationVisibility";
 import type { User } from "firebase/auth";
-import { deleteTrackerTest, watchTrackerTests } from "../lib/firebase";
+import { deleteTrackerTest, watchTrackerSections, watchTrackerTests } from "../lib/firebase";
 
 const ScrollView = (props: any) => <NativeScrollView {...props} scrollEventThrottle={16} onScroll={(event) => { if (!props.horizontal) reportVerticalScroll(event.nativeEvent.contentOffset.y); props.onScroll?.(event); }} />;
 
@@ -15,16 +15,25 @@ const categories: Category[] = ["Sectional", "Pre", "Mains"];
 
 export function ProgressScreen({ user }: { user: User | null }) {
   const [tests, setTests] = useState<MockTestLog[]>([]);
+  const [trackerSubjects, setTrackerSubjects] = useState<Array<{ id: string; name: string }>>([]);
   const [category, setCategory] = useState<Category>("Sectional");
   const [subject, setSubject] = useState("all");
   const [menu, setMenu] = useState<"category" | "subject" | null>(null);
   const [showAll, setShowAll] = useState(false);
   useEffect(() => {
     if (!user) { setTests([]); return; }
-    return watchTrackerTests(user, (records) => setTests(records.map((test) => ({ ...test, type: test.type === "Mains" ? "Mains" : test.type === "Pre" ? "Pre" : "Sectional", subject: test.subjectId || "General", score: Number(test.score ?? 0), total: Number(test.total ?? 0), accuracy: Number(test.accuracy ?? 0) }))));
+    const stopTests = watchTrackerTests(user, (records) => setTests(records.map((test) => ({ ...test, type: test.type === "Mains" ? "Mains" : test.type === "Pre" ? "Pre" : "Sectional", subject: test.subjectId || "General", score: Number(test.score ?? 0), total: Number(test.total ?? 0), accuracy: Number(test.accuracy ?? 0) }))));
+    const stopSubjects = watchTrackerSections(user, (sections) => setTrackerSubjects(
+      Array.isArray(sections.subjects) ? sections.subjects.map((subject: any) => ({ id: String(subject.id ?? ""), name: String(subject.name ?? "") })) : [],
+    ));
+    return () => { stopTests(); stopSubjects(); };
   }, [user?.uid]);
-  const subjects = [...new Set(tests.filter((test) => test.type === "Sectional").map((test) => test.subject))];
-  const filtered = tests.filter((test) => test.type === category && (category !== "Sectional" || subject === "all" || test.subject === subject)).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const displayTests = useMemo(() => tests.map((test) => ({
+    ...test,
+    subject: trackerSubjects.find((item) => item.id === test.subject)?.name ?? (test.subject || "General"),
+  })), [tests, trackerSubjects]);
+  const subjects = [...new Set(displayTests.filter((test) => test.type === "Sectional").map((test) => test.subject))];
+  const filtered = displayTests.filter((test) => test.type === category && (category !== "Sectional" || subject === "all" || test.subject === subject)).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   const summary = useMemo(() => {
     const scores = filtered.map((test) => test.score), accuracy = filtered.map((test) => test.accuracy);
     return { high: scores.length ? Math.max(...scores) : 0, low: scores.length ? Math.min(...scores) : 0, average: scores.length ? (scores.reduce((sum, value) => sum + value, 0) / scores.length).toFixed(1) : "0", accuracy: accuracy.length ? (accuracy.reduce((sum, value) => sum + value, 0) / accuracy.length).toFixed(1) : "0" };
@@ -41,7 +50,7 @@ export function ProgressScreen({ user }: { user: User | null }) {
       <View style={s.stats}><Metric label="Tests" value={String(filtered.length)} /><Metric label="Highest" value={String(summary.high)} suffix="marks" /><Metric label="Lowest" value={String(summary.low)} suffix="marks" /><Metric label="Average" value={summary.average} suffix="marks" /><Metric label="Avg. accuracy" value={summary.accuracy} suffix="%" /></View>
       {filtered.length ? <><Chart title="Marks trend" tests={filtered} metric="marks" color="#60a5fa" category={category} /><Chart title="Accuracy trend" tests={filtered} metric="accuracy" color="#34d399" category={category} /><View style={s.history}><View style={s.historyHeader}><View><Text style={s.historyTitle}>Recent tests</Text><Text style={s.historyCount}>Latest {Math.min(5, filtered.length)} of {filtered.length}</Text></View><Pressable onPress={() => setShowAll(true)} style={s.allButton}><Text style={s.allButtonText}>All tests</Text><MaterialCommunityIcons name="arrow-right" size={15} color="#a5b4fc" /></Pressable></View>{[...filtered].reverse().slice(0, 5).map((test) => <TestRow key={test.id} test={test} category={category} />)}</View></> : <View style={s.empty}><MaterialCommunityIcons name="chart-line-variant" size={32} color={colors.subdued} /><Text style={s.emptyTitle}>No {category.toLowerCase()} tests yet</Text><Text style={s.emptyCopy}>Log a mock test from Profile to see your progress.</Text></View>}
     </ScrollView>
-    <AllTestsModal visible={showAll} tests={tests} onClose={() => setShowAll(false)} onDelete={removeTest} />
+    <AllTestsModal visible={showAll} tests={displayTests} onClose={() => setShowAll(false)} onDelete={removeTest} />
   </View>;
 }
 function AllTestsModal({ visible, tests, onClose, onDelete }: { visible: boolean; tests: MockTestLog[]; onClose: () => void; onDelete: (id: string) => void }) {

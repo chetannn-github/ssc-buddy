@@ -25,12 +25,7 @@ const todayISO = () => {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 };
-const defaults: Data = { version: 1, pinnedChapterIds: [], fullMockTargets: { pre: 10, mains: 10 }, revision: {}, activity: [], subjects: [
-  { id: "english", name: "English", target: 20, chapters: [{ id: "eng-vocab", name: "Vocabulary", total: 24, completed: 16 }, { id: "eng-grammar", name: "Grammar", total: 18, completed: 7 }] },
-  { id: "maths", name: "Maths", target: 20, chapters: [{ id: "math-arithmetic", name: "Arithmetic", total: 36, completed: 22 }, { id: "math-algebra", name: "Algebra", total: 20, completed: 9 }] },
-  { id: "reasoning", name: "Reasoning", target: 15, chapters: [{ id: "reason-verbal", name: "Verbal reasoning", total: 16, completed: 12 }, { id: "reason-nonverbal", name: "Non-verbal reasoning", total: 14, completed: 5 }] },
-  { id: "gk", name: "GK", target: 15, chapters: [{ id: "gk-current", name: "Current affairs", total: 30, completed: 11 }, { id: "gk-static", name: "Static GK", total: 22, completed: 4 }] },
-] };
+const defaults: Data = { version: 1, pinnedChapterIds: [], fullMockTargets: { pre: 10, mains: 10 }, revision: {}, activity: [], subjects: [] };
 
 function normalise(raw: unknown): Data {
   type OldChapter = Partial<Chapter> & { done?: boolean; revisions?: number };

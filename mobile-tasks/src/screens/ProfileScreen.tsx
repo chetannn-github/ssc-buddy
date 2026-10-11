@@ -128,7 +128,7 @@ export function ProfileScreen({ user, tasks, profileSettings, onProfileSaved, on
           <Stat lastRow label="Incomplete tasks" value={String(filteredSummary.total - filteredSummary.done)} />
         </View>
       </View>
-      <ActivityHeatmap user={user} tasks={tasks} mockTests={mockTests} />
+      <ActivityHeatmap user={user} mockTests={mockTests} />
       <StudyTrackerOverview tasks={tasks} mockTests={mockTests} onOpen={onOpenTracker} />
       <MockTestLogDialog visible={loggingMockTest} onClose={() => setLoggingMockTest(false)} onSave={saveMockTest} />
       <Modal transparent visible={viewingAvatar} animationType="fade" onRequestClose={() => setViewingAvatar(false)}><Pressable style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 28, backgroundColor: "rgba(0,0,0,.88)" }} onPress={() => setViewingAvatar(false)}><Pressable style={{ width: "100%", aspectRatio: 1, maxWidth: 330, overflow: "hidden", borderRadius: 24, borderWidth: 1, borderColor: "#3f3f46", backgroundColor: "#1c1c1c" }} onPress={() => undefined}><Image source={avatarImages[avatarIndex]} style={{ width: "100%", height: "100%" }} /></Pressable></Pressable></Modal>
@@ -142,9 +142,10 @@ function Stat({ label, value, columns = 3, lastColumn, lastRow }: { label: strin
   return <View style={[styles.stat, { paddingVertical: 8 }, columns === 2 && styles.statHalf, lastColumn && styles.statLastColumn, lastRow && styles.statLastRow]}><Text style={styles.statValue}>{value}</Text><Text style={styles.statLabel}>{label}</Text></View>;
 }
 
-function ActivityHeatmap({ user, tasks, mockTests }: { user: User | null; tasks: Task[]; mockTests: MockTestLog[] }) {
+function ActivityHeatmap({ user, mockTests }: { user: User | null; mockTests: MockTestLog[] }) {
   const [selectedDay, setSelectedDay] = useState<string>(() => localDayKey(new Date()));
-  const [trackerActivity, setTrackerActivity] = useState<Array<{ date: string; count: number }>>([]);
+  const [trackerActivity, setTrackerActivity] = useState<Array<{ id: string; date: string; count: number; type?: string; subjectId?: string; chapterId?: string; revisionTypeId?: string }>>([]);
+  const [trackerSubjects, setTrackerSubjects] = useState<Array<{ id: string; name: string; chapters?: Array<{ id: string; name: string }> }>>([]);
   const [viewportWidth, setViewportWidth] = useState(0);
   const [contentWidth, setContentWidth] = useState(0);
   const [heatmapReady, setHeatmapReady] = useState(false);
@@ -156,13 +157,17 @@ function ActivityHeatmap({ user, tasks, mockTests }: { user: User | null; tasks:
     if (!user) { setTrackerActivity([]); return; }
     return watchTrackerSections(user, (sections) => {
       const entries = Array.isArray(sections.activity) ? sections.activity : [];
-      setTrackerActivity(entries.filter((entry: any) => entry && typeof entry.date === "string").map((entry: any) => ({ date: entry.date, count: Math.max(1, Number(entry.count) || 1) })));
+      setTrackerSubjects(Array.isArray(sections.subjects) ? sections.subjects : []);
+      setTrackerActivity(entries.filter((entry: any) => entry && typeof entry.date === "string").map((entry: any, index: number) => ({
+        id: String(entry.id ?? `${entry.date}-${index}`), date: entry.date, count: Math.max(1, Number(entry.count) || 1), type: entry.type,
+        subjectId: entry.subjectId, chapterId: entry.chapterId, revisionTypeId: entry.revisionTypeId,
+      })));
     });
   }, [user?.uid]);
   const { months, total, activeDays, streak, activity } = useMemo(() => {
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const counts = new Map<string, number>();
-    tasks.filter((task) => task.completed).forEach((task) => counts.set(task.date, (counts.get(task.date) ?? 0) + 1));
+    // Match web: Daily Tasks are intentionally not heatmap activities.
     mockTests.forEach((test) => counts.set(test.date, (counts.get(test.date) ?? 0) + 1));
     trackerActivity.forEach((entry) => counts.set(entry.date, (counts.get(entry.date) ?? 0) + entry.count));
     const days = Array.from({ length: 365 }, (_, index) => {
@@ -181,9 +186,28 @@ function ActivityHeatmap({ user, tasks, mockTests }: { user: User | null; tasks:
       return result;
     }, []);
     return { months: grouped, total: [...counts.values()].reduce((sum, count) => sum + count, 0), activeDays: [...counts.values()].filter(Boolean).length, streak: longest, activity: counts, maximum };
-  }, [mockTests, tasks, trackerActivity]);
+  }, [mockTests, trackerActivity]);
   const max = Math.max(1, ...[...activity.values()]);
   const selected = activity.get(selectedDay) ?? 0;
+  const activityRows = useMemo(() => {
+    const subjectName = (subjectId?: string) => trackerSubjects.find((subject) => subject.id === subjectId)?.name;
+    const chapterName = (subjectId?: string, chapterId?: string) => trackerSubjects.find((subject) => subject.id === subjectId)?.chapters?.find((chapter) => chapter.id === chapterId)?.name;
+    const mockRows = mockTests.filter((test) => test.date === selectedDay).map((test) => ({
+      id: `mock-${test.id}`, title: `${test.type} mock test`, detail: `${test.subject || "General"} · ${test.score}/${test.total}`,
+    }));
+    const trackerRows = trackerActivity.filter((entry) => entry.date === selectedDay).map((entry) => {
+      const subject = subjectName(entry.subjectId);
+      const chapter = chapterName(entry.subjectId, entry.chapterId);
+      const isRevision = entry.type === "revision";
+      const isMock = entry.type === "mock-test";
+      return {
+        id: `tracker-${entry.id}`,
+        title: isRevision ? `${entry.count} revision${entry.count === 1 ? "" : "s"} completed` : isMock ? `${entry.count} mock test${entry.count === 1 ? "" : "s"} logged` : `${entry.count} lecture${entry.count === 1 ? "" : "s"} completed`,
+        detail: [subject, chapter].filter(Boolean).join(" · ") || "Study tracker",
+      };
+    });
+    return [...trackerRows, ...mockRows];
+  }, [mockTests, selectedDay, trackerActivity, trackerSubjects]);
   const thumbWidth = viewportWidth && contentWidth ? Math.max(34, (viewportWidth * viewportWidth) / contentWidth) : 0;
   const scrollableWidth = Math.max(1, contentWidth - viewportWidth);
   const thumbLeft = scrollX.interpolate({ inputRange: [0, scrollableWidth], outputRange: [0, Math.max(0, viewportWidth - thumbWidth)], extrapolate: "clamp" });
@@ -217,6 +241,9 @@ function ActivityHeatmap({ user, tasks, mockTests }: { user: User | null; tasks:
     </Animated.ScrollView>
     {contentWidth > viewportWidth && scrollbarVisible && <View style={styles.heatScrollbar}><Animated.View style={[styles.heatScrollbarThumb, { width: thumbWidth, transform: [{ translateX: thumbLeft }] }]} /></View>}
     <View style={styles.heatDetail}><Text style={styles.heatDetailDate}>{new Date(`${selectedDay}T00:00:00`).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}</Text><Text style={styles.heatmapMuted}>{selected} activit{selected === 1 ? "y" : "ies"}</Text></View>
+    <View style={styles.activityList}>
+      {activityRows.length ? activityRows.map((row) => <View key={row.id} style={styles.activityRow}><View style={styles.activityCopy}><Text numberOfLines={1} style={styles.activityTitle}>{row.title}</Text><Text numberOfLines={1} style={styles.activityMeta}>{row.detail}</Text></View></View>) : <Text style={styles.noActivity}>No activity recorded on this day.</Text>}
+    </View>
   </View>;
 }
 
@@ -256,7 +283,7 @@ const styles: Record<string, any> = StyleSheet.create({
   identity: { alignItems: "center", marginTop: 12 }, exam: { color: colors.subdued, fontSize: 10, fontWeight: "700", letterSpacing: 2.2 }, nameLine: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 5 }, name: { color: colors.text, fontSize: 21, fontWeight: "700" },
   actionRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 11, marginTop: 19 }, action: { flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 8 }, actionText: { color: colors.text, fontSize: 13, fontWeight: "600" },
   summaryCard: { marginTop: 27, overflow: "visible", borderRadius: 18, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, paddingTop: 16 }, cardHeader: { zIndex: 30, flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 16 }, cardEyebrow: { color: "#a1a1aa", fontSize: 10, fontWeight: "700", letterSpacing: 1.6 }, trackerEyebrow: { paddingHorizontal: 16, paddingTop: 17 }, rangeWrap: { position: "relative", zIndex: 40 }, rangeButton: { height: 29, flexDirection: "row", alignItems: "center", gap: 3, borderRadius: 9, paddingHorizontal: 8, backgroundColor: "#292929" }, rangeText: { color: colors.text, fontSize: 11, fontWeight: "700" }, rangeMenu: { position: "absolute", top: 34, right: 0, minWidth: 124, overflow: "hidden", borderRadius: 11, paddingVertical: 3, backgroundColor: "#292929", borderWidth: 1, borderColor: colors.border, elevation: 30, shadowColor: "#000", shadowOpacity: 0.45, shadowRadius: 12, shadowOffset: { width: 0, height: 5 } }, rangeOption: { paddingHorizontal: 11, paddingVertical: 8 }, rangeOptionActive: { backgroundColor: "#3b3b3b" }, rangeOptionText: { color: colors.muted, fontSize: 12 }, rangeOptionTextActive: { color: colors.text, fontWeight: "800" }, practiceGrid: { flexDirection: "row", flexWrap: "wrap", paddingTop: 10 }, trackerGrid: { flexDirection: "row", flexWrap: "wrap", paddingTop: 11 }, stat: { width: "33.333%", alignItems: "center", paddingVertical: 10, paddingHorizontal: 3, borderRightWidth: 1, borderBottomWidth: 1, borderColor: colors.border }, statHalf: { width: "50%" }, statLastColumn: { borderRightWidth: 0 }, statLastRow: { borderBottomWidth: 0 }, statValue: { color: colors.text, fontSize: 17, fontWeight: "700", textAlign: "center" }, statLabel: { color: colors.muted, fontSize: 10, lineHeight: 14, marginTop: 4, textAlign: "center" }, divider: { height: 1, backgroundColor: colors.border },
-  heatmapSection: { marginTop: 20, paddingTop: 2 }, heatmapPending: { opacity: 0 }, heatmapHeading: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 10 }, heatmapFacts: { flexDirection: "row", gap: 12 }, heatmapMuted: { color: colors.muted, fontSize: 10 }, heatmapNumber: { color: colors.text, fontWeight: "800" }, heatmapScroll: { marginTop: 12 }, months: { gap: 10, paddingBottom: 4 }, month: { width: 58 }, monthGrid: { height: 63, flexDirection: "column", flexWrap: "wrap", alignContent: "flex-start", gap: 3 }, heatCell: { width: 8, height: 8, borderRadius: 2 }, heatSelected: { borderWidth: 1, borderColor: "#fff", transform: [{ scale: 1.15 }] }, monthLabel: { color: colors.muted, fontSize: 10, textAlign: "center", marginTop: 7 }, heatScrollbar: { height: 3, overflow: "hidden", marginTop: 2, borderRadius: 2, backgroundColor: "#303030" }, heatScrollbarThumb: { height: "100%", borderRadius: 2, backgroundColor: "#777782" }, heatDetail: { minHeight: 34, flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 8, borderRadius: 9, paddingHorizontal: 10, backgroundColor: "rgba(255,255,255,.04)" }, heatDetailDate: { color: colors.text, fontSize: 11, fontWeight: "700" },
+  heatmapSection: { marginTop: 20, paddingTop: 2 }, heatmapPending: { opacity: 0 }, heatmapHeading: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 10 }, heatmapFacts: { flexDirection: "row", gap: 12 }, heatmapMuted: { color: colors.muted, fontSize: 10 }, heatmapNumber: { color: colors.text, fontWeight: "800" }, heatmapScroll: { marginTop: 12 }, months: { gap: 10, paddingBottom: 4 }, month: { width: 58 }, monthGrid: { height: 63, flexDirection: "column", flexWrap: "wrap", alignContent: "flex-start", gap: 3 }, heatCell: { width: 8, height: 8, borderRadius: 2 }, heatSelected: { borderWidth: 1, borderColor: "#fff", transform: [{ scale: 1.15 }] }, monthLabel: { color: colors.muted, fontSize: 10, textAlign: "center", marginTop: 7 }, heatScrollbar: { height: 3, overflow: "hidden", marginTop: 2, borderRadius: 2, backgroundColor: "#303030" }, heatScrollbarThumb: { height: "100%", borderRadius: 2, backgroundColor: "#777782" }, heatDetail: { minHeight: 34, flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 8, borderRadius: 9, paddingHorizontal: 10, backgroundColor: "rgba(255,255,255,.04)" }, heatDetailDate: { color: colors.text, fontSize: 11, fontWeight: "700" }, activityList: { marginTop: 8, overflow: "hidden", borderRadius: 11, borderWidth: 1, borderColor: colors.border, backgroundColor: "rgba(255,255,255,.025)" }, activityRow: { minHeight: 43, justifyContent: "center", paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: colors.border }, activityCopy: { minWidth: 0 }, activityTitle: { color: colors.text, fontSize: 12, fontWeight: "700" }, activityMeta: { marginTop: 2, color: colors.muted, fontSize: 10 }, noActivity: { paddingVertical: 17, paddingHorizontal: 12, color: colors.muted, fontSize: 12, textAlign: "center" },
   trackerOverview: { marginTop: 24, borderTopWidth: 1, borderColor: colors.border, paddingTop: 19 }, trackerHeading: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 12 }, trackerTitle: { color: colors.text, fontSize: 19, fontWeight: "800", marginTop: 4 }, trackerCount: { color: colors.muted, fontSize: 11, fontFamily: "monospace" }, trackerCard: { marginTop: 9, borderRadius: 15, padding: 14, backgroundColor: "rgba(255,255,255,.025)", borderWidth: 1, borderColor: colors.border }, trackerCardTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 13 }, trackerCardLabel: { color: colors.muted, fontSize: 11, fontWeight: "700" }, trackerCardTitle: { color: colors.text, fontSize: 16, fontWeight: "800", marginTop: 3 }, trackerRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingTop: 8 }, trackerRowName: { width: 68, color: "#d4d4d8", fontSize: 11 }, trackerBar: { flex: 1, height: 5, overflow: "hidden", borderRadius: 4, backgroundColor: "#303030" }, trackerBarFill: { height: "100%", borderRadius: 4 }, trackerRowCount: { width: 31, color: colors.muted, fontSize: 10, textAlign: "right" },
   modalBackdrop: { flex: 1, justifyContent: "center", padding: 20, backgroundColor: "rgba(0,0,0,.70)" }, editDialog: { borderRadius: 21, padding: 20, gap: 14, backgroundColor: "#202020", borderWidth: 1, borderColor: colors.border }, editTitle: { color: colors.text, fontSize: 21, fontWeight: "800", marginBottom: 4 }, editLabel: { color: colors.subdued, fontSize: 10, letterSpacing: 1.3, fontWeight: "800", marginBottom: 7 }, editInput: { height: 46, borderRadius: 12, paddingHorizontal: 13, color: colors.text, backgroundColor: "#151515", borderWidth: 1, borderColor: "#3f3f46" }, manifestationInput: { minHeight: 82, borderRadius: 12, padding: 13, color: colors.text, backgroundColor: "#151515", borderWidth: 1, borderColor: "#3f3f46", textAlignVertical: "top" }, editActions: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 18, marginTop: 3 }, cancel: { color: "#d4d4d8", fontWeight: "700" }, saveProfile: { borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11, backgroundColor: colors.accent }, saveProfileText: { color: colors.accentDeep, fontWeight: "800" },
   confirmDialog: { borderRadius: 20, padding: 18, backgroundColor: "#1d1d1d", borderWidth: 1, borderColor: "#353535" }, confirmHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, confirmIcon: { width: 36, height: 36, alignItems: "center", justifyContent: "center", borderRadius: 11, backgroundColor: "rgba(244,63,94,.12)" }, confirmTitle: { color: colors.text, fontSize: 18, fontWeight: "800", marginTop: 15 }, confirmCopy: { color: colors.muted, fontSize: 13, marginTop: 5 }, confirmActions: { flexDirection: "row", gap: 9, marginTop: 20 }, cancelButton: { flex: 1, height: 43, alignItems: "center", justifyContent: "center", borderRadius: 11, backgroundColor: "#2b2b2b" }, cancelButtonText: { color: "#e4e4e7", fontSize: 13, fontWeight: "700" }, logoutConfirm: { flex: 1, height: 43, alignItems: "center", justifyContent: "center", borderRadius: 11, backgroundColor: "#e11d48" }, logoutConfirmText: { color: "#fff1f2", fontSize: 13, fontWeight: "800" },

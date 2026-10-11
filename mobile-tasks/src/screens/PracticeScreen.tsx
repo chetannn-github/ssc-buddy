@@ -156,44 +156,7 @@ const examAccentDeep = "#081a31";
 const makeId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 const defaultBank: Bank = {
   marking: { positive: 2, negative: 0.5 },
-  subjects: [
-    {
-      id: "english",
-      name: "English",
-      chapters: [
-        {
-          id: "vocab",
-          name: "Vocabulary",
-          exercises: [
-            {
-              id: "practice-1",
-              name: "Practice Set 1",
-              questionCount: 20,
-              answerKey: Array(20).fill(null),
-            },
-          ],
-        },
-      ],
-    },
-    {
-      id: "maths",
-      name: "Maths",
-      chapters: [
-        {
-          id: "arithmetic",
-          name: "Arithmetic",
-          exercises: [
-            {
-              id: "practice-1-maths",
-              name: "Practice Set 1",
-              questionCount: 25,
-              answerKey: Array(25).fill(null),
-            },
-          ],
-        },
-      ],
-    },
-  ],
+  subjects: [],
 };
 
 export function PracticeScreen({ user }: { user: any }) {
@@ -208,9 +171,9 @@ export function PracticeScreen({ user }: { user: any }) {
   const [history, setHistory] = useState<Record[]>([]);
   const [reattemptOf, setReattemptOf] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>("setup");
-  const [subjectId, setSubjectId] = useState(defaultBank.subjects[0].id);
-  const [chapterId, setChapterId] = useState(defaultBank.subjects[0].chapters[0].id);
-  const [exerciseId, setExerciseId] = useState(defaultBank.subjects[0].chapters[0].exercises[0].id);
+  const [subjectId, setSubjectId] = useState("");
+  const [chapterId, setChapterId] = useState("");
+  const [exerciseId, setExerciseId] = useState("");
   const [minutes, setMinutes] = useState("30");
   const [start, setStart] = useState("1");
   const [count, setCount] = useState("20");
