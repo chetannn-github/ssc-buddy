@@ -225,7 +225,8 @@ export default function App() {
 
   useEffect(() => {
     void (async () => {
-      const raw = await AsyncStorage.getItem(TASK_STORAGE_KEY) ?? await AsyncStorage.getItem(LEGACY_TASK_STORAGE_KEY);
+      const current = await AsyncStorage.getItem(TASK_STORAGE_KEY);
+      const raw = current ?? await AsyncStorage.getItem(LEGACY_TASK_STORAGE_KEY);
       const stored = raw ? (JSON.parse(raw) as Task[]) : [];
       const normalized = stored.map((storedTask) => {
         const { targetMinutes: _legacyTarget, ...task } = storedTask as Task & { targetMinutes?: number };
@@ -233,6 +234,7 @@ export default function App() {
       }).filter((task) => !task.id.startsWith("demo-"));
       setTasks(normalized);
       await AsyncStorage.setItem(TASK_STORAGE_KEY, JSON.stringify(normalized));
+      if (!current && raw) await AsyncStorage.removeItem(LEGACY_TASK_STORAGE_KEY);
       setTasksLoaded(true);
     })();
   }, []);
@@ -446,7 +448,7 @@ export default function App() {
       ) : appTab === "practice" ? (
         <PracticeScreen user={user} />
       ) : appTab === "progress" ? (
-        <ProgressScreen />
+        <ProgressScreen user={user} />
       ) : appTab === "tasks" ? (
         <>
       <View style={styles.header}>
@@ -638,7 +640,7 @@ export default function App() {
         <ComingSoonScreen title={activeAppTab.label} />
       )}
       <BottomNavigation activeTab={appTab} onChange={setAppTab} />
-      <MediaOverlay mode={mediaMode} musicOpenRequest={musicOpenRequest} onClose={() => setMediaMode(null)} />
+      <MediaOverlay user={user} mode={mediaMode} musicOpenRequest={musicOpenRequest} onClose={() => setMediaMode(null)} />
       <DailyManifestationDialog
         phrase={dailyManifestation}
         entry={manifestationEntry}

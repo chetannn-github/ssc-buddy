@@ -13,15 +13,8 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { MotivationalMusic, MotivationalVideos } from "@/components/layout/AppShell";
 import {
-  downloadCloudSnapshot,
-  hasCloudSnapshot,
-  hasMeaningfulLocalData,
   isFirebaseConfigured,
   observeFirebaseUser,
-  startLocalSync,
-  uploadLocalSnapshot,
-  watchCloudSnapshot,
-  recoverLastLocalSnapshot,
   patchCloudProfile,
   patchCloudPreferences,
   readCloudProfile,
@@ -156,40 +149,14 @@ function RootComponent() {
   const [videosOpen, setVideosOpen] = useState(false);
 
   const [syncUser, setSyncUser] = useState<User | null>(null);
-  const syncCleanup = useRef<(() => void) | null>(null);
   const profileSyncCleanup = useRef<(() => void) | null>(null);
   const practiceSyncCleanup = useRef<(() => void) | null>(null);
   const preferencesSyncCleanup = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (!isFirebaseConfigured) return;
-    recoverLastLocalSnapshot();
     return observeFirebaseUser(setSyncUser);
   }, []);
-
-  useEffect(() => {
-    if (!syncUser) return;
-    let cancelled = false;
-    const startAutomaticSync = async () => {
-      try {
-        const hydrationKey = `ssc-buddy-firebase-hydrated:${syncUser.uid}`;
-        if (sessionStorage.getItem(hydrationKey) !== "1") {
-          if (!hasMeaningfulLocalData() && await hasCloudSnapshot(syncUser)) await downloadCloudSnapshot(syncUser);
-          else await uploadLocalSnapshot(syncUser);
-          sessionStorage.setItem(hydrationKey, "1");
-        }
-        if (cancelled) return;
-        const stopLocalSync = startLocalSync(syncUser);
-        // Don't overwrite a live browser from a remote snapshot. It can be older or empty.
-        const stopCloudWatch = watchCloudSnapshot(syncUser, () => undefined);
-        syncCleanup.current = () => { stopLocalSync(); stopCloudWatch(); };
-      } catch {
-        // The in-browser cache remains available, and a later session retries cloud sync.
-      }
-    };
-    void startAutomaticSync();
-    return () => { cancelled = true; syncCleanup.current?.(); syncCleanup.current = null; };
-  }, [syncUser]);
 
   useEffect(() => {
     if (!syncUser) return;
@@ -205,8 +172,11 @@ function RootComponent() {
       keys.forEach((key) => {
         if (value[key] !== undefined) localStorage.setItem(key, typeof value[key] === "string" ? value[key] as string : JSON.stringify(value[key]));
       });
-      last = JSON.stringify(read());
-      window.dispatchEvent(new Event("ssc-preferences-updated"));
+      const next = JSON.stringify(read());
+      if (next !== last) {
+        last = next;
+        window.dispatchEvent(new Event("ssc-preferences-updated"));
+      }
       queueMicrotask(() => { applying = false; });
     };
     let stop: (() => void) | undefined;

@@ -1,6 +1,5 @@
 // @ts-nocheck
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Image, Modal, Pressable, ScrollView as NativeScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import type { User } from "firebase/auth";
@@ -10,7 +9,7 @@ import { colors } from "../theme";
 import { MockTestLogDialog, type MockTestLog } from "./MockTestLogDialog";
 import { reportVerticalScroll } from "../navigation/bottomNavigationVisibility";
 import type { PracticeProfile } from "../lib/profile-store";
-import { watchTrackerSections } from "../lib/firebase";
+import { appendTrackerTest, watchTrackerSections, watchTrackerTests } from "../lib/firebase";
 
 const ScrollView = (props: any) => <NativeScrollView {...props} scrollEventThrottle={16} onScroll={(event) => { if (!props.horizontal) reportVerticalScroll(event.nativeEvent.contentOffset.y); props.onScroll?.(event); }} />;
 
@@ -69,19 +68,16 @@ export function ProfileScreen({ user, tasks, profileSettings, onProfileSaved, on
   };
   useEffect(() => {
     if (!profileSettings) setProfileReady(true);
-    void AsyncStorage.getItem("ssc-buddy-mobile:mock-tests:v1").then((raw) => {
-      if (!raw) return;
-      try { setMockTests(JSON.parse(raw) as MockTestLog[]); } catch { setMockTests([]); }
-    });
-  }, []);
+    if (!user) return;
+    return watchTrackerTests(user, (tests) => setMockTests(tests.map((test) => ({ ...test, type: test.type === "Mains" ? "Mains" : test.type === "Pre" ? "Pre" : "Sectional", subject: test.subjectId || "General", score: Number(test.score ?? 0), total: Number(test.total ?? 0), accuracy: Number(test.accuracy ?? 0) }))));
+  }, [user?.uid]);
   useEffect(() => {
     if (!profileSettings) return;
     setProfileName(profileSettings.name); setExamName(profileSettings.examName ?? "SSC CGL 2027"); setGoal(String(profileSettings.questionGoal)); setManifestation(profileSettings.manifestation ?? ""); setProfileReady(true);
   }, [profileSettings]);
   const saveMockTest = (entry: MockTestLog) => {
-    const next = [entry, ...mockTests];
-    setMockTests(next);
-    void AsyncStorage.setItem("ssc-buddy-mobile:mock-tests:v1", JSON.stringify(next));
+    if (!user) return;
+    void appendTrackerTest(user, { id: entry.id, date: entry.date, createdAt: entry.createdAt, subjectId: "", type: entry.type, score: entry.score, total: entry.total, accuracy: entry.accuracy, notes: "" }, entry.subject);
   };
   const filteredTasks = tasks.filter((task) => withinRange(task.date, range));
   const filteredSummary = summarizeTasks(filteredTasks);

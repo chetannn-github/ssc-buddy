@@ -1,25 +1,28 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Animated, Easing, Modal, Pressable, ScrollView as NativeScrollView, StyleSheet, Text, View } from "react-native";
 import Svg, { Circle, Line, Path } from "react-native-svg";
 import type { MockTestLog } from "./MockTestLogDialog";
 import { colors } from "../theme";
 import { reportVerticalScroll } from "../navigation/bottomNavigationVisibility";
+import type { User } from "firebase/auth";
+import { deleteTrackerTest, watchTrackerTests } from "../lib/firebase";
 
 const ScrollView = (props: any) => <NativeScrollView {...props} scrollEventThrottle={16} onScroll={(event) => { if (!props.horizontal) reportVerticalScroll(event.nativeEvent.contentOffset.y); props.onScroll?.(event); }} />;
 
 type Category = MockTestLog["type"];
-const STORE = "ssc-buddy-mobile:mock-tests:v1";
 const categories: Category[] = ["Sectional", "Pre", "Mains"];
 
-export function ProgressScreen() {
+export function ProgressScreen({ user }: { user: User | null }) {
   const [tests, setTests] = useState<MockTestLog[]>([]);
   const [category, setCategory] = useState<Category>("Sectional");
   const [subject, setSubject] = useState("all");
   const [menu, setMenu] = useState<"category" | "subject" | null>(null);
   const [showAll, setShowAll] = useState(false);
-  useEffect(() => { void AsyncStorage.getItem(STORE).then((raw) => { if (raw) try { setTests(JSON.parse(raw) as MockTestLog[]); } catch {} }); }, []);
+  useEffect(() => {
+    if (!user) { setTests([]); return; }
+    return watchTrackerTests(user, (records) => setTests(records.map((test) => ({ ...test, type: test.type === "Mains" ? "Mains" : test.type === "Pre" ? "Pre" : "Sectional", subject: test.subjectId || "General", score: Number(test.score ?? 0), total: Number(test.total ?? 0), accuracy: Number(test.accuracy ?? 0) }))));
+  }, [user?.uid]);
   const subjects = [...new Set(tests.filter((test) => test.type === "Sectional").map((test) => test.subject))];
   const filtered = tests.filter((test) => test.type === category && (category !== "Sectional" || subject === "all" || test.subject === subject)).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   const summary = useMemo(() => {
@@ -27,7 +30,7 @@ export function ProgressScreen() {
     return { high: scores.length ? Math.max(...scores) : 0, low: scores.length ? Math.min(...scores) : 0, average: scores.length ? (scores.reduce((sum, value) => sum + value, 0) / scores.length).toFixed(1) : "0", accuracy: accuracy.length ? (accuracy.reduce((sum, value) => sum + value, 0) / accuracy.length).toFixed(1) : "0" };
   }, [filtered]);
   const choose = (next: Category) => { setCategory(next); setSubject("all"); setMenu(null); };
-  const removeTest = (id: string) => setTests((current) => { const next = current.filter((test) => test.id !== id); void AsyncStorage.setItem(STORE, JSON.stringify(next)); return next; });
+  const removeTest = (id: string) => { if (user) void deleteTrackerTest(user, id); };
   return <View style={s.page}>
     {menu && <Pressable accessibilityLabel="Close filters" style={s.dismissLayer} onPress={() => setMenu(null)} />}
     <View style={s.header}><Pressable accessibilityLabel="Close filters" style={s.headerDismiss} onPress={() => setMenu(null)} /><Text style={s.eyebrow}>MOCK TEST ANALYSIS</Text><Text style={s.title}>Progress</Text><View style={s.filters}>

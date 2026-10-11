@@ -36,6 +36,7 @@ export async function loadProfile() {
     try {
       const migrated = normalizeProfile(JSON.parse(legacy));
       await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(migrated));
+      await AsyncStorage.removeItem(LEGACY_PROFILE_KEY);
       return migrated;
     } catch { /* default below */ }
   }

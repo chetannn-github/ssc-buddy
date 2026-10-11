@@ -51,6 +51,7 @@ const StyleSheet = {
 type Option = "A" | "B" | "C" | "D";
 type Question = {
   id: string;
+  number?: number;
   question: string;
   options: [string, string, string, string];
   correctAnswer: Option;
@@ -69,11 +70,24 @@ type Subject = { id: string; name: string; chapters: Chapter[] };
 type Record = {
   id: string;
   createdAt: string;
+  /** Canonical web CBT attempt fields. UI-only aliases below are retained while old mobile screens are migrated. */
+  date: string;
+  testMode: "standard" | "random";
+  attemptGroupId?: string;
+  subjectId: string;
   subject: string;
+  chapterId: string;
   chapter: string;
+  exerciseId: string;
   exercise: string;
+  startNumber: number;
+  durationMinutes: number | null;
+  timeTakenSeconds: number;
   minutes: number;
   answers: Array<Option | null>;
+  answerKey: Array<Option | null>;
+  questionNumbers?: number[];
+  questionIds?: string[];
   key: Array<Option | null>;
   correct: number;
   wrong: number;
@@ -84,8 +98,57 @@ type Record = {
 };
 type Bank = { subjects: Subject[]; marking: { positive: number; negative: number } };
 type Phase = "setup" | "key" | "instructions" | "test" | "history" | "bank";
-const STORE = "ssc-buddy-mobile:practice-bank:v1";
-const HISTORY = "ssc-buddy-mobile:practice-history:v1";
+// These are the exact web CBT cache keys. Old mobile keys are read once only for migration.
+const STORE = "cbt-subjects";
+const HISTORY = "cbt-history";
+const FAVOURITES = "cbt-favorite-questions";
+const MARKING = "cbt-marking";
+const LEGACY_STORE = "ssc-buddy-mobile:practice-bank:v1";
+const LEGACY_HISTORY = "ssc-buddy-mobile:practice-history:v1";
+const LEGACY_FAVOURITES = "ssc-buddy-mobile:favourite-questions:v1";
+/** The Firestore payload is deliberately the web CBT contract, never the mobile view model. */
+const toCloudSubjects = (subjects: Subject[]) => subjects.map((subject) => ({
+  id: subject.id,
+  name: subject.name,
+  chapters: subject.chapters.map((chapter) => ({
+    id: chapter.id,
+    name: chapter.name,
+    questionCount: null,
+    answerKey: null,
+    exercises: chapter.exercises.map((exercise) => ({
+      id: exercise.id,
+      name: exercise.name,
+      questionCount: exercise.questionCount,
+      answerKey: exercise.answerKey,
+      ...(exercise.questions ? { questions: exercise.questions } : {}),
+    })),
+  })),
+}));
+const toCloudRecord = (record: Record) => ({
+  id: record.id,
+  date: record.date || record.createdAt.slice(0, 10),
+  createdAt: record.createdAt,
+  testMode: record.testMode ?? "standard",
+  ...(record.attemptGroupId ? { attemptGroupId: record.attemptGroupId } : {}),
+  subjectId: record.subjectId,
+  subject: record.subject,
+  chapterId: record.chapterId,
+  chapter: record.chapter,
+  exerciseId: record.exerciseId,
+  exercise: record.exercise,
+  startNumber: record.startNumber ?? 1,
+  durationMinutes: record.durationMinutes ?? record.duration ?? record.minutes,
+  timeTakenSeconds: record.timeTakenSeconds ?? Math.max(0, record.minutes * 60),
+  answers: record.answers,
+  ...(record.questionNumbers ? { questionNumbers: record.questionNumbers } : {}),
+  ...(record.questionIds ? { questionIds: record.questionIds } : {}),
+  answerKey: record.answerKey ?? record.key,
+  ...(record.questions ? { questions: record.questions } : {}),
+  correct: record.correct,
+  wrong: record.wrong,
+  marking: record.marking,
+  score: record.score,
+});
 const choices: Option[] = ["A", "B", "C", "D"];
 const examAccent = "#60a5fa";
 const examAccentSurface = "#162c45";
@@ -173,10 +236,20 @@ export function PracticeScreen({ user }: { user: any }) {
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   useEffect(() => {
     void (async () => {
-      const [bankRaw, historyRaw, favouritesRaw] = await Promise.all([AsyncStorage.getItem(STORE), AsyncStorage.getItem(HISTORY), AsyncStorage.getItem("ssc-buddy-mobile:favourite-questions:v1")]);
-      try { if (bankRaw) { const next = JSON.parse(bankRaw) as Bank; bankRef.current = next; setBank(next); } } catch {}
-      try { if (historyRaw) { const next = JSON.parse(historyRaw) as Record[]; historyRef.current = next; setHistory(next); } } catch {}
-      try { if (favouritesRaw) { const next = JSON.parse(favouritesRaw) as string[]; favouritesRef.current = next; setFavourites(next); } } catch {}
+      const [subjectsRaw, legacyBankRaw, historyRaw, legacyHistoryRaw, favouritesRaw, legacyFavouritesRaw, markingRaw] = await Promise.all([AsyncStorage.getItem(STORE), AsyncStorage.getItem(LEGACY_STORE), AsyncStorage.getItem(HISTORY), AsyncStorage.getItem(LEGACY_HISTORY), AsyncStorage.getItem(FAVOURITES), AsyncStorage.getItem(LEGACY_FAVOURITES), AsyncStorage.getItem(MARKING)]);
+      try {
+        const candidate = subjectsRaw ?? legacyBankRaw;
+        if (candidate) {
+          const parsed = JSON.parse(candidate) as Subject[] | Bank;
+          const next = Array.isArray(parsed) ? { ...bankRef.current, subjects: parsed } : parsed;
+          bankRef.current = next; setBank(next);
+          await AsyncStorage.setItem(STORE, JSON.stringify(next.subjects));
+          if (!subjectsRaw && legacyBankRaw) await AsyncStorage.removeItem(LEGACY_STORE);
+        }
+      } catch {}
+      try { if (markingRaw) { const marking = JSON.parse(markingRaw) as Bank["marking"]; bankRef.current = { ...bankRef.current, marking }; setBank(bankRef.current); } } catch {}
+      try { const candidate = historyRaw ?? legacyHistoryRaw; if (candidate) { const next = JSON.parse(candidate) as Record[]; historyRef.current = next; setHistory(next); await AsyncStorage.setItem(HISTORY, JSON.stringify(next)); if (!historyRaw && legacyHistoryRaw) await AsyncStorage.removeItem(LEGACY_HISTORY); } } catch {}
+      try { const candidate = favouritesRaw ?? legacyFavouritesRaw; if (candidate) { const next = JSON.parse(candidate) as string[]; favouritesRef.current = next; setFavourites(next); await AsyncStorage.setItem(FAVOURITES, JSON.stringify(next)); if (!favouritesRaw && legacyFavouritesRaw) await AsyncStorage.removeItem(LEGACY_FAVOURITES); } } catch {}
       setPracticeLoaded(true);
     })();
     return () => {
@@ -187,21 +260,22 @@ export function PracticeScreen({ user }: { user: any }) {
     const previous = bankRef.current;
     bankRef.current = next;
     setBank(next);
-    void AsyncStorage.setItem(STORE, JSON.stringify(next));
-    if (user) void syncPracticeEntities(user, "practiceSubjects", previous.subjects as any, next.subjects as any);
+    void AsyncStorage.setItem(STORE, JSON.stringify(next.subjects));
+    void AsyncStorage.setItem(MARKING, JSON.stringify(next.marking));
+    if (user) void syncPracticeEntities(user, "practiceSubjects", toCloudSubjects(previous.subjects) as any, toCloudSubjects(next.subjects) as any);
   };
   const saveHistory = (next: Record[]) => {
     const previous = historyRef.current;
     historyRef.current = next;
     setHistory(next);
     void AsyncStorage.setItem(HISTORY, JSON.stringify(next));
-    if (user) void syncPracticeEntities(user, "practiceAttempts", previous as any, next as any);
+    if (user) void syncPracticeEntities(user, "practiceAttempts", previous.map(toCloudRecord) as any, next.map(toCloudRecord) as any);
   };
   const saveFavourites = (next: string[]) => {
     const previous = favouritesRef.current;
     favouritesRef.current = next;
     setFavourites(next);
-    void AsyncStorage.setItem("ssc-buddy-mobile:favourite-questions:v1", JSON.stringify(next));
+    void AsyncStorage.setItem(FAVOURITES, JSON.stringify(next));
     if (user) void syncPracticeEntities(user, "practiceFavourites", previous.map((id) => ({ id })) as any, next.map((id) => ({ id })) as any);
   };
   useEffect(() => {
@@ -209,18 +283,18 @@ export function PracticeScreen({ user }: { user: any }) {
     let stopped = false; const stops: Array<() => void> = [];
     void (async () => {
       await Promise.all([
-        migratePracticeEntities(user, "practiceSubjects", bankRef.current.subjects as any),
-        migratePracticeEntities(user, "practiceAttempts", historyRef.current as any),
+        migratePracticeEntities(user, "practiceSubjects", toCloudSubjects(bankRef.current.subjects) as any),
+        migratePracticeEntities(user, "practiceAttempts", historyRef.current.map(toCloudRecord) as any),
         migratePracticeEntities(user, "practiceFavourites", favouritesRef.current.map((id) => ({ id })) as any),
       ]);
       if (stopped) return;
       const settings = await readPracticeSettings(user);
       if (!settings) await patchPracticeSettings(user, { marking: bankRef.current.marking });
       stops.push(
-        watchPracticeEntities(user, "practiceSubjects", (items) => { const next = { ...bankRef.current, subjects: items as any }; bankRef.current = next; setBank(next); void AsyncStorage.setItem(STORE, JSON.stringify(next)); }),
+        watchPracticeEntities(user, "practiceSubjects", (items) => { const next = { ...bankRef.current, subjects: items as any }; bankRef.current = next; setBank(next); void AsyncStorage.setItem(STORE, JSON.stringify(next.subjects)); }),
         watchPracticeEntities(user, "practiceAttempts", (items) => { const next = items.map((item) => ({ ...item, minutes: Number(item.minutes ?? item.durationMinutes ?? Math.round(Number(item.timeTakenSeconds ?? 0) / 60)), key: item.key ?? item.answerKey ?? [], correct: Number(item.correct ?? 0), wrong: Number(item.wrong ?? 0), score: Number(item.score ?? 0), subject: String(item.subject ?? ""), chapter: String(item.chapter ?? ""), exercise: String(item.exercise ?? "") })) as Record[]; historyRef.current = next; setHistory(next); void AsyncStorage.setItem(HISTORY, JSON.stringify(next)); }),
-        watchPracticeEntities(user, "practiceFavourites", (items) => { const next = items.map((item) => item.id); favouritesRef.current = next; setFavourites(next); void AsyncStorage.setItem("ssc-buddy-mobile:favourite-questions:v1", JSON.stringify(next)); }),
-        watchPracticeSettings(user, (settings) => { const marking = settings?.marking as Bank["marking"] | undefined; if (marking) { const next = { ...bankRef.current, marking }; bankRef.current = next; setBank(next); void AsyncStorage.setItem(STORE, JSON.stringify(next)); } }),
+        watchPracticeEntities(user, "practiceFavourites", (items) => { const next = items.map((item) => item.id); favouritesRef.current = next; setFavourites(next); void AsyncStorage.setItem(FAVOURITES, JSON.stringify(next)); }),
+        watchPracticeSettings(user, (settings) => { const marking = settings?.marking as Bank["marking"] | undefined; if (marking) { const next = { ...bankRef.current, marking }; bankRef.current = next; setBank(next); void AsyncStorage.setItem(MARKING, JSON.stringify(next)); } }),
       );
     })().catch(() => undefined);
     return () => { stopped = true; stops.forEach((stop) => stop()); };
@@ -330,11 +404,22 @@ export function PracticeScreen({ user }: { user: any }) {
     const saved: Record = {
       id: makeId(),
       createdAt: new Date().toISOString(),
+      date: new Date().toISOString().slice(0, 10),
+      testMode: random ? "random" : "standard",
+      ...(random ? { attemptGroupId: reattemptOf ?? makeId() } : {}),
+      subjectId: subject?.id ?? "",
       subject: subject?.name ?? "",
+      chapterId: chapter?.id ?? "",
       chapter: chapter?.name ?? "",
+      exerciseId: exercise?.id ?? "",
       exercise: exercise?.name ?? "",
+      startNumber,
+      durationMinutes: duration,
+      timeTakenSeconds: Math.max(0, duration * 60 - remaining),
       minutes: duration - Math.floor(remaining / 60),
       answers,
+      answerKey,
+      ...(selectedQuestions ? { questionIds: selectedQuestions.map((question) => question.id), questionNumbers: selectedQuestions.map((question, index) => question.number ?? (random ? index + 1 : startNumber + index)) } : {}),
       key: answerKey,
       correct,
       wrong,

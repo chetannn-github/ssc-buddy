@@ -1,4 +1,5 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import type { User } from "firebase/auth";
 import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import Constants, { AppOwnership } from "expo-constants";
 import { useVideoPlayer, VideoView } from "expo-video";
@@ -8,27 +9,28 @@ import Svg, { Circle } from "react-native-svg";
 import { musicCover, musicSource, musicTracks, trackTitle, videoSource, videoTracks } from "../lib/media";
 import { colors } from "../theme";
 import { subscribeBottomNavigation } from "../navigation/bottomNavigationVisibility";
+import { patchCloudPreferences, watchCloudPreferences } from "../lib/firebase";
 
 export type MediaMode = "video" | "music" | null;
 const reelPages = Array.from({ length: videoTracks.length * 400 }, (_, index) => ({ id: index, track: videoTracks[index % videoTracks.length] }));
 const firstReelPage = Math.floor(reelPages.length / 2);
 
-export function MediaOverlay({ mode, onClose, musicOpenRequest }: { mode: MediaMode; onClose: () => void; musicOpenRequest: number }) {
-  if (mode === "video") return <VideoReels onClose={onClose} />;
-  if (mode === "music") return <MusicPlayer onClose={onClose} openRequest={musicOpenRequest} />;
+export function MediaOverlay({ user, mode, onClose, musicOpenRequest }: { user: User | null; mode: MediaMode; onClose: () => void; musicOpenRequest: number }) {
+  if (mode === "video") return <VideoReels user={user} onClose={onClose} />;
+  if (mode === "music") return <MusicPlayer user={user} onClose={onClose} openRequest={musicOpenRequest} />;
   return null;
 }
 
-function VideoReels({ onClose }: { onClose: () => void }) {
+function VideoReels({ user, onClose }: { user: User | null; onClose: () => void }) {
   const { height } = useWindowDimensions();
   const [index, setIndex] = useState(firstReelPage);
+  const [likes, toggleLike] = useCloudLikes(user, "ssc-buddy-liked-videos");
   return <Modal visible animationType="slide" onRequestClose={onClose}><View style={styles.reel}>
-    <FlatList data={reelPages} keyExtractor={(item) => String(item.id)} pagingEnabled showsVerticalScrollIndicator={false} initialScrollIndex={firstReelPage} getItemLayout={(_, itemIndex) => ({ length: height, offset: height * itemIndex, index: itemIndex })} initialNumToRender={3} windowSize={3} onMomentumScrollEnd={(event) => setIndex(Math.round(event.nativeEvent.contentOffset.y / height))} renderItem={({ item, index: itemIndex }) => <ReelPage track={item.track} active={index === itemIndex} height={height} onClose={onClose} />} />
+    <FlatList data={reelPages} keyExtractor={(item) => String(item.id)} pagingEnabled showsVerticalScrollIndicator={false} initialScrollIndex={firstReelPage} getItemLayout={(_, itemIndex) => ({ length: height, offset: height * itemIndex, index: itemIndex })} initialNumToRender={3} windowSize={3} onMomentumScrollEnd={(event) => setIndex(Math.round(event.nativeEvent.contentOffset.y / height))} renderItem={({ item, index: itemIndex }) => <ReelPage track={item.track} active={index === itemIndex} height={height} onClose={onClose} liked={likes.has(item.track)} onToggleLike={() => toggleLike(item.track)} />} />
   </View></Modal>;
 }
 
-function ReelPage({ track, active, height, onClose }: { track: string; active: boolean; height: number; onClose: () => void }) {
-  const [liked, setLiked] = useState(false);
+function ReelPage({ track, active, height, onClose, liked, onToggleLike }: { track: string; active: boolean; height: number; onClose: () => void; liked: boolean; onToggleLike: () => void }) {
   const [speeding, setSpeeding] = useState(false);
   const [videoTime, setVideoTime] = useState(0);
   const longPressRef = useRef(false);
@@ -58,14 +60,14 @@ function ReelPage({ track, active, height, onClose }: { track: string; active: b
     <Pressable style={styles.close} onPress={onClose}><MaterialCommunityIcons name="close" size={24} color={colors.text} /></Pressable>
     <Pressable style={styles.videoTap} delayLongPress={280} onLongPress={startFastForward} onPressOut={stopFastForward} onPress={() => { if (longPressRef.current) { longPressRef.current = false; return; } player.playing ? player.pause() : player.play(); }} />
     {speeding && <View pointerEvents="none" style={styles.speedBadge}><Text style={styles.speedText}>2×</Text></View>}
-    <View style={styles.reelControls}><Pressable style={styles.round} onPress={() => setLiked((value) => !value)}><MaterialCommunityIcons name={liked ? "heart" : "heart-outline"} size={23} color={liked ? "#fb7185" : colors.text} /></Pressable></View>
+    <View style={styles.reelControls}><Pressable style={styles.round} onPress={onToggleLike}><MaterialCommunityIcons name={liked ? "heart" : "heart-outline"} size={23} color={liked ? "#fb7185" : colors.text} /></Pressable></View>
     <View pointerEvents="none" style={styles.videoProgressTrack}><View style={[styles.videoProgressFill, { width: `${progress * 100}%` }]} /></View>
   </View>;
 }
 
-function MusicPlayer({ onClose, openRequest }: { onClose: () => void; openRequest: number }) {
+function MusicPlayer({ user, onClose, openRequest }: { user: User | null; onClose: () => void; openRequest: number }) {
   const [index, setIndex] = useState(0);
-  const [liked, setLiked] = useState(false);
+  const [likes, toggleLike] = useCloudLikes(user, "ssc-buddy-liked-music");
   const [repeat, setRepeat] = useState(false);
   const [minimized, setMinimized] = useState(false);
   const [bottomNavVisible, setBottomNavVisible] = useState(true);
@@ -78,6 +80,7 @@ function MusicPlayer({ onClose, openRequest }: { onClose: () => void; openReques
   const artworkAnimation = useRef<Animated.CompositeAnimation | null>(null);
   const shouldSpin = useRef(false);
   const activeTrack = musicTracks[index] ?? musicTracks[0];
+  const liked = likes.has(activeTrack);
   const discSize = 148;
   const cover = musicCover(activeTrack);
   // Expo Go cannot include this project's custom foreground media service.
@@ -178,7 +181,7 @@ function MusicPlayer({ onClose, openRequest }: { onClose: () => void; openReques
     <View style={styles.musicHead}><View /><View style={styles.musicHeaderActions}><Pressable onPress={() => setMinimized(true)} hitSlop={9}><MaterialCommunityIcons name="arrow-collapse" size={20} color={colors.muted} /></Pressable><Pressable onPress={onClose} hitSlop={9}><MaterialCommunityIcons name="close" size={21} color={colors.muted} /></Pressable></View></View>
     <View style={[styles.disc, { width: discSize, height: discSize, marginTop: 10 }]} {...discPan.panHandlers}><Animated.View style={[styles.artwork, { width: 124, height: 124, borderRadius: 62, transform: [{ rotate: rotation }] }]}>{cover ? <Image source={cover} style={styles.coverImage} /> : <MaterialCommunityIcons name="music" size={48} color={colors.accent} />}</Animated.View><ProgressRing size={discSize} progress={progress} /></View>
     <Text style={styles.songTitle} numberOfLines={1}>{trackTitle(musicTracks[index] ?? "")}</Text>
-    <View style={styles.controls}><Pressable style={styles.round} onPress={() => setLiked((value) => !value)}><MaterialCommunityIcons name={liked ? "heart" : "heart-outline"} size={21} color={liked ? "#fb7185" : colors.text} /></Pressable><Pressable style={[styles.round, repeat && { backgroundColor: "#284d7f" }]} onPress={() => setRepeat((value) => !value)}><MaterialCommunityIcons name="repeat" size={20} color={colors.text} /></Pressable><Pressable style={styles.round} onPress={() => shift(-1)}><MaterialCommunityIcons name="chevron-left" size={28} color={colors.text} /></Pressable><Pressable style={styles.round} onPress={() => shift(1)}><MaterialCommunityIcons name="chevron-right" size={28} color={colors.text} /></Pressable></View>
+    <View style={styles.controls}><Pressable style={styles.round} onPress={() => toggleLike(activeTrack)}><MaterialCommunityIcons name={liked ? "heart" : "heart-outline"} size={21} color={liked ? "#fb7185" : colors.text} /></Pressable><Pressable style={[styles.round, repeat && { backgroundColor: "#284d7f" }]} onPress={() => setRepeat((value) => !value)}><MaterialCommunityIcons name="repeat" size={20} color={colors.text} /></Pressable><Pressable style={styles.round} onPress={() => shift(-1)}><MaterialCommunityIcons name="chevron-left" size={28} color={colors.text} /></Pressable><Pressable style={styles.round} onPress={() => shift(1)}><MaterialCommunityIcons name="chevron-right" size={28} color={colors.text} /></Pressable></View>
     <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginTop: 26 }}><Text style={[styles.playlistLabel, { marginTop: 0 }]}>Music</Text><View style={{ borderRadius: 7, paddingHorizontal: 10, paddingVertical: 4, backgroundColor: "#3a3a3a" }}><Text style={{ color: colors.text, fontSize: 10, fontWeight: "700" }}>motivation</Text></View></View><View style={styles.playlist}>{musicTracks.map((track, trackIndex) => <Pressable key={track} onPress={() => setIndex(trackIndex)} style={[styles.track, trackIndex === index && styles.trackActive]}><Text numberOfLines={1} style={[styles.trackText, trackIndex === index && styles.trackTextActive]}>{trackTitle(track)}</Text></Pressable>)}</View>
   </Pressable></Pressable></Modal>;
 }
@@ -196,6 +199,27 @@ function ProgressRing({ size, progress }: { size: number; progress: number }) {
     <Circle cx={size / 2} cy={size / 2} r={radius} stroke="#fb4f5a" strokeWidth={stroke} fill="transparent" strokeLinecap="round" strokeDasharray={circumference} strokeDashoffset={circumference * (1 - progress)} rotation="-90" origin={`${size / 2}, ${size / 2}`} />
     <Circle cx={dotX} cy={dotY} r={dotRadius} fill="#fb4f5a" stroke="#ffd1d4" strokeWidth={size < 60 ? 0.75 : 1} />
   </Svg>;
+}
+
+/** Uses the same preferences document and field names as the web media overlays. */
+function useCloudLikes(user: User | null, key: "ssc-buddy-liked-videos" | "ssc-buddy-liked-music") {
+  const [likes, setLikes] = useState<Set<string>>(() => new Set());
+  useEffect(() => {
+    if (!user) { setLikes(new Set()); return; }
+    return watchCloudPreferences(user, (preferences) => {
+      const value = preferences?.[key];
+      setLikes(new Set(Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []));
+    });
+  }, [key, user?.uid]);
+  const toggle = (track: string) => {
+    setLikes((current) => {
+      const next = new Set(current);
+      next.has(track) ? next.delete(track) : next.add(track);
+      if (user) void patchCloudPreferences(user, { [key]: [...next] });
+      return next;
+    });
+  };
+  return [likes, toggle] as const;
 }
 
 const styles = StyleSheet.create({

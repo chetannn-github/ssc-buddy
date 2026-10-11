@@ -84,6 +84,14 @@ export function watchCloudProfile(user: User, callback: (profile: Record<string,
   return onSnapshot(cloudProfileDoc(user), (snapshot) => callback(snapshot.data() ?? null));
 }
 
+const cloudPreferencesDoc = (user: User) => doc(getFirebaseFirestore(), "users", user.uid, "preferences", "current");
+export async function patchCloudPreferences(user: User, fields: Record<string, unknown>) {
+  await setDoc(cloudPreferencesDoc(user), { ...fields, updatedAt: serverTimestamp() }, { merge: true });
+}
+export function watchCloudPreferences(user: User, callback: (value: Record<string, unknown> | null) => void) {
+  return onSnapshot(cloudPreferencesDoc(user), (snapshot) => callback(snapshot.data() ?? null));
+}
+
 type CloudTask = { id: string; [key: string]: unknown };
 const taskCollection = (user: User) => collection(getFirebaseFirestore(), "users", user.uid, "tasks");
 
@@ -160,6 +168,38 @@ export async function syncTrackerSections(user: User, before: Record<string, unk
 }
 export function watchTrackerSections(user: User, callback: (sections: Record<string, unknown>) => void) {
   return onSnapshot(trackerCollection(user), (snapshot) => callback(Object.fromEntries(snapshot.docs.map((item) => [item.id, item.data().value]))));
+}
+
+/** Canonical web tracker test-log API: users/{uid}/tracker/tests.value.log. */
+export type TrackerTestLog = { id: string; date: string; createdAt: string; subjectId: string; type: string; score: number | null; total: number | null; accuracy: number | null; notes: string };
+const trackerTestsDoc = (user: User) => doc(trackerCollection(user), "tests");
+const normaliseTrackerTest = (value: unknown): TrackerTestLog | null => {
+  const test = value as Partial<TrackerTestLog>;
+  if (!test?.id || !test.date) return null;
+  return { id: String(test.id), date: String(test.date), createdAt: String(test.createdAt ?? test.date), subjectId: String(test.subjectId ?? ""), type: String(test.type ?? ""), score: test.score == null ? null : Number(test.score), total: test.total == null ? null : Number(test.total), accuracy: test.accuracy == null ? null : Number(test.accuracy), notes: String(test.notes ?? "") };
+};
+export function watchTrackerTests(user: User, callback: (tests: TrackerTestLog[]) => void) {
+  return onSnapshot(trackerTestsDoc(user), (snapshot) => {
+    const raw = snapshot.data()?.value as { log?: unknown[] } | undefined;
+    callback((Array.isArray(raw?.log) ? raw.log : []).map(normaliseTrackerTest).filter((item): item is TrackerTestLog => item !== null));
+  });
+}
+export async function appendTrackerTest(user: User, test: TrackerTestLog, subjectName?: string) {
+  const reference = trackerTestsDoc(user); const current = (await getDoc(reference)).data()?.value as Record<string, unknown> | undefined;
+  const log = Array.isArray(current?.log) ? current.log.filter((item) => (item as { id?: unknown })?.id !== test.id) : [];
+  const subjectRows = (await getDoc(doc(trackerCollection(user), "subjects"))).data()?.value;
+  const subject = Array.isArray(subjectRows) ? subjectRows.find((item) => String((item as { name?: unknown }).name ?? "").toLowerCase() === String(subjectName ?? "").toLowerCase()) as { id?: unknown } | undefined : undefined;
+  await setDoc(reference, { value: {
+    targets: current?.targets && typeof current.targets === "object" ? current.targets : {},
+    mocks: current?.mocks && typeof current.mocks === "object" ? current.mocks : { pre: { target: 0, done: 0 }, mains: { target: 0, done: 0 } },
+    ...(current ?? {}),
+    log: [...log, { ...test, subjectId: String(subject?.id ?? test.subjectId ?? "") }],
+  } }, { merge: true });
+}
+export async function deleteTrackerTest(user: User, id: string) {
+  const reference = trackerTestsDoc(user); const current = (await getDoc(reference)).data()?.value as Record<string, unknown> | undefined;
+  const log = Array.isArray(current?.log) ? current.log.filter((item) => (item as { id?: unknown })?.id !== id) : [];
+  await setDoc(reference, { value: { ...(current ?? {}), log } }, { merge: true });
 }
 
 /** Same Firestore contract as the web app: users/{uid}/sharedData/{storageKey}. */
