@@ -24,6 +24,9 @@ type Ctx = {
 
 const TrackerCtx = createContext<Ctx | null>(null);
 
+const isSameTrackerData = (left: TrackerData, right: TrackerData) =>
+  JSON.stringify(left) === JSON.stringify(right);
+
 function migrate(raw: unknown): TrackerData {
   const base = defaultData();
   const d = raw as Partial<TrackerData>;
@@ -130,10 +133,13 @@ export function TrackerProvider({ children }: { children: ReactNode }) {
   const [syncUser, setSyncUser] = useState<User | null>(null);
   const lastSynced = useRef<TrackerData>(defaultData());
   const applyingRemote = useRef(false);
+  const localChangePending = useRef(false);
 
   useEffect(() => {
     try {
-      setData(loadTrackerData());
+      const initial = loadTrackerData();
+      lastSynced.current = initial;
+      setData(initial);
     } catch {
       /* ignore corrupt storage */
     }
@@ -154,12 +160,15 @@ export function TrackerProvider({ children }: { children: ReactNode }) {
       await migrateTrackerIfEmpty(syncUser, data);
       if (disposed) return;
       stop = watchTrackerSections(syncUser, (remote) => {
-        // A Firestore snapshot is already canonical. Persisting it through the
-        // normal data effect immediately writes it back and can create a
-        // snapshot/write loop whenever a tracker tab remounts.
-        applyingRemote.current = true;
         lastSynced.current = remote;
-        setData(remote);
+        setData((current) => {
+          // Firestore also emits metadata-only snapshots. Keeping the current
+          // object for an identical payload prevents tracker tabs from being
+          // remounted for no data change.
+          if (isSameTrackerData(current, remote)) return current;
+          applyingRemote.current = true;
+          return remote;
+        });
       });
     })().catch(() => undefined);
     return () => { disposed = true; stop(); };
@@ -171,12 +180,16 @@ export function TrackerProvider({ children }: { children: ReactNode }) {
     if (!loaded.current || !ready) return;
     try {
       localStorage.setItem(TRACKER_STORAGE_KEY, JSON.stringify(data));
-      window.dispatchEvent(new Event("cbt-tracker-updated"));
       if (applyingRemote.current) {
         applyingRemote.current = false;
         return;
       }
-      if (syncUser && JSON.stringify(lastSynced.current) !== JSON.stringify(data)) {
+      // Hydration and remote snapshots must never become new local writes.
+      // Only an explicit CRUD action is allowed to broadcast and sync.
+      if (!localChangePending.current) return;
+      localChangePending.current = false;
+      window.dispatchEvent(new Event("cbt-tracker-updated"));
+      if (syncUser && !isSameTrackerData(lastSynced.current, data)) {
         const previous = lastSynced.current;
         lastSynced.current = data;
         void syncTrackerSections(syncUser, previous, data);
@@ -184,18 +197,34 @@ export function TrackerProvider({ children }: { children: ReactNode }) {
     } catch {
       /* storage full */
     }
-  }, [data, ready]);
+  }, [data, ready, syncUser]);
 
   const update = useCallback((fn: (d: TrackerData) => void) => {
     setData((prev) => {
       const next = JSON.parse(JSON.stringify(prev)) as TrackerData;
       fn(next);
+      if (isSameTrackerData(prev, next)) return prev;
+      localChangePending.current = true;
       return next;
     });
   }, []);
 
-  const replace = useCallback((d: TrackerData) => setData(migrate(d)), []);
-  const reset = useCallback(() => setData(defaultData()), []);
+  const replace = useCallback((d: TrackerData) => {
+    const next = migrate(d);
+    setData((current) => {
+      if (isSameTrackerData(current, next)) return current;
+      localChangePending.current = true;
+      return next;
+    });
+  }, []);
+  const reset = useCallback(() => {
+    const next = defaultData();
+    setData((current) => {
+      if (isSameTrackerData(current, next)) return current;
+      localChangePending.current = true;
+      return next;
+    });
+  }, []);
 
   const value = useMemo(() => ({ data, update, replace, reset }), [data, update, replace, reset]);
 

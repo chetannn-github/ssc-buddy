@@ -47,7 +47,7 @@ function TrackPage() {
               </button>
             ))}
           </nav>
-          <div key={tab} className="tracker-tab-panel mt-2">
+          <div className="tracker-tab-panel mt-2">
             {tab === "Syllabus" && <Syllabus />}
             {tab === "Revision" && <Revision />}
             {tab === "Mock Test" && <Tests />}
