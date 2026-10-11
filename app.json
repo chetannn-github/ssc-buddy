@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "1ec18170-b942-48de-85dd-50fe075addd8"
+      }
+    },
+    "android": {
+      "package": "com.csrr.tanstack_start_ts"
+    }
+  }
+}
