@@ -23,7 +23,7 @@ import {
 
 import { colors } from "../theme";
 import { reportVerticalScroll } from "../navigation/bottomNavigationVisibility";
-import { migratePracticeEntities, patchPracticeSettings, readPracticeSettings, syncPracticeEntities, watchPracticeEntities, watchPracticeSettings } from "../lib/firebase";
+import { deletePracticeEntity, migratePracticeEntities, patchPracticeSettings, readPracticeSettings, syncPracticeEntities, watchPracticeEntities, watchPracticeSettings } from "../lib/firebase";
 
 const ScrollView = (props: any) => (
   <NativeScrollView
@@ -154,8 +154,18 @@ const examAccent = "#60a5fa";
 const examAccentSurface = "#162c45";
 const examAccentDeep = "#081a31";
 const makeId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+const defaultMarking = { positive: 4, negative: 1 };
+const normaliseMarking = (value: unknown) => {
+  const candidate = value as Partial<Bank["marking"]> | null;
+  const positive = Number(candidate?.positive);
+  const negative = Number(candidate?.negative);
+  return {
+    positive: Number.isFinite(positive) && positive >= 0 ? positive : defaultMarking.positive,
+    negative: Number.isFinite(negative) && negative >= 0 ? negative : defaultMarking.negative,
+  };
+};
 const defaultBank: Bank = {
-  marking: { positive: 2, negative: 0.5 },
+  marking: defaultMarking,
   subjects: [],
 };
 
@@ -205,13 +215,15 @@ export function PracticeScreen({ user }: { user: any }) {
         const candidate = subjectsRaw ?? legacyBankRaw;
         if (candidate) {
           const parsed = JSON.parse(candidate) as Subject[] | Bank;
-          const next = Array.isArray(parsed) ? { ...bankRef.current, subjects: parsed } : parsed;
+          const next = Array.isArray(parsed)
+            ? { ...bankRef.current, subjects: parsed }
+            : { ...parsed, subjects: Array.isArray(parsed.subjects) ? parsed.subjects : [], marking: normaliseMarking(parsed.marking) };
           bankRef.current = next; setBank(next);
           await AsyncStorage.setItem(STORE, JSON.stringify(next.subjects));
           if (!subjectsRaw && legacyBankRaw) await AsyncStorage.removeItem(LEGACY_STORE);
         }
       } catch {}
-      try { if (markingRaw) { const marking = JSON.parse(markingRaw) as Bank["marking"]; bankRef.current = { ...bankRef.current, marking }; setBank(bankRef.current); } } catch {}
+      try { if (markingRaw) { const marking = normaliseMarking(JSON.parse(markingRaw)); bankRef.current = { ...bankRef.current, marking }; setBank(bankRef.current); } } catch {}
       try { const candidate = historyRaw ?? legacyHistoryRaw; if (candidate) { const next = JSON.parse(candidate) as Record[]; historyRef.current = next; setHistory(next); await AsyncStorage.setItem(HISTORY, JSON.stringify(next)); if (!historyRaw && legacyHistoryRaw) await AsyncStorage.removeItem(LEGACY_HISTORY); } } catch {}
       try { const candidate = favouritesRaw ?? legacyFavouritesRaw; if (candidate) { const next = JSON.parse(candidate) as string[]; favouritesRef.current = next; setFavourites(next); await AsyncStorage.setItem(FAVOURITES, JSON.stringify(next)); if (!favouritesRaw && legacyFavouritesRaw) await AsyncStorage.removeItem(LEGACY_FAVOURITES); } } catch {}
       setPracticeLoaded(true);
@@ -222,6 +234,7 @@ export function PracticeScreen({ user }: { user: any }) {
   }, []);
   const saveBank = (next: Bank) => {
     const previous = bankRef.current;
+    next = { ...next, marking: normaliseMarking(next.marking) };
     bankRef.current = next;
     setBank(next);
     void AsyncStorage.setItem(STORE, JSON.stringify(next.subjects));
@@ -255,12 +268,14 @@ export function PracticeScreen({ user }: { user: any }) {
       ]);
       if (stopped) return;
       const settings = await readPracticeSettings(user);
-      if (!settings) await patchPracticeSettings(user, { marking: bankRef.current.marking });
+      if (!settings?.marking || !Number.isFinite(Number((settings.marking as any)?.positive)) || !Number.isFinite(Number((settings.marking as any)?.negative))) {
+        await patchPracticeSettings(user, { marking: bankRef.current.marking });
+      }
       stops.push(
         watchPracticeEntities(user, "practiceSubjects", (items) => { const next = { ...bankRef.current, subjects: items as any }; bankRef.current = next; setBank(next); void AsyncStorage.setItem(STORE, JSON.stringify(next.subjects)); }),
         watchPracticeEntities(user, "practiceAttempts", (items) => { const next = items.map((item) => ({ ...item, minutes: Number(item.minutes ?? item.durationMinutes ?? Math.round(Number(item.timeTakenSeconds ?? 0) / 60)), key: item.key ?? item.answerKey ?? [], correct: Number(item.correct ?? 0), wrong: Number(item.wrong ?? 0), score: Number(item.score ?? 0), subject: String(item.subject ?? ""), chapter: String(item.chapter ?? ""), exercise: String(item.exercise ?? "") })) as Record[]; historyRef.current = next; setHistory(next); void AsyncStorage.setItem(HISTORY, JSON.stringify(next)); }),
         watchPracticeEntities(user, "practiceFavourites", (items) => { const next = items.map((item) => item.id); favouritesRef.current = next; setFavourites(next); void AsyncStorage.setItem(FAVOURITES, JSON.stringify(next)); }),
-        watchPracticeSettings(user, (settings) => { const marking = settings?.marking as Bank["marking"] | undefined; if (marking) { const next = { ...bankRef.current, marking }; bankRef.current = next; setBank(next); void AsyncStorage.setItem(MARKING, JSON.stringify(next)); } }),
+        watchPracticeSettings(user, (settings) => { const marking = normaliseMarking(settings?.marking); const next = { ...bankRef.current, marking }; bankRef.current = next; setBank(next); void AsyncStorage.setItem(MARKING, JSON.stringify(marking)); }),
       );
     })().catch(() => undefined);
     return () => { stopped = true; stops.forEach((stop) => stop()); };
@@ -559,6 +574,9 @@ export function PracticeScreen({ user }: { user: any }) {
         onDelete={(id) => {
           const next = history.filter((record) => record.id !== id);
           saveHistory(next);
+          // Keep the list diff sync for consistency, but also delete this
+          // attempt directly from its canonical Firestore document.
+          if (user) void deletePracticeEntity(user, "practiceAttempts", id);
         }}
         onUpdate={(updated) => {
           const next = history.map((record) => (record.id === updated.id ? updated : record));
@@ -653,22 +671,32 @@ export function PracticeScreen({ user }: { user: any }) {
       <View style={s.header}>
         <View>
           <Text style={s.eyebrow}>PRACTICE SESSION</Text>
-          <Text style={s.title}>New practice session</Text>
+          <Text style={s.title}>Practice</Text>
+          <Text style={s.headerCopy}>Build a focused test from your question bank.</Text>
         </View>
         <View style={s.headerActions}>
-          <Pressable onPress={() => setPhase("bank")} style={s.linkButton}>
+          <Pressable accessibilityLabel="Open question bank" onPress={() => setPhase("bank")} style={s.linkButton}>
             <MaterialCommunityIcons
               name="book-open-page-variant-outline"
               color={colors.muted}
               size={20}
             />
+            <Text style={s.linkButtonText}>Bank</Text>
           </Pressable>
-          <Pressable onPress={() => setPhase("history")} style={s.linkButton}>
+          <Pressable accessibilityLabel="Open previous sessions" onPress={() => setPhase("history")} style={s.linkButton}>
             <MaterialCommunityIcons name="history" color={colors.muted} size={20} />
+            <Text style={s.linkButtonText}>History</Text>
           </Pressable>
         </View>
       </View>
-      <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled" onScrollBeginDrag={() => setMenu(null)}>
+        <View style={s.setupIntro}>
+          <View style={s.setupIntroIcon}><MaterialCommunityIcons name={exercise ? "check" : "clipboard-text-outline"} size={18} color={exercise ? "#5eead4" : "#93c5fd"} /></View>
+          <View style={{ flex: 1 }}>
+            <Text style={s.setupIntroTitle}>{exercise ? "Ready to practise" : "Set up your test"}</Text>
+            <Text numberOfLines={1} style={s.setupIntroCopy}>{exercise ? `${subject?.name} · ${chapter?.name} · ${exercise.name}` : "Choose a subject, chapter, and exercise."}</Text>
+          </View>
+        </View>
         <SetupSelect
           label="Subject"
           value={subject?.name ?? "Select subject"}
@@ -2153,8 +2181,14 @@ const s = StyleSheet.create({
     letterSpacing: 1.7,
   },
   title: { color: colors.text, fontFamily: "Manrope_800ExtraBold", fontSize: 24, marginTop: 4 },
+  headerCopy: { color: colors.muted, fontFamily: "Manrope_500Medium", fontSize: 11, marginTop: 3 },
   content: { padding: 20, paddingTop: 5, gap: 12, paddingBottom: 75 },
-  linkButton: { padding: 8, borderRadius: 11, backgroundColor: "#252525" },
+  linkButton: { minHeight: 37, paddingHorizontal: 9, flexDirection: "row", alignItems: "center", gap: 5, borderRadius: 11, backgroundColor: "#252525", borderWidth: 1, borderColor: "#353535" },
+  linkButtonText: { color: "#c4c4c8", fontFamily: "Manrope_700Bold", fontSize: 10 },
+  setupIntro: { minHeight: 58, flexDirection: "row", alignItems: "center", gap: 10, padding: 11, borderRadius: 15, backgroundColor: "#171d28", borderWidth: 1, borderColor: "#27364c" },
+  setupIntroIcon: { width: 34, height: 34, alignItems: "center", justifyContent: "center", borderRadius: 11, backgroundColor: "#202d40" },
+  setupIntroTitle: { color: colors.text, fontFamily: "Manrope_800ExtraBold", fontSize: 12 },
+  setupIntroCopy: { color: "#98a5b8", fontFamily: "Manrope_500Medium", fontSize: 10, marginTop: 2 },
   label: {
     color: colors.subdued,
     fontSize: 10,

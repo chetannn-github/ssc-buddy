@@ -4,7 +4,6 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import {
-  Alert,
   Animated,
   Easing,
   Image,
@@ -36,7 +35,7 @@ import { BottomNavigation } from "./src/components/BottomNavigation";
 import { type TabKey, tabs } from "./src/navigation/tabs";
 import { ComingSoonScreen } from "./src/screens/ComingSoonScreen";
 import { AuthScreen } from "./src/screens/AuthScreen";
-import { isFirebaseConfigured, migrateTasksIfEmpty, observeSession, patchCloudProfile, readCloudProfile, syncTaskChanges, watchCloudProfile, watchTasks } from "./src/lib/firebase";
+import { isFirebaseConfigured, migrateTasksIfEmpty, observeSession, patchCloudProfile, readCloudProfile, syncTaskChanges, watchCloudProfile, watchPracticeEntities, watchTasks, watchTrackerSections, writeQuestionLearning } from "./src/lib/firebase";
 import { logout } from "./src/lib/firebase";
 import { loadProfile, normalizeProfile, saveProfile, type PracticeProfile } from "./src/lib/profile-store";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
@@ -47,11 +46,13 @@ import { ProgressScreen } from "./src/screens/ProgressScreen";
 import { reportVerticalTouch } from "./src/navigation/bottomNavigationVisibility";
 import type { User } from "firebase/auth";
 import { reportVerticalScroll, resetBottomNavigation } from "./src/navigation/bottomNavigationVisibility";
+import { getUnlockQuiz, loadUnlockQuiz } from "./src/domain/unlock-quiz";
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 type TaskRange = "today" | "week" | "month" | "3months" | "year";
 const TASK_RANGE_LABELS: Record<TaskRange, string> = { today: "Today", week: "This week", month: "This month", "3months": "Last 3 months", year: "This year" };
 const MANIFESTATION_COMPLETION_PREFIX = "ssc-buddy:manifestation-completion";
+const localDateKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 
 function manifestationDayKey() {
   const now = new Date();
@@ -117,6 +118,8 @@ export default function App() {
   const [musicOpenRequest, setMusicOpenRequest] = useState(0);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [tasksLoaded, setTasksLoaded] = useState(false);
+  const [practiceActivityDates, setPracticeActivityDates] = useState<string[]>([]);
+  const [trackerActivityDates, setTrackerActivityDates] = useState<string[]>([]);
   const [profileSettings, setProfileSettings] = useState<PracticeProfile | null>(null);
   const [appTab, setAppTab] = useState<TabKey>("tasks");
   const [trackTab, setTrackTab] = useState<"Syllabus" | "Revision" | "Mock Test">("Syllabus");
@@ -124,6 +127,7 @@ export default function App() {
   const [manifestationEntry, setManifestationEntry] = useState("");
   const [manifestationRepeats, setManifestationRepeats] = useState(0);
   const [manifestationError, setManifestationError] = useState("");
+  const learningFingerprint = useRef("");
   const [tab, setTab] = useState<"Tasks" | "Analytics" | "History">("Tasks");
   const [taskDay, setTaskDay] = useState<"today" | "tomorrow">("today");
   const [analyticsRange, setAnalyticsRange] = useState<TaskRange>("week");
@@ -141,6 +145,7 @@ export default function App() {
   const [schedule, setSchedule] = useState<"today" | "tomorrow">("today");
   const [subjectMenuOpen, setSubjectMenuOpen] = useState(false);
   const [completion, setCompletion] = useState<Task | null>(null);
+  const [deletingTask, setDeletingTask] = useState<Task | null>(null);
   const [spent, setSpent] = useState("60");
   const activeAppTab = tabs.find((item) => item.key === appTab) ?? tabs[0];
   // General is a neutral category, not seeded study content. Every other
@@ -153,7 +158,12 @@ export default function App() {
       const { renderDailyTasksWidget } = require("./src/widgets/DailyTasksWidget");
       void requestWidgetUpdate({
         widgetName: "DailyTasksWidget",
-        renderWidget: () => renderDailyTasksWidget(next),
+        renderWidget: async () => renderDailyTasksWidget(next),
+      });
+      const { renderQuickRecallWidget } = require("./src/widgets/QuickRecallWidget");
+      void requestWidgetUpdate({
+        widgetName: "QuickRecallWidget",
+        renderWidget: async () => renderQuickRecallWidget(await getUnlockQuiz()),
       });
     } catch {}
   };
@@ -192,6 +202,22 @@ export default function App() {
     setManifestationEntry("");
     setManifestationRepeats(0);
   }, [authenticated]);
+  useEffect(() => {
+    if (!user) return;
+    let disposed = false;
+    const syncLearning = async () => {
+      const state = await loadUnlockQuiz();
+      if (disposed || !state) return;
+      const payload = { stats: state.stats, lastSubject: state.subject };
+      const fingerprint = JSON.stringify(payload);
+      if (fingerprint === learningFingerprint.current) return;
+      learningFingerprint.current = fingerprint;
+      try { await writeQuestionLearning(user, payload); } catch { learningFingerprint.current = ""; }
+    };
+    void syncLearning();
+    const timer = setInterval(() => { void syncLearning(); }, 5_000);
+    return () => { disposed = true; clearInterval(timer); };
+  }, [user?.uid]);
 
   useEffect(() => {
     if (!authenticated || !user || !profileSettings) return;
@@ -266,6 +292,16 @@ export default function App() {
   // Initial migration must only run once per authenticated account.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authenticated, user?.uid, tasksLoaded]);
+  // Matches the web header streak exactly: practice attempts plus explicit
+  // tracker activity. Daily-task completion intentionally does not inflate it.
+  useEffect(() => {
+    if (!user) { setPracticeActivityDates([]); setTrackerActivityDates([]); return; }
+    const stopAttempts = watchPracticeEntities(user, "practiceAttempts", (items) => setPracticeActivityDates(items.map((item) => typeof item.date === "string" ? item.date : "").filter(Boolean)));
+    const stopTracker = watchTrackerSections(user, (sections) => setTrackerActivityDates(
+      Array.isArray(sections.activity) ? sections.activity.map((entry: any) => typeof entry?.date === "string" ? entry.date : "").filter(Boolean) : [],
+    ));
+    return () => { stopAttempts?.(); stopTracker?.(); };
+  }, [user?.uid]);
   const persist = (next: Task[]) => {
     const previous = tasks;
     setTasks(next);
@@ -307,15 +343,14 @@ export default function App() {
     return [...totals.entries()].sort((left, right) => right[1].minutes - left[1].minutes);
   }, [analyticsTasks]);
   const streak = useMemo(() => {
+    const activeDays = new Set([...practiceActivityDates, ...trackerActivityDates].map((value) => localDateKey(new Date(value))));
+    const cursor = new Date();
+    cursor.setHours(0, 0, 0, 0);
+    if (!activeDays.has(localDateKey(cursor))) cursor.setDate(cursor.getDate() - 1);
     let days = 0;
-    for (let i = 0; ; i += 1) {
-      const date = new Date();
-      date.setDate(date.getDate() - i);
-      if (tasks.some((task) => task.date === dateKey(date) && task.completed)) days += 1;
-      else break;
-    }
+    while (activeDays.has(localDateKey(cursor))) { days += 1; cursor.setDate(cursor.getDate() - 1); }
     return days;
-  }, [tasks]);
+  }, [practiceActivityDates, trackerActivityDates]);
   const highest = useMemo(
     () =>
       tasksInLastDays(tasks, 365)
@@ -403,20 +438,17 @@ export default function App() {
           : task,
       ),
     );
-  const remove = (id: string) =>
-    Alert.alert("Delete task?", "This task will be removed permanently.", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: () => persist(tasks.filter((task) => task.id !== id)),
-      },
-    ]);
+  const remove = (id: string) => setDeletingTask(tasks.find((task) => task.id === id) ?? null);
+  const confirmDelete = () => {
+    if (!deletingTask) return;
+    persist(tasks.filter((task) => task.id !== deletingTask.id));
+    setDeletingTask(null);
+  };
 
   if (showSplash || !authReady) {
     return (
       <SafeAreaProvider>
-        <StatusBar style="light" />
+        <StatusBar hidden />
         <SplashScreen />
       </SafeAreaProvider>
     );
@@ -425,7 +457,7 @@ export default function App() {
   if (!authenticated) {
     return (
       <SafeAreaProvider>
-        <StatusBar style="light" />
+        <StatusBar hidden />
         <AuthScreen onAuthenticated={() => setAuthenticated(true)} />
       </SafeAreaProvider>
     );
@@ -434,7 +466,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.safe} edges={["top", "left", "right"]} onTouchStart={() => resetBottomNavigation()}>
-      <StatusBar style="light" />
+      <StatusBar hidden />
       {appTab === "profile" ? (
         <ProfileScreen
           user={user}
@@ -466,6 +498,10 @@ export default function App() {
           <Text style={styles.headerCopy}>Plan, track, and review.</Text>
         </View>
         <View style={styles.headerActions}>
+          <View accessibilityLabel={`Practice streak: ${streak} days`} style={[styles.streakPill, streak > 0 && styles.streakPillActive]}>
+            <MaterialCommunityIcons name="fire" size={17} color={streak > 0 ? "#fcd34d" : "#a1a1aa"} />
+            <Text style={[styles.streakText, streak > 0 && styles.streakTextActive]}>{streak}</Text>
+          </View>
           <Pressable style={styles.add} onPress={openNew}>
             <Text style={styles.addText}>＋ Add task</Text>
           </Pressable>
@@ -486,7 +522,10 @@ export default function App() {
         {tab === "Tasks" && (
           <>
             <View style={styles.hero}>
-              <Text style={styles.date}>{taskDay === "today" ? "Today’s tasks" : "Tomorrow’s tasks"}</Text>
+              <View style={styles.heroHeading}>
+                <Text style={styles.date}>{taskDay === "today" ? "Today’s tasks" : "Tomorrow’s tasks"}</Text>
+                {(tomorrowTaskCount > 0 || taskDay === "tomorrow") && <Pressable style={styles.dayToggle} onPress={() => setTaskDay((current) => current === "today" ? "tomorrow" : "today")}><Text style={styles.dayToggleText}>{taskDay === "today" ? `Tomorrow (${tomorrowTaskCount})` : "Today"}</Text><MaterialCommunityIcons name="chevron-right" size={14} color="#b4b4b8" /></Pressable>}
+              </View>
               <View style={styles.progressRow}>
                 <CompletionRing percent={todaySummary.percent} />
                 <View style={styles.statColumn}>
@@ -498,12 +537,7 @@ export default function App() {
                   <Text style={styles.stat}>{formatMinutes(todaySummary.minutes)}</Text>
                 </View>
               </View>
-              <View style={styles.bar}>
-                <View style={[styles.barFill, { width: `${todaySummary.percent}%` }]} />
-              </View>
-              <Text style={styles.muted}>{streak} day consistency streak</Text>
             </View>
-            {(tomorrowTaskCount > 0 || taskDay === "tomorrow") && <Pressable style={styles.dayToggle} onPress={() => setTaskDay((current) => current === "today" ? "tomorrow" : "today")}><Text style={styles.dayToggleText}>{taskDay === "today" ? `Tomorrow (${tomorrowTaskCount})` : "Today"}</Text></Pressable>}
             <Text style={styles.sectionTitle}>{taskDay === "today" ? "TODAY'S TASKS" : "TOMORROW'S TASKS"}</Text>
             {todayTasks.length === 0 ? (
                 <Empty onPress={openNew} />
@@ -533,7 +567,7 @@ export default function App() {
             <View style={styles.analyticsFilters}><TaskDropdown label={TASK_RANGE_LABELS[analyticsRange]} open={analyticsRangeOpen} onToggle={() => { setAnalyticsRangeOpen((value) => !value); setAnalyticsSubjectOpen(false); }} options={(["today", "week", "month", "3months", "year"] as TaskRange[]).map((value) => ({ value, label: TASK_RANGE_LABELS[value] }))} onSelect={(value) => { setAnalyticsRange(value as TaskRange); setAnalyticsRangeOpen(false); }} /><TaskDropdown label={analyticsSubject} open={analyticsSubjectOpen} onToggle={() => { setAnalyticsSubjectOpen((value) => !value); setAnalyticsRangeOpen(false); }} options={["All subjects", ...subjectOptions.filter((item) => item !== "General")].map((value) => ({ value, label: value }))} onSelect={(value) => { setAnalyticsSubject(value); setAnalyticsSubjectOpen(false); }} /></View>
             <View style={styles.metricGrid}>
               <Metric label="Time spent" value={formatMinutes(analyticsSummary.minutes)} note={TASK_RANGE_LABELS[analyticsRange]} />
-              <Metric label="Completed / pending" value={`${analyticsSummary.done} / ${analyticsSummary.total - analyticsSummary.done}`} note={`${analyticsSummary.total} scheduled · ${analyticsSummary.percent}% completion`} />
+              <Metric label="Completed / pending" value={`${analyticsSummary.done} / ${analyticsSummary.total - analyticsSummary.done}`} note={`${analyticsSummary.percent}% completion`} />
             </View>
             <Breakdown title="Subject-wise study time" items={subjectBreakdown} tone="mint" />
             <Breakdown title="Task-type breakdown" items={typeBreakdown} tone="blue" />
@@ -633,6 +667,19 @@ export default function App() {
             </View>
           </View>
         </View>
+      </Modal>
+      <Modal transparent visible={deletingTask !== null} animationType="fade" onRequestClose={() => setDeletingTask(null)}>
+        <Pressable style={styles.deleteBackdrop} onPress={() => setDeletingTask(null)}>
+          <Pressable style={styles.deleteDialog} onPress={() => undefined}>
+            <View style={styles.deleteIcon}><MaterialCommunityIcons name="trash-can-outline" size={21} color="#fda4af" /></View>
+            <Text style={styles.deleteTitle}>Delete task?</Text>
+            <Text numberOfLines={2} style={styles.deleteCopy}>“{deletingTask?.name}” will be permanently removed.</Text>
+            <View style={styles.deleteActions}>
+              <Pressable style={styles.deleteCancel} onPress={() => setDeletingTask(null)}><Text style={styles.deleteCancelText}>Keep task</Text></Pressable>
+              <Pressable style={styles.deleteConfirm} onPress={confirmDelete}><Text style={styles.deleteConfirmText}>Delete</Text></Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
       </Modal>
         </>
       ) : (
@@ -780,6 +827,10 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   headerActions: { flexDirection: "row", alignItems: "center", gap: 9 },
+  streakPill: { minWidth: 42, height: 40, paddingHorizontal: 10, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, borderRadius: 20, backgroundColor: "#262626", borderWidth: 1, borderColor: "#333333" },
+  streakPillActive: { backgroundColor: "rgba(251, 191, 36, .14)", borderColor: "rgba(251, 191, 36, .22)" },
+  streakText: { color: "#d4d4d8", fontSize: 13, fontWeight: "800" },
+  streakTextActive: { color: "#fef3c7" },
   eyebrow: { color: "#818cf8", fontSize: 10, fontWeight: "700", letterSpacing: 2 },
   title: { color: "#fafafa", fontSize: 25, fontWeight: "700", marginTop: 3 },
   headerCopy: { color: "#a1a1aa", fontSize: 12, marginTop: 3 },
@@ -804,6 +855,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#303030",
   },
+  heroHeading: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
   date: { color: "#fafafa", fontSize: 20, fontWeight: "700" },
   progressRow: { flexDirection: "row", alignItems: "center", gap: 22, marginVertical: 20 },
   ring: {
@@ -819,8 +871,6 @@ const styles = StyleSheet.create({
   statColumn: { gap: 4 },
   statLabel: { color: "#a1a1aa", fontSize: 10, letterSpacing: 1.4 },
   stat: { color: "#fafafa", fontSize: 23, fontWeight: "700", marginBottom: 6 },
-  bar: { height: 8, backgroundColor: "#333", borderRadius: 6, overflow: "hidden" },
-  barFill: { height: "100%", backgroundColor: "#5eead4", borderRadius: 6 },
   muted: { color: "#a1a1aa", fontSize: 13, marginTop: 9 },
   sectionTitle: {
     color: "#a1a1aa",
@@ -885,7 +935,7 @@ const styles = StyleSheet.create({
   rangeButtonActive: { backgroundColor: "#303030" },
   rangeText: { color: "#71717a", fontSize: 11, fontWeight: "700" },
   rangeTextActive: { color: "#5eead4" },
-  dayToggle: { alignSelf: "flex-start", borderRadius: 11, borderWidth: 1, borderColor: "#414141", paddingHorizontal: 12, paddingVertical: 8, backgroundColor: "#1b1b1b" },
+  dayToggle: { flexDirection: "row", alignItems: "center", gap: 2, borderRadius: 11, borderWidth: 1, borderColor: "#414141", paddingLeft: 10, paddingRight: 7, paddingVertical: 7, backgroundColor: "#242424" },
   dayToggleText: { color: "#e4e4e7", fontSize: 12, fontWeight: "700" },
   subjectFilters: { gap: 7, paddingVertical: 2 },
   subjectFilter: { borderRadius: 11, borderWidth: 1, borderColor: "#3d3d3d", paddingHorizontal: 11, paddingVertical: 8, backgroundColor: "#1b1b1b" },
@@ -1037,6 +1087,16 @@ const styles = StyleSheet.create({
     backgroundColor: "#5eead4",
   },
   primaryText: { color: "#042f2e", fontWeight: "800" },
+  deleteBackdrop: { flex: 1, alignItems: "center", justifyContent: "center", padding: 26, backgroundColor: "rgba(0,0,0,.76)" },
+  deleteDialog: { width: "100%", maxWidth: 370, borderRadius: 22, padding: 21, backgroundColor: "#1c1c1c", borderWidth: 1, borderColor: "#3a3a3a" },
+  deleteIcon: { width: 43, height: 43, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(244,63,94,.14)", borderWidth: 1, borderColor: "rgba(253,164,175,.16)" },
+  deleteTitle: { color: "#fafafa", fontSize: 19, fontWeight: "800", marginTop: 15 },
+  deleteCopy: { color: "#a1a1aa", fontSize: 13, lineHeight: 19, marginTop: 6 },
+  deleteActions: { flexDirection: "row", gap: 9, marginTop: 21 },
+  deleteCancel: { flex: 1, minHeight: 45, alignItems: "center", justifyContent: "center", borderRadius: 13, backgroundColor: "#292929", borderWidth: 1, borderColor: "#414141" },
+  deleteCancelText: { color: "#f4f4f5", fontSize: 13, fontWeight: "800" },
+  deleteConfirm: { flex: 1, minHeight: 45, alignItems: "center", justifyContent: "center", borderRadius: 13, backgroundColor: "#e11d48" },
+  deleteConfirmText: { color: "#fff1f2", fontSize: 13, fontWeight: "800" },
   manifestationBackdrop: { flex: 1, justifyContent: "center", padding: 20, backgroundColor: "#000000" },
   manifestationDialog: { borderRadius: 22, padding: 21, backgroundColor: "#1d1d1d", borderWidth: 1, borderColor: "#383838" },
   manifestationIcon: { width: 49, height: 49, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: "#203040" },

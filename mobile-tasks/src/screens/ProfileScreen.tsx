@@ -28,6 +28,28 @@ const withinRange = (date: string, range: Range) => {
 };
 const localDayKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 
+// Keep these exact filenames aligned with public/avatars/manifest.json in the
+// web app. `avatar` is the filename in the shared cloud profile document.
+const avatarAssets: Record<string, number> = {
+  "1.jpg": require("../../assets/avatars/1.jpg"),
+  "32.jpg": require("../../assets/avatars/32.jpg"),
+  "Motivational Quotes.jpg": require("../../assets/avatars/Motivational Quotes.jpg"),
+  "babe get up i believe in you_.jpg": require("../../assets/avatars/babe get up i believe in you_.jpg"),
+  "download (1).jpg": require("../../assets/avatars/download (1).jpg"),
+  "download (2).jpg": require("../../assets/avatars/download (2).jpg"),
+  "download (3).jpg": require("../../assets/avatars/download (3).jpg"),
+  "download (4).jpg": require("../../assets/avatars/download (4).jpg"),
+  "download (5).jpg": require("../../assets/avatars/download (5).jpg"),
+  "download.jpg": require("../../assets/avatars/download.jpg"),
+  "pain is  fuel 🦅🟥.jpg": require("../../assets/avatars/pain is  fuel 🦅🟥.jpg"),
+  "💪🏻.jpg": require("../../assets/avatars/💪🏻.jpg"),
+};
+const avatarFiles = Object.keys(avatarAssets);
+const defaultAvatarFor = (name: string) => {
+  const hash = Array.from(name).reduce((total, character) => total + character.charCodeAt(0), 0);
+  return avatarFiles[hash % avatarFiles.length] ?? avatarFiles[0];
+};
+
 type Props = {
   user: User | null;
   tasks: Task[];
@@ -48,7 +70,7 @@ export function ProfileScreen({ user, tasks, profileSettings, onProfileSaved, on
   const [editing, setEditing] = useState(false);
   const [confirmLogout, setConfirmLogout] = useState(false);
   const name = profileReady ? (profileName.trim() || user?.displayName?.trim() || user?.email?.split("@")[0] || "Student") : "";
-  const [avatarIndex, setAvatarIndex] = useState(0);
+  const [avatarFile, setAvatarFile] = useState(() => profileSettings?.avatar && avatarAssets[profileSettings.avatar] ? profileSettings.avatar : defaultAvatarFor(profileSettings?.name || user?.displayName || user?.email || "Student"));
   const [viewingAvatar, setViewingAvatar] = useState(false);
   const [spin] = useState(() => new Animated.Value(0));
   const [loggingMockTest, setLoggingMockTest] = useState(false);
@@ -57,16 +79,21 @@ export function ProfileScreen({ user, tasks, profileSettings, onProfileSaved, on
   const [practiceRecords, setPracticeRecords] = useState<Array<{ id: string; date: string; subject?: string; chapter?: string }>>([]);
   const [range, setRange] = useState<Range>("today");
   const [rangeOpen, setRangeOpen] = useState(false);
-  const avatarImages = [
-    require("../../assets/avatar-1.jpg"),
-    require("../../assets/avatar-2.jpg"),
-    require("../../assets/avatar-3.jpg"),
-  ];
+  const avatarImage = avatarAssets[avatarFile] ?? avatarAssets[avatarFiles[0]];
   const rotate = spin.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
   const changeAvatar = () => {
     spin.setValue(0);
     Animated.timing(spin, { toValue: 1, duration: 560, useNativeDriver: true }).start();
-    setAvatarIndex((current) => (current + 1) % avatarImages.length);
+    const options = avatarFiles.filter((file) => file !== avatarFile);
+    const nextAvatar = options[Math.floor(Math.random() * options.length)] ?? avatarFile;
+    setAvatarFile(nextAvatar);
+    onProfileSaved({
+      name: profileName,
+      examName,
+      questionGoal: Number(goal) || 100,
+      manifestation,
+      avatar: nextAvatar,
+    });
   };
   useEffect(() => {
     if (!profileSettings) setProfileReady(true);
@@ -87,7 +114,9 @@ export function ProfileScreen({ user, tasks, profileSettings, onProfileSaved, on
   }, [user?.uid]);
   useEffect(() => {
     if (!profileSettings) return;
-    setProfileName(profileSettings.name); setExamName(profileSettings.examName ?? ""); setGoal(String(profileSettings.questionGoal)); setManifestation(profileSettings.manifestation ?? ""); setProfileReady(true);
+    setProfileName(profileSettings.name); setExamName(profileSettings.examName ?? ""); setGoal(String(profileSettings.questionGoal)); setManifestation(profileSettings.manifestation ?? "");
+    setAvatarFile(profileSettings.avatar && avatarAssets[profileSettings.avatar] ? profileSettings.avatar : defaultAvatarFor(profileSettings.name || user?.displayName || user?.email || "Student"));
+    setProfileReady(true);
   }, [profileSettings]);
   const saveMockTest = (entry: MockTestLog) => {
     if (!user) return;
@@ -108,7 +137,7 @@ export function ProfileScreen({ user, tasks, profileSettings, onProfileSaved, on
   return (
     <ScrollView style={styles.page} contentContainerStyle={[styles.content, { paddingTop: 16 }]} onScrollBeginDrag={() => setRangeOpen(false)}>
       <View style={styles.profileRow}>
-        <View style={[styles.avatar, { width: 70, height: 70, borderRadius: 35 }]}><Pressable onPress={() => setViewingAvatar(true)}><Image source={avatarImages[avatarIndex]} style={[styles.avatarImage, { borderRadius: 35 }]} /></Pressable><Pressable style={[styles.avatarBadge, { width: 25, height: 25, borderRadius: 13 }]} accessibilityLabel="Change profile image" onPress={changeAvatar}><Animated.View style={{ transform: [{ rotate }] }}><MaterialCommunityIcons name="sync" size={12} color={colors.muted} /></Animated.View></Pressable></View>
+        <View style={[styles.avatar, { width: 70, height: 70, borderRadius: 35 }]}><Pressable onPress={() => setViewingAvatar(true)}><Image source={avatarImage} style={[styles.avatarImage, { borderRadius: 35 }]} /></Pressable><Pressable style={[styles.avatarBadge, { width: 25, height: 25, borderRadius: 13 }]} accessibilityLabel="Change profile image" onPress={changeAvatar}><Animated.View style={{ transform: [{ rotate }] }}><MaterialCommunityIcons name="sync" size={12} color={colors.muted} /></Animated.View></Pressable></View>
         <View style={[styles.identity, { marginTop: 9 }]}>
           <Text style={styles.exam}>{examName}</Text>
           <View style={styles.nameLine}><Text style={styles.name} numberOfLines={1}>{name}</Text><Pressable accessibilityLabel="Edit profile" hitSlop={10} onPressIn={() => setEditing(true)}><MaterialCommunityIcons name="pencil-outline" size={17} color={colors.muted} /></Pressable><Pressable accessibilityLabel="Log out" hitSlop={10} onPress={() => setConfirmLogout(true)}><MaterialCommunityIcons name="logout" size={17} color={colors.muted} /></Pressable></View>
@@ -145,9 +174,9 @@ export function ProfileScreen({ user, tasks, profileSettings, onProfileSaved, on
       <ActivityHeatmap user={user} mockTests={mockTests} practiceRecords={practiceRecords} />
       <StudyTrackerOverview tasks={tasks} mockTests={mockTests} onOpen={onOpenTracker} />
       <MockTestLogDialog visible={loggingMockTest} subjects={syllabusSubjects} onClose={() => setLoggingMockTest(false)} onSave={saveMockTest} />
-      <Modal transparent visible={viewingAvatar} animationType="fade" onRequestClose={() => setViewingAvatar(false)}><Pressable style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 28, backgroundColor: "rgba(0,0,0,.88)" }} onPress={() => setViewingAvatar(false)}><Pressable style={{ width: "100%", aspectRatio: 1, maxWidth: 330, overflow: "hidden", borderRadius: 24, borderWidth: 1, borderColor: "#3f3f46", backgroundColor: "#1c1c1c" }} onPress={() => undefined}><Image source={avatarImages[avatarIndex]} style={{ width: "100%", height: "100%" }} /></Pressable></Pressable></Modal>
+      <Modal transparent visible={viewingAvatar} animationType="fade" onRequestClose={() => setViewingAvatar(false)}><Pressable style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 28, backgroundColor: "rgba(0,0,0,.88)" }} onPress={() => setViewingAvatar(false)}><Pressable style={{ width: "100%", aspectRatio: 1, maxWidth: 330, overflow: "hidden", borderRadius: 24, borderWidth: 1, borderColor: "#3f3f46", backgroundColor: "#1c1c1c" }} onPress={() => undefined}><Image source={avatarImage} style={{ width: "100%", height: "100%" }} /></Pressable></Pressable></Modal>
       <Modal transparent visible={confirmLogout} animationType="fade" onRequestClose={() => setConfirmLogout(false)}><Pressable style={styles.modalBackdrop} onPress={() => setConfirmLogout(false)}><Pressable style={styles.confirmDialog} onPress={() => undefined}><View style={styles.confirmHeader}><View style={styles.confirmIcon}><MaterialCommunityIcons name="logout" size={18} color="#fca5a5" /></View><Pressable hitSlop={10} onPress={() => setConfirmLogout(false)}><MaterialCommunityIcons name="close" size={20} color={colors.subdued} /></Pressable></View><Text style={styles.confirmTitle}>Sign out?</Text><Text style={styles.confirmCopy}>You can sign back in anytime.</Text><View style={styles.confirmActions}><Pressable style={styles.cancelButton} onPress={() => setConfirmLogout(false)}><Text style={styles.cancelButtonText}>Cancel</Text></Pressable><Pressable style={styles.logoutConfirm} onPress={onLogout}><Text style={styles.logoutConfirmText}>Sign out</Text></Pressable></View></Pressable></Pressable></Modal>
-      <Modal transparent visible={editing} animationType="fade" onRequestClose={() => setEditing(false)}><Pressable style={styles.modalBackdrop} onPress={() => setEditing(false)}><Pressable style={styles.editDialog} onPress={() => undefined}><Text style={styles.editTitle}>Setup your profile</Text><EditField label="Your name" value={profileName} onChange={setProfileName} /><EditField label="Question goal" value={goal} onChange={(value) => setGoal(value.replace(/\D/g, ""))} numeric /><EditField label="Exam name" value={examName} onChange={setExamName} /><Text style={styles.editLabel}>DAILY MANIFESTATION (OPTIONAL)</Text><TextInput multiline value={manifestation} onChangeText={(value) => setManifestation(value.toUpperCase())} placeholder="Write the sentence you want to type daily" placeholderTextColor={colors.subdued} style={styles.manifestationInput} /><View style={styles.editActions}><Pressable onPress={() => setEditing(false)}><Text style={styles.cancel}>Cancel</Text></Pressable><Pressable style={styles.saveProfile} onPress={() => { onProfileSaved({ name: profileName, examName, questionGoal: Number(goal) || 100, manifestation }); setEditing(false); }}><Text style={styles.saveProfileText}>Save profile</Text></Pressable></View></Pressable></Pressable></Modal>
+      <Modal transparent visible={editing} animationType="fade" onRequestClose={() => setEditing(false)}><Pressable style={styles.modalBackdrop} onPress={() => setEditing(false)}><Pressable style={styles.editDialog} onPress={() => undefined}><Text style={styles.editTitle}>Setup your profile</Text><EditField label="Your name" value={profileName} onChange={setProfileName} /><EditField label="Question goal" value={goal} onChange={(value) => setGoal(value.replace(/\D/g, ""))} numeric /><EditField label="Exam name" value={examName} onChange={setExamName} /><Text style={styles.editLabel}>DAILY MANIFESTATION (OPTIONAL)</Text><TextInput multiline value={manifestation} onChangeText={(value) => setManifestation(value.toUpperCase())} placeholder="Write the sentence you want to type daily" placeholderTextColor={colors.subdued} style={styles.manifestationInput} /><View style={styles.editActions}><Pressable onPress={() => setEditing(false)}><Text style={styles.cancel}>Cancel</Text></Pressable><Pressable style={styles.saveProfile} onPress={() => { onProfileSaved({ name: profileName, examName, questionGoal: Number(goal) || 100, manifestation, avatar: avatarFile }); setEditing(false); }}><Text style={styles.saveProfileText}>Save profile</Text></Pressable></View></Pressable></Pressable></Modal>
     </ScrollView>
   );
 }

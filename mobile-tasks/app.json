@@ -6,6 +6,9 @@
     "icon": "./assets/auth.jpg",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
+    "androidStatusBar": {
+      "hidden": true
+    },
     "android": {
       "package": "com.sscbuddy.tasks",
       "permissions": [
@@ -34,6 +37,7 @@
           "enableBackgroundPlayback": true
         }
       ],
+      "./plugins/with-unlock-quiz-receiver",
       [
         "react-native-android-widget",
         {
@@ -42,10 +46,21 @@
               "name": "DailyTasksWidget",
               "label": "Daily tasks",
               "description": "Today's SSC Buddy tasks and completion progress",
-              "minWidth": "180dp",
-              "minHeight": "110dp",
+              "minWidth": "360dp",
+              "minHeight": "300dp",
               "targetCellWidth": 4,
-              "targetCellHeight": 2,
+              "targetCellHeight": 5,
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000
+            },
+            {
+              "name": "QuickRecallWidget",
+              "label": "Quick recall",
+              "description": "Three focused SSC questions when you unlock your phone",
+              "minWidth": "260dp",
+              "minHeight": "250dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 4,
               "resizeMode": "horizontal|vertical",
               "updatePeriodMillis": 1800000
             }

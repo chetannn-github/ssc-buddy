@@ -1,3 +1,4 @@
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { formatMinutes, type Task } from "../domain/tasks";
@@ -41,9 +42,9 @@ export function TaskRow({ task, onDone, onReopen, onEdit, onDelete, compact = fa
           </Text>
         </Pressable>
         {!compact ? (
-          <Pressable accessibilityLabel="Delete task" onPress={onDelete} hitSlop={10}>
-            <Text style={styles.delete}>×</Text>
-          </Pressable>
+          <View style={styles.actions}>
+            <Pressable accessibilityLabel="Delete task" onPress={onDelete} hitSlop={9} style={styles.iconAction}><MaterialCommunityIcons name="trash-can-outline" size={17} color={colors.muted} /></Pressable>
+          </View>
         ) : null}
       </View>
     </View>
@@ -52,22 +53,24 @@ export function TaskRow({ task, onDone, onReopen, onEdit, onDelete, compact = fa
 
 const styles = StyleSheet.create({
   task: {
-    minHeight: 74,
+    minHeight: 56,
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    borderRadius: 17,
-    padding: 14,
-    backgroundColor: colors.surface,
+    gap: 10,
+    borderRadius: 13,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: 6,
+    backgroundColor: "#1a1a1a",
     borderWidth: 1,
     borderColor: colors.border,
   },
   completed: { backgroundColor: colors.completeSurface, borderColor: colors.completeBorder },
-  compact: { marginTop: 9, minHeight: 58 },
+  compact: { marginTop: 9, minHeight: 52, marginBottom: 0 },
   check: {
-    width: 29,
-    height: 29,
-    borderRadius: 15,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.subdued,
     alignItems: "center",
@@ -78,8 +81,9 @@ const styles = StyleSheet.create({
   checkIncompleteHistory: { borderColor: "#70373c", backgroundColor: "#2b1d20" },
   incompleteHistoryText: { color: "#ff8a95", fontSize: 16 },
   main: { flex: 1 },
-  name: { color: colors.text, fontSize: 15, fontWeight: "700" },
-  meta: { color: colors.muted, fontSize: 12, marginTop: 4 },
+  name: { color: colors.text, fontSize: 13, fontWeight: "700" },
+  meta: { color: colors.muted, fontSize: 10, marginTop: 2 },
   strike: { textDecorationLine: "line-through", color: colors.muted },
-  delete: { fontSize: 27, color: colors.muted, paddingHorizontal: 4 },
+  actions: { flexDirection: "row", alignItems: "center", gap: 2 },
+  iconAction: { width: 27, height: 27, alignItems: "center", justifyContent: "center", borderRadius: 9 },
 });

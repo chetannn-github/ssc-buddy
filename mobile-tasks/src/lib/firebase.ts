@@ -162,6 +162,21 @@ export async function syncPracticeEntities(user: User, name: string, before: Pra
   }
 }
 
+/** Deletes one canonical practice entity without relying on a list snapshot. */
+export async function deletePracticeEntity(user: User, name: string, id: string) {
+  const queueKey = `${user.uid}:${name}`;
+  const previousJob = practiceWriteQueues.get(queueKey) ?? Promise.resolve();
+  const job = previousJob.catch(() => undefined).then(() =>
+    deleteDoc(doc(practiceCollection(user, name), id)),
+  );
+  practiceWriteQueues.set(queueKey, job);
+  try {
+    await job;
+  } finally {
+    if (practiceWriteQueues.get(queueKey) === job) practiceWriteQueues.delete(queueKey);
+  }
+}
+
 export function watchPracticeEntities(user: User, name: string, callback: (entities: PracticeEntity[]) => void) {
   return onSnapshot(practiceCollection(user, name), (snapshot) => callback(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as PracticeEntity))));
 }
@@ -252,6 +267,15 @@ export function watchSharedData(user: User, key: string, callback: (value: strin
     const value = snapshot.data()?.value;
     callback(typeof value === "string" ? value : null);
   });
+}
+
+/** Dedicated per-question learning stats; separate from question-bank content and attempts. */
+const questionLearningDoc = (user: User) => doc(getFirebaseFirestore(), "users", user.uid, "questionLearning", "current");
+export async function writeQuestionLearning(user: User, value: Record<string, unknown>) {
+  await setDoc(questionLearningDoc(user), { ...value, updatedAt: serverTimestamp() }, { merge: true });
+}
+export async function readQuestionLearning(user: User) {
+  return (await getDoc(questionLearningDoc(user))).data() ?? null;
 }
 
 export function observeSession(callback: (user: User | null) => void) {

@@ -109,7 +109,12 @@ function write(key: string, value: unknown) {
 export const DEFAULT_MARKING: MarkingScheme = { positive: 4, negative: 1 };
 
 export function loadMarking(): MarkingScheme | null {
-  return read<MarkingScheme | null>(MARKING_KEY, null);
+  const value = read<MarkingScheme | null>(MARKING_KEY, null);
+  if (!value) return null;
+  const positive = Number(value.positive);
+  const negative = Number(value.negative);
+  if (!Number.isFinite(positive) || positive < 0 || !Number.isFinite(negative) || negative < 0) return null;
+  return { positive, negative };
 }
 
 export function saveMarking(m: MarkingScheme) {
