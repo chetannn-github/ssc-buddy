@@ -1,4 +1,4 @@
-import { collection, doc, getDocs, onSnapshot, setDoc, writeBatch, type Unsubscribe } from "firebase/firestore";
+import { collection, doc, getDocs, setDoc, writeBatch } from "firebase/firestore";
 import type { User } from "firebase/auth";
 import { getFirebaseFirestore } from "@/lib/firebase-sync";
 import { defaultData, type TrackerData } from "@/lib/tracker";
@@ -26,18 +26,18 @@ export async function syncTrackerSections(user: User, before: TrackerData, next:
   ));
 }
 
-export function watchTrackerSections(user: User, callback: (data: TrackerData) => void): Unsubscribe {
-  return onSnapshot(collectionFor(user), (snapshot) => {
-    const values = Object.fromEntries(snapshot.docs.map((item) => [item.id, item.data()["value"]])) as Partial<Record<Section, unknown>>;
-    const base = defaultData();
-    callback({
-      ...base,
-      ...(values.meta && typeof values.meta === "object" ? { meta: { ...base.meta, ...(values.meta as TrackerData["meta"]) } } : {}),
-      ...(Array.isArray(values.subjects) ? { subjects: values.subjects as TrackerData["subjects"] } : {}),
-      ...(values.revision && typeof values.revision === "object" ? { revision: values.revision as TrackerData["revision"] } : {}),
-      ...(values.tests && typeof values.tests === "object" ? { tests: values.tests as TrackerData["tests"] } : {}),
-      ...(Array.isArray(values.activity) ? { activity: values.activity as TrackerData["activity"] } : {}),
-      ...(Array.isArray(values.pinned) ? { pinnedChapterIds: values.pinned as string[] } : {}),
-    });
-  });
+/** One-time Firestore read used during page load; no live subscription is kept open. */
+export async function readTrackerSections(user: User): Promise<TrackerData> {
+  const snapshot = await getDocs(collectionFor(user));
+  const values = Object.fromEntries(snapshot.docs.map((item) => [item.id, item.data()["value"]])) as Partial<Record<Section, unknown>>;
+  const base = defaultData();
+  return {
+    ...base,
+    ...(values.meta && typeof values.meta === "object" ? { meta: { ...base.meta, ...(values.meta as TrackerData["meta"]) } } : {}),
+    ...(Array.isArray(values.subjects) ? { subjects: values.subjects as TrackerData["subjects"] } : {}),
+    ...(values.revision && typeof values.revision === "object" ? { revision: values.revision as TrackerData["revision"] } : {}),
+    ...(values.tests && typeof values.tests === "object" ? { tests: values.tests as TrackerData["tests"] } : {}),
+    ...(Array.isArray(values.activity) ? { activity: values.activity as TrackerData["activity"] } : {}),
+    ...(Array.isArray(values.pinned) ? { pinnedChapterIds: values.pinned as string[] } : {}),
+  };
 }

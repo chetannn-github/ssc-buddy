@@ -11,9 +11,9 @@ import {
   YAxis,
 } from "recharts";
 import { AppShell } from "@/components/layout/AppShell";
-import { loadTrackerData } from "@/lib/tracker-store";
+import { loadTrackerData, saveTrackerData } from "@/lib/tracker-store";
 import type { TestEntry, TrackerData } from "@/lib/tracker";
-import { watchTrackerSections } from "@/lib/tracker-sync";
+import { readTrackerSections } from "@/lib/tracker-sync";
 import { useAuthUser } from "@/lib/auth-context";
 
 type TestCategory = "Sectional" | "Pre" | "Mains";
@@ -212,11 +212,13 @@ function Progress() {
     };
   }, []);
 
-  // Progress is reachable without opening /track. Subscribe here as well so
-  // test logs made in the mobile app are rendered from the same tracker docs.
+  // Hydrate once on opening the page. A refresh intentionally fetches newer cloud data.
   useEffect(() => {
     if (!user) return;
-    return watchTrackerSections(user, setTracker);
+    void readTrackerSections(user).then((remote) => {
+      setTracker(remote);
+      saveTrackerData(remote);
+    }).catch(() => undefined);
   }, [user]);
 
   const tests = useMemo(() => {

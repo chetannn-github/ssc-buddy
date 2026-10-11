@@ -1,0 +1,164 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createRoot } from "react-dom/client";
+import { BrainCircuit, Check, ChevronDown, CloudOff, Eye, EyeOff, Flame, LoaderCircle, LogOut, Plus, Trash2, X } from "lucide-react";
+import type { User } from "firebase/auth";
+import { TASK_TYPES, type DailyTask, type TaskType, createAccount, firebaseConfigured, loadQuickRecallSeed, logout, makeTaskId, observeAuth, removeTask, saveTask, signIn, signInGoogle, todayKey, watchStreakActivity, watchTasks } from "./lib/firebase";
+import { createQuickRecallSession, type QuickRecallSession } from "./lib/quick-recall";
+import { QuickRecallPanel } from "./components/QuickRecallPanel";
+import authImage from "./assets/auth.jpg";
+import googleImage from "./assets/google.png";
+import "./styles.css";
+
+type Draft = Pick<DailyTask, "name" | "subject" | "type" | "date">;
+const blankDraft = (): Draft => ({ name: "", subject: "Other", type: "Lecture", date: todayKey() });
+const tomorrowKey = () => { const date = new Date(); date.setDate(date.getDate() + 1); return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`; };
+const intentionalActionDelay = () => new Promise<void>((resolve) => window.setTimeout(resolve, 420));
+
+function App() {
+  const [user, setUser] = useState<User | null>(null);
+  const [tasks, setTasks] = useState<DailyTask[]>([]);
+  const [activityDates, setActivityDates] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [editor, setEditor] = useState<DailyTask | null | "new">(null);
+  const [draft, setDraft] = useState<Draft>(blankDraft());
+  const [schedule, setSchedule] = useState<"today" | "tomorrow">("today");
+  const [taskDay, setTaskDay] = useState<"today" | "tomorrow">("today");
+  const [complete, setComplete] = useState<DailyTask | null>(null);
+  const [minutes, setMinutes] = useState("30");
+  const [logoutConfirm, setLogoutConfirm] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [deletingTask, setDeletingTask] = useState<DailyTask | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [ringProgress, setRingProgress] = useState(0);
+  const [quickRecallOpen, setQuickRecallOpen] = useState(false);
+  const [quickRecallLoading, setQuickRecallLoading] = useState(false);
+  const [quickRecallSession, setQuickRecallSession] = useState<QuickRecallSession | null>(null);
+
+  useEffect(() => {
+    if (!firebaseConfigured) return;
+    return observeAuth(setUser);
+  }, []);
+  useEffect(() => {
+    if (!user) { setTasks([]); return; }
+    return watchTasks(user, (next) => setTasks(next));
+  }, [user?.uid]);
+  useEffect(() => {
+    if (!user) { setActivityDates([]); return; }
+    return watchStreakActivity(user, setActivityDates);
+  }, [user?.uid]);
+
+  const today = todayKey();
+  const tomorrow = tomorrowKey();
+  const todayTasks = useMemo(() => tasks.filter((task) => task.date === (taskDay === "today" ? today : tomorrow)).sort((a, b) => Number(a.completed) - Number(b.completed)), [taskDay, tasks, today, tomorrow]);
+  const tomorrowTaskCount = tasks.filter((task) => task.date === tomorrow).length;
+  const done = todayTasks.filter((task) => task.completed);
+  const minutesDone = done.reduce((total, task) => total + (task.minutesSpent ?? 0), 0);
+  const completionPercent = todayTasks.length ? Math.round((done.length / todayTasks.length) * 100) : 0;
+  const streak = useMemo(() => {
+    const toKey = (value: string | Date) => { const date = new Date(value); return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`; };
+    const activeDays = new Set(activityDates.map(toKey));
+    const cursor = new Date(); cursor.setHours(0, 0, 0, 0);
+    if (!activeDays.has(toKey(cursor))) cursor.setDate(cursor.getDate() - 1);
+    let days = 0;
+    while (activeDays.has(toKey(cursor))) { days += 1; cursor.setDate(cursor.getDate() - 1); }
+    return days;
+  }, [activityDates]);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setRingProgress(completionPercent));
+    return () => cancelAnimationFrame(frame);
+  }, [completionPercent]);
+
+  const openNew = () => { setDraft(blankDraft()); setSchedule(taskDay); setEditor("new"); };
+  const openEdit = (task: DailyTask) => { setDraft({ name: task.name, subject: task.subject, type: task.type, date: task.date }); setEditor(task); };
+  const submitTask = async () => {
+    if (!user || !draft.name.trim()) return;
+    setBusy(true);
+    const previous = editor && editor !== "new" ? editor : null;
+    await saveTask(user, {
+      id: previous?.id ?? makeTaskId(), createdAt: previous?.createdAt ?? new Date().toISOString(),
+      completed: previous?.completed ?? false, completedAt: previous?.completedAt ?? null, minutesSpent: previous?.minutesSpent ?? null,
+      ...draft, date: editor === "new" ? (schedule === "tomorrow" ? tomorrowKey() : todayKey()) : draft.date, name: draft.name.trim(), subject: draft.subject.trim() || "Other",
+    });
+    setBusy(false); setEditor(null);
+  };
+  const completeTask = async () => {
+    if (!user || !complete) return;
+    setBusy(true);
+    await saveTask(user, { ...complete, completed: true, completedAt: new Date().toISOString(), minutesSpent: Math.max(0, Number(minutes) || 0) });
+    setBusy(false); setComplete(null);
+  };
+  const reopen = async (task: DailyTask) => { if (user) await saveTask(user, { ...task, completed: false, completedAt: null, minutesSpent: null }); };
+  const confirmLogout = async () => {
+    setLoggingOut(true);
+    try { await intentionalActionDelay(); await logout(); }
+    finally { setLoggingOut(false); setLogoutConfirm(false); }
+  };
+  const confirmDelete = async () => {
+    if (!user || !deletingTask) return;
+    setDeleting(true);
+    try { await Promise.all([removeTask(user, deletingTask.id), intentionalActionDelay()]); }
+    finally { setDeleting(false); setDeletingTask(null); }
+  };
+  const openQuickRecall = async () => {
+    if (!user) return;
+    setQuickRecallOpen(true); setQuickRecallLoading(true);
+    try { setQuickRecallSession(createQuickRecallSession(await loadQuickRecallSeed(user))); }
+    catch { setQuickRecallSession(null); }
+    finally { setQuickRecallLoading(false); }
+  };
+
+  if (!firebaseConfigured) return <main className="auth"><section className="auth-card"><CloudOff /><h1>Firebase setup required</h1><p>Add the same Firebase web values used by SSC Buddy to <code>desktop-widget/.env</code>, then restart the desktop app.</p></section></main>;
+  if (!user) return <AuthPanel />;
+
+  return <main className="widget">
+    <header><div className="window-drag"><span className="brand">STUDY PLANNER</span><h1>{quickRecallOpen ? "Quick Recall" : "Daily Tasks"}</h1></div>{!quickRecallOpen && <div className="header-actions"><button className="quick-recall-trigger" title="Quick Recall" onClick={() => void openQuickRecall()}><BrainCircuit size={16} /><span>Recall</span></button><div className={`streak-pill ${streak > 0 ? "active" : ""}`} title={`${streak} day consistency`}><Flame size={16} /><span>{streak}</span></div><button className="logout" title="Sign out" onClick={() => setLogoutConfirm(true)}><LogOut size={15} /></button></div>}</header>
+    {quickRecallOpen ? <QuickRecallPanel session={quickRecallSession} loading={quickRecallLoading} onBack={() => setQuickRecallOpen(false)} onRestart={() => void openQuickRecall()} /> : <><section className="task-hero"><div className="hero-heading"><span>{taskDay === "today" ? "Today’s tasks" : "Tomorrow’s tasks"}</span><div className="hero-actions">{(tomorrowTaskCount > 0 || taskDay === "tomorrow") && <button className="day-toggle" onClick={() => setTaskDay((value) => value === "today" ? "tomorrow" : "today")}>{taskDay === "today" ? `Tomorrow (${tomorrowTaskCount})` : "Today"}<ChevronDown size={14} /></button>}<button className="icon-button" onClick={openNew} title="Add task"><Plus size={18} /></button></div></div><div className="progress-row"><div className="completion-ring"><svg viewBox="0 0 84 84" aria-hidden="true"><circle className="ring-track" cx="42" cy="42" r="35" /><circle className="ring-value" cx="42" cy="42" r="35" style={{ strokeDashoffset: 220 - (220 * ringProgress) / 100 }} /></svg><div><strong>{completionPercent}%</strong></div></div><div className="hero-stats"><div><span>TASKS</span><strong>{done.length} / {todayTasks.length}</strong></div><div><span>COMPLETED TIME</span><strong>{formatMinutes(minutesDone)}</strong></div></div></div></section><div className="toolbar"><span>{taskDay === "today" ? "TODAY'S TASKS" : "TOMORROW'S TASKS"}</span></div><section className="task-list">{todayTasks.length ? todayTasks.map((task) => <article className={`task ${task.completed ? "done" : ""}`} key={task.id}><button className="check" onClick={() => task.completed ? void reopen(task) : (setMinutes(String(task.minutesSpent ?? 30)), setComplete(task))}>{task.completed && <Check size={14} />}</button><button className="task-main" onClick={() => openEdit(task)}><b>{task.name}</b><small>{task.subject} · {task.type}{task.completed && task.minutesSpent ? ` · ${formatMinutes(task.minutesSpent)}` : ""}</small></button><button className="subtle delete-trigger" onClick={() => setDeletingTask(task)} title="Delete task"><Trash2 size={15} /></button></article>) : <div className="empty"><p>No tasks for {taskDay}.</p><button className="primary" onClick={openNew}><Plus size={16} /> Add task</button></div>}</section></>}
+    {editor && <TaskEditor draft={draft} setDraft={setDraft} subjects={[...new Set([...tasks.map((task) => task.subject), "Other"])]} schedule={schedule} setSchedule={setSchedule} busy={busy} editing={editor !== "new"} onClose={() => setEditor(null)} onSave={() => void submitTask()} />}
+    {complete && <CompleteDialog task={complete} minutes={minutes} setMinutes={setMinutes} busy={busy} onClose={() => setComplete(null)} onSave={() => void completeTask()} />}
+    {logoutConfirm && <LogoutDialog busy={loggingOut} onClose={() => setLogoutConfirm(false)} onConfirm={() => void confirmLogout()} />}
+    {deletingTask && <DeleteTaskDialog task={deletingTask} busy={deleting} onClose={() => setDeletingTask(null)} onConfirm={() => void confirmDelete()} />}
+  </main>;
+}
+
+function AuthPanel() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [showPassword, setShowPassword] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const submit = async () => {
+    if (!email.trim() || !password) return;
+    setBusy(true); setMessage("");
+    try { mode === "signin" ? await signIn(email, password) : await createAccount(email, password); }
+    catch (error) { setMessage(authMessage(error)); }
+    finally { setBusy(false); }
+  };
+  return <main className="desktop-auth">
+    <section className="auth-visual" style={{ backgroundImage: `linear-gradient(90deg, rgba(12,12,12,.55), rgba(12,12,12,.88)), url(${authImage})` }}><div className="auth-visual-brand"><img src={authImage} /><span>SSC Buddy</span></div><div><span className="auth-kicker">YOUR PREPARATION, IN SYNC</span><h1>Study anywhere.<br />Pick up exactly where you left off.</h1><p>Your practice, tracker, favourites and tasks stay private to your account.</p></div><small>Built for focused SSC preparation.</small></section>
+    <section className="auth-form"><div className="auth-mobile-brand"><img src={authImage} /><span>SSC Buddy</span></div><span className="auth-kicker">YOUR PRIVATE WORKSPACE</span><h1>{mode === "signin" ? "Welcome back" : "Create your account"}</h1><p>{mode === "signin" ? "Sign in to continue your preparation." : "Create a private workspace with your email and password."}</p><div className="auth-inputs"><input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email" type="email" autoComplete="email" /><div className="password-wrap"><input value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" type={showPassword ? "text" : "password"} autoComplete="current-password" onKeyDown={(event) => { if (event.key === "Enter") void submit(); }} /><button type="button" aria-label={showPassword ? "Hide password" : "Show password"} onClick={() => setShowPassword((value) => !value)}>{showPassword ? <EyeOff size={17} /> : <Eye size={17} />}</button></div>{message && <span className="auth-error">{message}</span>}<button className="auth-primary" disabled={busy || !email.trim() || !password} onClick={() => void submit()}>{busy ? <LoaderCircle className="spin" /> : mode === "signin" ? "Sign in" : "Create account"}</button></div><div className="auth-divider"><i />OR<i /></div><button className="auth-google" disabled={busy} onClick={() => { setBusy(true); setMessage(""); void signInGoogle().catch((error) => setMessage(authMessage(error))).finally(() => setBusy(false)); }}><img src={googleImage} />Continue with Google</button><button className="auth-switch" disabled={busy} onClick={() => { setMode((current) => current === "signin" ? "signup" : "signin"); setMessage(""); }}>{mode === "signin" ? "New here? Create an account" : "Already have an account? Sign in"}</button></section>
+  </main>;
+}
+function authMessage(error: unknown) { const code = typeof error === "object" && error && "code" in error ? String(error.code) : ""; return ({ "auth/invalid-credential": "Email or password is incorrect.", "auth/email-already-in-use": "An account already exists. Please sign in.", "auth/weak-password": "Password should be at least 6 characters.", "auth/invalid-email": "Enter a valid email address.", "auth/network-request-failed": "Network issue. Check your connection." } as Record<string, string>)[code] ?? "Could not continue. Please try again."; }
+
+function TaskEditor({ draft, setDraft, subjects, schedule, setSchedule, busy, editing, onClose, onSave }: { draft: Draft; setDraft: (draft: Draft) => void; subjects: string[]; schedule: "today" | "tomorrow"; setSchedule: (value: "today" | "tomorrow") => void; busy: boolean; editing: boolean; onClose: () => void; onSave: () => void }) {
+  return <div className="modal" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><div className={`dialog task-dialog ${editing ? "editing" : ""}`}><button className="close" onClick={onClose}><X size={18} /></button><h2>{editing ? "Edit task" : "New task"}</h2>{editing && <p className="muted dialog-copy">Update this task.</p>}<label>Task name<input autoFocus value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} onKeyDown={(event) => event.key === "Enter" && onSave()} placeholder="Lecture 5 of Polity" /></label><div className="form-grid"><label>Subject<SelectMenu value={draft.subject} options={subjects} onChange={(subject) => setDraft({ ...draft, subject })} /></label><label>Task type<SelectMenu value={draft.type} options={[...TASK_TYPES]} onChange={(type) => setDraft({ ...draft, type: type as TaskType })} /></label></div>{!editing && <div className="schedule"><span>Schedule for</span><div><button type="button" className={schedule === "today" ? "active" : ""} onClick={() => setSchedule("today")}>Today</button><button type="button" className={schedule === "tomorrow" ? "active" : ""} onClick={() => setSchedule("tomorrow")}>Tomorrow</button></div></div>}<div className="dialog-actions"><button className="secondary" disabled={busy} onClick={onClose}>Cancel</button><button className="primary" disabled={busy || !draft.name.trim()} onClick={onSave}>{busy ? <LoaderCircle className="spin" /> : editing ? "Save changes" : "Add task"}</button></div></div></div>;
+}
+function SelectMenu({ value, options, onChange }: { value: string; options: string[]; onChange: (value: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => { const close = (event: MouseEvent) => { if (!root.current?.contains(event.target as Node)) setOpen(false); }; document.addEventListener("mousedown", close); return () => document.removeEventListener("mousedown", close); }, []);
+  return <div className="select-menu" ref={root}><button type="button" className="select-trigger" aria-expanded={open} onClick={() => setOpen((value) => !value)}><span>{value}</span><ChevronDown size={15} /></button>{open && <div className="select-popover">{options.map((option) => <button type="button" key={option} className={option === value ? "selected" : ""} onClick={() => { onChange(option); setOpen(false); }}>{option}</button>)}</div>}</div>;
+}
+function CompleteDialog({ task, minutes, setMinutes, busy, onClose, onSave }: { task: DailyTask; minutes: string; setMinutes: (value: string) => void; busy: boolean; onClose: () => void; onSave: () => void }) {
+  return <div className="modal" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><div className="dialog complete-dialog"><button className="close" onClick={onClose}><X size={18} /></button><h2>Complete task</h2><p className="muted complete-name">{task.name}</p><label>Actual study minutes<input autoFocus inputMode="numeric" value={minutes} onChange={(event) => setMinutes(event.target.value.replace(/\D/g, ""))} placeholder="30" /></label><div className="chips">{[30, 45, 60, 90, 120].map((value) => <button type="button" className={Number(minutes) === value ? "chip active" : "chip"} key={value} onClick={() => setMinutes(String(value))}>{formatMinutes(value)}</button>)}</div><div className="dialog-actions"><button className="secondary" disabled={busy} onClick={onClose}>Cancel</button><button className="primary" disabled={busy} onClick={onSave}>{busy ? <LoaderCircle className="spin" /> : "Mark complete"}</button></div></div></div>;
+}
+function LogoutDialog({ busy, onClose, onConfirm }: { busy: boolean; onClose: () => void; onConfirm: () => void }) {
+  return <div className="modal"><div className="dialog logout-dialog"><div className="confirm-header"><div className="logout-dialog-icon"><LogOut size={18} /></div><button className="confirm-close" aria-label="Close" onClick={onClose} disabled={busy}><X size={19} /></button></div><h2>Sign out?</h2><p className="muted">You can sign back in anytime.</p><div className="dialog-actions"><button className="secondary" disabled={busy} onClick={onClose}>Cancel</button><button className="danger-primary" disabled={busy} onClick={onConfirm}>{busy ? <LoaderCircle className="spin" /> : "Sign out"}</button></div></div></div>;
+}
+function DeleteTaskDialog({ task, busy, onClose, onConfirm }: { task: DailyTask; busy: boolean; onClose: () => void; onConfirm: () => void }) {
+  return <div className="modal" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><div className="dialog delete-dialog"><div className="confirm-header"><div className="delete-dialog-icon"><Trash2 size={17} /></div><button className="confirm-close" aria-label="Close" onClick={onClose} disabled={busy}><X size={18} /></button></div><h2>Delete task?</h2><p className="muted">This task will be removed from your plan.</p><div className="dialog-actions"><button className="secondary" disabled={busy} onClick={onClose}>Cancel</button><button className="danger-primary" disabled={busy} onClick={onConfirm}>{busy ? <LoaderCircle className="spin" /> : "Delete"}</button></div></div></div>;
+}
+function formatMinutes(value: number) { return value >= 60 ? `${Math.floor(value / 60)}h${value % 60 ? ` ${value % 60}m` : ""}` : `${value}m`; }
+createRoot(document.getElementById("root")!).render(<App />);

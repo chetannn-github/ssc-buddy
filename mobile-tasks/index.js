@@ -9,6 +9,27 @@ if (Platform.OS === "android") {
   const { renderDailyTasksWidget } = require("./src/widgets/DailyTasksWidget");
   const { renderQuickRecallWidget } = require("./src/widgets/QuickRecallWidget");
   const { answerUnlockQuiz, advanceUnlockQuiz, getUnlockQuiz, startUnlockQuiz } = require("./src/domain/unlock-quiz");
+  const { getFirebaseAuth, toggleTaskFromWidget } = require("./src/lib/firebase");
+  const { onAuthStateChanged } = require("firebase/auth");
+
+  const getWidgetUser = async () => {
+    const auth = getFirebaseAuth();
+    if (auth.currentUser) return auth.currentUser;
+    return new Promise((resolve) => {
+      let settled = false;
+      let timeout;
+      let unsubscribe = () => undefined;
+      const finish = (user) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        unsubscribe();
+        resolve(user);
+      };
+      timeout = setTimeout(() => finish(null), 4000);
+      unsubscribe = onAuthStateChanged(auth, finish);
+    });
+  };
 
   registerWidgetTaskHandler(async ({ widgetInfo, widgetAction, clickAction, clickActionData, renderWidget }) => {
     if (!["DailyTasksWidget", "QuickRecallWidget"].includes(widgetInfo.widgetName)) return;
@@ -20,6 +41,19 @@ if (Platform.OS === "android") {
       tasks = [];
     }
     if (widgetInfo.widgetName === "DailyTasksWidget") {
+      if (widgetAction === "WIDGET_CLICK" && clickAction === "TOGGLE_TASK") {
+        const taskId = typeof clickActionData?.taskId === "string" ? clickActionData.taskId : "";
+        if (taskId) {
+          try {
+            const user = await getWidgetUser();
+            const updated = user ? await toggleTaskFromWidget(user, taskId) : null;
+            if (updated) {
+              tasks = tasks.map((task) => task.id === taskId ? updated : task);
+              await AsyncStorage.setItem("ssc-buddy:tasks:v2", JSON.stringify(tasks));
+            }
+          } catch {}
+        }
+      }
       renderWidget(renderDailyTasksWidget(tasks));
       return;
     }

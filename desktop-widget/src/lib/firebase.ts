@@ -1,0 +1,128 @@
+import { initializeApp } from "firebase/app";
+import {
+  GoogleAuthProvider,
+  createUserWithEmailAndPassword,
+  getAuth,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  signOut,
+  type User,
+} from "firebase/auth";
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getDocs,
+  initializeFirestore,
+  onSnapshot,
+  persistentLocalCache,
+  setDoc,
+  type Unsubscribe,
+} from "firebase/firestore";
+
+export const TASK_TYPES = ["Lecture", "Revision", "Mock", "Practice Session", "Other"] as const;
+export type TaskType = (typeof TASK_TYPES)[number];
+/** Exact existing web/mobile task document contract. Do not add fields here. */
+export type DailyTask = {
+  id: string;
+  name: string;
+  subject: string;
+  type: TaskType;
+  createdAt: string;
+  date: string;
+  completed: boolean;
+  completedAt: string | null;
+  minutesSpent: number | null;
+};
+export type QuickRecallSeed = { subjects: unknown[]; attempts: unknown[]; favouriteQuestionIds: string[] };
+
+const config = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+};
+
+export const firebaseConfigured = Boolean(config.apiKey && config.authDomain && config.projectId && config.appId);
+const app = firebaseConfigured ? initializeApp(config) : null;
+// IndexedDB persistence gives cached reads, locally queued writes, and automatic
+// reconnect replay. This is Firestore's native conflict-safe offline mechanism.
+const db = app ? initializeFirestore(app, { localCache: persistentLocalCache() }) : null;
+const auth = app ? getAuth(app) : null;
+
+const tasksFor = (user: User) => collection(db!, "users", user.uid, "tasks");
+const taskRef = (user: User, id: string) => doc(db!, "users", user.uid, "tasks", id);
+
+export function observeAuth(callback: (user: User | null) => void): Unsubscribe {
+  if (!auth) return () => callback(null);
+  return onAuthStateChanged(auth, callback);
+}
+
+export async function signIn(email: string, password: string) {
+  if (!auth) throw new Error("Firebase is not configured. Add .env values first.");
+  return signInWithEmailAndPassword(auth, email.trim(), password);
+}
+
+export async function createAccount(email: string, password: string) {
+  if (!auth) throw new Error("Firebase is not configured. Add .env values first.");
+  return createUserWithEmailAndPassword(auth, email.trim(), password);
+}
+
+export async function signInGoogle() {
+  if (!auth) throw new Error("Firebase is not configured. Add .env values first.");
+  return signInWithPopup(auth, new GoogleAuthProvider());
+}
+
+export async function logout() { if (auth) await signOut(auth); }
+
+export function watchTasks(user: User, onChange: (tasks: DailyTask[], source: "cache" | "server") => void) {
+  return onSnapshot(tasksFor(user), { includeMetadataChanges: true }, (snapshot) => {
+    const unique = new Map<string, DailyTask>();
+    snapshot.docs.forEach((entry) => unique.set(entry.id, { id: entry.id, ...entry.data() } as DailyTask));
+    const tasks = [...unique.values()].sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+    onChange(tasks, snapshot.metadata.fromCache ? "cache" : "server");
+  });
+}
+
+/** Reads the same activity sources used by the Android header streak. */
+export function watchStreakActivity(user: User, callback: (dates: string[]) => void): Unsubscribe {
+  let practiceDates: string[] = [];
+  let trackerDates: string[] = [];
+  const emit = () => callback([...practiceDates, ...trackerDates]);
+  const practiceStop = onSnapshot(collection(db!, "users", user.uid, "practiceAttempts"), (snapshot) => {
+    practiceDates = snapshot.docs.map((entry) => entry.data().date).filter((date): date is string => typeof date === "string");
+    emit();
+  });
+  const trackerStop = onSnapshot(doc(db!, "users", user.uid, "tracker", "activity"), (snapshot) => {
+    const value = snapshot.data()?.value;
+    trackerDates = Array.isArray(value) ? value.map((entry) => entry?.date).filter((date): date is string => typeof date === "string") : [];
+    emit();
+  });
+  return () => { practiceStop(); trackerStop(); };
+}
+
+/** Reads the existing practice collections without creating any widget-only data. */
+export async function loadQuickRecallSeed(user: User): Promise<QuickRecallSeed> {
+  const [subjects, attempts, favourites] = await Promise.all([
+    getDocs(collection(db!, "users", user.uid, "practiceSubjects")),
+    getDocs(collection(db!, "users", user.uid, "practiceAttempts")),
+    getDocs(collection(db!, "users", user.uid, "practiceFavourites")),
+  ]);
+  return {
+    subjects: subjects.docs.map((entry) => ({ id: entry.id, ...entry.data() })),
+    attempts: attempts.docs.map((entry) => ({ id: entry.id, ...entry.data() })),
+    favouriteQuestionIds: favourites.docs.map((entry) => String(entry.data().id ?? entry.id)),
+  };
+}
+
+/** One document per task, matching the existing web's document-level CRUD. */
+export async function saveTask(user: User, task: DailyTask) { await setDoc(taskRef(user, task.id), task); }
+export async function removeTask(user: User, id: string) { await deleteDoc(taskRef(user, id)); }
+export const makeTaskId = () => `${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
+export const todayKey = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+};

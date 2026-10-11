@@ -107,6 +107,28 @@ export function watchTasks(user: User, callback: (tasks: CloudTask[]) => void) {
   return onSnapshot(taskCollection(user), (snapshot) => callback(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as CloudTask)).sort((a, b) => String(b["createdAt"]).localeCompare(String(a["createdAt"])))));
 }
 
+/**
+ * Atomic task toggle for the Android home-screen widget. Only completion
+ * fields are changed, so a background widget tap cannot overwrite a task edit
+ * made in the website or app at the same time.
+ */
+export async function toggleTaskFromWidget(user: User, taskId: string): Promise<CloudTask | null> {
+  const reference = doc(taskCollection(user), taskId);
+  return runTransaction(getFirebaseFirestore(), async (transaction) => {
+    const snapshot = await transaction.get(reference);
+    if (!snapshot.exists()) return null;
+    const current = { id: snapshot.id, ...snapshot.data() } as CloudTask;
+    const completed = !Boolean(current.completed);
+    const update = {
+      completed,
+      completedAt: completed ? new Date().toISOString() : null,
+      minutesSpent: completed ? Number(current.minutesSpent ?? 0) : null,
+    };
+    transaction.update(reference, update);
+    return { ...current, ...update };
+  });
+}
+
 /** Document-level task sync: only created, changed, or removed tasks are written. */
 export async function syncTaskChanges(user: User, previous: CloudTask[], next: CloudTask[]) {
   const same = (left: CloudTask, right: CloudTask) => JSON.stringify(left) === JSON.stringify(right);

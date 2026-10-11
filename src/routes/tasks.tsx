@@ -26,7 +26,7 @@ import {
 } from "@/lib/daily-tasks";
 import { loadTrackerData } from "@/lib/tracker-store";
 import { isFirebaseConfigured, observeFirebaseUser } from "@/lib/firebase-sync";
-import { migrateTasksIfEmpty, syncTaskChanges, watchTasks } from "@/lib/task-sync";
+import { migrateTasksIfEmpty, readTasks, syncTaskChanges } from "@/lib/task-sync";
 
 export const Route = createFileRoute("/tasks")({ component: DailyTasks });
 
@@ -79,17 +79,15 @@ function DailyTasks() {
   }, []);
   useEffect(() => {
     if (!syncUser) return;
-    let cancelled = false;
-    let stop: () => void = () => undefined;
     void (async () => {
       await migrateTasksIfEmpty(syncUser, tasks);
-      if (!cancelled) stop = watchTasks(syncUser, (remote) => {
+      const remote = await readTasks(syncUser);
+      if (remote.length) {
         setTasks(remote);
         saveDailyTasks(remote);
-      });
+      }
     })();
-    return () => { cancelled = true; stop(); };
-  // Subscribe once per signed-in user; mutations use the latest state in persist.
+  // Data is hydrated once when the page loads; writes are still synced explicitly.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [syncUser]);
   const persist = (next: DailyTask[]) => {

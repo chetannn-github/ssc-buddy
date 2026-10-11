@@ -57,7 +57,7 @@
               "name": "QuickRecallWidget",
               "label": "Quick recall",
               "description": "Three focused SSC questions when you unlock your phone",
-              "minWidth": "260dp",
+              "minWidth": "360dp",
               "minHeight": "250dp",
               "targetCellWidth": 4,
               "targetCellHeight": 4,

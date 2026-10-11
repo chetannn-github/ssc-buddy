@@ -1,4 +1,4 @@
-import { collection, deleteDoc, doc, getDocs, onSnapshot, setDoc, writeBatch } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDocs, setDoc, writeBatch } from "firebase/firestore";
 import type { User } from "firebase/auth";
 import { getFirebaseFirestore } from "@/lib/firebase-sync";
 import type { DailyTask } from "@/lib/daily-tasks";
@@ -14,13 +14,12 @@ export async function migrateTasksIfEmpty(user: User, localTasks: DailyTask[]) {
   await batch.commit();
 }
 
-export function watchTasks(user: User, onChange: (tasks: DailyTask[]) => void) {
-  return onSnapshot(collectionFor(user), (snapshot) => {
-    const tasks = snapshot.docs
-      .map((item) => ({ id: item.id, ...item.data() }) as DailyTask)
-      .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
-    onChange(tasks);
-  });
+/** One-time hydration on page load. The website intentionally has no live listener. */
+export async function readTasks(user: User): Promise<DailyTask[]> {
+  const snapshot = await getDocs(collectionFor(user));
+  return snapshot.docs
+    .map((item) => ({ id: item.id, ...item.data() }) as DailyTask)
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }
 
 /** Performs document-level writes only; unchanged tasks never reach Firestore. */
