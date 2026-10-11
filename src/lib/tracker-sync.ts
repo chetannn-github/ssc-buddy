@@ -41,3 +41,10 @@ export async function readTrackerSections(user: User): Promise<TrackerData> {
     ...(Array.isArray(values.pinned) ? { pinnedChapterIds: values.pinned as string[] } : {}),
   };
 }
+
+/** @deprecated Kept for the tracker package API; it now hydrates once only. */
+export function watchTrackerSections(user: User, callback: (data: TrackerData) => void) {
+  let active = true;
+  void readTrackerSections(user).then((data) => { if (active) callback(data); }).catch(() => undefined);
+  return () => { active = false; };
+}

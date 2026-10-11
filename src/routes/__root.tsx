@@ -21,8 +21,6 @@ import {
   patchCloudPreferences,
   readCloudProfile,
   readCloudPreferences,
-  watchCloudProfile,
-  watchCloudPreferences,
 } from "@/lib/firebase-sync";
 import { PROFILE_KEY } from "@/lib/profile";
 import { startPracticeSync } from "@/lib/practice-sync";
@@ -153,9 +151,6 @@ function RootComponent() {
 
   const [syncUser, setSyncUser] = useState<User | null>(null);
   const [authResolved, setAuthResolved] = useState(!isFirebaseConfigured);
-  const profileSyncCleanup = useRef<(() => void) | null>(null);
-  const practiceSyncCleanup = useRef<(() => void) | null>(null);
-  const preferencesSyncCleanup = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (!isFirebaseConfigured) return;
@@ -191,12 +186,10 @@ function RootComponent() {
       }
       queueMicrotask(() => { applying = false; });
     };
-    let stop: (() => void) | undefined;
     void (async () => {
       const remote = await readCloudPreferences(syncUser);
       if (remote) apply(remote);
       else { const initial = read(); await patchCloudPreferences(syncUser, initial); last = JSON.stringify(initial); }
-      stop = watchCloudPreferences(syncUser, (value) => { if (value) apply(value); });
     })().catch(() => undefined);
     const save = () => {
       if (applying) return;
@@ -205,18 +198,14 @@ function RootComponent() {
       if (Object.keys(changed).length) { last = JSON.stringify(next); void patchCloudPreferences(syncUser, changed); }
     };
     window.addEventListener("ssc-preferences-updated", save);
-    preferencesSyncCleanup.current = () => { stop?.(); window.removeEventListener("ssc-preferences-updated", save); };
-    return () => { preferencesSyncCleanup.current?.(); preferencesSyncCleanup.current = null; };
+    return () => window.removeEventListener("ssc-preferences-updated", save);
   }, [syncUser]);
 
   useEffect(() => {
     if (!syncUser) return;
-    let disposed = false;
-    void startPracticeSync(syncUser).then((stop) => {
-      if (disposed) stop();
-      else practiceSyncCleanup.current = stop;
-    }).catch(() => undefined);
-    return () => { disposed = true; practiceSyncCleanup.current?.(); practiceSyncCleanup.current = null; };
+    let cleanup: (() => void) | undefined;
+    void startPracticeSync(syncUser).then((stop) => { cleanup = stop; }).catch(() => undefined);
+    return () => cleanup?.();
   }, [syncUser]);
 
   // Profile is deliberately synced as its own document: mobile writes cannot replace the
@@ -251,6 +240,19 @@ function RootComponent() {
       window.dispatchEvent(new Event("cbt-profile-updated"));
       queueMicrotask(() => { applyingRemote = false; });
     };
+    const save = () => {
+      const value = localStorage.getItem(PROFILE_KEY);
+      if (applyingRemote || !value) return;
+      try {
+        const next = clean(JSON.parse(value) as Record<string, unknown>);
+        const previous = lastProfile ? JSON.parse(lastProfile) as Record<string, unknown> : {};
+        const changed = Object.fromEntries(Object.entries(next).filter(([key, field]) => previous[key] !== field));
+        if (Object.keys(changed).length) {
+          lastProfile = JSON.stringify(next);
+          void patchCloudProfile(syncUser, changed);
+        }
+      } catch { /* invalid local profile is ignored */ }
+    };
     const start = async () => {
       const remote = await readCloudProfile(syncUser);
       if (disposed) return;
@@ -262,28 +264,10 @@ function RootComponent() {
         lastProfile = JSON.stringify(clean(profile));
       }
       if (disposed) return;
-      const stopWatch = watchCloudProfile(syncUser, (profile) => { if (profile) apply(profile); });
-      const save = () => {
-        const value = localStorage.getItem(PROFILE_KEY);
-        if (applyingRemote || !value) return;
-        try {
-          const next = clean(JSON.parse(value) as Record<string, unknown>);
-          const previous = lastProfile ? JSON.parse(lastProfile) as Record<string, unknown> : {};
-          const changed = Object.fromEntries(Object.entries(next).filter(([key, field]) => previous[key] !== field));
-          if (Object.keys(changed).length) {
-            lastProfile = JSON.stringify(next);
-            void patchCloudProfile(syncUser, changed);
-          }
-        } catch { /* invalid local profile is ignored */ }
-      };
       window.addEventListener("cbt-profile-updated", save);
-      profileSyncCleanup.current = (() => {
-        stopWatch();
-        window.removeEventListener("cbt-profile-updated", save);
-      });
     };
     void start();
-    return () => { disposed = true; profileSyncCleanup.current?.(); profileSyncCleanup.current = null; };
+    return () => { disposed = true; window.removeEventListener("cbt-profile-updated", save); };
   }, [syncUser]);
 
   useEffect(() => {

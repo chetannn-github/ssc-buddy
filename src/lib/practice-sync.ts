@@ -1,4 +1,4 @@
-import { collection, deleteDoc, doc, getDocs, onSnapshot, setDoc, type Unsubscribe, writeBatch } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDocs, setDoc, type Unsubscribe, writeBatch } from "firebase/firestore";
 import type { User } from "firebase/auth";
 import { getFirebaseFirestore } from "@/lib/firebase-sync";
 import { loadFavoriteQuestionIds, loadHistory, loadMarking, loadSubjects, saveFavoriteQuestionIds, saveHistory, saveMarking, saveSubjects, type MarkingScheme, type Subject, type TestRecord } from "@/lib/exam";
@@ -38,20 +38,31 @@ export async function startPracticeSync(user: User): Promise<Unsubscribe> {
   const settings = await getDocs(collection(getFirebaseFirestore(), "users", user.uid, "practiceSettings"));
   if (!settings.size && loadMarking()) await setDoc(settingsRef, { marking: loadMarking() });
 
-  let applyingRemote = false;
-  let subjects = localSubjects;
-  let attempts = localAttempts;
-  let favourites = localFavourites;
-  let marking = loadMarking();
+  // The website deliberately reads cloud data once per refresh. Keeping four
+  // snapshot streams plus a reconciliation interval alive made navigation and
+  // profile saves repeatedly re-enter the synchronisation loop.
+  const [remoteSubjects, remoteAttempts, remoteFavourites, settingsSnapshot] = await Promise.all([
+    getDocs(docsFor(user, "practiceSubjects")),
+    getDocs(docsFor(user, "practiceAttempts")),
+    getDocs(docsFor(user, "practiceFavourites")),
+    getDocs(collection(getFirebaseFirestore(), "users", user.uid, "practiceSettings")),
+  ]);
+  let subjects = remoteSubjects.size
+    ? remoteSubjects.docs.map((item) => ({ id: item.id, ...item.data() }) as Subject)
+    : localSubjects;
+  let attempts = remoteAttempts.size
+    ? remoteAttempts.docs.map((item) => ({ id: item.id, ...item.data() }) as TestRecord)
+    : localAttempts;
+  let favourites = remoteFavourites.size
+    ? remoteFavourites.docs.map((item) => ({ id: item.id }))
+    : localFavourites;
+  let marking = settingsSnapshot.docs.find((item) => item.id === "current")?.data()["marking"] as MarkingScheme | undefined ?? loadMarking();
+  if (remoteSubjects.size) saveSubjects(subjects);
+  if (remoteAttempts.size) saveHistory(attempts);
+  if (remoteFavourites.size) saveFavoriteQuestionIds(favourites.map((item) => item.id));
+  if (marking) saveMarking(marking);
   const emit = () => window.dispatchEvent(new Event("ssc-study-data-changed"));
-  const stops = [
-    onSnapshot(docsFor(user, "practiceSubjects"), (snapshot) => { const next = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as Subject); applyingRemote = true; subjects = next; saveSubjects(next); emit(); applyingRemote = false; }),
-    onSnapshot(docsFor(user, "practiceAttempts"), (snapshot) => { const next = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as TestRecord); applyingRemote = true; attempts = next; saveHistory(next); emit(); applyingRemote = false; }),
-    onSnapshot(docsFor(user, "practiceFavourites"), (snapshot) => { const next = snapshot.docs.map((item) => item.id); applyingRemote = true; favourites = next.map((id) => ({ id })); saveFavoriteQuestionIds(next); emit(); applyingRemote = false; }),
-    onSnapshot(settingsRef, (snapshot) => { const next = snapshot.data()?.["marking"] as MarkingScheme | undefined; if (next) { applyingRemote = true; marking = next; saveMarking(next); emit(); applyingRemote = false; } }),
-  ];
   const save = () => {
-    if (applyingRemote) return;
     const nextSubjects = loadSubjects(); const nextAttempts = loadHistory(); const nextFavourites = loadFavoriteQuestionIds().map((id) => ({ id })); const nextMarking = loadMarking();
     void syncCollection(user, "practiceSubjects", subjects, nextSubjects); subjects = nextSubjects;
     void syncCollection(user, "practiceAttempts", attempts, nextAttempts); attempts = nextAttempts;
@@ -59,13 +70,7 @@ export async function startPracticeSync(user: User): Promise<Unsubscribe> {
     if (!equal(marking, nextMarking) && nextMarking) { marking = nextMarking; void setDoc(settingsRef, { marking: nextMarking }, { merge: true }); }
   };
   window.addEventListener("ssc-study-data-changed", save);
-  // A key edit can occur while the initial Firestore listeners are still
-  // attaching (for example immediately after opening /test). Reconcile the
-  // entity-level cache as a safety net so that update cannot be missed.
-  const reconciliationTimer = window.setInterval(save, 1_200);
   return () => {
-    window.clearInterval(reconciliationTimer);
-    stops.forEach((stop) => stop());
     window.removeEventListener("ssc-study-data-changed", save);
   };
 }
