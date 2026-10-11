@@ -204,10 +204,8 @@ function Progress() {
   useEffect(() => {
     const refresh = () => setTracker(loadTrackerData());
     window.addEventListener("cbt-tracker-updated", refresh);
-    window.addEventListener("storage", refresh);
     return () => {
       window.removeEventListener("cbt-tracker-updated", refresh);
-      window.removeEventListener("storage", refresh);
     };
   }, []);
 

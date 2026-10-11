@@ -1062,10 +1062,8 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
       setStreakReady(true);
     };
     refresh();
-    window.addEventListener("storage", refresh);
     window.addEventListener("cbt-tracker-updated", refresh);
     return () => {
-      window.removeEventListener("storage", refresh);
       window.removeEventListener("cbt-tracker-updated", refresh);
     };
   }, []);
