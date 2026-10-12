@@ -104,6 +104,14 @@ function formatHeatmapTooltipDate(date: Date) {
 
 type DayActivityDetail = { label: string; detail: string; count: number };
 
+function activityDotClass(label: string) {
+  if (label === "Lecture") return "bg-sky-400";
+  if (label.startsWith("Revision")) return "bg-emerald-400";
+  if (label.includes("Mock")) return "bg-violet-400";
+  if (label === "Quick recall") return "bg-amber-400";
+  return "bg-blue-400";
+}
+
 function DayActivityDetails({ date, items }: { date: string; items: DayActivityDetail[] }) {
   const total = items.reduce((sum, item) => sum + item.count, 0);
   return (
@@ -121,8 +129,14 @@ function DayActivityDetails({ date, items }: { date: string; items: DayActivityD
               key={`${item.label}-${item.detail}-${index}`}
               className="flex justify-between gap-3"
             >
-              <span>
-                <span className="text-zinc-100">{item.label}</span> · {item.detail}
+              <span className="flex min-w-0 items-center gap-1.5">
+                <span
+                  aria-hidden="true"
+                  className={cn("h-1.5 w-1.5 shrink-0 rounded-full", activityDotClass(item.label))}
+                />
+                <span className="min-w-0 truncate">
+                  <span className="text-zinc-100">{item.label}</span> · {item.detail}
+                </span>
               </span>
               <span className="shrink-0 font-mono text-zinc-500">×{item.count}</span>
             </li>
@@ -192,10 +206,18 @@ function ActivityHeatmap({
       if (!key) return;
       // A completed practice session represents one daily activity, regardless of question count.
       const count = 1;
+      const isQuickRecall = record.testMode === "quick-recall" || record.subject === "Quick Recall";
+      const questionCount =
+        record.questionIds?.length ??
+        record.questions?.length ??
+        record.questionNumbers?.length ??
+        record.answers.length;
       activity.set(key, (activity.get(key) ?? 0) + count);
       addDetail(key, {
-        label: "Practice session",
-        detail: `${record.subject} · ${record.chapter}`,
+        label: isQuickRecall ? "Quick recall" : "Practice session",
+        detail: isQuickRecall
+          ? `${questionCount} question${questionCount === 1 ? "" : "s"}`
+          : `${record.subject} · ${record.chapter}`,
         count,
       });
     });
@@ -297,7 +319,7 @@ function ActivityHeatmap({
   }, [months.length]);
 
   return (
-    <section className="overflow-visible py-5 text-zinc-100 sm:py-6">
+    <section className="overflow-visible py-3 text-zinc-100 sm:py-4">
       <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-2 text-sm">
         <p className="text-zinc-400">
           {totalActivity} activities · {rangeLabels[range].toLowerCase()}
@@ -315,7 +337,7 @@ function ActivityHeatmap({
         </p>
       </div>
 
-      <div className="mt-2.5">
+      <div className="mt-2">
         <div>
           <div
             ref={heatmapScrollRef}
@@ -389,7 +411,7 @@ function ActivityHeatmap({
             document.body,
           )
         : null}
-      <div className="mt-3 flex items-center justify-end gap-1.5 text-[10px] text-zinc-400">
+      <div className="mt-2 flex items-center justify-end gap-1.5 text-[10px] text-zinc-400">
         Less
         {[0, 1, 2, 3, 4].map((intensity) => (
           <span
@@ -515,7 +537,7 @@ function TargetProgress({
 
   return (
     <section className="overflow-hidden rounded-2xl border border-white/10 bg-[#1a1a1a]">
-      <div className="flex items-center justify-between gap-3 px-4 pt-3 sm:px-5">
+      <div className="flex items-center justify-between gap-3 px-4 pt-2 sm:px-5">
         <span className="text-[11px] font-semibold tracking-[0.16em] text-zinc-500 uppercase">
           Practice
         </span>
@@ -553,7 +575,7 @@ function TargetProgress({
           )}
         </div>
       </div>
-      <div className="grid grid-cols-2 divide-x-0 divide-y divide-white/10 px-2 py-2 sm:grid-cols-5 sm:divide-x sm:divide-y-0 sm:px-3">
+      <div className="grid grid-cols-2 divide-x-0 divide-y divide-white/10 px-2 py-1.5 sm:grid-cols-5 sm:divide-x sm:divide-y-0 sm:px-3">
         <StatCell label="Question goal">
           <AnimatedNumber value={goal} />
         </StatCell>
@@ -569,10 +591,10 @@ function TargetProgress({
           </StatCell>
         ))}
       </div>
-      <div className="border-t border-white/10 px-4 pt-3 text-[11px] font-semibold tracking-[0.16em] text-zinc-500 uppercase sm:px-5">
+      <div className="border-t border-white/10 px-4 pt-2 text-[11px] font-semibold tracking-[0.16em] text-zinc-500 uppercase sm:px-5">
         Study tracker
       </div>
-      <div className="grid grid-cols-3 divide-x divide-y divide-white/10 px-2 py-2 sm:grid-cols-6 sm:divide-y-0 sm:px-3">
+      <div className="grid grid-cols-3 divide-x divide-y divide-white/10 px-2 py-1.5 sm:grid-cols-6 sm:divide-y-0 sm:px-3">
         {trackerStats.map(({ label, value }) => (
           <StatCell key={label} label={label}>
             <AnimatedNumber value={value} />
@@ -624,7 +646,7 @@ function StudyTrackerOverview({ tracker }: { tracker: TrackerData | null }) {
   const mockTarget = tracker.tests.mocks.pre.target + tracker.tests.mocks.mains.target;
 
   return (
-    <section className="border-t border-white/10 pt-5 sm:pt-6">
+    <section className="-mt-3 border-t border-white/10 pt-4 sm:pt-5">
       <div className="flex items-baseline justify-between gap-3">
         <div>
           <p className="text-[11px] font-semibold tracking-[0.16em] text-zinc-500 uppercase">
@@ -1026,23 +1048,25 @@ export function Profile() {
             />
           )}
 
-          <TargetProgress
-            attempted={totals.attempted}
-            goal={questionGoal}
-            tests={totals.tests}
-            correct={totals.correct}
-            wrong={totals.wrong}
-            lectures={trackerTotals.lectures}
-            revisions={trackerTotals.revisions}
-            mockTests={trackerTotals.mockTests}
-            studyMinutes={dailyTaskTotals.studyMinutes}
-            completedTasks={dailyTaskTotals.completed}
-            incompleteTasks={dailyTaskTotals.incomplete}
-            range={range}
-            onRangeChange={setRange}
-          />
+          <div className="space-y-3">
+            <TargetProgress
+              attempted={totals.attempted}
+              goal={questionGoal}
+              tests={totals.tests}
+              correct={totals.correct}
+              wrong={totals.wrong}
+              lectures={trackerTotals.lectures}
+              revisions={trackerTotals.revisions}
+              mockTests={trackerTotals.mockTests}
+              studyMinutes={dailyTaskTotals.studyMinutes}
+              completedTasks={dailyTaskTotals.completed}
+              incompleteTasks={dailyTaskTotals.incomplete}
+              range={range}
+              onRangeChange={setRange}
+            />
 
-          <ActivityHeatmap records={records} tracker={tracker} range="year" />
+            <ActivityHeatmap records={records} tracker={tracker} range="year" />
+          </div>
 
           <StudyTrackerOverview tracker={tracker} />
         </div>

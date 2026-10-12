@@ -6,6 +6,10 @@ import { loadFavoriteQuestionIds, loadHistory, loadMarking, loadSubjects, onPrac
 type Item = { id: string };
 const equal = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 const docsFor = (user: User, name: string) => collection(getFirebaseFirestore(), "users", user.uid, name);
+// Full question-bank documents are intentionally cached only after a Practice
+// screen asks for them. This gives the global writer a lightweight baseline
+// without parsing that bank on unrelated routes.
+const subjectBaselines = new Map<string, Subject[]>();
 
 async function migrateCollection<T extends Item>(user: User, name: string, items: T[]) {
   const remote = await getDocs(docsFor(user, name));
@@ -30,12 +34,34 @@ async function syncCollection<T extends Item>(user: User, name: string, before: 
  * website: a large question bank can otherwise repeatedly serialize on the
  * main thread and freeze unrelated routes.
  */
-export async function startPracticeSync(user: User): Promise<Unsubscribe> {
+type PracticeSyncOptions = {
+  /** Question-bank documents can be very large; only hydrate them on a Practice route. */
+  includeSubjects?: boolean;
+};
+
+/** Loads the potentially large question bank only when it is actually needed. */
+export async function hydratePracticeSubjects(user: User) {
   const localSubjects = loadSubjects();
+  await migrateCollection(user, "practiceSubjects", localSubjects);
+  const remoteSubjects = await getDocs(docsFor(user, "practiceSubjects"));
+  if (!remoteSubjects.size) return localSubjects;
+  const subjects = remoteSubjects.docs.map(
+    (item) => ({ id: item.id, ...item.data() }) as Subject,
+  );
+  subjectBaselines.set(user.uid, subjects);
+  saveSubjects(subjects, { notify: false });
+  return subjects;
+}
+
+export async function startPracticeSync(
+  user: User,
+  { includeSubjects = false }: PracticeSyncOptions = {},
+): Promise<Unsubscribe> {
+  const localSubjects = includeSubjects ? loadSubjects() : (subjectBaselines.get(user.uid) ?? []);
   const localAttempts = loadHistory();
   const localFavourites = loadFavoriteQuestionIds().map((id) => ({ id }));
   await Promise.all([
-    migrateCollection(user, "practiceSubjects", localSubjects),
+    ...(includeSubjects ? [migrateCollection(user, "practiceSubjects", localSubjects)] : []),
     migrateCollection(user, "practiceAttempts", localAttempts),
     migrateCollection(user, "practiceFavourites", localFavourites),
   ]);
@@ -47,12 +73,12 @@ export async function startPracticeSync(user: User): Promise<Unsubscribe> {
   // snapshot streams plus a reconciliation interval alive made navigation and
   // profile saves repeatedly re-enter the synchronisation loop.
   const [remoteSubjects, remoteAttempts, remoteFavourites, settingsSnapshot] = await Promise.all([
-    getDocs(docsFor(user, "practiceSubjects")),
+    includeSubjects ? getDocs(docsFor(user, "practiceSubjects")) : Promise.resolve(null),
     getDocs(docsFor(user, "practiceAttempts")),
     getDocs(docsFor(user, "practiceFavourites")),
     getDocs(collection(getFirebaseFirestore(), "users", user.uid, "practiceSettings")),
   ]);
-  let subjects = remoteSubjects.size
+  let subjects = remoteSubjects?.size
     ? remoteSubjects.docs.map((item) => ({ id: item.id, ...item.data() }) as Subject)
     : localSubjects;
   let attempts = remoteAttempts.size
@@ -62,16 +88,48 @@ export async function startPracticeSync(user: User): Promise<Unsubscribe> {
     ? remoteFavourites.docs.map((item) => ({ id: item.id }))
     : localFavourites;
   let marking = settingsSnapshot.docs.find((item) => item.id === "current")?.data()["marking"] as MarkingScheme | undefined ?? loadMarking();
-  if (remoteSubjects.size) saveSubjects(subjects);
+  if (remoteSubjects?.size) {
+    subjectBaselines.set(user.uid, subjects);
+    saveSubjects(subjects, { notify: false });
+  }
   if (remoteAttempts.size) saveHistory(attempts);
   if (remoteFavourites.size) saveFavoriteQuestionIds(favourites.map((item) => item.id));
   if (marking) saveMarking(marking);
-  const save = () => {
-    const nextSubjects = loadSubjects(); const nextAttempts = loadHistory(); const nextFavourites = loadFavoriteQuestionIds().map((id) => ({ id })); const nextMarking = loadMarking();
-    void syncCollection(user, "practiceSubjects", subjects, nextSubjects); subjects = nextSubjects;
-    void syncCollection(user, "practiceAttempts", attempts, nextAttempts); attempts = nextAttempts;
-    void syncCollection(user, "practiceFavourites", favourites, nextFavourites); favourites = nextFavourites;
-    if (!equal(marking, nextMarking) && nextMarking) { marking = nextMarking; void setDoc(settingsRef, { marking: nextMarking }, { merge: true }); }
+  const save = (key: string) => {
+    // Persist only the collection that actually changed. Loading/stringifying all
+    // question-bank data for every answer or preference write was the source of
+    // the cross-route UI stalls.
+    if (key === "cbt-subjects") {
+      const baseline = subjectBaselines.get(user.uid);
+      // A subject edit only happens in Practice. Until that screen has hydrated
+      // its bank, do not parse or upload a large cached collection globally.
+      if (!includeSubjects && !baseline) return;
+      const next = loadSubjects();
+      const previous = baseline ?? subjects;
+      void syncCollection(user, "practiceSubjects", previous, next);
+      subjectBaselines.set(user.uid, next);
+      subjects = next;
+      return;
+    }
+    if (key === "cbt-history") {
+      const next = loadHistory();
+      void syncCollection(user, "practiceAttempts", attempts, next);
+      attempts = next;
+      return;
+    }
+    if (key === "cbt-favorite-questions") {
+      const next = loadFavoriteQuestionIds().map((id) => ({ id }));
+      void syncCollection(user, "practiceFavourites", favourites, next);
+      favourites = next;
+      return;
+    }
+    if (key === "cbt-marking") {
+      const next = loadMarking();
+      if (!equal(marking, next) && next) {
+        marking = next;
+        void setDoc(settingsRef, { marking: next }, { merge: true });
+      }
+    }
   };
   const stopPersistObserver = onPracticePersist(save);
   return () => {

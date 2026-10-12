@@ -63,10 +63,9 @@ function saveLikes(key: string, likes: Set<string>) {
   window.dispatchEvent(new Event("ssc-preferences-updated"));
 }
 
-function weightedPick(items: string[], likes: Set<string>) {
-  if (!items.length) return null;
-  let cursor = Math.random() * items.reduce((sum, item) => sum + (likes.has(item) ? 4 : 1), 0);
-  return items.find((item) => ((cursor -= likes.has(item) ? 4 : 1) < 0)) ?? items[0] ?? null;
+/** Keep saved items first while retaining the manifest's order within each group. */
+function prioritizeLikes(items: string[], likes: Set<string>) {
+  return [...items].sort((left, right) => Number(likes.has(right)) - Number(likes.has(left)));
 }
 
 function localDateKey() {
@@ -342,14 +341,19 @@ export function MotivationalVideos({
       })
       .then((files) => {
         if (!active) return;
-        setVideos(files);
-        setSelectedVideo(weightedPick(files, loadLikes(VIDEO_LIKES_KEY)));
+        const ordered = prioritizeLikes(files, loadLikes(VIDEO_LIKES_KEY));
+        setVideos(ordered);
+        setSelectedVideo(ordered[0] ?? null);
       })
       .catch(() => active && setVideos([]));
     return () => {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    setVideos((current) => prioritizeLikes(current, likedVideos));
+  }, [likedVideos]);
 
   const selectedIndex = selectedVideo ? videos.indexOf(selectedVideo) : -1;
   const showVideo = (direction: -1 | 1) => {
@@ -708,8 +712,9 @@ export function MotivationalMusic({ onClose }: { onClose: () => void }) {
       })
       .then((files) => {
         if (!active) return;
-        setTracks(files);
-        const initial = weightedPick(files, loadLikes(MUSIC_LIKES_KEY));
+        const ordered = prioritizeLikes(files, loadLikes(MUSIC_LIKES_KEY));
+        setTracks(ordered);
+        const initial = ordered[0] ?? null;
         const playlist = initial ? playlistName(initial) : "";
         setSelectedPlaylist(playlist);
         setSelectedTrack(initial);
@@ -719,6 +724,10 @@ export function MotivationalMusic({ onClose }: { onClose: () => void }) {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    setTracks((current) => prioritizeLikes(current, likedTracks));
+  }, [likedTracks]);
 
   useEffect(() => {
     const expand = () => setMinimized(false);
@@ -754,9 +763,12 @@ export function MotivationalMusic({ onClose }: { onClose: () => void }) {
   }, [selectedTrack]);
 
   const playlists = useMemo(() => [...new Set(tracks.map(playlistName))], [tracks]);
-  const playlistTracks = tracks.filter((track) => playlistName(track) === selectedPlaylist);
+  const playlistTracks = prioritizeLikes(
+    tracks.filter((track) => playlistName(track) === selectedPlaylist),
+    likedTracks,
+  );
   const playingPlaylistTracks = selectedTrack
-    ? tracks.filter((track) => playlistName(track) === playlistName(selectedTrack))
+    ? prioritizeLikes(tracks.filter((track) => playlistName(track) === playlistName(selectedTrack)), likedTracks)
     : [];
   const trackIndex = selectedTrack ? playingPlaylistTracks.indexOf(selectedTrack) : -1;
   const showTrack = (direction: -1 | 1) => {
@@ -769,6 +781,11 @@ export function MotivationalMusic({ onClose }: { onClose: () => void }) {
   };
   const choosePlaylist = (playlist: string) => {
     setSelectedPlaylist(playlist);
+    const first = prioritizeLikes(
+      tracks.filter((track) => playlistName(track) === playlist),
+      likedTracks,
+    )[0];
+    if (first) setSelectedTrack(first);
   };
   const togglePlayback = () => {
     const audio = audioRef.current;

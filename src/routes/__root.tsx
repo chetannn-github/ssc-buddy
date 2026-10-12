@@ -23,13 +23,20 @@ import {
   readCloudPreferences,
 } from "@/lib/firebase-sync";
 import { PROFILE_KEY } from "@/lib/profile";
-import { startPracticeSync } from "@/lib/practice-sync";
+import { hydratePracticeSubjects, startPracticeSync } from "@/lib/practice-sync";
 import { AuthUserContext } from "@/lib/auth-context";
 import { loadDailyTasks, saveDailyTasks } from "@/lib/daily-tasks";
 import { migrateTasksIfEmpty, readTasks } from "@/lib/task-sync";
 import { loadTrackerData, saveTrackerData } from "@/lib/tracker-store";
 import { migrateTrackerIfEmpty, readTrackerSections } from "@/lib/tracker-sync";
+import { WEB_CLOUD_SYNC_ENABLED } from "@/lib/web-cloud-sync";
 import type { User } from "firebase/auth";
+
+const DEBUG_FREEZE = import.meta.env.DEV;
+const debugFreeze = (label: string, details?: Record<string, unknown>) => {
+  if (!DEBUG_FREEZE) return;
+  console.debug(`[SSC Buddy debug] ${label}`, details ?? "");
+};
 
 function NotFoundComponent() {
   return (
@@ -155,7 +162,6 @@ function RootComponent() {
 
   const [syncUser, setSyncUser] = useState<User | null>(null);
   const [authResolved, setAuthResolved] = useState(!isFirebaseConfigured);
-  const [cloudHydrated, setCloudHydrated] = useState(false);
 
   useEffect(() => {
     if (!isFirebaseConfigured) return;
@@ -167,6 +173,46 @@ function RootComponent() {
 
   const navigate = useNavigate();
   const path = useRouterState({ select: (state) => state.location.pathname });
+
+  // Temporary development diagnostics for UI stalls. This is intentionally not
+  // included in production builds, and does not write or alter application data.
+  useEffect(() => {
+    if (!DEBUG_FREEZE) return;
+    debugFreeze("route", { path });
+    const eventNames = [
+      "ssc-daily-tasks-updated",
+      "cbt-tracker-updated",
+      "cbt-profile-updated",
+      "ssc-preferences-updated",
+    ] as const;
+    const counters = new Map<string, { count: number; startedAt: number }>();
+    const listeners = eventNames.map((eventName) => {
+      const listener = () => {
+        const now = performance.now();
+        const current = counters.get(eventName) ?? { count: 0, startedAt: now };
+        const next = now - current.startedAt > 2_000 ? { count: 1, startedAt: now } : { ...current, count: current.count + 1 };
+        counters.set(eventName, next);
+        debugFreeze("local event", { eventName, countIn2Seconds: next.count, path });
+        if (next.count >= 6) console.warn("[SSC Buddy debug] possible event loop", { eventName, path, countIn2Seconds: next.count });
+      };
+      window.addEventListener(eventName, listener);
+      return [eventName, listener] as const;
+    });
+    const observer = typeof PerformanceObserver === "undefined" ? null : new PerformanceObserver((entries) => {
+      entries.getEntries().forEach((entry) => {
+        if (entry.duration >= 100) console.warn("[SSC Buddy debug] long UI task", { durationMs: Math.round(entry.duration), path });
+      });
+    });
+    try {
+      observer?.observe({ type: "longtask", buffered: true });
+    } catch {
+      // Some browsers do not expose Long Tasks; event diagnostics still work.
+    }
+    return () => {
+      listeners.forEach(([eventName, listener]) => window.removeEventListener(eventName, listener));
+      observer?.disconnect();
+    };
+  }, [path]);
   useEffect(() => {
     if (isFirebaseConfigured && authResolved && !syncUser && path !== "/auth") {
       void navigate({ to: "/auth", replace: true });
@@ -174,7 +220,7 @@ function RootComponent() {
   }, [authResolved, navigate, path, syncUser]);
 
   useEffect(() => {
-    if (!syncUser) return;
+    if (!syncUser || !WEB_CLOUD_SYNC_ENABLED) return;
     const keys = [
       "ssc-buddy-liked-videos",
       "ssc-buddy-liked-music",
@@ -244,14 +290,38 @@ function RootComponent() {
     };
   }, [syncUser]);
 
+  // Question banks include complete question text, options and explanations. Loading them
+  // after every route render blocked the browser for seconds on a large bank. Core data is
+  // still hydrated above for every page; this heavy collection is only required by Practice.
+  const requiresPracticeBank = path === "/test" || path === "/question-bank" || path.startsWith("/question/");
+  useEffect(() => {
+    if (!syncUser || !requiresPracticeBank) {
+      return;
+    }
+    if (!WEB_CLOUD_SYNC_ENABLED) {
+      return;
+    }
+    const startedAt = performance.now();
+    debugFreeze("practice bank hydration started", { path });
+    void hydratePracticeSubjects(syncUser)
+      .catch(() => undefined)
+      .finally(() => {
+        debugFreeze("practice bank hydration finished", { path, durationMs: Math.round(performance.now() - startedAt) });
+      });
+    return;
+  }, [requiresPracticeBank, syncUser]);
+
   useEffect(() => {
     if (!syncUser) {
-      setCloudHydrated(false);
+      return;
+    }
+    if (!WEB_CLOUD_SYNC_ENABLED) {
       return;
     }
     let disposed = false;
     let stopPracticeSync: (() => void) | undefined;
-    setCloudHydrated(false);
+    const startedAt = performance.now();
+    debugFreeze("core cloud hydration started", { path });
     void (async () => {
       const localTasks = loadDailyTasks();
       const localTracker = loadTrackerData();
@@ -273,9 +343,14 @@ function RootComponent() {
       stopPracticeSync = stop;
       saveDailyTasks(remoteTasks);
       saveTrackerData(remoteTracker);
-      setCloudHydrated(true);
-    })().catch(() => {
-      if (!disposed) setCloudHydrated(true);
+      debugFreeze("core cloud hydration finished", {
+        path,
+        durationMs: Math.round(performance.now() - startedAt),
+        tasks: remoteTasks.length,
+        subjects: remoteTracker.subjects.length,
+      });
+    })().catch((error: unknown) => {
+      console.error("[SSC Buddy debug] core cloud hydration failed", error);
     });
     return () => {
       disposed = true;
@@ -286,7 +361,7 @@ function RootComponent() {
   // Profile is deliberately synced as its own document: mobile writes cannot replace the
   // browser's full local-storage backup, and both clients use the same key and JSON.
   useEffect(() => {
-    if (!syncUser) return;
+    if (!syncUser || !WEB_CLOUD_SYNC_ENABLED) return;
     let disposed = false;
     let applyingRemote = false;
     let lastProfile = "";
@@ -373,9 +448,7 @@ function RootComponent() {
     <AuthUserContext.Provider value={syncUser}>
       <QueryClientProvider client={queryClient}>
         {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-        {syncUser && !cloudHydrated && path !== "/auth" ? (
-          <div className="flex min-h-screen items-center justify-center bg-[#121212] text-sm text-zinc-400">Loading your workspace…</div>
-        ) : <Outlet />}
+        <Outlet />
         {musicOpen && <MotivationalMusic onClose={() => setMusicOpen(false)} />}
         {videosOpen && (
           <MotivationalVideos

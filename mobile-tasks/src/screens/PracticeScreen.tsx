@@ -80,7 +80,7 @@ type Record = {
   createdAt: string;
   /** Canonical web CBT attempt fields. UI-only aliases below are retained while old mobile screens are migrated. */
   date: string;
-  testMode: "standard" | "random";
+  testMode: "standard" | "random" | "quick-recall";
   attemptGroupId?: string;
   subjectId: string;
   subject: string;
@@ -1278,15 +1278,23 @@ function History({
   const [chapter, setChapter] = useState("All chapters");
   const [filterMenu, setFilterMenu] = useState<"subject" | "chapter" | null>(null);
   const [selected, setSelected] = useState<{ record: Record; attempts: Record[] } | null>(null);
-  const subjects = Array.from(new Set(records.map((record) => record.subject))).sort();
+  // Quick Recall contributes to Activity/Profile metrics, but it is not a
+  // manually started practice test and must not crowd Previous sessions.
+  const sessionRecords = records.filter(
+    (record) =>
+      record.testMode !== "quick-recall" &&
+      record.subject !== "Quick Recall" &&
+      !record.id.startsWith("quick-recall:"),
+  );
+  const subjects = Array.from(new Set(sessionRecords.map((record) => record.subject))).sort();
   const chapters = Array.from(
     new Set(
-      records
+      sessionRecords
         .filter((record) => subject === "All subjects" || record.subject === subject)
         .map((record) => record.chapter),
     ),
   ).sort();
-  const visible = records.filter(
+  const visible = sessionRecords.filter(
     (record) =>
       (subject === "All subjects" || record.subject === subject) &&
       (chapter === "All chapters" || record.chapter === chapter),

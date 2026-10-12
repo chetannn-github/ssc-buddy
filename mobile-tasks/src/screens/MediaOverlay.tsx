@@ -12,19 +12,15 @@ import { subscribeBottomNavigation } from "../navigation/bottomNavigationVisibil
 import { patchCloudPreferences, watchCloudPreferences } from "../lib/firebase";
 
 export type MediaMode = "video" | "music" | null;
-const reelPages = Array.from({ length: videoTracks.length * 400 }, (_, index) => ({ id: index, track: videoTracks[index % videoTracks.length] }));
-const firstReelPage = Math.floor(reelPages.length / 2);
 const playlistName = (track: string) => decodeURIComponent(track).split("/").slice(0, -1).join(" / ") || "Music";
-/** Exact web weighting: a liked item is four times as likely as another item. */
-const weightedPick = (items: string[], likes: Set<string>) => {
-  if (!items.length) return null;
-  let cursor = Math.random() * items.reduce((total, item) => total + (likes.has(item) ? 4 : 1), 0);
-  return items.find((item) => ((cursor -= likes.has(item) ? 4 : 1) < 0)) ?? items[0] ?? null;
+/** Keep liked media first, while preserving the source order inside each group. */
+const prioritizeLikes = (items: string[], likes: Set<string>) => {
+  return [...items].sort((left, right) => Number(likes.has(right)) - Number(likes.has(left)));
 };
-const reelIndexFor = (track: string) => {
-  const offset = videoTracks.indexOf(track);
-  if (offset < 0 || !videoTracks.length) return firstReelPage;
-  const base = firstReelPage - (firstReelPage % videoTracks.length);
+const reelIndexFor = (track: string, tracks: string[], firstReelPage: number) => {
+  const offset = tracks.indexOf(track);
+  if (offset < 0 || !tracks.length) return firstReelPage;
+  const base = firstReelPage - (firstReelPage % tracks.length);
   return base + offset;
 };
 
@@ -36,20 +32,26 @@ export function MediaOverlay({ user, mode, onClose, musicOpenRequest }: { user: 
 
 function VideoReels({ user, onClose }: { user: User | null; onClose: () => void }) {
   const { height } = useWindowDimensions();
-  const [index, setIndex] = useState(firstReelPage);
   const [swiping, setSwiping] = useState(false);
   const [likes, toggleLike, likesReady] = useCloudLikes(user, "ssc-buddy-liked-videos");
+  const orderedTracks = useMemo(() => prioritizeLikes(videoTracks, likes), [likes]);
+  const reelPages = useMemo(
+    () => Array.from({ length: orderedTracks.length * 400 }, (_, index) => ({ id: index, track: orderedTracks[index % orderedTracks.length] })),
+    [orderedTracks],
+  );
+  const firstReelPage = Math.floor(reelPages.length / 2);
+  const [index, setIndex] = useState(firstReelPage);
   const reelsRef = useRef<FlatList<{ id: number; track: string }>>(null);
   const initialPickApplied = useRef(false);
   useEffect(() => {
     if (!likesReady || initialPickApplied.current) return;
     initialPickApplied.current = true;
-    const track = weightedPick(videoTracks, likes);
+    const track = orderedTracks[0];
     if (!track) return;
-    const next = reelIndexFor(track);
+    const next = reelIndexFor(track, orderedTracks, firstReelPage);
     setIndex(next);
     requestAnimationFrame(() => reelsRef.current?.scrollToIndex({ index: next, animated: false }));
-  }, [likes, likesReady]);
+  }, [firstReelPage, likesReady, orderedTracks]);
   return <Modal visible animationType="slide" onRequestClose={onClose}><View style={styles.reel}>
     <FlatList ref={reelsRef} data={reelPages} keyExtractor={(item) => String(item.id)} pagingEnabled showsVerticalScrollIndicator={false} initialScrollIndex={firstReelPage} getItemLayout={(_, itemIndex) => ({ length: height, offset: height * itemIndex, index: itemIndex })} initialNumToRender={2} maxToRenderPerBatch={2} windowSize={2} removeClippedSubviews onScrollBeginDrag={() => setSwiping(true)} onScrollEndDrag={(event) => { if (!event.nativeEvent.velocity?.y) setSwiping(false); }} onMomentumScrollEnd={(event) => { setIndex(Math.round(event.nativeEvent.contentOffset.y / height)); setSwiping(false); }} renderItem={({ item, index: itemIndex }) => index === itemIndex ? <ReelPage track={item.track} active height={height} onClose={onClose} liked={likes.has(item.track)} swiping={swiping} onToggleLike={() => toggleLike(item.track)} /> : <View style={[styles.reel, { height, flex: 0 }]} />} />
   </View></Modal>;
@@ -117,9 +119,10 @@ function MusicPlayer({ user, onClose, openRequest }: { user: User | null; onClos
   const artworkAnimation = useRef<Animated.CompositeAnimation | null>(null);
   const shouldSpin = useRef(false);
   const activeTrack = musicTracks[index] ?? musicTracks[0];
-  const playlists = useMemo(() => [...new Set(musicTracks.map(playlistName))], []);
-  const visibleTracks = useMemo(() => musicTracks.filter((track) => playlistName(track) === selectedPlaylist), [selectedPlaylist]);
-  const playingPlaylistTracks = useMemo(() => musicTracks.filter((track) => playlistName(track) === playlistName(activeTrack ?? "")), [activeTrack]);
+  const orderedTracks = useMemo(() => prioritizeLikes(musicTracks, likes), [likes]);
+  const playlists = useMemo(() => [...new Set(orderedTracks.map(playlistName))], [orderedTracks]);
+  const visibleTracks = useMemo(() => orderedTracks.filter((track) => playlistName(track) === selectedPlaylist), [orderedTracks, selectedPlaylist]);
+  const playingPlaylistTracks = useMemo(() => orderedTracks.filter((track) => playlistName(track) === playlistName(activeTrack ?? "")), [activeTrack, orderedTracks]);
   const liked = likes.has(activeTrack);
   const discSize = 112;
   const cover = musicCover(activeTrack);
@@ -129,14 +132,14 @@ function MusicPlayer({ user, onClose, openRequest }: { user: User | null; onClos
   useEffect(() => {
     if (!likesReady || initialPickApplied.current) return;
     initialPickApplied.current = true;
-    const initial = weightedPick(musicTracks, likes);
+    const initial = orderedTracks[0];
     if (!initial) return;
     const nextIndex = musicTracks.indexOf(initial);
     if (nextIndex >= 0) {
       setIndex(nextIndex);
       setSelectedPlaylist(playlistName(initial));
     }
-  }, [likes, likesReady]);
+  }, [likesReady, orderedTracks]);
   useEffect(() => { if (openRequest) setMinimized(false); }, [openRequest]);
   useEffect(() => subscribeBottomNavigation(setBottomNavVisible), []);
   useEffect(() => {

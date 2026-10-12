@@ -14,15 +14,22 @@ import {
 } from "@/components/ui/select";
 import { attemptKey, deleteRecord, loadHistory, type TestRecord } from "@/lib/exam";
 
-function friendlyDate(iso: string) {
-  const d = new Date(iso);
+function friendlyDate(timestamp: string, fallbackDate?: string) {
+  // Android records use `date` as a local calendar key (YYYY-MM-DD) and keep
+  // the real timestamp in `createdAt`. Parsing the calendar key as ISO made
+  // every mobile-synced attempt look like 5:30 AM in India (UTC offset).
+  const hasClock = timestamp.includes("T");
+  const source = hasClock ? timestamp : `${fallbackDate ?? timestamp}T00:00:00`;
+  const d = new Date(source);
   const now = new Date();
   const day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
   const diffDays = Math.round((day(now) - day(d)) / 86400000);
-  const time = d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-  if (diffDays === 0) return `Today, ${time}`;
-  if (diffDays === 1) return `Yesterday, ${time}`;
-  if (diffDays < 7) return `${diffDays} days ago, ${time}`;
+  const time = hasClock
+    ? d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
+    : null;
+  if (diffDays === 0) return time ? `Today, ${time}` : "Today";
+  if (diffDays === 1) return time ? `Yesterday, ${time}` : "Yesterday";
+  if (diffDays < 7) return time ? `${diffDays} days ago, ${time}` : `${diffDays} days ago`;
   return d.toLocaleDateString(undefined, {
     day: "numeric",
     month: "short",
@@ -62,22 +69,38 @@ function HistoryPage() {
     return () => window.clearTimeout(timer);
   }, [isLoading]);
 
-  const subjects = useMemo(
-    () => Array.from(new Set(records.map((r) => r.subject))).sort(),
+  // Quick Recall is counted in daily activity, not as a user-started test.
+  // Keep it out of the Practice history even though it shares the canonical
+  // practiceAttempts Firestore collection for sync and deduplication.
+  const sessionRecords = useMemo(
+    () =>
+      records.filter(
+        (record) =>
+          record.testMode !== "quick-recall" &&
+          record.subject !== "Quick Recall" &&
+          !record.id.startsWith("quick-recall:"),
+      ),
     [records],
+  );
+
+  const subjects = useMemo(
+    () => Array.from(new Set(sessionRecords.map((r) => r.subject))).sort(),
+    [sessionRecords],
   );
   const chapters = useMemo(
     () =>
       Array.from(
         new Set(
-          records.filter((r) => subject === ALL || r.subject === subject).map((r) => r.chapter),
+          sessionRecords
+            .filter((r) => subject === ALL || r.subject === subject)
+            .map((r) => r.chapter),
         ),
       ).sort(),
-    [records, subject],
+    [sessionRecords, subject],
   );
 
   const visible = useMemo(() => {
-    const list = records.filter(
+    const list = sessionRecords.filter(
       (r) =>
         (subject === ALL || r.subject === subject) && (chapter === ALL || r.chapter === chapter),
     );
@@ -100,7 +123,7 @@ function HistoryPage() {
         };
       })
       .sort((a, b) => new Date(b.latest.date).getTime() - new Date(a.latest.date).getTime());
-  }, [records, subject, chapter]);
+  }, [sessionRecords, subject, chapter]);
 
   return (
     <AppShell title="Test History">
@@ -209,7 +232,7 @@ function HistoryPage() {
                             </p>
                           )}
                           <p className="mt-1 text-xs text-muted-foreground">
-                            {friendlyDate(r.date)}
+                            {friendlyDate(r.createdAt ?? r.date, r.date)}
                           </p>
                         </div>
                       </div>

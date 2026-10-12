@@ -21,6 +21,8 @@ export type McqQuestion = {
 
 export type TestRecord = {
   id: string;
+  /** Exact creation timestamp supplied by the mobile app. `date` can be a local YYYY-MM-DD key. */
+  createdAt?: string;
   date: string;
   testMode?: "standard" | "random" | "quick-recall";
   attemptGroupId?: string;
@@ -96,21 +98,22 @@ function read<T>(key: string, fallback: T): T {
   }
 }
 
-const practicePersistenceSubscribers = new Set<() => void>();
+const practicePersistenceSubscribers = new Set<(key: string) => void>();
 
 /** Internal persistence hook. Unlike a browser CustomEvent, listener errors
  * cannot escape through `window.dispatchEvent` and freeze the active route. */
-export function onPracticePersist(callback: () => void) {
+export function onPracticePersist(callback: (key: string) => void) {
   practicePersistenceSubscribers.add(callback);
   return () => practicePersistenceSubscribers.delete(callback);
 }
 
-function write(key: string, value: unknown) {
+function write(key: string, value: unknown, notify = true) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
+    if (!notify) return;
     practicePersistenceSubscribers.forEach((callback) => {
       try {
-        callback();
+        callback(key);
       } catch {
         /* a sync observer must never break a write */
       }
@@ -241,8 +244,8 @@ export function loadSubjects(): Subject[] {
   return subjects;
 }
 
-export function saveSubjects(subjects: Subject[]) {
-  write(SUBJECTS_KEY, subjects);
+export function saveSubjects(subjects: Subject[], options?: { notify?: boolean }) {
+  write(SUBJECTS_KEY, subjects, options?.notify !== false);
 }
 
 export function addSubject(name: string): Subject[] {

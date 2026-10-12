@@ -2,6 +2,7 @@ import { collection, doc, getDocs, onSnapshot, setDoc, writeBatch } from "fireba
 import type { User } from "firebase/auth";
 import { getFirebaseFirestore } from "@/lib/firebase-sync";
 import { defaultData, type TrackerData } from "@/lib/tracker";
+import { WEB_CLOUD_SYNC_ENABLED } from "@/lib/web-cloud-sync";
 
 type Section = "meta" | "subjects" | "revision" | "tests" | "activity" | "pinned";
 const sections: Section[] = ["meta", "subjects", "revision", "tests", "activity", "pinned"];
@@ -21,6 +22,7 @@ export async function migrateTrackerIfEmpty(user: User, data: TrackerData) {
 
 /** Writes only tracker sections whose value actually changed. */
 export async function syncTrackerSections(user: User, before: TrackerData, next: TrackerData) {
+  if (!WEB_CLOUD_SYNC_ENABLED) return;
   await Promise.all(sections.filter((section) => !equal(sectionValue(before, section), sectionValue(next, section))).map((section) =>
     setDoc(doc(collectionFor(user), section), { value: sectionValue(next, section) }, { merge: true }),
   ));

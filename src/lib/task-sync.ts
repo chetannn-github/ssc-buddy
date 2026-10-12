@@ -2,6 +2,7 @@ import { collection, deleteDoc, doc, getDocs, onSnapshot, setDoc, writeBatch } f
 import type { User } from "firebase/auth";
 import { getFirebaseFirestore } from "@/lib/firebase-sync";
 import type { DailyTask } from "@/lib/daily-tasks";
+import { WEB_CLOUD_SYNC_ENABLED } from "@/lib/web-cloud-sync";
 
 const collectionFor = (user: User) => collection(getFirebaseFirestore(), "users", user.uid, "tasks");
 const same = (left: DailyTask, right: DailyTask) => JSON.stringify(left) === JSON.stringify(right);
@@ -30,6 +31,7 @@ export function watchTasks(user: User, onChange: (tasks: DailyTask[]) => void) {
 
 /** Performs document-level writes only; unchanged tasks never reach Firestore. */
 export async function syncTaskChanges(user: User, previous: DailyTask[], next: DailyTask[]) {
+  if (!WEB_CLOUD_SYNC_ENABLED) return;
   const before = new Map(previous.map((task) => [task.id, task]));
   const after = new Map(next.map((task) => [task.id, task]));
   await Promise.all([

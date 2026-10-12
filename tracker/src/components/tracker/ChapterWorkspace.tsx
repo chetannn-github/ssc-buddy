@@ -20,6 +20,11 @@ import { useTrackerDialog } from "./dialog";
 type Mode = "syllabus" | "revision";
 type Selected = { subject: Subject; chapter: Chapter } | null;
 
+// Older saved workspaces can contain incomplete chapter placeholders. They are
+// not usable revision targets, so treat them exactly like an empty subject.
+const hasUsableChapter = (subject: Subject | undefined) =>
+  Boolean(subject?.chapters.some((chapter) => chapter.id.trim() && chapter.name.trim()));
+
 function RevisionDots({
   done,
   target,
@@ -162,7 +167,10 @@ export function ChapterWorkspace({ mode }: { mode: Mode }) {
         chapters.splice(sourceIndex < targetIndex ? targetIndex - 1 : targetIndex, 0, chapter);
     });
 
-  const addRevisionType = (subjectId: string) =>
+  const addRevisionType = (subjectId: string) => {
+    // Revision cycles belong to actual chapters. Do not create orphaned types
+    // for an empty subject, because they cannot be used or tracked anywhere.
+    if (!hasUsableChapter(data.subjects.find((subject) => subject.id === subjectId))) return;
     openForm({
       title: "Add revision type",
       fields: [
@@ -187,6 +195,7 @@ export function ChapterWorkspace({ mode }: { mode: Mode }) {
           });
         }),
     });
+  };
 
   return (
     <div className="space-y-3">
@@ -252,6 +261,7 @@ export function ChapterWorkspace({ mode }: { mode: Mode }) {
         {subjects.map((subject) => {
           const progress =
             mode === "syllabus" ? subjectSyllabus(subject) : subjectRevision(data, subject);
+          const canAddRevisionType = hasUsableChapter(subject);
           const isOpen = openSubjectId === subject.id;
           const isReordering = reorderingSubjectId === subject.id;
           return (
@@ -308,7 +318,7 @@ export function ChapterWorkspace({ mode }: { mode: Mode }) {
                     </button>
                   </div>
                 )}
-                {mode === "revision" && (
+                {mode === "revision" && canAddRevisionType && (
                   <GhostButton
                     tone="blue"
                     className="!px-2 !py-1 text-xs"
