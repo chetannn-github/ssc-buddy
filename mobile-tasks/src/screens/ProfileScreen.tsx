@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { File } from "expo-file-system";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Animated, Easing, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView as NativeScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import type { User } from "firebase/auth";
@@ -9,7 +10,7 @@ import { colors } from "../theme";
 import { MockTestLogDialog, type MockTestLog } from "./MockTestLogDialog";
 import { reportVerticalScroll } from "../navigation/bottomNavigationVisibility";
 import type { PracticeProfile } from "../lib/profile-store";
-import { appendTrackerTest, watchPracticeEntities, watchTrackerSections, watchTrackerTests } from "../lib/firebase";
+import { appendTrackerTest, syncTrackerSections, watchPracticeEntities, watchTrackerSections, watchTrackerTests } from "../lib/firebase";
 
 const ScrollView = (props: any) => <NativeScrollView {...props} scrollEventThrottle={16} onScroll={(event) => { if (!props.horizontal) reportVerticalScroll(event.nativeEvent.contentOffset.y); props.onScroll?.(event); }} />;
 
@@ -62,6 +63,32 @@ type Props = {
   streak: number;
 };
 
+type ImportedSubject = { id: string; name: string; chapters: Array<{ id: string; name: string; total: number; completed: number }> };
+
+function parseSubjectsFile(value: unknown): ImportedSubject[] {
+  const source = value as { subjects?: unknown };
+  if (!Array.isArray(source?.subjects) || source.subjects.length === 0) throw new Error("JSON must include a non-empty subjects array.");
+  const ids = new Set<string>();
+  return source.subjects.map((item, subjectIndex) => {
+    const subject = item as { id?: unknown; name?: unknown; chapters?: unknown };
+    const id = typeof subject.id === "string" ? subject.id.trim() : "";
+    const name = typeof subject.name === "string" ? subject.name.trim() : "";
+    if (!id || !name || ids.has(id) || !Array.isArray(subject.chapters)) throw new Error(`Subject ${subjectIndex + 1} needs a unique id, name, and chapters array.`);
+    ids.add(id);
+    const chapterIds = new Set<string>();
+    const chapters = subject.chapters.map((chapterItem, chapterIndex) => {
+      const chapter = chapterItem as { id?: unknown; name?: unknown; total?: unknown; completed?: unknown };
+      const chapterId = typeof chapter.id === "string" ? chapter.id.trim() : "";
+      const chapterName = typeof chapter.name === "string" ? chapter.name.trim() : "";
+      const total = Math.max(1, Number(chapter.total) || 0);
+      if (!chapterId || !chapterName || chapterIds.has(chapterId)) throw new Error(`${name}: chapter ${chapterIndex + 1} needs a unique id and name.`);
+      chapterIds.add(chapterId);
+      return { id: chapterId, name: chapterName, total, completed: Math.min(total, Math.max(0, Number(chapter.completed) || 0)) };
+    });
+    return { id, name, chapters };
+  });
+}
+
 export function ProfileScreen({ user, tasks, profileSettings, onProfileSaved, onLogout, onOpenVideo, onOpenMusic, onOpenTracker, streak }: Props) {
   const [profileName, setProfileName] = useState(profileSettings?.name ?? "");
   const [profileReady, setProfileReady] = useState(profileSettings !== null);
@@ -83,6 +110,10 @@ export function ProfileScreen({ user, tasks, profileSettings, onProfileSaved, on
   const [rangeOpen, setRangeOpen] = useState(false);
   const [rangeMenuVisible, setRangeMenuVisible] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
+  const [addingSubjects, setAddingSubjects] = useState(false);
+  const [importedSubjects, setImportedSubjects] = useState<ImportedSubject[]>([]);
+  const [subjectFileName, setSubjectFileName] = useState("");
+  const [subjectImportError, setSubjectImportError] = useState("");
   const rangeMenuProgress = useRef(new Animated.Value(0)).current;
   const rangeContent = useRef(new Animated.Value(1)).current;
   const avatarImage = avatarAssets[avatarFile] ?? avatarAssets[avatarFiles[0]];
@@ -100,6 +131,25 @@ export function ProfileScreen({ user, tasks, profileSettings, onProfileSaved, on
       manifestation,
       avatar: nextAvatar,
     });
+  };
+  const chooseSubjectsFile = async () => {
+    if (savingProfile) return;
+    setSubjectImportError("");
+    try {
+      // File.pickFileAsync owns the Android document permission grant for the
+      // selected URI. It avoids the missing-read-permission issue produced by
+      // DocumentPicker + a separate FileSystem reader.
+      const result = await File.pickFileAsync({ mimeTypes: ["application/json", "text/json"] });
+      if (result.canceled) return;
+      const asset = result.result;
+      const raw = await asset.text();
+      const subjects = parseSubjectsFile(JSON.parse(raw));
+      setImportedSubjects(subjects);
+      setSubjectFileName(asset.name || "syllabus.json");
+    } catch (error) {
+      setImportedSubjects([]); setSubjectFileName("");
+      setSubjectImportError(error instanceof Error ? error.message : "Choose a valid syllabus JSON file.");
+    }
   };
   useEffect(() => {
     if (!profileSettings) setProfileReady(true);
@@ -132,13 +182,15 @@ export function ProfileScreen({ user, tasks, profileSettings, onProfileSaved, on
   const filteredTasks = tasks.filter((task) => withinRange(task.date, range));
   const filteredSummary = summarizeTasks(filteredTasks);
   const practiceSessions = filteredTasks.filter((task) => task.type === "Practice Session").length;
-  const trackerSubjects = Array.isArray(trackerData.subjects) ? trackerData.subjects : [];
-  const trackerLectures = trackerSubjects.reduce((sum: number, subject: any) => sum + (Array.isArray(subject.chapters) ? subject.chapters.reduce((chapterSum: number, chapter: any) => chapterSum + Math.max(0, Number(chapter.completed) || 0), 0) : 0), 0);
-  const trackerRevisions = trackerSubjects.reduce((sum: number, subject: any) => {
-    const revision = trackerData.revision?.[subject.id] ?? {}; const types = Array.isArray(revision.types) ? revision.types : [];
-    return sum + (Array.isArray(subject.chapters) ? subject.chapters.reduce((chapterSum: number, chapter: any) => chapterSum + types.reduce((typeSum: number, item: any) => typeSum + Math.min(Math.max(0, Number(item.target) || 0), Math.max(0, Number(revision.done?.[chapter.id]?.[item.id]) || 0)), 0), 0) : 0);
-  }, 0);
-  const loggedMocks = mockTests.filter((test) => withinRange(test.date, range)).length;
+  // Match the web profile exactly: tracker figures represent completed
+  // activity within the selected date range, not the syllabus totals.
+  const trackerActivities = Array.isArray(trackerData.activity) ? trackerData.activity : [];
+  const trackerTotalFor = (type: "lecture" | "revision" | "mock-test") => trackerActivities
+    .filter((entry: any) => entry?.type === type && typeof entry?.date === "string" && withinRange(entry.date, range))
+    .reduce((sum: number, entry: any) => sum + Math.max(0, Number(entry.count) || 0), 0);
+  const trackerLectures = trackerTotalFor("lecture");
+  const trackerRevisions = trackerTotalFor("revision");
+  const loggedMocks = trackerTotalFor("mock-test") + mockTests.filter((test) => withinRange(test.date, range)).length;
   const activeRangeLabel = ranges.find((item) => item.key === range)?.label ?? "Today";
   const changeRange = (next: Range) => {
     if (next !== range) {
@@ -206,7 +258,7 @@ export function ProfileScreen({ user, tasks, profileSettings, onProfileSaved, on
       <MockTestLogDialog visible={loggingMockTest} subjects={syllabusSubjects} onClose={() => setLoggingMockTest(false)} onSave={saveMockTest} />
       <Modal transparent visible={viewingAvatar} animationType="fade" onRequestClose={() => setViewingAvatar(false)}><Pressable style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 28, backgroundColor: "rgba(0,0,0,.88)" }} onPress={() => setViewingAvatar(false)}><Pressable style={{ width: "100%", aspectRatio: 1, maxWidth: 330, overflow: "hidden", borderRadius: 24, borderWidth: 1, borderColor: "#3f3f46", backgroundColor: "#1c1c1c" }} onPress={() => undefined}><Image source={avatarImage} style={{ width: "100%", height: "100%" }} /></Pressable></Pressable></Modal>
       <Modal transparent visible={confirmLogout} animationType="fade" onRequestClose={() => setConfirmLogout(false)}><Pressable style={styles.modalBackdrop} onPress={() => setConfirmLogout(false)}><Pressable style={styles.confirmDialog} onPress={() => undefined}><View style={styles.confirmHeader}><View style={styles.confirmIcon}><MaterialCommunityIcons name="logout" size={18} color="#fca5a5" /></View><Pressable hitSlop={10} onPress={() => setConfirmLogout(false)}><MaterialCommunityIcons name="close" size={20} color={colors.subdued} /></Pressable></View><Text style={styles.confirmTitle}>Sign out?</Text><Text style={styles.confirmCopy}>You can sign back in anytime.</Text><View style={styles.confirmActions}><Pressable style={styles.cancelButton} onPress={() => setConfirmLogout(false)}><Text style={styles.cancelButtonText}>Cancel</Text></Pressable><Pressable style={styles.logoutConfirm} onPress={onLogout}><Text style={styles.logoutConfirmText}>Sign out</Text></Pressable></View></Pressable></Pressable></Modal>
-      <Modal transparent visible={editing} animationType="fade" onRequestClose={() => !savingProfile && setEditing(false)}><KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={() => !savingProfile && setEditing(false)} /><View style={styles.editDialog}><Text style={styles.editTitle}>Setup your profile</Text><EditField label="Your name" value={profileName} onChange={setProfileName} /><EditField label="Question goal" value={goal} onChange={(value) => setGoal(value.replace(/\D/g, ""))} numeric /><EditField label="Exam name" value={examName} onChange={setExamName} /><Text style={styles.editLabel}>DAILY MANIFESTATION (OPTIONAL)</Text><TextInput multiline value={manifestation} onChangeText={(value) => setManifestation(value.toUpperCase())} placeholder="Write the sentence you want to type daily" placeholderTextColor={colors.subdued} style={styles.manifestationInput} /><View style={styles.editActions}><Pressable disabled={savingProfile} onPress={() => setEditing(false)}><Text style={styles.cancel}>Cancel</Text></Pressable><Pressable disabled={savingProfile} style={[styles.saveProfile, savingProfile && { opacity: .65 }]} onPress={async () => { setSavingProfile(true); onProfileSaved({ name: profileName, examName, questionGoal: Number(goal) || 100, manifestation, avatar: avatarFile }); await new Promise((resolve) => setTimeout(resolve, 220)); setSavingProfile(false); setEditing(false); }}>{savingProfile ? <ActivityIndicator size="small" color={colors.accentDeep} /> : <Text style={styles.saveProfileText}>Save profile</Text>}</Pressable></View></View></KeyboardAvoidingView></Modal>
+      <Modal transparent visible={editing} animationType="fade" onRequestClose={() => !savingProfile && setEditing(false)}><KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={() => !savingProfile && setEditing(false)} /><View style={styles.editDialog}><Text style={styles.editTitle}>Setup your profile</Text><EditField label="Your name" value={profileName} onChange={setProfileName} /><EditField label="Question goal" value={goal} onChange={(value) => setGoal(value.replace(/\D/g, ""))} numeric /><EditField label="Exam name" value={examName} onChange={setExamName} />{!syllabusSubjects.length && <View style={styles.subjectSetup}><Pressable disabled={savingProfile} onPress={() => setAddingSubjects((value) => !value)} style={styles.addSubjects}><MaterialCommunityIcons name="plus" size={16} color="#60a5fa" /><Text style={styles.addSubjectsText}>{addingSubjects ? "Hide subject import" : "Import syllabus JSON"}</Text></Pressable>{addingSubjects && <><Text style={[styles.editLabel, styles.subjectSetupLabel]}>SYLLABUS FILE</Text><Pressable disabled={savingProfile} onPress={() => void chooseSubjectsFile()} style={styles.chooseSubjectFile}><MaterialCommunityIcons name="file-upload-outline" size={16} color="#60a5fa" /><Text numberOfLines={1} style={styles.chooseSubjectFileText}>{subjectFileName || "Choose JSON file"}</Text></Pressable><Text style={styles.subjectHint}>{importedSubjects.length ? `${importedSubjects.length} subject${importedSubjects.length === 1 ? "" : "s"} ready to import.` : "Subjects, chapters, total and completed lectures are imported."}</Text>{subjectImportError ? <Text style={styles.subjectImportError}>{subjectImportError}</Text> : null}</>}</View>}<View style={styles.manifestationField}><Text style={[styles.editLabel, styles.manifestationLabel]}>DAILY MANIFESTATION (OPTIONAL)</Text><TextInput multiline value={manifestation} onChangeText={(value) => setManifestation(value.toUpperCase())} placeholder="Write the sentence you want to type daily" placeholderTextColor={colors.subdued} style={styles.manifestationInput} /></View><View style={styles.editActions}><Pressable disabled={savingProfile} onPress={() => setEditing(false)}><Text style={styles.cancel}>Cancel</Text></Pressable><Pressable disabled={savingProfile} style={[styles.saveProfile, savingProfile && { opacity: .65 }]} onPress={async () => { setSavingProfile(true); try { onProfileSaved({ name: profileName, examName, questionGoal: Number(goal) || 100, manifestation, avatar: avatarFile }); const newSubjects = !syllabusSubjects.length ? importedSubjects : []; if (user && newSubjects.length) { const revision = { ...(trackerData.revision ?? {}), ...Object.fromEntries(newSubjects.map((subject) => [subject.id, { types: [], done: {}, targets: {} }])) }; const nextTracker = { ...trackerData, subjects: [...(Array.isArray(trackerData.subjects) ? trackerData.subjects : []), ...newSubjects], revision }; await syncTrackerSections(user, trackerData, nextTracker); setTrackerData(nextTracker); setSyllabusSubjects(newSubjects.map((subject) => subject.name)); setImportedSubjects([]); setSubjectFileName(""); setAddingSubjects(false); } await new Promise((resolve) => setTimeout(resolve, 220)); setEditing(false); } finally { setSavingProfile(false); } }}>{savingProfile ? <ActivityIndicator size="small" color={colors.accentDeep} /> : <Text style={styles.saveProfileText}>Save profile</Text>}</Pressable></View></View></KeyboardAvoidingView></Modal>
     </ScrollView>
   );
 }
@@ -404,7 +456,7 @@ const styles: Record<string, any> = StyleSheet.create({
   actionRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 14, marginTop: 19 }, action: { flexDirection: "row", alignItems: "center", gap: 3, paddingVertical: 8 }, actionText: { color: colors.text, fontSize: 13, fontWeight: "600" },
   summaryCard: { marginTop: 27, overflow: "visible", borderRadius: 18, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, paddingTop: 16 }, cardHeader: { zIndex: 30, flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 16 }, cardEyebrow: { color: "#a1a1aa", fontSize: 10, fontWeight: "700", letterSpacing: 1.6 }, trackerEyebrow: { paddingHorizontal: 16, paddingTop: 17 }, rangeWrap: { position: "relative", zIndex: 40 }, rangeButton: { height: 29, flexDirection: "row", alignItems: "center", gap: 3, borderRadius: 9, paddingHorizontal: 8, backgroundColor: "#292929" }, rangeText: { color: colors.text, fontSize: 11, fontWeight: "700" }, rangeMenu: { position: "absolute", top: 34, right: 0, minWidth: 124, overflow: "hidden", borderRadius: 11, paddingVertical: 3, backgroundColor: "#292929", borderWidth: 1, borderColor: colors.border, elevation: 30, shadowColor: "#000", shadowOpacity: 0.45, shadowRadius: 12, shadowOffset: { width: 0, height: 5 } }, rangeOption: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 11, paddingVertical: 8 }, rangeOptionActive: { backgroundColor: "#f4f4f5" }, rangeOptionText: { color: colors.muted, fontSize: 12 }, rangeOptionTextActive: { color: "#171717", fontWeight: "800" }, practiceGrid: { flexDirection: "row", flexWrap: "wrap", paddingTop: 10 }, trackerGrid: { flexDirection: "row", flexWrap: "wrap", paddingTop: 11 }, stat: { width: "33.333%", alignItems: "center", paddingVertical: 10, paddingHorizontal: 3, borderRightWidth: 1, borderBottomWidth: 1, borderColor: colors.border }, statHalf: { width: "50%" }, statLastColumn: { borderRightWidth: 0 }, statLastRow: { borderBottomWidth: 0 }, statValue: { color: colors.text, fontSize: 17, fontWeight: "700", textAlign: "center" }, statLabel: { color: colors.muted, fontSize: 10, lineHeight: 14, marginTop: 4, textAlign: "center" }, divider: { height: 1, backgroundColor: colors.border },
   heatmapSection: { marginTop: 20, paddingTop: 2 }, heatmapPending: { opacity: 0 }, heatmapHeading: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 10 }, heatmapFacts: { flexDirection: "row", gap: 12 }, heatmapMuted: { color: colors.muted, fontSize: 10 }, heatmapNumber: { color: colors.text, fontWeight: "800" }, heatmapScroll: { marginTop: 12 }, months: { gap: 10, paddingBottom: 4 }, month: { width: 58 }, monthGrid: { height: 63, flexDirection: "column", flexWrap: "wrap", alignContent: "flex-start", gap: 3 }, heatCell: { width: 8, height: 8, borderRadius: 2 }, heatSelected: { borderWidth: 1, borderColor: "#fff", transform: [{ scale: 1.15 }] }, monthLabel: { color: colors.muted, fontSize: 10, textAlign: "center", marginTop: 7 }, heatScrollbar: { height: 3, overflow: "hidden", marginTop: 2, borderRadius: 2, backgroundColor: "#303030" }, heatScrollbarThumb: { height: "100%", borderRadius: 2, backgroundColor: "#777782" }, heatDetail: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 8, paddingHorizontal: 1 }, heatDetailDate: { color: colors.text, fontSize: 11, fontWeight: "700" }, activityList: { marginTop: 2 }, activityRow: { minHeight: 25, flexDirection: "row", alignItems: "center", gap: 7, paddingVertical: 1 }, activityDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: "#6ee7b7" }, activityText: { flex: 1, color: colors.muted, fontSize: 10 }, activityTitle: { color: colors.text, fontWeight: "700" }, activityCount: { color: colors.muted, fontSize: 10, fontFamily: "monospace" }, noActivity: { paddingVertical: 7, color: colors.muted, fontSize: 11 },
-  trackerOverview: { marginTop: 12, borderTopWidth: 1, borderColor: colors.border, paddingTop: 13 }, trackerHeading: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 12 }, trackerTitle: { color: colors.text, fontSize: 19, fontWeight: "800", marginTop: 4 }, trackerCount: { color: colors.muted, fontSize: 11, fontFamily: "monospace" }, trackerCard: { marginTop: 9, borderRadius: 15, padding: 14, backgroundColor: "rgba(255,255,255,.025)", borderWidth: 1, borderColor: colors.border }, trackerCardTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 13 }, trackerCardLabel: { color: colors.muted, fontSize: 11, fontWeight: "700" }, trackerCardTitle: { color: colors.text, fontSize: 16, fontWeight: "800", marginTop: 3 }, trackerRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingTop: 8 }, trackerRowName: { width: 68, color: "#d4d4d8", fontSize: 11 }, trackerBar: { flex: 1, height: 5, overflow: "hidden", borderRadius: 4, backgroundColor: "#303030" }, trackerBarFill: { height: "100%", borderRadius: 4 }, trackerRowCount: { width: 31, color: colors.muted, fontSize: 10, textAlign: "right" },
-  modalBackdrop: { flex: 1, justifyContent: "center", padding: 20, backgroundColor: "rgba(0,0,0,.70)" }, editDialog: { borderRadius: 21, padding: 20, gap: 14, backgroundColor: "#202020", borderWidth: 1, borderColor: colors.border }, editTitle: { color: colors.text, fontSize: 21, fontWeight: "800", marginBottom: 4 }, editLabel: { color: colors.subdued, fontSize: 10, letterSpacing: 1.3, fontWeight: "800", marginBottom: 7 }, editInput: { height: 46, borderRadius: 12, paddingHorizontal: 13, color: colors.text, backgroundColor: "#151515", borderWidth: 1, borderColor: "#3f3f46" }, manifestationInput: { minHeight: 82, borderRadius: 12, padding: 13, color: colors.text, backgroundColor: "#151515", borderWidth: 1, borderColor: "#3f3f46", textAlignVertical: "top" }, editActions: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 18, marginTop: 3 }, cancel: { color: "#d4d4d8", fontWeight: "700" }, saveProfile: { borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11, backgroundColor: colors.accent }, saveProfileText: { color: colors.accentDeep, fontWeight: "800" },
+  trackerOverview: { marginTop: 12, borderTopWidth: 1, borderColor: colors.border, paddingTop: 13 }, trackerHeading: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 12 }, trackerTitle: { color: colors.text, fontSize: 19, fontWeight: "800", marginTop: 4 }, trackerCount: { color: colors.muted, fontSize: 11, fontFamily: "monospace" }, trackerCard: { marginTop: 9, borderRadius: 15, padding: 14, backgroundColor: "rgba(255,255,255,.025)", borderWidth: 1, borderColor: colors.border }, trackerCardTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 13 }, trackerCardLabel: { color: colors.muted, fontSize: 11, fontWeight: "700" }, trackerCardTitle: { color: colors.text, fontSize: 16, fontWeight: "800", marginTop: 3 }, trackerRow: { flexDirection: "row", alignItems: "center", gap: 7, paddingTop: 8 }, trackerRowName: { width: 72, color: "#d4d4d8", fontSize: 11 }, trackerBar: { flex: 1, maxWidth: 190, height: 5, overflow: "hidden", borderRadius: 4, backgroundColor: "#303030" }, trackerBarFill: { height: "100%", borderRadius: 4 }, trackerRowCount: { width: 43, marginLeft: "auto", color: colors.muted, fontSize: 10, textAlign: "right", fontFamily: "monospace" },
+  modalBackdrop: { flex: 1, justifyContent: "center", padding: 20, backgroundColor: "rgba(0,0,0,.70)" }, editDialog: { borderRadius: 19, padding: 17, gap: 10, backgroundColor: "#202020", borderWidth: 1, borderColor: colors.border }, editTitle: { color: colors.text, fontSize: 19, fontWeight: "800", marginBottom: 1 }, editLabel: { color: colors.subdued, fontSize: 9, letterSpacing: 1.2, fontWeight: "800", marginBottom: 5 }, editInput: { height: 42, borderRadius: 11, paddingHorizontal: 12, color: colors.text, backgroundColor: "#151515", borderWidth: 1, borderColor: "#3f3f46" }, subjectSetup: { marginTop: -2 }, addSubjects: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 3 }, addSubjectsText: { color: "#60a5fa", fontSize: 12, fontWeight: "600" }, subjectSetupLabel: { marginTop: 5, marginBottom: 3 }, chooseSubjectFile: { height: 40, flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 11, paddingHorizontal: 11, backgroundColor: "#151515", borderWidth: 1, borderColor: "#3f3f46" }, chooseSubjectFileText: { flex: 1, color: colors.text, fontSize: 12 }, subjectHint: { color: colors.subdued, fontSize: 9, marginTop: 3 }, subjectImportError: { color: "#fca5a5", fontSize: 9, marginTop: 3, lineHeight: 13 }, manifestationField: { marginTop: -3 }, manifestationLabel: { marginBottom: 2 }, manifestationInput: { minHeight: 48, maxHeight: 48, borderRadius: 11, paddingHorizontal: 11, paddingVertical: 8, color: colors.text, backgroundColor: "#151515", borderWidth: 1, borderColor: "#3f3f46", textAlignVertical: "top" }, editActions: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 15, marginTop: 1 }, cancel: { color: "#d4d4d8", fontWeight: "700" }, saveProfile: { borderRadius: 11, paddingHorizontal: 13, paddingVertical: 9, backgroundColor: "#8fc5f0" }, saveProfileText: { color: "#10243a", fontWeight: "600" },
   confirmDialog: { borderRadius: 20, padding: 18, backgroundColor: "#1d1d1d", borderWidth: 1, borderColor: "#353535" }, confirmHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, confirmIcon: { width: 36, height: 36, alignItems: "center", justifyContent: "center", borderRadius: 11, backgroundColor: "rgba(244,63,94,.12)" }, confirmTitle: { color: colors.text, fontSize: 18, fontWeight: "800", marginTop: 15 }, confirmCopy: { color: colors.muted, fontSize: 13, marginTop: 5 }, confirmActions: { flexDirection: "row", gap: 9, marginTop: 20 }, cancelButton: { flex: 1, height: 43, alignItems: "center", justifyContent: "center", borderRadius: 11, backgroundColor: "#2b2b2b" }, cancelButtonText: { color: "#e4e4e7", fontSize: 13, fontWeight: "700" }, logoutConfirm: { flex: 1, height: 43, alignItems: "center", justifyContent: "center", borderRadius: 11, backgroundColor: "#e11d48" }, logoutConfirmText: { color: "#fff1f2", fontSize: 13, fontWeight: "800" },
 });

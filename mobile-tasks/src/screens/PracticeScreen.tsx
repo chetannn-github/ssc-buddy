@@ -1,8 +1,8 @@
 // @ts-nocheck
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as DocumentPicker from "expo-document-picker";
-import * as FileSystem from "expo-file-system/legacy";
+import * as Clipboard from "expo-clipboard";
+import { File } from "expo-file-system";
 import {
   Manrope_400Regular,
   Manrope_500Medium,
@@ -160,6 +160,20 @@ const toCloudRecord = (record: Record) => ({
 const choices: Option[] = ["A", "B", "C", "D"];
 const examAccent = "#60a5fa";
 const examAccentSurface = "#162c45";
+const QUESTION_JSON_PROMPT = `Create an SSC Buddy question-bank JSON file. Return ONLY valid JSON, with no markdown or explanation.
+
+Use this exact shape:
+[
+  {
+    "id": "unique-question-id",
+    "question": "Question text",
+    "options": ["Option A", "Option B", "Option C", "Option D"],
+    "correctAnswer": "A",
+    "explanation": "Short explanation"
+  }
+]
+
+Rules: every question needs exactly four options; correctAnswer must be A, B, C, or D; each id must be unique.`;
 const examAccentDeep = "#081a31";
 const makeId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 const defaultMarking = { positive: 4, negative: 1 };
@@ -371,13 +385,13 @@ export function PracticeScreen({ user }: { user: any }) {
     setDialog("exercise");
   };
   const chooseQuestionFile = async () => {
-    const result = await DocumentPicker.getDocumentAsync({ type: ["application/json", "text/json"], copyToCacheDirectory: true });
+    const result = await File.pickFileAsync({ mimeTypes: ["application/json", "text/json"] });
     if (result.canceled) return;
     try {
-      const raw = await FileSystem.readAsStringAsync(result.assets[0].uri, { encoding: FileSystem.EncodingType.UTF8 });
+      const raw = await result.result.text();
       const parsed = JSON.parse(raw) as unknown;
       if (!Array.isArray(parsed) || !parsed.length) throw new Error("Use a non-empty JSON array.");
-      setJson(raw); setJsonFileName(result.assets[0].name); setJsonError("");
+      setJson(raw); setJsonFileName(result.result.name || "questions.json"); setJsonError("");
     } catch (error) { setJson(""); setJsonFileName(""); setJsonError(error instanceof Error ? error.message : "Choose a valid question JSON file."); }
   };
   const begin = () => {
@@ -717,7 +731,7 @@ export function PracticeScreen({ user }: { user: any }) {
           </Pressable>
         </View>
       </View>
-      <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled" onScrollBeginDrag={() => setMenu(null)}>
+      <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled" onScrollBeginDrag={() => setMenu(null)} onTouchStart={() => { if (menu) setMenu(null); }}>
         <SetupSelect
           label="Subject"
           value={subject?.name ?? "Select subject"}
@@ -725,7 +739,7 @@ export function PracticeScreen({ user }: { user: any }) {
           onPress={() => setMenu(menu === "subject" ? null : "subject")}
           items={bank.subjects.map((x) => ({ id: x.id, label: x.name }))}
           onSelect={selectSubject}
-          onAdd={() => setDialog("subject")}
+          onAdd={() => { setMenu(null); setDialog("subject"); }}
         />
         <SetupSelect
           label="Chapter"
@@ -738,7 +752,7 @@ export function PracticeScreen({ user }: { user: any }) {
             setExerciseId(subject?.chapters.find((x) => x.id === value)?.exercises[0]?.id ?? "");
             setMenu(null);
           }}
-          onAdd={() => setDialog("chapter")}
+          onAdd={() => { setMenu(null); setDialog("chapter"); }}
           disabled={!subject}
         />
         <SetupSelect
@@ -751,7 +765,7 @@ export function PracticeScreen({ user }: { user: any }) {
             setExerciseId(value);
             setMenu(null);
           }}
-          onAdd={() => { setJson(""); setJsonFileName(""); setJsonError(""); setDialog("exercise"); }}
+          onAdd={() => { setMenu(null); setJson(""); setJsonFileName(""); setJsonError(""); setDialog("exercise"); }}
           disabled={!chapter}
         />
         {exercise ? (
@@ -1824,13 +1838,22 @@ function AddDialog({
   onSave: () => void;
 }) {
   const exercise = title === "Add exercise";
+  const [promptCopied, setPromptCopied] = useState(false);
+  const copyQuestionPrompt = async () => {
+    await Clipboard.setStringAsync(QUESTION_JSON_PROMPT);
+    setPromptCopied(true);
+    setTimeout(() => setPromptCopied(false), 1800);
+  };
   return (
     <Modal transparent visible={visible} animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
       <Pressable style={[s.backdrop, exercise && s.sheetBackdrop]} onPress={onClose}>
         <Pressable style={[s.dialog, exercise && s.exerciseSheet]} onPress={() => undefined}>
           {exercise ? <View style={s.sheetHandle} /> : null}
-          <Text style={s.dialogTitle}>{editing ? "Update exercise" : title}</Text>
+          <View style={s.dialogHeading}><Text style={s.dialogTitle}>{editing ? "Update exercise" : title}</Text>{exercise && kind === "questions" ? <Pressable onPress={() => void copyQuestionPrompt()} style={s.copyPrompt}>
+            <MaterialCommunityIcons name={promptCopied ? "check" : "content-copy"} size={15} color={promptCopied ? "#86efac" : colors.accent} />
+            <Text style={[s.copyPromptText, promptCopied && s.copyPromptTextDone]}>{promptCopied ? "Copied" : "Copy prompt"}</Text>
+          </Pressable> : null}</View>
           <TextInput
             autoFocus
             value={value}
@@ -1884,11 +1907,13 @@ function AddDialog({
                 </>
               ) : (
                 <>
-                  <Pressable onPress={onChooseQuestionFile} style={s.questionFilePicker}>
-                    <MaterialCommunityIcons name="file-upload-outline" size={22} color={colors.accent} />
-                    <Text style={s.questionFileTitle} numberOfLines={1}>{jsonFileName || "Choose question JSON file"}</Text>
-                    <Text style={s.questionFileCopy}>Question array with four options and the correct answer.</Text>
-                  </Pressable>
+                  <View style={s.questionImportActions}>
+                    <Pressable onPress={onChooseQuestionFile} style={s.questionFilePicker}>
+                      <MaterialCommunityIcons name="file-upload-outline" size={20} color={colors.accent} />
+                      <Text style={s.questionFileTitle} numberOfLines={1}>{jsonFileName || "Choose JSON file"}</Text>
+                      <Text style={s.questionFileCopy}>Question array</Text>
+                    </Pressable>
+                  </View>
                   {error ? <Text style={s.error}>{error}</Text> : null}
                 </>
               )}
@@ -2968,21 +2993,26 @@ const s = StyleSheet.create({
     marginBottom: 14,
     backgroundColor: "#5a5a5a",
   },
-  dialogTitle: { color: colors.text, fontSize: 20, fontWeight: "800" },
+  dialogHeading: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
+  dialogTitle: { flex: 1, color: colors.text, fontSize: 20, fontWeight: "800" },
+  questionImportActions: { marginTop: 10 },
   questionFilePicker: {
-    minHeight: 118,
-    marginTop: 10,
+    alignSelf: "stretch",
+    minHeight: 92,
     borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 18,
+    paddingHorizontal: 11,
+    paddingVertical: 12,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(96,165,250,.05)",
     borderWidth: 1,
     borderColor: "rgba(96,165,250,.38)",
   },
-  questionFileTitle: { color: colors.text, fontSize: 14, fontWeight: "700", marginTop: 8, maxWidth: "100%" },
-  questionFileCopy: { color: colors.subdued, fontSize: 11, lineHeight: 16, textAlign: "center", marginTop: 4 },
+  questionFileTitle: { color: colors.text, fontSize: 12, fontWeight: "700", marginTop: 6, maxWidth: "100%" },
+  questionFileCopy: { color: colors.subdued, fontSize: 10, lineHeight: 14, textAlign: "center", marginTop: 3 },
+  copyPrompt: { height: 34, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, borderRadius: 10, paddingHorizontal: 9, backgroundColor: "#202c38", borderWidth: 1, borderColor: "#315878" },
+  copyPromptText: { color: colors.accent, fontSize: 11, fontWeight: "700", textAlign: "center" },
+  copyPromptTextDone: { color: "#86efac" },
   error: { color: "#fca5a5", fontSize: 12, marginTop: 8 },
   actions: {
     flexDirection: "row",

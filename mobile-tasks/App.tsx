@@ -50,7 +50,6 @@ import { reportVerticalTouch } from "./src/navigation/bottomNavigationVisibility
 import type { User } from "firebase/auth";
 import { reportVerticalScroll, resetBottomNavigation } from "./src/navigation/bottomNavigationVisibility";
 import { getUnlockQuiz, loadUnlockQuiz } from "./src/domain/unlock-quiz";
-import { BackupImportPrompt } from "./src/components/BackupImportPrompt";
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 type TaskRange = "today" | "week" | "month" | "3months" | "year";
@@ -141,7 +140,6 @@ export default function App() {
   const [practiceActivityDates, setPracticeActivityDates] = useState<string[]>([]);
   const [trackerActivityDates, setTrackerActivityDates] = useState<string[]>([]);
   const [profileSettings, setProfileSettings] = useState<PracticeProfile | null>(null);
-  const [backupPromptHandled, setBackupPromptHandled] = useState(true);
   const [appTab, setAppTab] = useState<TabKey>("tasks");
   const [trackTab, setTrackTab] = useState<"Syllabus" | "Revision" | "Mock Test">("Syllabus");
   const [dailyManifestation, setDailyManifestation] = useState("");
@@ -226,10 +224,6 @@ export default function App() {
   useEffect(() => {
     void loadProfile().then(setProfileSettings);
   }, []);
-  useEffect(() => {
-    if (!user) { setBackupPromptHandled(true); return; }
-    void AsyncStorage.getItem(`ssc-buddy:backup-prompt:${user.uid}`).then((value) => setBackupPromptHandled(value === "done"));
-  }, [user?.uid]);
   useEffect(() => {
     if (!authenticated || !profileSettings) return;
     const phrase = profileSettings?.manifestation?.trim().toUpperCase() ?? "";
@@ -763,17 +757,6 @@ export default function App() {
       )}
       <BottomNavigation activeTab={appTab} onChange={setAppTab} />
       <MediaOverlay user={user} mode={mediaMode} musicOpenRequest={musicOpenRequest} onClose={() => setMediaMode(null)} />
-      {user && <BackupImportPrompt
-        user={user}
-        visible={!backupPromptHandled && !profileSettings?.name}
-        onSkip={() => { setBackupPromptHandled(true); void AsyncStorage.setItem(`ssc-buddy:backup-prompt:${user.uid}`, "done"); }}
-        onImported={(profile, restoredTasks) => {
-          setProfileSettings(profile);
-          setTasks(restoredTasks);
-          setBackupPromptHandled(true);
-          void AsyncStorage.setItem(`ssc-buddy:backup-prompt:${user.uid}`, "done");
-        }}
-      />}
       <DailyManifestationDialog
         phrase={dailyManifestation}
         entry={manifestationEntry}

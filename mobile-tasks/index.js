@@ -57,12 +57,12 @@ if (Platform.OS === "android") {
       renderWidget(renderDailyTasksWidget(tasks));
       return;
     }
-    let quiz;
+    let quiz = await getUnlockQuiz();
     if (widgetAction === "WIDGET_CLICK" && (clickAction === "QUIZ_ANSWER" || clickAction?.startsWith("QUIZ_ANSWER_"))) {
       // Answer choice is deliberately encoded in the action name as well as
       // accepting the legacy data payload. Several Android launchers omit
       // clickActionData for home-screen widgets.
-      const choice = clickAction?.replace("QUIZ_ANSWER_", "") || clickActionData?.choice;
+      const choice = clickActionData?.choice || clickAction?.replace("QUIZ_ANSWER_", "");
       if (["A", "B", "C", "D"].includes(choice)) quiz = await answerUnlockQuiz(choice);
     } else if (widgetAction === "WIDGET_CLICK" && clickAction === "QUIZ_NEXT") {
       quiz = await advanceUnlockQuiz();
@@ -72,18 +72,6 @@ if (Platform.OS === "android") {
       quiz = await getUnlockQuiz();
     }
     renderWidget(renderQuickRecallWidget(quiz));
-    // Keep answer feedback on screen while the countdown runs. The learner
-    // explicitly taps Next once it becomes available.
-    if (quiz?.status === "correction" && (quiz.lockedUntil ?? 0) > Date.now()) {
-      // Android widgets do not have a ticking clock; refresh once per second so
-      // the learner can actually see the fifteen-second correction countdown.
-      while ((quiz.lockedUntil ?? 0) > Date.now()) {
-        await new Promise((resolve) => setTimeout(resolve, 1_000));
-        quiz = await getUnlockQuiz();
-        renderWidget(renderQuickRecallWidget(quiz));
-      }
-      renderWidget(renderQuickRecallWidget(await getUnlockQuiz()));
-    }
   });
 }
 

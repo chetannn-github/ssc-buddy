@@ -14,6 +14,7 @@
       "package": "com.sscbuddy.tasks",
       "permissions": [
         "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"

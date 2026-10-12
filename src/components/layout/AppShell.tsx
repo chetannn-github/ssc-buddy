@@ -17,7 +17,6 @@ import {
   Play,
   Repeat2,
   Route as RouteIcon,
-  Upload,
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -28,7 +27,6 @@ import { loadHistory, type TestRecord } from "@/lib/exam";
 import { trackerActiveDates } from "@/lib/tracker";
 import { loadTrackerData, saveTrackerData } from "@/lib/tracker-store";
 import { loadPracticeProfile, savePracticeProfile, type PracticeProfile } from "@/lib/profile";
-import { importBackupToFirebase } from "@/lib/backup";
 import type { User } from "firebase/auth";
 import { useAuthUser } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
@@ -100,9 +98,6 @@ function ProfileOnboarding({ onComplete, user }: { onComplete: (profile: Practic
   const [goal, setGoal] = useState("100");
   const [examName, setExamName] = useState("SSC CGL 2027");
   const [examDate, setExamDate] = useState("");
-  const [importing, setImporting] = useState(false);
-  const [importError, setImportError] = useState("");
-  const backupInput = useRef<HTMLInputElement>(null);
   const parsedGoal = Math.max(1, Math.min(100000, Number(goal) || 0));
   const canContinue = name.trim().length > 0 && Number(goal) >= 1;
 
@@ -126,24 +121,6 @@ function ProfileOnboarding({ onComplete, user }: { onComplete: (profile: Practic
     });
     onComplete(profile);
   };
-  const importBackup = async (file: File | undefined) => {
-    if (!file || importing) return;
-    if (!window.confirm("Import this backup? It replaces any existing cloud data for this account.")) return;
-    setImporting(true);
-    setImportError("");
-    try {
-      const imported = await importBackupToFirebase(user, file);
-      const next = imported ?? loadPracticeProfile();
-      if (next) onComplete(next);
-      else setImportError("Backup imported, but it has no profile. Complete the setup below.");
-    } catch (error) {
-      setImportError(error instanceof Error ? error.message : "Backup import failed. Please use a valid JSON backup.");
-    } finally {
-      setImporting(false);
-      if (backupInput.current) backupInput.current.value = "";
-    }
-  };
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4 backdrop-blur-md">
       <section className="w-full max-w-md rounded-3xl border border-white/10 bg-[#202020] p-6 text-zinc-100 shadow-[0_24px_70px_-24px_black] sm:p-8">
@@ -152,12 +129,6 @@ function ProfileOnboarding({ onComplete, user }: { onComplete: (profile: Practic
         </span>
         <h2 className="mt-5 text-2xl font-semibold">Setup your profile</h2>
         <p className="mt-1 text-sm text-zinc-400">Signed in as {user.email ?? "your account"}</p>
-        <input ref={backupInput} className="hidden" type="file" accept="application/json,.json" onChange={(event) => void importBackup(event.target.files?.[0])} />
-        <button type="button" disabled={importing} onClick={() => backupInput.current?.click()} className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-sky-300 transition hover:text-sky-200 disabled:opacity-50">
-          <Upload className="h-4 w-4" /> {importing ? "Importing backup…" : "Import an existing backup"}
-        </button>
-        <p className="mt-1 text-xs text-zinc-500">This replaces cloud data for this new workspace, then syncs it everywhere.</p>
-        {importError && <p className="mt-2 text-xs text-amber-300">{importError}</p>}
           <div className="mt-6 space-y-4">
           <label className="block text-sm font-medium text-zinc-200">
             Your name
