@@ -294,7 +294,68 @@ export function watchSharedData(user: User, key: string, callback: (value: strin
 /** Dedicated per-question learning stats; separate from question-bank content and attempts. */
 const questionLearningDoc = (user: User) => doc(getFirebaseFirestore(), "users", user.uid, "questionLearning", "current");
 export async function writeQuestionLearning(user: User, value: Record<string, unknown>) {
-  await setDoc(questionLearningDoc(user), { ...value, updatedAt: serverTimestamp() }, { merge: true });
+  const reference = questionLearningDoc(user);
+  await runTransaction(getFirebaseFirestore(), async (transaction) => {
+    const remote = (await transaction.get(reference)).data() ?? {};
+    const incoming = value.stats && typeof value.stats === "object" ? value.stats as Record<string, Record<string, unknown>> : {};
+    const current = remote.stats && typeof remote.stats === "object" ? remote.stats as Record<string, Record<string, unknown>> : {};
+    const stats = { ...current };
+    Object.entries(incoming).forEach(([key, local]) => {
+      const cloud = current[key] ?? {};
+      const cloudAsked = Number(cloud.askedCount ?? 0); const localAsked = Number(local.askedCount ?? 0);
+      const localIsNewer = String(local.lastAskedAt ?? "") >= String(cloud.lastAskedAt ?? "");
+      stats[key] = {
+        ...cloud, ...local,
+        askedCount: Math.max(cloudAsked, localAsked),
+        correctCount: Math.max(Number(cloud.correctCount ?? 0), Number(local.correctCount ?? 0)),
+        wrongCount: Math.max(Number(cloud.wrongCount ?? 0), Number(local.wrongCount ?? 0)),
+        lastAskedAt: localIsNewer ? local.lastAskedAt : cloud.lastAskedAt,
+        lastOutcome: localIsNewer ? local.lastOutcome : cloud.lastOutcome,
+      };
+    });
+    transaction.set(reference, { ...remote, ...value, stats, updatedAt: serverTimestamp() }, { merge: true });
+  });
+}
+
+/** Replaces only SSC Buddy's canonical collections from an exported backup. */
+export async function replaceCloudBackup(user: User, backup: {
+  tasks: CloudTask[]; subjects: PracticeEntity[]; attempts: PracticeEntity[]; favourites: string[];
+  marking?: Record<string, unknown> | null; tracker?: Record<string, unknown> | null;
+  profile?: Record<string, unknown> | null; preferences?: Record<string, unknown> | null;
+  shared?: Record<string, string>;
+}) {
+  const db = getFirebaseFirestore(); const root = collection(db, "users", user.uid);
+  const groups = ["tasks", "practiceSubjects", "practiceAttempts", "practiceFavourites", "practiceSettings", "tracker", "profile", "preferences", "sharedData", "questionLearning", "appData"];
+  for (const group of groups) {
+    const existing = await getDocs(collection(root, group));
+    if (group === "appData") {
+      for (const legacy of existing.docs) {
+        const chunks = await getDocs(collection(legacy.ref, "chunks"));
+        for (let start = 0; start < chunks.docs.length; start += 450) {
+          const batch = writeBatch(db); chunks.docs.slice(start, start + 450).forEach((item) => batch.delete(item.ref)); await batch.commit();
+        }
+      }
+    }
+    for (let start = 0; start < existing.docs.length; start += 450) {
+      const batch = writeBatch(db); existing.docs.slice(start, start + 450).forEach((item) => batch.delete(item.ref)); await batch.commit();
+    }
+  }
+  const entries: Array<[string, string, unknown]> = [
+    ...backup.tasks.map((value) => ["tasks", value.id, value] as [string, string, unknown]),
+    ...backup.subjects.map((value) => ["practiceSubjects", value.id, value] as [string, string, unknown]),
+    ...backup.attempts.map((value) => ["practiceAttempts", value.id, value] as [string, string, unknown]),
+    ...backup.favourites.map((id) => ["practiceFavourites", id, { id }] as [string, string, unknown]),
+    ...(backup.marking ? [["practiceSettings", "current", { marking: backup.marking }] as [string, string, unknown]] : []),
+    ...(backup.tracker ? Object.entries(backup.tracker).map(([id, value]) => ["tracker", id, { value }] as [string, string, unknown]) : []),
+    ...(backup.profile ? [["profile", "current", backup.profile] as [string, string, unknown]] : []),
+    ...(backup.preferences ? [["preferences", "current", backup.preferences] as [string, string, unknown]] : []),
+    ...Object.entries(backup.shared ?? {}).map(([id, value]) => ["sharedData", id, { value }] as [string, string, unknown]),
+  ];
+  for (let start = 0; start < entries.length; start += 450) {
+    const batch = writeBatch(db);
+    entries.slice(start, start + 450).forEach(([group, id, value]) => batch.set(doc(root, group, id), value));
+    await batch.commit();
+  }
 }
 export async function readQuestionLearning(user: User) {
   return (await getDoc(questionLearningDoc(user))).data() ?? null;

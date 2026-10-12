@@ -2,6 +2,7 @@
   "expo": {
     "name": "SSC Buddy",
     "slug": "ssc-buddy-tasks",
+    "scheme": "sscbuddy",
     "version": "1.0.0",
     "icon": "./assets/auth.jpg",
     "orientation": "portrait",

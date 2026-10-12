@@ -17,7 +17,20 @@ export const LEGACY_TASK_STORAGE_KEY = "ssc-buddy-mobile:tasks:v1";
 
 export const TASK_TYPES: TaskType[] = ["Lecture", "Revision", "Mock", "Practice Session", "Other"];
 
-export const dateKey = (date = new Date()) => date.toISOString().slice(0, 10);
+/**
+ * A scheduled task belongs to the calendar day the student sees on their
+ * device. `toISOString()` is UTC, so in India it incorrectly rolls over at
+ * 5:30 AM and makes yesterday appear as today. Keep task keys in local time,
+ * matching the website's `todayKey` implementation.
+ */
+export const dateKey = (date = new Date()) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+
+export const dateKeyFromOffset = (offset: number, from = new Date()) => {
+  const date = new Date(from);
+  date.setDate(date.getDate() + offset);
+  return dateKey(date);
+};
 
 export const formatMinutes = (minutes: number) =>
   minutes >= 60

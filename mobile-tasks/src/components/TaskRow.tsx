@@ -11,12 +11,14 @@ type Props = {
   onEdit: () => void;
   onDelete: () => void;
   compact?: boolean;
+  grouped?: boolean;
+  last?: boolean;
 };
 
-export function TaskRow({ task, onDone, onReopen, onEdit, onDelete, compact = false }: Props) {
+export function TaskRow({ task, onDone, onReopen, onEdit, onDelete, compact = false, grouped = false, last = false }: Props) {
   return (
     <View>
-      <View style={[styles.task, task.completed && styles.completed, compact && styles.compact]}>
+      <View style={[styles.task, task.completed && styles.completed, compact && styles.compact, grouped && styles.grouped, grouped && task.completed && styles.groupedCompleted, grouped && last && styles.groupedLast]}>
         {compact ? (
           <View style={[styles.check, task.completed ? styles.checkComplete : styles.checkIncompleteHistory]}>
             <Text style={[styles.checkText, !task.completed && styles.incompleteHistoryText]}>
@@ -67,6 +69,9 @@ const styles = StyleSheet.create({
   },
   completed: { backgroundColor: colors.completeSurface, borderColor: colors.completeBorder },
   compact: { marginTop: 9, minHeight: 52, marginBottom: 0 },
+  grouped: { minHeight: 54, marginTop: 0, marginBottom: 0, borderWidth: 0, borderBottomWidth: 1, borderRadius: 0, borderBottomColor: "#303030", backgroundColor: "transparent", paddingHorizontal: 2 },
+  groupedCompleted: { backgroundColor: "rgba(96,165,250,.06)" },
+  groupedLast: { borderBottomWidth: 0 },
   check: {
     width: 24,
     height: 24,

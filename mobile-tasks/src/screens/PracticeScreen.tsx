@@ -1,6 +1,8 @@
 // @ts-nocheck
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as DocumentPicker from "expo-document-picker";
+import * as FileSystem from "expo-file-system/legacy";
 import {
   Manrope_400Regular,
   Manrope_500Medium,
@@ -12,7 +14,12 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
+  ActivityIndicator,
+  Animated,
+  Easing,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView as NativeScrollView,
   StyleSheet as NativeStyleSheet,
@@ -22,6 +29,7 @@ import {
 } from "react-native";
 
 import { colors } from "../theme";
+import { dateKey } from "../domain/tasks";
 import { reportVerticalScroll } from "../navigation/bottomNavigationVisibility";
 import { deletePracticeEntity, migratePracticeEntities, patchPracticeSettings, readPracticeSettings, syncPracticeEntities, watchPracticeEntities, watchPracticeSettings } from "../lib/firebase";
 
@@ -192,6 +200,7 @@ export function PracticeScreen({ user }: { user: any }) {
   const [randomSeed, setRandomSeed] = useState(0);
   const [answerKey, setAnswerKey] = useState<Array<Option | null>>([]);
   const [savingNewKey, setSavingNewKey] = useState(false);
+  const [savingAnswerKey, setSavingAnswerKey] = useState(false);
   const [answers, setAnswers] = useState<Array<Option | null>>([]);
   const [current, setCurrent] = useState(0);
   const [remaining, setRemaining] = useState(0);
@@ -200,6 +209,7 @@ export function PracticeScreen({ user }: { user: any }) {
   const [draft, setDraft] = useState("");
   const [exerciseKind, setExerciseKind] = useState<"key" | "questions">("key");
   const [json, setJson] = useState("");
+  const [jsonFileName, setJsonFileName] = useState("");
   const [jsonError, setJsonError] = useState("");
   const [menu, setMenu] = useState<"subject" | "chapter" | "exercise" | null>(null);
   const [bankSubject, setBankSubject] = useState("all");
@@ -298,6 +308,7 @@ export function PracticeScreen({ user }: { user: any }) {
     if (active) setStart("1");
   }, [chapterId, chapter, exerciseId]);
   const exerciseQuestionTotal = exercise?.questions?.length ?? exercise?.questionCount ?? 1;
+  const isQuestionExercise = Boolean(exercise?.questions?.length);
   const startNumber = random ? 1 : Math.max(1, Math.min(exerciseQuestionTotal, Number(start) || 1));
   const availableQuestions = random
     ? exerciseQuestionTotal
@@ -306,6 +317,7 @@ export function PracticeScreen({ user }: { user: any }) {
     ? Math.max(1, Math.min(availableQuestions, Number(count) || 1))
     : availableQuestions;
   const duration = Math.max(1, Math.min(180, Number(minutes) || 1));
+  const canContinue = Boolean(subject && chapter && exercise && minutes.trim() && (!fixed || count.trim()) && (isQuestionExercise ? (random || start.trim()) : start.trim()));
   const selectedQuestions = useMemo(() => {
     const questions = exercise?.questions ?? [];
     if (!random) return questions.slice(startNumber - 1, startNumber - 1 + questionCount);
@@ -355,7 +367,18 @@ export function PracticeScreen({ user }: { user: any }) {
         : "",
     );
     setJsonError("");
+    setJsonFileName(exercise.questions?.length ? "Current question file" : "");
     setDialog("exercise");
+  };
+  const chooseQuestionFile = async () => {
+    const result = await DocumentPicker.getDocumentAsync({ type: ["application/json", "text/json"], copyToCacheDirectory: true });
+    if (result.canceled) return;
+    try {
+      const raw = await FileSystem.readAsStringAsync(result.assets[0].uri, { encoding: FileSystem.EncodingType.UTF8 });
+      const parsed = JSON.parse(raw) as unknown;
+      if (!Array.isArray(parsed) || !parsed.length) throw new Error("Use a non-empty JSON array.");
+      setJson(raw); setJsonFileName(result.assets[0].name); setJsonError("");
+    } catch (error) { setJson(""); setJsonFileName(""); setJsonError(error instanceof Error ? error.message : "Choose a valid question JSON file."); }
   };
   const begin = () => {
     if (!exercise || !subject || !chapter)
@@ -399,7 +422,7 @@ export function PracticeScreen({ user }: { user: any }) {
     const saved: Record = {
       id: makeId(),
       createdAt: new Date().toISOString(),
-      date: new Date().toISOString().slice(0, 10),
+      date: dateKey(),
       testMode: random ? "random" : "standard",
       ...(random ? { attemptGroupId: reattemptOf ?? makeId() } : {}),
       subjectId: subject?.id ?? "",
@@ -431,6 +454,8 @@ export function PracticeScreen({ user }: { user: any }) {
   };
   const saveKey = async (nextPhase: "setup" | "instructions" = "instructions") => {
     if (!exercise || !subject || !chapter) return;
+    if (savingAnswerKey) return;
+    setSavingAnswerKey(true);
     const next: Bank = {
       ...bank,
       subjects: bank.subjects.map((item) =>
@@ -456,9 +481,13 @@ export function PracticeScreen({ user }: { user: any }) {
     // Wait for the canonical practiceSubjects write before leaving the key
     // editor. This makes a key edit durable even if the user immediately
     // changes tab or closes the app.
-    await saveBank(next);
-    setSavingNewKey(false);
-    setPhase(nextPhase);
+    try {
+      await saveBank(next);
+      setSavingNewKey(false);
+      setPhase(nextPhase);
+    } finally {
+      setSavingAnswerKey(false);
+    }
   };
   const add = () => {
     const value = draft.trim();
@@ -558,6 +587,7 @@ export function PracticeScreen({ user }: { user: any }) {
     }
     setDraft("");
     setJson("");
+    setJsonFileName("");
     setJsonError("");
     setEditingExerciseId(null);
     setDialog(null);
@@ -627,6 +657,7 @@ export function PracticeScreen({ user }: { user: any }) {
       <KeyScreen
         count={answerKey.length || questionCount}
         values={answerKey}
+        saving={savingAnswerKey}
         onChange={setAnswerKey}
         onBack={() => {
           setSavingNewKey(false);
@@ -667,12 +698,11 @@ export function PracticeScreen({ user }: { user: any }) {
       />
     );
   return (
-    <View style={s.page}>
+    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={s.page}>
       <View style={s.header}>
         <View>
           <Text style={s.eyebrow}>PRACTICE SESSION</Text>
           <Text style={s.title}>Practice</Text>
-          <Text style={s.headerCopy}>Build a focused test from your question bank.</Text>
         </View>
         <View style={s.headerActions}>
           <Pressable accessibilityLabel="Open question bank" onPress={() => setPhase("bank")} style={s.linkButton}>
@@ -681,22 +711,13 @@ export function PracticeScreen({ user }: { user: any }) {
               color={colors.muted}
               size={20}
             />
-            <Text style={s.linkButtonText}>Bank</Text>
           </Pressable>
           <Pressable accessibilityLabel="Open previous sessions" onPress={() => setPhase("history")} style={s.linkButton}>
             <MaterialCommunityIcons name="history" color={colors.muted} size={20} />
-            <Text style={s.linkButtonText}>History</Text>
           </Pressable>
         </View>
       </View>
       <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled" onScrollBeginDrag={() => setMenu(null)}>
-        <View style={s.setupIntro}>
-          <View style={s.setupIntroIcon}><MaterialCommunityIcons name={exercise ? "check" : "clipboard-text-outline"} size={18} color={exercise ? "#5eead4" : "#93c5fd"} /></View>
-          <View style={{ flex: 1 }}>
-            <Text style={s.setupIntroTitle}>{exercise ? "Ready to practise" : "Set up your test"}</Text>
-            <Text numberOfLines={1} style={s.setupIntroCopy}>{exercise ? `${subject?.name} · ${chapter?.name} · ${exercise.name}` : "Choose a subject, chapter, and exercise."}</Text>
-          </View>
-        </View>
         <SetupSelect
           label="Subject"
           value={subject?.name ?? "Select subject"}
@@ -725,28 +746,23 @@ export function PracticeScreen({ user }: { user: any }) {
           value={exercise?.name ?? "Select exercise"}
           open={menu === "exercise"}
           onPress={() => setMenu(menu === "exercise" ? null : "exercise")}
-          items={
-            chapter?.exercises.map((x) => ({
-              id: x.id,
-              label: `${x.name} · ${x.questions ? "Questions" : "Answer key"} · ${x.questionCount}Q`,
-            })) ?? []
-          }
+          items={chapter?.exercises.map((x) => ({ id: x.id, label: x.name })) ?? []}
           onSelect={(value) => {
             setExerciseId(value);
             setMenu(null);
           }}
-          onAdd={() => setDialog("exercise")}
+          onAdd={() => { setJson(""); setJsonFileName(""); setJsonError(""); setDialog("exercise"); }}
           disabled={!chapter}
         />
         {exercise ? (
           <Pressable onPress={editExercise} style={s.exerciseEdit}>
             <MaterialCommunityIcons name="pencil-outline" size={15} color={colors.accent} />
             <Text style={s.exerciseEditText} numberOfLines={1}>
-              Edit {exercise.questions?.length ? "questions" : "answer key"} · {exercise.name}
+              Edit answer key
             </Text>
           </Pressable>
         ) : null}
-        <View style={s.card}>
+        <View style={s.practiceSetupCard}>
           <Text style={s.label}>TIMING</Text>
           <TextInput
             value={minutes}
@@ -757,29 +773,47 @@ export function PracticeScreen({ user }: { user: any }) {
             onBlur={() => setMinutes(String(duration))}
             keyboardType="number-pad"
             maxLength={3}
-            style={s.input}
+            style={[s.input, s.timingInput]}
             placeholder="Minutes"
             placeholderTextColor={colors.subdued}
           />
-          <View style={s.presetRow}>
+          <View style={[s.presetRow, s.timingPresetRow]}>
             {[15, 30, 45, 60].map((value) => (
               <Pressable
                 key={value}
                 onPress={() => setMinutes(String(value))}
-                style={[s.preset, Number(minutes) === value && s.presetActive]}
+                style={[s.preset, s.timingPreset, Number(minutes) === value && s.presetActive]}
               >
                 <Text style={[s.presetText, Number(minutes) === value && s.presetTextActive]}>
-                  {value}m
+                  {value}
                 </Text>
               </Pressable>
             ))}
           </View>
-        </View>
-        <View style={s.card}>
+          <TextInput
+            value={start}
+            onChangeText={(value) => {
+              const digits = value.replace(/\D/g, "");
+              const nextStart = Math.max(1, Math.min(exerciseQuestionTotal, Number(digits) || 1));
+              const nextAvailable = Math.max(1, exerciseQuestionTotal - nextStart + 1);
+              setStart(digits === "" ? "" : String(nextStart));
+              setCount((current) => current === "" ? current : String(Math.max(1, Math.min(nextAvailable, Number(current) || 1))));
+            }}
+            onBlur={() => { setStart(String(startNumber)); setCount(String(questionCount)); }}
+            editable={!(isQuestionExercise && random)}
+            keyboardType="number-pad"
+            maxLength={String(exerciseQuestionTotal).length}
+            style={[s.input, isQuestionExercise && random && s.inputDisabled]}
+            placeholder="Start question no."
+            placeholderTextColor={colors.subdued}
+          />
+          <Text style={s.helper}>{isQuestionExercise && random ? "Random test selects from the entire exercise." : `Numbering begins at Q${startNumber}. Chapter total ${exerciseQuestionTotal}.`}</Text>
+        <View style={s.configDivider} />
+        <View style={s.configSection}>
           <Text style={s.label}>QUESTIONS</Text>
-          <View style={s.modeRow}>
+          {isQuestionExercise && <View style={s.modeRow}>
             <Pressable onPress={() => setRandom(false)} style={[s.mode, !random && s.modeActive]}>
-              <Text style={[s.modeText, !random && s.modeTextActive]}>Sequential</Text>
+              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} style={[s.modeText, !random && s.modeTextActive]}>Sequential</Text>
             </Pressable>
             <Pressable
               disabled={!exercise?.questions?.length}
@@ -791,19 +825,19 @@ export function PracticeScreen({ user }: { user: any }) {
               }}
               style={[s.mode, random && s.modeActive, !exercise?.questions?.length && s.disabled]}
             >
-              <Text style={[s.modeText, random && s.modeTextActive]}>Random</Text>
+              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} style={[s.modeText, random && s.modeTextActive]}>Random</Text>
             </Pressable>
-          </View>
+          </View>}
           <View style={s.modeRow}>
             <Pressable
               disabled={random}
               onPress={() => setFixed(false)}
               style={[s.mode, !fixed && s.modeActive, random && s.disabled]}
             >
-              <Text style={[s.modeText, !fixed && s.modeTextActive]}>Unlimited</Text>
+              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} style={[s.modeText, !fixed && s.modeTextActive]}>Unlimited</Text>
             </Pressable>
             <Pressable onPress={() => setFixed(true)} style={[s.mode, fixed && s.modeActive]}>
-              <Text style={[s.modeText, fixed && s.modeTextActive]}>Fixed count</Text>
+              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} style={[s.modeText, fixed && s.modeTextActive]}>Fixed count</Text>
             </Pressable>
           </View>
           {fixed && (
@@ -825,31 +859,6 @@ export function PracticeScreen({ user }: { user: any }) {
               placeholderTextColor={colors.subdued}
             />
           )}
-          {!random && (
-            <TextInput
-              value={start}
-              onChangeText={(value) => {
-                const digits = value.replace(/\D/g, "");
-                const nextStart = Math.max(1, Math.min(exerciseQuestionTotal, Number(digits) || 1));
-                const nextAvailable = Math.max(1, exerciseQuestionTotal - nextStart + 1);
-                setStart(digits === "" ? "" : String(nextStart));
-                setCount((current) =>
-                  current === ""
-                    ? current
-                    : String(Math.max(1, Math.min(nextAvailable, Number(current) || 1))),
-                );
-              }}
-              onBlur={() => {
-                setStart(String(startNumber));
-                setCount(String(questionCount));
-              }}
-              keyboardType="number-pad"
-              maxLength={String(exerciseQuestionTotal).length}
-              style={s.input}
-              placeholder="Start numbering"
-              placeholderTextColor={colors.subdued}
-            />
-          )}
           <Text style={s.helper}>
             {random
               ? "Random test starts at 1. Favourites are selected first."
@@ -858,11 +867,13 @@ export function PracticeScreen({ user }: { user: any }) {
                 : "Solve until the timer ends."}
           </Text>
         </View>
-        <MarkingCard marking={bank.marking} onSave={(marking) => saveBank({ ...bank, marking })} />
-        <Pressable style={s.primary} onPress={begin}>
-          <Text style={s.primaryText}>Continue to instructions</Text>
+        <View style={s.configDivider} />
+        <MarkingCard embedded marking={bank.marking} onSave={(marking) => saveBank({ ...bank, marking })} />
+        <Pressable disabled={!canContinue} style={[s.primary, s.setupContinue, !canContinue && s.disabled]} onPress={begin}>
+          <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72} style={[s.primaryText, s.primaryWideText]}>Continue to instructions</Text>
           <MaterialCommunityIcons name="arrow-right" size={19} color={examAccentDeep} />
         </Pressable>
+        </View>
       </ScrollView>
       <AddDialog
         visible={dialog !== null}
@@ -881,16 +892,19 @@ export function PracticeScreen({ user }: { user: any }) {
         onCount={setCount}
         json={json}
         onJson={setJson}
+        jsonFileName={jsonFileName}
+        onChooseQuestionFile={() => void chooseQuestionFile()}
         error={jsonError}
         editing={editingExerciseId !== null}
         onClose={() => {
           setDialog(null);
           setJsonError("");
+          setJsonFileName("");
           setEditingExerciseId(null);
         }}
         onSave={add}
       />
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -913,29 +927,48 @@ function SetupSelect({
   onSelect: (id: string) => void;
   onAdd: () => void;
 }) {
+  const visibility = useRef(new Animated.Value(open ? 1 : 0)).current;
+  const [renderMenu, setRenderMenu] = useState(open);
+
+  useEffect(() => {
+    visibility.stopAnimation();
+    if (open) {
+      setRenderMenu(true);
+      Animated.timing(visibility, { toValue: 1, duration: 180, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+      return;
+    }
+    if (!renderMenu) return;
+    Animated.timing(visibility, { toValue: 0, duration: 130, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(({ finished }) => {
+      if (finished) setRenderMenu(false);
+    });
+  }, [open, renderMenu, visibility]);
+
   return (
-    <View style={s.selectGroup}>
+    <View style={[s.selectGroup, open && s.selectGroupOpen]}>
       <Text style={s.label}>{label.toUpperCase()}</Text>
       <Pressable disabled={disabled} onPress={onPress} style={[s.select, disabled && s.disabled]}>
-        <Text style={s.selectText}>{value}</Text>
+        <Text numberOfLines={1} style={[s.selectText, !items.length && s.selectPlaceholder]}>{value}</Text>
         <MaterialCommunityIcons
           name={open ? "chevron-up" : "chevron-down"}
-          size={20}
+          size={18}
           color={colors.muted}
         />
       </Pressable>
-      {open && (
-        <View style={s.menu}>
-          {items.map((item) => (
-            <Pressable key={item.id} onPress={() => onSelect(item.id)} style={s.menuItem}>
-              <Text style={s.menuText}>{item.label}</Text>
-            </Pressable>
-          ))}
+      {renderMenu && (
+        <Animated.View style={[s.menu, { opacity: visibility, transform: [{ translateY: visibility.interpolate({ inputRange: [0, 1], outputRange: [-6, 0] }) }, { scale: visibility.interpolate({ inputRange: [0, 1], outputRange: [0.98, 1] }) }] }]} pointerEvents={open ? "auto" : "none"}>
+          <NativeScrollView nestedScrollEnabled style={s.menuList} keyboardShouldPersistTaps="handled">
+            {items.map((item) => (
+              <Pressable key={item.id} onPress={() => onSelect(item.id)} style={[s.menuItem, item.label === value && s.menuItemSelected]}>
+                <Text numberOfLines={1} style={[s.menuText, item.label === value && s.menuTextSelected]}>{item.label}</Text>
+                {item.label === value && <MaterialCommunityIcons name="check" size={16} color="#171717" />}
+              </Pressable>
+            ))}
+          </NativeScrollView>
           <Pressable onPress={onAdd} style={s.addItem}>
             <MaterialCommunityIcons name="plus" size={16} color={colors.accent} />
             <Text style={s.addItemText}>Add {label.toLowerCase()}</Text>
           </Pressable>
-        </View>
+        </Animated.View>
       )}
     </View>
   );
@@ -946,12 +979,14 @@ function KeyScreen({
   onChange,
   onBack,
   onSave,
+  saving,
 }: {
   count: number;
   values: Array<Option | null>;
   onChange: (value: Array<Option | null>) => void;
   onBack: () => void;
   onSave: () => void;
+  saving: boolean;
 }) {
   const filled = values.filter(Boolean).length;
   const complete = filled === count;
@@ -997,11 +1032,11 @@ function KeyScreen({
           </View>
         ))}
         <Pressable
-          disabled={!complete}
-          style={[s.primary, !complete && s.disabled]}
+          disabled={!complete || saving}
+          style={[s.primary, (!complete || saving) && s.disabled]}
           onPress={onSave}
         >
-          <Text style={s.primaryText}>Save answer key</Text>
+          {saving ? <ActivityIndicator size="small" color={colors.accentDeep} /> : <Text style={s.primaryText}>Save answer key</Text>}
         </Pressable>
       </ScrollView>
     </View>
@@ -1010,9 +1045,11 @@ function KeyScreen({
 function MarkingCard({
   marking,
   onSave,
+  embedded = false,
 }: {
   marking: Bank["marking"];
   onSave: (next: Bank["marking"]) => void;
+  embedded?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [positive, setPositive] = useState(String(marking.positive));
@@ -1031,18 +1068,11 @@ function MarkingCard({
     setEditing(false);
   };
   return (
-    <View style={s.card}>
-      <View style={s.markingHeader}>
+    <View style={embedded ? s.markingEmbedded : s.card}>
+      <Pressable onPress={editing ? save : beginEditing} style={s.markingHeader}>
         <Text style={s.label}>MARKING SCHEME</Text>
-        <Pressable onPress={editing ? save : beginEditing} style={s.markingEdit}>
-          <MaterialCommunityIcons
-            name={editing ? "check" : "pencil-outline"}
-            size={15}
-            color={colors.accent}
-          />
-          <Text style={s.markingEditText}>{editing ? "Save" : "Edit"}</Text>
-        </Pressable>
-      </View>
+        <Text style={s.markingInlineValue}>{editing ? "Done" : `+${marking.positive} / −${marking.negative}`}</Text>
+      </Pressable>
       {editing ? (
         <View style={s.markingInputs}>
           <View style={s.markingField}>
@@ -1064,11 +1094,7 @@ function MarkingCard({
             />
           </View>
         </View>
-      ) : (
-        <Text style={s.marking}>
-          +{marking.positive} correct · −{marking.negative} wrong
-        </Text>
-      )}
+      ) : null}
     </View>
   );
 }
@@ -1395,13 +1421,29 @@ function History({
   );
 }
 function HistoryFilter({ label, open, onPress, options, onSelect }: { label: string; open: boolean; onPress: () => void; options: string[]; onSelect: (value: string) => void }) {
+  const visibility = useRef(new Animated.Value(open ? 1 : 0)).current;
+  const [renderMenu, setRenderMenu] = useState(open);
+
+  useEffect(() => {
+    visibility.stopAnimation();
+    if (open) {
+      setRenderMenu(true);
+      Animated.timing(visibility, { toValue: 1, duration: 180, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+      return;
+    }
+    if (!renderMenu) return;
+    Animated.timing(visibility, { toValue: 0, duration: 130, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(({ finished }) => {
+      if (finished) setRenderMenu(false);
+    });
+  }, [open, renderMenu, visibility]);
+
   return (
     <View style={s.historyFilterWrap}>
-      <Pressable onPress={onPress} style={[s.historyFilterButton, open && s.historyFilterButtonOpen]}>
+      <Pressable onPress={onPress} style={s.historyFilterButton}>
         <Text numberOfLines={1} style={s.historyFilterText}>{label}</Text>
         <MaterialCommunityIcons name={open ? "chevron-up" : "chevron-down"} size={17} color={colors.muted} />
       </Pressable>
-      {open ? <View style={s.historyFilterMenu}>{options.map((option) => <Pressable key={option} onPress={() => onSelect(option)} style={[s.historyFilterOption, option === label && s.historyFilterOptionActive]}><Text numberOfLines={1} style={[s.historyFilterOptionText, option === label && s.historyFilterOptionTextActive]}>{option}</Text></Pressable>)}</View> : null}
+      {renderMenu ? <Animated.View pointerEvents={open ? "auto" : "none"} style={[s.historyFilterMenu, { opacity: visibility, transform: [{ translateY: visibility.interpolate({ inputRange: [0, 1], outputRange: [-6, 0] }) }, { scale: visibility.interpolate({ inputRange: [0, 1], outputRange: [0.98, 1] }) }] }]}>{options.map((option) => { const selected = option === label; return <Pressable key={option} onPress={() => onSelect(option)} style={[s.historyFilterOption, selected && s.historyFilterOptionActive]}><Text numberOfLines={1} style={[s.historyFilterOptionText, selected && s.historyFilterOptionTextActive]}>{option}</Text>{selected && <MaterialCommunityIcons name="check" size={16} color="#171717" />}</Pressable>; })}</Animated.View> : null}
     </View>
   );
 }
@@ -1757,6 +1799,8 @@ function AddDialog({
   onCount,
   json,
   onJson,
+  jsonFileName,
+  onChooseQuestionFile,
   error,
   editing,
   onClose,
@@ -1772,6 +1816,8 @@ function AddDialog({
   onCount: (value: string) => void;
   json: string;
   onJson: (value: string) => void;
+  jsonFileName: string;
+  onChooseQuestionFile: () => void;
   error: string;
   editing: boolean;
   onClose: () => void;
@@ -1780,6 +1826,7 @@ function AddDialog({
   const exercise = title === "Add exercise";
   return (
     <Modal transparent visible={visible} animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
       <Pressable style={[s.backdrop, exercise && s.sheetBackdrop]} onPress={onClose}>
         <Pressable style={[s.dialog, exercise && s.exerciseSheet]} onPress={() => undefined}>
           {exercise ? <View style={s.sheetHandle} /> : null}
@@ -1807,18 +1854,18 @@ function AddDialog({
                   </Text>
                 </View>
               ) : (
-                <View style={s.modeRow}>
+                <View style={s.exerciseTypeRow}>
                   <Pressable
                     onPress={() => onKind("key")}
-                    style={[s.mode, kind === "key" && s.modeActive]}
+                    style={[s.exerciseTypeOption, kind === "key" && s.exerciseTypeOptionActive]}
                   >
-                    <Text style={[s.modeText, kind === "key" && s.modeTextActive]}>Answer key</Text>
+                    <Text style={[s.exerciseTypeText, kind === "key" && s.exerciseTypeTextActive]}>Answer key</Text>
                   </Pressable>
                   <Pressable
                     onPress={() => onKind("questions")}
-                    style={[s.mode, kind === "questions" && s.modeActive]}
+                    style={[s.exerciseTypeOption, kind === "questions" && s.exerciseTypeOptionActive]}
                   >
-                    <Text style={[s.modeText, kind === "questions" && s.modeTextActive]}>
+                    <Text style={[s.exerciseTypeText, kind === "questions" && s.exerciseTypeTextActive]}>
                       Question JSON
                     </Text>
                   </Pressable>
@@ -1834,26 +1881,14 @@ function AddDialog({
                     placeholderTextColor={colors.subdued}
                     style={s.input}
                   />
-                  <Text style={s.helper}>
-                    Next, fill the answer key for every question—just like the web flow.
-                  </Text>
                 </>
               ) : (
                 <>
-                  <TextInput
-                    multiline
-                    scrollEnabled
-                    nestedScrollEnabled
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    value={json}
-                    onChangeText={onJson}
-                    placeholder={
-                      '[{"question":"...","options":["A","B","C","D"],"correctAnswer":0}]'
-                    }
-                    placeholderTextColor={colors.subdued}
-                    style={s.jsonInput}
-                  />
+                  <Pressable onPress={onChooseQuestionFile} style={s.questionFilePicker}>
+                    <MaterialCommunityIcons name="file-upload-outline" size={22} color={colors.accent} />
+                    <Text style={s.questionFileTitle} numberOfLines={1}>{jsonFileName || "Choose question JSON file"}</Text>
+                    <Text style={s.questionFileCopy}>Question array with four options and the correct answer.</Text>
+                  </Pressable>
                   {error ? <Text style={s.error}>{error}</Text> : null}
                 </>
               )}
@@ -1868,7 +1903,7 @@ function AddDialog({
                 {exercise && kind === "key"
                   ? editing
                     ? "Update answer key"
-                    : "Next: answer key"
+                    : "Add exercise"
                   : editing
                     ? "Update exercise"
                     : "Add"}
@@ -1877,6 +1912,7 @@ function AddDialog({
           </View>
         </Pressable>
       </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -1905,7 +1941,13 @@ function QuestionBank({
   const [chapterFilterOpen, setChapterFilterOpen] = useState(false);
   const visibleSubjects = subjects.filter((subject) => filter === "all" || subject.id === filter);
   const chapters = visibleSubjects.flatMap((subject) =>
-    subject.chapters.map((chapter) => ({ id: `${subject.id}:${chapter.id}`, name: chapter.name })),
+    subject.chapters.map((chapter) => ({
+      id: `${subject.id}:${chapter.id}`,
+      name: chapter.name || "Untitled chapter",
+      // With All subjects selected, retain the subject in the chapter label.
+      // Otherwise equally named chapters look blank/indistinguishable.
+      label: filter === "all" ? `${subject.name} · ${chapter.name || "Untitled chapter"}` : (chapter.name || "Untitled chapter"),
+    })),
   );
   const entries = subjects
     .filter((subject) => filter === "all" || subject.id === filter)
@@ -2044,6 +2086,7 @@ function QuestionBank({
       <ScrollView contentContainerStyle={s.content}>
         <View style={s.bankFilters}>
           <BankDropdown
+            title="Subject"
             label={
               filter === "all"
                 ? "All subjects"
@@ -2065,17 +2108,18 @@ function QuestionBank({
             }}
           />
           <BankDropdown
+            title="Chapter"
             label={
               chapterFilter === "all"
                 ? "All chapters"
-                : (chapters.find((chapter) => chapter.id === chapterFilter)?.name ?? "All chapters")
+                : (chapters.find((chapter) => chapter.id === chapterFilter)?.label ?? "All chapters")
             }
             open={chapterFilterOpen}
             onPress={() => {
               setChapterFilterOpen((value) => !value);
               setSubjectFilterOpen(false);
             }}
-            options={[{ id: "all", label: "All chapters" }, ...chapters]}
+            options={[{ id: "all", label: "All chapters" }, ...chapters.map(({ id, label }) => ({ id, label }))]}
             onSelect={(value) => {
               setChapterFilter(value);
               setChapterFilterOpen(false);
@@ -2118,47 +2162,65 @@ function QuestionBank({
 }
 
 function BankDropdown({
+  title,
   label,
   open,
   onPress,
   options,
   onSelect,
 }: {
+  title: string;
   label: string;
   open: boolean;
   onPress: () => void;
   options: { id: string; label: string }[];
   onSelect: (value: string) => void;
 }) {
+  const visibility = useRef(new Animated.Value(open ? 1 : 0)).current;
+  const [renderMenu, setRenderMenu] = useState(open);
+
+  useEffect(() => {
+    visibility.stopAnimation();
+    if (open) {
+      setRenderMenu(true);
+      Animated.timing(visibility, { toValue: 1, duration: 180, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+      return;
+    }
+    if (!renderMenu) return;
+    Animated.timing(visibility, { toValue: 0, duration: 130, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(({ finished }) => {
+      if (finished) setRenderMenu(false);
+    });
+  }, [open, renderMenu, visibility]);
+
   return (
     <View style={[s.bankDropdown, open && s.bankDropdownOpen]}>
+      <Text style={s.bankDropdownLabel}>{title.toUpperCase()}</Text>
       <Pressable
         onPress={onPress}
-        style={[s.bankDropdownTrigger, open && s.bankDropdownTriggerOpen]}
+        style={s.bankDropdownTrigger}
       >
         <Text numberOfLines={1} style={s.bankDropdownValue}>
           {label}
         </Text>
-        <MaterialCommunityIcons
-          name={open ? "chevron-up" : "chevron-down"}
-          size={19}
-          color={colors.muted}
-        />
+        <View style={s.bankDropdownChevron}><MaterialCommunityIcons name={open ? "chevron-up" : "chevron-down"} size={17} color={colors.muted} /></View>
       </Pressable>
-      {open ? (
-        <View style={s.bankDropdownMenu}>
+      {renderMenu ? (
+        <Animated.View pointerEvents={open ? "auto" : "none"} style={[s.bankDropdownMenu, { opacity: visibility, transform: [{ translateY: visibility.interpolate({ inputRange: [0, 1], outputRange: [-6, 0] }) }, { scale: visibility.interpolate({ inputRange: [0, 1], outputRange: [0.98, 1] }) }] }]}>
+          <NativeScrollView nestedScrollEnabled style={s.bankDropdownList} keyboardShouldPersistTaps="handled">
           {options.map((option) => (
             <Pressable
               key={option.id}
               onPress={() => onSelect(option.id)}
-              style={s.bankDropdownOption}
+              style={[s.bankDropdownOption, option.label === label && s.bankDropdownOptionSelected]}
             >
-              <Text numberOfLines={1} style={s.bankDropdownOptionText}>
+              <Text numberOfLines={1} style={[s.bankDropdownOptionText, option.label === label && s.bankDropdownOptionTextSelected]}>
                 {option.label}
               </Text>
+              {option.label === label && <MaterialCommunityIcons name="check" size={16} color="#171717" />}
             </Pressable>
           ))}
-        </View>
+          </NativeScrollView>
+        </Animated.View>
       ) : null}
     </View>
   );
@@ -2170,8 +2232,9 @@ const s = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    padding: 20,
-    paddingBottom: 13,
+    paddingHorizontal: 16,
+    paddingTop: 13,
+    paddingBottom: 7,
   },
   headerActions: { flexDirection: "row", alignItems: "center", gap: 8 },
   eyebrow: {
@@ -2182,77 +2245,100 @@ const s = StyleSheet.create({
   },
   title: { color: colors.text, fontFamily: "Manrope_800ExtraBold", fontSize: 24, marginTop: 4 },
   headerCopy: { color: colors.muted, fontFamily: "Manrope_500Medium", fontSize: 11, marginTop: 3 },
-  content: { padding: 20, paddingTop: 5, gap: 12, paddingBottom: 75 },
-  linkButton: { minHeight: 37, paddingHorizontal: 9, flexDirection: "row", alignItems: "center", gap: 5, borderRadius: 11, backgroundColor: "#252525", borderWidth: 1, borderColor: "#353535" },
-  linkButtonText: { color: "#c4c4c8", fontFamily: "Manrope_700Bold", fontSize: 10 },
-  setupIntro: { minHeight: 58, flexDirection: "row", alignItems: "center", gap: 10, padding: 11, borderRadius: 15, backgroundColor: "#171d28", borderWidth: 1, borderColor: "#27364c" },
-  setupIntroIcon: { width: 34, height: 34, alignItems: "center", justifyContent: "center", borderRadius: 11, backgroundColor: "#202d40" },
-  setupIntroTitle: { color: colors.text, fontFamily: "Manrope_800ExtraBold", fontSize: 12 },
-  setupIntroCopy: { color: "#98a5b8", fontFamily: "Manrope_500Medium", fontSize: 10, marginTop: 2 },
+  content: { paddingHorizontal: 14, paddingTop: 2, gap: 5, paddingBottom: 66 },
+  linkButton: { width: 38, height: 38, alignItems: "center", justifyContent: "center", borderRadius: 11, backgroundColor: "#252525", borderWidth: 1, borderColor: "#353535" },
   label: {
     color: colors.subdued,
     fontSize: 10,
     letterSpacing: 1.5,
     fontWeight: "800",
-    marginBottom: 8,
+    marginBottom: 5,
   },
-  selectGroup: { zIndex: 20 },
+  selectGroup: { position: "relative", zIndex: 2 },
+  selectGroupOpen: { zIndex: 40 },
   select: {
-    height: 49,
-    borderRadius: 13,
-    paddingHorizontal: 14,
+    height: 39,
+    borderRadius: 11,
+    paddingHorizontal: 13,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#1c1c1c",
+    backgroundColor: "#1a1a1a",
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: "#3a3a3a",
   },
-  selectText: { color: colors.text, fontFamily: "Manrope_600SemiBold", fontSize: 14 },
+  selectText: { flex: 1, color: colors.text, fontFamily: "Manrope_600SemiBold", fontSize: 13, marginRight: 10 },
+  selectPlaceholder: { color: colors.muted },
   menu: {
-    marginTop: 5,
-    borderRadius: 13,
+    position: "absolute",
+    top: 58,
+    left: 0,
+    right: 0,
+    zIndex: 80,
+    elevation: 30,
+    borderRadius: 11,
     overflow: "hidden",
-    backgroundColor: "#262626",
+    backgroundColor: "#252525",
     borderWidth: 1,
-    borderColor: "#424242",
+    borderColor: "#4a4a4a",
+    shadowColor: "#000",
+    shadowOpacity: 0.45,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
   },
+  menuList: { maxHeight: 218 },
   menuItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingVertical: 11,
     borderBottomWidth: 1,
     borderColor: "#363636",
   },
-  menuText: { color: colors.text, fontSize: 13 },
+  menuItemSelected: { backgroundColor: "#f4f4f5" },
+  menuText: { color: colors.text, fontFamily: "Manrope_500Medium", fontSize: 12 },
+  menuTextSelected: { color: "#171717", fontFamily: "Manrope_700Bold" },
   addItem: {
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingVertical: 11,
     flexDirection: "row",
     alignItems: "center",
     gap: 7,
   },
-  addItemText: { color: colors.accent, fontSize: 13, fontWeight: "700" },
+  addItemText: { color: colors.accent, fontFamily: "Manrope_700Bold", fontSize: 12 },
   exerciseEdit: {
     flexDirection: "row",
     alignItems: "center",
     alignSelf: "flex-start",
-    gap: 6,
-    marginTop: -4,
-    paddingHorizontal: 9,
-    paddingVertical: 7,
+    gap: 5,
+    marginTop: -2,
+    paddingHorizontal: 7,
+    paddingVertical: 5,
     borderRadius: 9,
-    backgroundColor: "#173c36",
+    borderWidth: 1,
+    borderColor: "#343434",
+    backgroundColor: "transparent",
   },
-  exerciseEditText: { maxWidth: 250, color: "#a7f3d0", fontSize: 11, fontWeight: "800" },
+  exerciseEditText: { maxWidth: 250, color: colors.muted, fontFamily: "Manrope_600SemiBold", fontSize: 10 },
   card: {
     borderRadius: 18,
-    padding: 15,
+    padding: 11,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
   },
+  practiceSetupCard: {
+    borderRadius: 18,
+    padding: 11,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  configSection: { paddingTop: 2 },
+  configDivider: { height: 1, backgroundColor: "#353535", marginVertical: 10 },
   input: {
-    height: 48,
+    height: 44,
     marginTop: 2,
     borderRadius: 12,
     paddingHorizontal: 13,
@@ -2262,54 +2348,60 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#3f3f46",
   },
-  presetRow: { flexDirection: "row", gap: 7, marginTop: 10 },
+  timingInput: { height: 41 },
+  inputDisabled: { opacity: 0.45 },
+  presetRow: { flexDirection: "row", gap: 7, marginTop: 8 },
+  timingPresetRow: { marginTop: 6 },
   preset: {
-    flex: 1,
+    minWidth: 68,
     alignItems: "center",
     borderRadius: 10,
-    paddingVertical: 9,
-    backgroundColor: "#2b2b2b",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    backgroundColor: "#151515",
+    borderWidth: 1,
+    borderColor: "#303030",
   },
-  presetActive: { backgroundColor: examAccentSurface },
+  timingPreset: { minWidth: 63, paddingHorizontal: 8, paddingVertical: 7 },
+  presetActive: { backgroundColor: examAccent, borderColor: examAccent },
   presetText: { color: colors.muted, fontFamily: "Manrope_700Bold", fontSize: 12 },
-  presetTextActive: { color: "#dbeafe" },
-  modeRow: { flexDirection: "row", gap: 8, marginBottom: 8 },
+  presetTextActive: { color: examAccentDeep },
+  modeRow: { flexDirection: "row", gap: 7, marginBottom: 7 },
   mode: {
     flex: 1,
+    minWidth: 0,
     alignItems: "center",
-    borderRadius: 11,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#3f3f46",
-    paddingVertical: 10,
+    borderColor: "#303030",
+    paddingHorizontal: 6,
+    paddingVertical: 8,
+    backgroundColor: "#151515",
   },
-  modeActive: { borderColor: examAccent, backgroundColor: examAccentSurface },
-  modeText: { color: colors.muted, fontFamily: "Manrope_700Bold", fontSize: 12 },
-  modeTextActive: { color: "#dbeafe" },
+  modeActive: { borderColor: examAccent, backgroundColor: examAccent },
+  modeText: { alignSelf: "stretch", color: colors.muted, fontFamily: "Manrope_700Bold", fontSize: 11, textAlign: "center" },
+  modeTextActive: { color: examAccentDeep },
   exerciseTypeLocked: {
-    minHeight: 42,
+    minHeight: 38,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    paddingHorizontal: 12,
-    borderRadius: 11,
+    paddingHorizontal: 10,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#315d54",
-    backgroundColor: "#153c35",
+    borderColor: "#363636",
+    backgroundColor: "#1b1b1b",
   },
-  exerciseTypeLockedText: { color: "#ccfbf1", fontSize: 12, fontWeight: "800" },
-  helper: { color: colors.muted, fontSize: 12, lineHeight: 18, marginTop: 8 },
-  markingHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  markingEdit: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    marginTop: -6,
-    borderRadius: 9,
-    backgroundColor: "#203d37",
-  },
-  markingEditText: { color: colors.accent, fontSize: 11, fontWeight: "800" },
+  exerciseTypeLockedText: { color: colors.muted, fontFamily: "Manrope_600SemiBold", fontSize: 11 },
+  exerciseTypeRow: { flexDirection: "row", gap: 6, marginBottom: 8 },
+  exerciseTypeOption: { flex: 1, alignItems: "center", borderRadius: 9, paddingVertical: 8, backgroundColor: "#202020" },
+  exerciseTypeOptionActive: { backgroundColor: "#26384f" },
+  exerciseTypeText: { color: colors.muted, fontFamily: "Manrope_600SemiBold", fontSize: 11 },
+  exerciseTypeTextActive: { color: "#bfdbfe" },
+  helper: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 6 },
+  markingHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 28 },
+  markingEmbedded: { paddingVertical: 1 },
+  markingInlineValue: { color: colors.text, fontSize: 14, fontFamily: "Manrope_700Bold" },
   markingInputs: { flexDirection: "row", gap: 10 },
   markingField: { flex: 1 },
   markingFieldLabel: { color: colors.muted, fontSize: 11, fontWeight: "700", marginBottom: 6 },
@@ -2323,16 +2415,17 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#3f3f46",
   },
-  marking: { color: colors.text, fontSize: 14, fontWeight: "700" },
   primary: {
     minHeight: 50,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
     gap: 8,
+    paddingHorizontal: 14,
     borderRadius: 14,
     backgroundColor: examAccent,
   },
+  setupContinue: { minHeight: 46, marginTop: 13 },
   primarySmall: {
     alignItems: "center",
     justifyContent: "center",
@@ -2342,6 +2435,7 @@ const s = StyleSheet.create({
     backgroundColor: examAccent,
   },
   primaryText: { color: examAccentDeep, fontFamily: "Manrope_800ExtraBold", fontSize: 13 },
+  primaryWideText: { flexShrink: 1, textAlign: "center" },
   back: { color: colors.muted, fontFamily: "Manrope_700Bold", fontSize: 13 },
   keyRow: {
     minHeight: 48,
@@ -2465,13 +2559,12 @@ const s = StyleSheet.create({
   historyFilters: { zIndex: 20, flexDirection: "row", gap: 8 },
   historyFilterWrap: { flex: 1, position: "relative", zIndex: 20 },
   historyFilterButton: { height: 42, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 6, borderRadius: 12, paddingHorizontal: 12, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
-  historyFilterButtonOpen: { borderColor: examAccent, backgroundColor: "#17243a" },
   historyFilterText: { flex: 1, color: colors.text, fontSize: 12, fontWeight: "700" },
   historyFilterMenu: { position: "absolute", zIndex: 40, elevation: 40, top: 47, right: 0, left: 0, maxHeight: 210, overflow: "hidden", borderRadius: 12, backgroundColor: "#292929", borderWidth: 1, borderColor: "#454545", shadowColor: "#000", shadowOpacity: 0.5, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } },
-  historyFilterOption: { paddingHorizontal: 12, paddingVertical: 10 },
-  historyFilterOptionActive: { backgroundColor: "#383838" },
+  historyFilterOption: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12, paddingVertical: 10 },
+  historyFilterOptionActive: { backgroundColor: "#f4f4f5" },
   historyFilterOptionText: { color: "#d4d4d8", fontSize: 12 },
-  historyFilterOptionTextActive: { color: colors.text, fontWeight: "800" },
+  historyFilterOptionTextActive: { color: "#171717", fontWeight: "800" },
   historyCard: {
     borderRadius: 14,
     padding: 11,
@@ -2673,42 +2766,47 @@ const s = StyleSheet.create({
   bankDropdown: { flex: 1, position: "relative", zIndex: 20 },
   bankDropdownOpen: { zIndex: 50 },
   bankDropdownTrigger: {
-    height: 47,
+    height: 45,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 6,
-    borderRadius: 12,
+    borderRadius: 11,
     paddingLeft: 13,
     paddingRight: 10,
-    backgroundColor: "#1c1c1c",
+    backgroundColor: "#202020",
     borderWidth: 1,
     borderColor: colors.border,
   },
-  bankDropdownTriggerOpen: { borderColor: "#60a5fa", backgroundColor: "#20272d" },
+  bankDropdownLabel: { color: colors.subdued, fontSize: 9, fontWeight: "800", letterSpacing: 1.1, marginBottom: 6, marginLeft: 2 },
+  bankDropdownChevron: { width: 25, height: 25, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: "#303030" },
   bankDropdownValue: { flex: 1, color: colors.text, fontSize: 12, fontWeight: "700" },
   bankDropdownMenu: {
     position: "absolute",
     zIndex: 100,
     elevation: 100,
-    top: 52,
+    top: 68,
     left: 0,
     right: 0,
-    maxHeight: 210,
     overflow: "hidden",
     borderRadius: 12,
     backgroundColor: "#272727",
     borderWidth: 1,
     borderColor: "#4a4a4a",
   },
+  bankDropdownList: { maxHeight: 210 },
   bankDropdownOption: {
     minHeight: 42,
-    justifyContent: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 12,
     borderBottomWidth: 1,
     borderColor: "#3a3a3a",
   },
+  bankDropdownOptionSelected: { backgroundColor: "#f4f4f5" },
   bankDropdownOptionText: { color: colors.text, fontSize: 12 },
+  bankDropdownOptionTextSelected: { color: "#171717", fontWeight: "700" },
   bankEntry: {
     minHeight: 72,
     flexDirection: "row",
@@ -2869,20 +2967,20 @@ const s = StyleSheet.create({
     backgroundColor: "#5a5a5a",
   },
   dialogTitle: { color: colors.text, fontSize: 20, fontWeight: "800" },
-  jsonInput: {
-    height: 280,
+  questionFilePicker: {
+    minHeight: 118,
     marginTop: 10,
     borderRadius: 12,
-    padding: 13,
-    color: colors.text,
-    backgroundColor: "#151515",
+    paddingHorizontal: 16,
+    paddingVertical: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(96,165,250,.05)",
     borderWidth: 1,
-    borderColor: "#3f3f46",
-    textAlignVertical: "top",
-    fontFamily: "monospace",
-    fontSize: 12,
-    lineHeight: 18,
+    borderColor: "rgba(96,165,250,.38)",
   },
+  questionFileTitle: { color: colors.text, fontSize: 14, fontWeight: "700", marginTop: 8, maxWidth: "100%" },
+  questionFileCopy: { color: colors.subdued, fontSize: 11, lineHeight: 16, textAlign: "center", marginTop: 4 },
   error: { color: "#fca5a5", fontSize: 12, marginTop: 8 },
   actions: {
     flexDirection: "row",

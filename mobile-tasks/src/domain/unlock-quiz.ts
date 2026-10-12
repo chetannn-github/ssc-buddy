@@ -8,6 +8,7 @@ export type UnlockQuestion = {
   question: string;
   options: [string, string, string, string];
   correctAnswer: QuizChoice;
+  explanation?: string;
 };
 
 type LearningStat = { askedCount: number; correctCount: number; wrongCount: number; lastAskedAt: string; lastOutcome: "correct" | "wrong" };
@@ -43,7 +44,7 @@ function asQuestions() {
       if (!item?.id || !item?.question || !Array.isArray(item?.options) || item.options.length !== 4 || !isChoice(answer)) return;
       questions.push({
         id: String(item.id), subjectId: String(subject.id ?? subject.name ?? "general"), subject: String(subject.name ?? "General"),
-        question: String(item.question), options: item.options as [string, string, string, string], correctAnswer: answer,
+        question: String(item.question), options: item.options as [string, string, string, string], correctAnswer: answer, explanation: typeof item.explanation === "string" ? item.explanation : "",
       });
     }))));
     const wrongs = new Map<string, number>();
@@ -105,13 +106,6 @@ export async function startUnlockQuiz(): Promise<UnlockQuizState | null> {
 export async function getUnlockQuiz(): Promise<UnlockQuizState | null> {
   const current = await loadUnlockQuiz();
   if (!current || current.status === "complete") return startUnlockQuiz();
-  if (current.status === "correction" && (current.lockedUntil ?? 0) <= Date.now()) {
-    current.status = current.index + 1 >= current.questions.length ? "complete" : "active";
-    current.index += current.status === "active" ? 1 : 0;
-    current.selected = undefined;
-    current.lockedUntil = undefined;
-    return save(current);
-  }
   return current;
 }
 
@@ -128,8 +122,8 @@ export async function answerUnlockQuiz(choice: QuizChoice): Promise<UnlockQuizSt
   state.selected = choice;
   if (choice === question.correctAnswer) {
     stat.correctCount += 1; stat.lastOutcome = "correct"; state.correct += 1;
-    if (state.index + 1 >= state.questions.length) state.status = "complete";
-    else { state.index += 1; state.selected = undefined; }
+    // Keep the answer visible before allowing the learner to move forward.
+    state.status = "correction"; state.lockedUntil = Date.now() + 10_000;
   } else {
     // Keep the correction visible, but do not make the unlock interaction feel
     // punitive. The widget counts this down live for fifteen seconds.

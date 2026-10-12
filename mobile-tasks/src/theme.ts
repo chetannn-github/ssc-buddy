@@ -7,8 +7,9 @@ export const colors = {
   text: "#fafafa",
   muted: "#a1a1aa",
   subdued: "#71717a",
-  accent: "#5eead4",
-  accentDeep: "#052e2b",
-  completeSurface: "#16342f",
-  completeBorder: "#256b5a",
+  // Matches the Practice Session primary action ("Continue to instructions").
+  accent: "#60a5fa",
+  accentDeep: "#081a31",
+  completeSurface: "#162c45",
+  completeBorder: "#285f94",
 } as const;

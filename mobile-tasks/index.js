@@ -69,8 +69,8 @@ if (Platform.OS === "android") {
       quiz = await getUnlockQuiz();
     }
     renderWidget(renderQuickRecallWidget(quiz));
-    // Keep an incorrect answer on screen long enough to teach the correction,
-    // then move to the next question without requiring another widget tap.
+    // Keep answer feedback on screen while the countdown runs. The learner
+    // explicitly taps Next once it becomes available.
     if (quiz?.status === "correction" && (quiz.lockedUntil ?? 0) > Date.now()) {
       // Android widgets do not have a ticking clock; refresh once per second so
       // the learner can actually see the fifteen-second correction countdown.
@@ -79,8 +79,7 @@ if (Platform.OS === "android") {
         quiz = await getUnlockQuiz();
         renderWidget(renderQuickRecallWidget(quiz));
       }
-      const nextQuiz = await advanceUnlockQuiz();
-      renderWidget(renderQuickRecallWidget(nextQuiz));
+      renderWidget(renderQuickRecallWidget(await getUnlockQuiz()));
     }
   });
 }

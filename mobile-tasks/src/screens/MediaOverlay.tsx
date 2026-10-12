@@ -24,18 +24,24 @@ export function MediaOverlay({ user, mode, onClose, musicOpenRequest }: { user: 
 function VideoReels({ user, onClose }: { user: User | null; onClose: () => void }) {
   const { height } = useWindowDimensions();
   const [index, setIndex] = useState(firstReelPage);
+  const [swiping, setSwiping] = useState(false);
   const [likes, toggleLike] = useCloudLikes(user, "ssc-buddy-liked-videos");
   return <Modal visible animationType="slide" onRequestClose={onClose}><View style={styles.reel}>
-    <FlatList data={reelPages} keyExtractor={(item) => String(item.id)} pagingEnabled showsVerticalScrollIndicator={false} initialScrollIndex={firstReelPage} getItemLayout={(_, itemIndex) => ({ length: height, offset: height * itemIndex, index: itemIndex })} initialNumToRender={3} windowSize={3} onMomentumScrollEnd={(event) => setIndex(Math.round(event.nativeEvent.contentOffset.y / height))} renderItem={({ item, index: itemIndex }) => <ReelPage track={item.track} active={index === itemIndex} height={height} onClose={onClose} liked={likes.has(item.track)} onToggleLike={() => toggleLike(item.track)} />} />
+    <FlatList data={reelPages} keyExtractor={(item) => String(item.id)} pagingEnabled showsVerticalScrollIndicator={false} initialScrollIndex={firstReelPage} getItemLayout={(_, itemIndex) => ({ length: height, offset: height * itemIndex, index: itemIndex })} initialNumToRender={3} windowSize={3} onScrollBeginDrag={() => setSwiping(true)} onScrollEndDrag={(event) => { if (!event.nativeEvent.velocity?.y) setSwiping(false); }} onMomentumScrollEnd={(event) => { setIndex(Math.round(event.nativeEvent.contentOffset.y / height)); setSwiping(false); }} renderItem={({ item, index: itemIndex }) => <ReelPage track={item.track} active={index === itemIndex} height={height} onClose={onClose} liked={likes.has(item.track)} swiping={swiping} onToggleLike={() => toggleLike(item.track)} />} />
   </View></Modal>;
 }
 
-function ReelPage({ track, active, height, onClose, liked, onToggleLike }: { track: string; active: boolean; height: number; onClose: () => void; liked: boolean; onToggleLike: () => void }) {
+function ReelPage({ track, active, height, onClose, liked, swiping, onToggleLike }: { track: string; active: boolean; height: number; onClose: () => void; liked: boolean; swiping: boolean; onToggleLike: () => void }) {
   const [speeding, setSpeeding] = useState(false);
   const [videoTime, setVideoTime] = useState(0);
   const longPressRef = useRef(false);
   const source = videoSource(track);
-  const player = useVideoPlayer(source, (item) => { item.loop = true; });
+  const player = useVideoPlayer(source, (item) => {
+    item.loop = true;
+    // Android's native player defaults this to false despite the public API
+    // default. Keep pitch at 1× so a long-press 2× reel sounds natural.
+    item.preservesPitch = true;
+  });
   useEffect(() => {
     if (active) player.play(); else player.pause();
   }, [active, player]);
@@ -48,6 +54,7 @@ function ReelPage({ track, active, height, onClose, liked, onToggleLike }: { tra
   const startFastForward = () => {
     longPressRef.current = true;
     setSpeeding(true);
+    player.preservesPitch = true;
     player.playbackRate = 2;
   };
   const stopFastForward = () => {
@@ -57,11 +64,11 @@ function ReelPage({ track, active, height, onClose, liked, onToggleLike }: { tra
   return <View style={[styles.reel, { height, flex: 0 }]}>
     <VideoView style={styles.video} player={player} nativeControls={false} contentFit="cover" />
     <View pointerEvents="none" style={styles.reelShade} />
-    <Pressable style={styles.close} onPress={onClose}><MaterialCommunityIcons name="close" size={24} color={colors.text} /></Pressable>
+    {!swiping && <Pressable style={styles.close} onPress={onClose}><MaterialCommunityIcons name="close" size={24} color={colors.text} /></Pressable>}
     <Pressable style={styles.videoTap} delayLongPress={280} onLongPress={startFastForward} onPressOut={stopFastForward} onPress={() => { if (longPressRef.current) { longPressRef.current = false; return; } player.playing ? player.pause() : player.play(); }} />
     {speeding && <View pointerEvents="none" style={styles.speedBadge}><Text style={styles.speedText}>2×</Text></View>}
     <View style={styles.reelControls}><Pressable style={styles.round} onPress={onToggleLike}><MaterialCommunityIcons name={liked ? "heart" : "heart-outline"} size={23} color={liked ? "#fb7185" : colors.text} /></Pressable></View>
-    <View pointerEvents="none" style={styles.videoProgressTrack}><View style={[styles.videoProgressFill, { width: `${progress * 100}%` }]} /></View>
+    {!swiping && <View pointerEvents="none" style={styles.videoProgressTrack}><View style={[styles.videoProgressFill, { width: `${progress * 100}%` }]} /></View>}
   </View>;
 }
 
