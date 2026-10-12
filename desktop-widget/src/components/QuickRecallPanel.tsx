@@ -4,9 +4,9 @@ import type { QuickRecallSession, QuizChoice } from "../lib/quick-recall";
 
 const choices: QuizChoice[] = ["A", "B", "C", "D"];
 const QUICK_RECALL_PROGRESS_KEY = "ssc-buddy-desktop-quick-recall-progress";
-type SavedProgress = { sessionId: string; index: number; correct: number; selected: QuizChoice | null; correctionUntil: number | null };
+type SavedProgress = { sessionId: string; index: number; correct: number; selected: QuizChoice | null; answers: QuizChoice[]; correctionUntil: number | null };
 
-function sessionId(session: QuickRecallSession | null) { return session?.questions.map((question) => question.id).join("|") ?? ""; }
+function sessionId(session: QuickRecallSession | null) { return session?.runId ?? ""; }
 function loadProgress(session: QuickRecallSession | null): SavedProgress | null {
   try {
     const saved = JSON.parse(localStorage.getItem(QUICK_RECALL_PROGRESS_KEY) ?? "null") as SavedProgress | null;
@@ -14,10 +14,11 @@ function loadProgress(session: QuickRecallSession | null): SavedProgress | null 
   } catch { return null; }
 }
 
-export function QuickRecallPanel({ session, loading, onBack, onRestart, onAnswered }: { session: QuickRecallSession | null; loading: boolean; onBack: () => void; onRestart: () => void; onAnswered: (question: QuickRecallSession["questions"][number], correct: boolean) => void }) {
+export function QuickRecallPanel({ session, loading, onBack, onRestart, onAnswered }: { session: QuickRecallSession | null; loading: boolean; onBack: () => void; onRestart: () => void; onAnswered: (question: QuickRecallSession["questions"][number], choice: QuizChoice, index: number, correct: boolean) => void }) {
   const [index, setIndex] = useState(() => loadProgress(session)?.index ?? 0);
   const [correct, setCorrect] = useState(() => loadProgress(session)?.correct ?? 0);
   const [selected, setSelected] = useState<QuizChoice | null>(() => loadProgress(session)?.selected ?? null);
+  const [answers, setAnswers] = useState<QuizChoice[]>(() => loadProgress(session)?.answers ?? []);
   const [finished, setFinished] = useState(false);
   const [correctionUntil, setCorrectionUntil] = useState<number | null>(() => loadProgress(session)?.correctionUntil ?? null);
   const [secondsLeft, setSecondsLeft] = useState(0);
@@ -31,14 +32,14 @@ export function QuickRecallPanel({ session, loading, onBack, onRestart, onAnswer
 
   useEffect(() => {
     const saved = loadProgress(session);
-    setIndex(saved?.index ?? 0); setCorrect(saved?.correct ?? 0); setSelected(saved?.selected ?? null); setFinished(false); setCorrectionUntil(saved?.correctionUntil ?? null); setSecondsLeft(0);
+    setIndex(saved?.index ?? 0); setCorrect(saved?.correct ?? 0); setSelected(saved?.selected ?? null); setAnswers(saved?.answers ?? []); setFinished(false); setCorrectionUntil(saved?.correctionUntil ?? null); setSecondsLeft(0);
   }, [session]);
 
   useEffect(() => {
     if (!session) return;
     if (finished) { localStorage.removeItem(QUICK_RECALL_PROGRESS_KEY); return; }
-    localStorage.setItem(QUICK_RECALL_PROGRESS_KEY, JSON.stringify({ sessionId: sessionId(session), index, correct, selected, correctionUntil } satisfies SavedProgress));
-  }, [session, index, correct, selected, correctionUntil, finished]);
+    localStorage.setItem(QUICK_RECALL_PROGRESS_KEY, JSON.stringify({ sessionId: sessionId(session), index, correct, selected, answers, correctionUntil } satisfies SavedProgress));
+  }, [session, index, correct, selected, answers, correctionUntil, finished]);
 
   useEffect(() => {
     if (!correctionUntil) return;
@@ -56,7 +57,8 @@ export function QuickRecallPanel({ session, loading, onBack, onRestart, onAnswer
     if (!question || selected) return;
     const right = choice === question.correctAnswer;
     setSelected(choice);
-    onAnswered(question, right);
+    setAnswers((value) => [...value, choice]);
+    onAnswered(question, choice, index, right);
     if (right) {
       setCorrect((value) => value + 1);
     } else {

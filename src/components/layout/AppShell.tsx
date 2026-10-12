@@ -332,7 +332,7 @@ export function MotivationalVideos({
 
   useEffect(() => {
     let active = true;
-    fetch("/videos/manifest.json", { cache: "no-store" })
+    fetch("/media/videos/manifest.json", { cache: "no-store" })
       .then(async (response) => {
         if (!response.ok) return [];
         const files = (await response.json()) as unknown;
@@ -554,7 +554,7 @@ export function MotivationalVideos({
                   );
                 }}
               >
-                <source src={`/videos/${encodeURIComponent(selectedVideo)}`} />
+                <source src={`/media/videos/${encodeURIComponent(selectedVideo)}`} />
                 Your browser does not support video playback.
               </video>
             </div>
@@ -698,7 +698,7 @@ export function MotivationalMusic({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     let active = true;
-    fetch("/music/manifest.json", { cache: "no-store" })
+    fetch("/media/music/manifest.json", { cache: "no-store" })
       .then(async (response) => {
         if (!response.ok) return [];
         const files = (await response.json()) as unknown;
@@ -738,7 +738,7 @@ export function MotivationalMusic({ onClose }: { onClose: () => void }) {
     setCoverUrl(null);
     setPlaybackPercent(0);
     if (!selectedTrack) return;
-    fetch(`/music/${encodeURIComponent(selectedTrack)}`)
+    fetch(`/media/music/${encodeURIComponent(selectedTrack)}`)
       .then((response) => response.arrayBuffer())
       .then((buffer) => {
         const cover = embeddedCoverArt(new Uint8Array(buffer));
@@ -837,7 +837,7 @@ export function MotivationalMusic({ onClose }: { onClose: () => void }) {
         setIsPlaying(false);
         if (!repeatTrack) showTrack(1);
       }}
-      src={`/music/${encodeURIComponent(selectedTrack)}`}
+      src={`/media/music/${encodeURIComponent(selectedTrack)}`}
     />
   ) : null;
 

@@ -10,7 +10,8 @@ export type QuickRecallQuestion = {
   correctAnswer: QuizChoice;
   explanation?: string;
 };
-export type QuickRecallSession = { subject: string; questions: QuickRecallQuestion[] };
+export type QuickRecallSession = { runId: string; startedAt: string; subject: string; questions: QuickRecallQuestion[] };
+const makeRunId = () => `quick-recall-${Date.now()}-${crypto.randomUUID?.() ?? Math.random().toString(36).slice(2, 10)}`;
 
 const choices: QuizChoice[] = ["A", "B", "C", "D"];
 const isChoice = (value: unknown): value is QuizChoice => typeof value === "string" && choices.includes(value as QuizChoice);
@@ -63,5 +64,5 @@ export function createQuickRecallSession(seed: QuickRecallSeed): QuickRecallSess
     const score = (item: QuickRecallQuestion) => { const stat = learning[questionKey(item)]; return (favourites.has(item.id) ? 1000 : 0) + (wrongs.get(questionKey(item)) ?? 0) * 100 + (stat?.wrongCount ?? 0) * 50 - (stat?.askedCount ?? 0) + Math.random() * 3; };
     return score(right) - score(left);
   }).slice(0, 3);
-  return selected.length ? { subject: selected[0].subject, questions: selected } : null;
+  return selected.length ? { runId: makeRunId(), startedAt: new Date().toISOString(), subject: selected[0].subject, questions: selected } : null;
 }

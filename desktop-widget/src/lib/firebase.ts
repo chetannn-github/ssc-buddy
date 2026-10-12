@@ -147,6 +147,43 @@ export async function recordQuickRecallAnswer(user: User, question: { id: string
   });
 }
 
+export type QuickRecallPracticeInput = {
+  runId: string;
+  date: string;
+  startedAt: string;
+  questions: Array<{ id: string; subjectId: string; correctAnswer: string }>;
+  answers: string[];
+};
+
+/** Same daily, transaction-safe practiceAttempts write used by Android. */
+export async function recordQuickRecallPractice(user: User, input: QuickRecallPracticeInput) {
+  const reference = doc(db!, "users", user.uid, "practiceAttempts", `quick-recall:${input.date}`);
+  await runTransaction(db!, async (transaction) => {
+    const snapshot = await transaction.get(reference);
+    const current = snapshot.data() ?? {};
+    const runIds = Array.isArray(current.quickRecallRunIds) ? current.quickRecallRunIds.map(String) : [];
+    if (runIds.includes(input.runId)) return;
+    const count = Math.min(input.questions.length, input.answers.length);
+    const questions = input.questions.slice(0, count);
+    const answers = input.answers.slice(0, count);
+    const correct = answers.reduce((total, answer, index) => total + (answer === questions[index]?.correctAnswer ? 1 : 0), 0);
+    const oldAnswers = Array.isArray(current.answers) ? current.answers : [];
+    const oldIds = Array.isArray(current.questionIds) ? current.questionIds : [];
+    const oldKey = Array.isArray(current.answerKey) ? current.answerKey : [];
+    const nextCorrect = Math.max(0, Number(current.correct) || 0) + correct;
+    const nextWrong = Math.max(0, Number(current.wrong) || 0) + count - correct;
+    transaction.set(reference, {
+      ...current, id: `quick-recall:${input.date}`, date: input.date,
+      createdAt: current.createdAt ?? input.startedAt, updatedAt: new Date().toISOString(),
+      testMode: "quick-recall", subjectId: "quick-recall", subject: "Quick Recall", chapter: "", exercise: "Quick Recall",
+      startNumber: 1, durationMinutes: null, timeTakenSeconds: Math.max(0, Number(current.timeTakenSeconds) || 0),
+      answers: [...oldAnswers, ...answers], questionIds: [...oldIds, ...questions.map((question) => question.id)],
+      answerKey: [...oldKey, ...questions.map((question) => question.correctAnswer)], correct: nextCorrect, wrong: nextWrong,
+      marking: { positive: 1, negative: 0 }, score: nextCorrect, quickRecallRunIds: [...runIds, input.runId], updatedAtServer: serverTimestamp(),
+    });
+  });
+}
+
 /** One document per task, matching the existing web's document-level CRUD. */
 export async function saveTask(user: User, task: DailyTask) { await setDoc(taskRef(user, task.id), task); }
 export async function removeTask(user: User, id: string) { await deleteDoc(taskRef(user, id)); }

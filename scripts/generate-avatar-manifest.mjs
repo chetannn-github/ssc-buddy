@@ -2,8 +2,11 @@ import { readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 const avatarDirectory = join(process.cwd(), "public", "avatars");
-const videoDirectory = join(process.cwd(), "public", "videos");
-const musicDirectory = join(process.cwd(), "public", "music");
+// Media has one source of truth for web and Expo. The web serves this folder
+// directly from /media; Expo consumes its generated manifest remotely.
+const mediaDirectory = join(process.cwd(), "public", "media");
+const videoDirectory = join(mediaDirectory, "videos");
+const musicDirectory = join(mediaDirectory, "music");
 const imageExtension = /\.(avif|gif|jpe?g|png|webp)$/i;
 const videoExtension = /\.(m4v|mov|mp4|ogv|webm)$/i;
 const musicExtension = /\.(mp3|m4a|ogg|wav)$/i;

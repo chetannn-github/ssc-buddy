@@ -22,7 +22,7 @@ export type McqQuestion = {
 export type TestRecord = {
   id: string;
   date: string;
-  testMode?: "standard" | "random";
+  testMode?: "standard" | "random" | "quick-recall";
   attemptGroupId?: string;
   subjectId?: string;
   subject: string;
