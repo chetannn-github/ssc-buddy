@@ -1,4 +1,6 @@
-:root { font-family: Roboto, "Segoe UI", Arial, sans-serif; color: #f4f4f5; background: transparent; color-scheme: dark; }
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Sora:wght@500;600;700&display=swap");
+
+:root { font-family: "Manrope", ui-sans-serif, system-ui, sans-serif; color: #f4f4f5; background: transparent; color-scheme: dark; }
 * { box-sizing: border-box; } body { margin: 0; min-width: 320px; background: transparent; } button, input, select { font: inherit; } button { cursor: pointer; }
 /* WebView2 adds its own password-reveal control; use the app's eye button only. */
 input[type="password"]::-ms-reveal, input[type="password"]::-ms-clear { display: none; }
@@ -45,13 +47,69 @@ header, .toolbar, footer, .task { display: flex; align-items: center; } header {
 .quick-state span { font-size: 11px; line-height: 1.4; }
 .quick-state .secondary, .quick-state .primary { width: auto; min-height: 35px; padding: 0 11px; font-size: 11px; font-weight: 600; }
 .quick-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 4px; }
+
+/* Compact completion summary — keep the result visible without a tall empty card. */
+.quick-complete {
+  min-height: 0;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 18px;
+  padding: 12px;
+  text-align: left;
+  border-color: transparent;
+  background: #1a1a1a;
+}
+
+.quick-complete-icon {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 11px;
+  color: #93c5fd;
+  background: #17283a;
+}
+
+.quick-complete-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.quick-complete strong {
+  font-family: "Sora", ui-sans-serif, system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.quick-complete-copy > span:last-child {
+  color: #a1a1aa;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.quick-complete .quick-actions {
+  grid-column: 1 / -1;
+  width: 100%;
+  margin-top: 2px;
+}
+
+.quick-complete .quick-actions .secondary,
+.quick-complete .quick-actions .primary {
+  width: 100%;
+  min-height: 32px;
+  font-size: 11px;
+  font-weight: 500;
+}
 .quick-heading { display: flex; align-items: center; gap: 8px; color: #83efd4; font-size: 9px; font-weight: 800; letter-spacing: .1em; }
 .quick-heading small { margin-left: auto; color: #a1a1aa; font-size: 10px; letter-spacing: 0; }
 .back-icon { display: grid; width: 26px; height: 26px; place-items: center; border: 0; border-radius: 8px; color: #c4c4c8; background: #282828; }
 .quick-question { margin: 2px 0; color: #f4f4f5; font-size: 14px; font-weight: 600; line-height: 1.4; }
 .quick-options { display: grid; gap: 6px; }
 .quick-option { display: flex; width: 100%; align-items: center; gap: 9px; padding: 9px; border: 1px solid #343434; border-radius: 10px; color: #e4e4e7; background: #242424; text-align: left; font-size: 11px; transition: border-color 160ms ease, background 160ms ease; }
-.quick-option:hover:not(:disabled) { border-color: #5eead4; background: #20332f; }
+.quick-option:hover:not(:disabled) { border-color: #52525b; background: #242424; }
 .quick-option b { display: grid; width: 20px; height: 20px; flex: 0 0 20px; place-items: center; border-radius: 50%; color: #83efd4; background: #303030; font-size: 10px; }
 .quick-option span { overflow: hidden; flex: 1; text-overflow: ellipsis; white-space: nowrap; }
 .quick-option.correct { border-color: #286053; background: #18342f; }
@@ -73,7 +131,8 @@ header, .toolbar, footer, .task { display: flex; align-items: center; } header {
 .widget .done .check { background: #60a5fa; }
 .widget .chip.active { color: #dbeafe; border-color: #60a5fa; background: #162c45; }
 .quick-recall-trigger:hover, .quick-recall-trigger.active { border-color: #285f94; color: #dbeafe; background: #162c45; }
-.quick-option:hover:not(:disabled) { border-color: #60a5fa; background: #162c45; }
+.quick-option:hover:not(:disabled) { border-color: #52525b; background: #242424; }
+.quick-option:focus-visible { outline: none; border-color: #52525b; }
 .quick-option b { color: #93c5fd; }
 .quick-next { border-color: #285f94; color: #dbeafe; background: #162c45; }
 .quick-next:hover:not(:disabled) { border-color: #60a5fa; background: #1e3a5f; }
@@ -106,7 +165,85 @@ header, .toolbar, footer, .task { display: flex; align-items: center; } header {
 .task-dialog .form-grid > label:nth-child(2) .select-popover {
   top: calc(100% + 5px);
   bottom: auto;
-  max-height: 118px;
-  overflow-y: auto;
+  max-height: none;
+  overflow: visible;
   transform-origin: top;
+}
+
+/* Header status/actions should read as lightweight controls, not extra chips. */
+.widget .streak-pill {
+  min-width: 0;
+  height: auto;
+  gap: 3px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  color: #a1a1aa;
+  background: transparent;
+  font-size: 11px;
+  font-weight: 600;
+}
+.widget .streak-pill.active { border: 0; color: #fcd34d; background: transparent; }
+.widget .streak-pill svg { color: currentColor; }
+.widget .logout {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
+  color: #8f8f96;
+  background: transparent;
+}
+.widget .logout:hover { border: 0; color: #fda4af; background: rgba(244, 63, 94, .1); }
+
+/* Empty day gets a clear but quiet full-width primary action. */
+.widget .empty .primary {
+  width: 100%;
+  min-height: 34px;
+  margin: 11px 0 0;
+  color: #082f49;
+  font-weight: 500;
+}
+
+/* Keep the paired task selectors visually tight in the narrow widget dialog. */
+.task-dialog .form-grid { gap: 5px; }
+.task-dialog { row-gap: 5px; }
+
+/* Anchor menus directly under their own trigger; don't leave a floating gap. */
+.task-dialog .select-menu > .select-popover {
+  top: calc(100% + 1px);
+  margin-top: 0;
+}
+.task-dialog .select-popover button { min-height: 25px; padding: 4px 7px; line-height: 1.15; }
+
+/* Labels should sit close to their field in this compact desktop dialog. */
+.task-dialog > label,
+.task-dialog .form-grid > label {
+  gap: 2px;
+  line-height: 1.15;
+}
+.task-dialog > h2 { margin-bottom: -1px; }
+
+/* Calm entry motion for New/Edit task, without making the compact widget feel slow. */
+.task-dialog {
+  animation: task-dialog-enter 180ms cubic-bezier(.2, .8, .2, 1) both;
+}
+
+/* Keep the New/Edit task flow compact without leaving an empty footer. */
+.task-dialog,
+.task-dialog.editing {
+  min-height: 0;
+  gap: 10px;
+  padding: 14px 14px 10px;
+}
+.task-dialog .form-grid { gap: 11px; }
+.task-dialog > label,
+.task-dialog .form-grid > label { gap: 2px; }
+.task-dialog input,
+.task-dialog .select-trigger { height: 36px; }
+.task-dialog .schedule { gap: 4px; }
+.task-dialog .schedule > div { gap: 6px; }
+.task-dialog .dialog-actions { margin-top: 5px; }
+@keyframes task-dialog-enter {
+  from { opacity: 0; transform: translateY(10px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }

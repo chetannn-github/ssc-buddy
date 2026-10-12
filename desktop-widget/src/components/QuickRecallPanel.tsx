@@ -23,6 +23,8 @@ export function QuickRecallPanel({ session, loading, onBack, onRestart, onAnswer
   const [correctionUntil, setCorrectionUntil] = useState<number | null>(() => loadProgress(session)?.correctionUntil ?? null);
   const [secondsLeft, setSecondsLeft] = useState(0);
   const question = session?.questions[index];
+  // Sessions created before chapter metadata was added must still render safely.
+  const chapterLabel = session?.chapter || question?.chapter || "Practice";
 
   const nextQuestion = () => {
     if (index + 1 >= (session?.questions.length ?? 0)) setFinished(true);
@@ -68,10 +70,23 @@ export function QuickRecallPanel({ session, loading, onBack, onRestart, onAnswer
 
   if (loading) return <section className="quick-recall-panel quick-state quick-loading"><LoaderCircle className="spin" /><span>Preparing quick recall…</span></section>;
   if (!session) return <section className="quick-recall-panel quick-state"><Sparkles size={20} /><strong>No question-based exercises yet.</strong><span>Add question-based exercises in Practice Session to begin.</span><button className="secondary" onClick={onBack}>Back to tasks</button></section>;
-  if (finished) return <section className="quick-recall-panel quick-state"><Sparkles size={21} /><strong>{correct}/{session.questions.length} correct</strong><span>{session.subject} · Quick recall complete</span><div className="quick-actions"><button className="secondary" onClick={onBack}><ArrowLeft size={14} /> Tasks</button><button className="primary" onClick={onRestart}><RotateCcw size={14} /> Again</button></div></section>;
+  if (finished) {
+    const total = session.questions.length;
+    return <section className="quick-recall-panel quick-state quick-complete">
+      <div className="quick-complete-icon"><Sparkles size={18} /></div>
+      <div className="quick-complete-copy">
+        <strong>{correct}/{total} correct</strong>
+        <span>{session.subject}</span>
+      </div>
+      <div className="quick-actions">
+        <button className="secondary" onClick={onBack}><ArrowLeft size={14} /> Tasks</button>
+        <button className="primary" onClick={onRestart}><RotateCcw size={14} /> Again</button>
+      </div>
+    </section>;
+  }
 
   return <section className="quick-recall-panel">
-    <div className="quick-heading"><span>QUICK RECALL · {session.subject.toUpperCase()}</span><div className="quick-progress"><small>{correctionUntil ? `Next in ${secondsLeft}s` : `${index + 1}/${session.questions.length}`}</small><button type="button" className="quick-next" disabled={selected !== question?.correctAnswer || Boolean(correctionUntil)} onClick={nextQuestion}>{index + 1 === session.questions.length ? "Finish" : "Next"}</button></div></div>
+    <div className="quick-heading"><span>{session.subject.toUpperCase()} · {chapterLabel.toUpperCase()}</span><div className="quick-progress"><small>{correctionUntil ? `Next in ${secondsLeft}s` : `${index + 1}/${session.questions.length}`}</small><button type="button" className="quick-next" disabled={selected !== question?.correctAnswer || Boolean(correctionUntil)} onClick={nextQuestion}>{index + 1 === session.questions.length ? "Finish" : "Next"}</button></div></div>
     <p className="quick-question">{question?.question}</p>
     <div className="quick-options">{choices.map((choice, optionIndex) => {
       const selectedThis = selected === choice;

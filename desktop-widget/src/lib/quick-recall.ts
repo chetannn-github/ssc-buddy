@@ -5,12 +5,13 @@ export type QuickRecallQuestion = {
   id: string;
   subjectId: string;
   subject: string;
+  chapter: string;
   question: string;
   options: [string, string, string, string];
   correctAnswer: QuizChoice;
   explanation?: string;
 };
-export type QuickRecallSession = { runId: string; startedAt: string; subject: string; questions: QuickRecallQuestion[] };
+export type QuickRecallSession = { runId: string; startedAt: string; subject: string; chapter: string; questions: QuickRecallQuestion[] };
 const makeRunId = () => `quick-recall-${Date.now()}-${crypto.randomUUID?.() ?? Math.random().toString(36).slice(2, 10)}`;
 
 const choices: QuizChoice[] = ["A", "B", "C", "D"];
@@ -31,7 +32,7 @@ export function createQuickRecallSession(seed: QuickRecallSeed): QuickRecallSess
           const record = item as Record<string, unknown>;
           if (!record.id || !record.question || !Array.isArray(record.options) || record.options.length !== 4 || !isChoice(record.correctAnswer)) return;
           questions.push({
-            id: String(record.id ?? index), subjectId: String(subject.id ?? subject.name ?? "general"), subject: String(subject.name ?? "General"), question: String(record.question),
+            id: String(record.id ?? index), subjectId: String(subject.id ?? subject.name ?? "general"), subject: String(subject.name ?? "General"), chapter: String((chapter as Record<string, unknown>).name ?? "Practice"), question: String(record.question),
             options: record.options.map(String) as [string, string, string, string], correctAnswer: record.correctAnswer,
             explanation: typeof record.explanation === "string" ? record.explanation : undefined,
           });
@@ -64,5 +65,5 @@ export function createQuickRecallSession(seed: QuickRecallSeed): QuickRecallSess
     const score = (item: QuickRecallQuestion) => { const stat = learning[questionKey(item)]; return (favourites.has(item.id) ? 1000 : 0) + (wrongs.get(questionKey(item)) ?? 0) * 100 + (stat?.wrongCount ?? 0) * 50 - (stat?.askedCount ?? 0) + Math.random() * 3; };
     return score(right) - score(left);
   }).slice(0, 3);
-  return selected.length ? { runId: makeRunId(), startedAt: new Date().toISOString(), subject: selected[0].subject, questions: selected } : null;
+  return selected.length ? { runId: makeRunId(), startedAt: new Date().toISOString(), subject: selected[0].subject, chapter: selected[0].chapter, questions: selected } : null;
 }

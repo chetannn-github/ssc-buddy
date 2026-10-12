@@ -798,7 +798,7 @@ export function PracticeScreen({ user }: { user: any }) {
                 onPress={() => setMinutes(String(value))}
                 style={[s.preset, s.timingPreset, Number(minutes) === value && s.presetActive]}
               >
-                <Text numberOfLines={1} allowFontScaling={false} style={[s.presetText, s.timingPresetText, Number(minutes) === value && s.presetTextActive]}>
+                <Text allowFontScaling={false} style={[s.presetText, s.timingPresetText, Number(minutes) === value && s.presetTextActive]}>
                   {value}
                 </Text>
               </Pressable>
@@ -2384,7 +2384,7 @@ const s = StyleSheet.create({
   timingInput: { height: 41 },
   inputDisabled: { opacity: 0.45 },
   presetRow: { flexDirection: "row", gap: 7, marginTop: 8 },
-  timingPresetRow: { marginTop: 6, justifyContent: "space-between", gap: 0 },
+  timingPresetRow: { marginTop: 6, gap: 6 },
   preset: {
     minWidth: 68,
     alignItems: "center",
@@ -2395,10 +2395,9 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#303030",
   },
-  // Four presets always share the available row width. Using minWidth here
-  // caused Android to squeeze the text on narrow devices ("30" became "3").
-  timingPreset: { width: "23.5%", minWidth: 0, flexGrow: 0, flexShrink: 1, paddingHorizontal: 0, paddingVertical: 7 },
-  timingPresetText: { textAlign: "center" },
+  // Flex items avoid Android's inconsistent percentage sizing inside this row.
+  timingPreset: { flex: 1, minWidth: 0, paddingHorizontal: 2, paddingVertical: 7 },
+  timingPresetText: { width: "100%", textAlign: "center", includeFontPadding: false },
   presetActive: { backgroundColor: examAccent, borderColor: examAccent },
   presetText: { color: colors.muted, fontFamily: "Manrope_700Bold", fontSize: 12 },
   presetTextActive: { color: examAccentDeep },

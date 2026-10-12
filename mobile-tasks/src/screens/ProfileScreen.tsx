@@ -305,11 +305,12 @@ function ActivityHeatmap({ user, mockTests, practiceRecords }: { user: User | nu
   const [trackerRevision, setTrackerRevision] = useState<Record<string, { types?: Array<{ id: string; name: string }> }>>({});
   const [viewportWidth, setViewportWidth] = useState(0);
   const [contentWidth, setContentWidth] = useState(0);
-  const [heatmapReady, setHeatmapReady] = useState(false);
+  const [heatmapReady, setHeatmapReady] = useState(true);
   const [scrollbarVisible, setScrollbarVisible] = useState(false);
   const heatmapRef = useRef<ScrollView>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
   const scrollbarTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const initiallyPositionedFor = useRef<string | null>(null);
   useEffect(() => {
     if (!user) { setTrackerActivity([]); setTrackerRevision({}); return; }
     return watchTrackerSections(user, (sections) => {
@@ -384,14 +385,16 @@ function ActivityHeatmap({ user, mockTests, practiceRecords }: { user: User | nu
       setHeatmapReady(true);
       return;
     }
+    const positionKey = user?.uid ?? "guest";
+    if (initiallyPositionedFor.current === positionKey) {
+      setHeatmapReady(true);
+      return;
+    }
+    initiallyPositionedFor.current = positionKey;
     const end = contentWidth - viewportWidth;
-    const frame = requestAnimationFrame(() => {
-      scrollX.setValue(end);
-      heatmapRef.current?.scrollTo({ x: end, animated: false });
-      requestAnimationFrame(() => setHeatmapReady(true));
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [contentWidth, viewportWidth]);
+    scrollX.setValue(end);
+    heatmapRef.current?.scrollTo({ x: end, animated: false });
+  }, [contentWidth, viewportWidth, user?.uid]);
   useEffect(() => () => { if (scrollbarTimer.current) clearTimeout(scrollbarTimer.current); }, []);
   const revealScrollbar = () => {
     if (scrollbarTimer.current) clearTimeout(scrollbarTimer.current);
@@ -401,9 +404,9 @@ function ActivityHeatmap({ user, mockTests, practiceRecords }: { user: User | nu
     if (scrollbarTimer.current) clearTimeout(scrollbarTimer.current);
     scrollbarTimer.current = setTimeout(() => setScrollbarVisible(false), 900);
   };
-  return <View style={[styles.heatmapSection, !heatmapReady && styles.heatmapPending]}>
+  return <View style={styles.heatmapSection}>
     <View style={styles.heatmapHeading}><Text style={styles.heatmapMuted}>{total} activities · this year</Text><View style={styles.heatmapFacts}><Text style={styles.heatmapMuted}><Text style={styles.heatmapNumber}>{activeDays}</Text> active days</Text><Text style={styles.heatmapMuted}><Text style={styles.heatmapNumber}>{streak}</Text> max streak</Text></View></View>
-    <Animated.ScrollView ref={heatmapRef} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.months} style={styles.heatmapScroll} onLayout={(event) => setViewportWidth(event.nativeEvent.layout.width)} onContentSizeChange={(width) => setContentWidth(width)} onScrollBeginDrag={revealScrollbar} onScrollEndDrag={hideScrollbarSoon} onMomentumScrollEnd={hideScrollbarSoon} onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], { useNativeDriver: true })} scrollEventThrottle={16}>
+    <Animated.ScrollView ref={heatmapRef} horizontal contentOffset={{ x: 10000, y: 0 }} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.months} style={styles.heatmapScroll} onLayout={(event) => setViewportWidth(event.nativeEvent.layout.width)} onContentSizeChange={(width) => setContentWidth(width)} onScrollBeginDrag={revealScrollbar} onScrollEndDrag={hideScrollbarSoon} onMomentumScrollEnd={hideScrollbarSoon} onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], { useNativeDriver: true })} scrollEventThrottle={16}>
       {months.map((month) => <View key={month.key} style={[styles.month, { width: 76 }]}><View style={[styles.monthGrid, { height: 74 }]}>{month.days.map((day) => { const level = day.value === 0 ? 0 : Math.min(4, Math.ceil((day.value / max) * 4)); return <Pressable key={day.key} accessibilityLabel={`${day.key}: ${day.value} activities`} onPress={() => setSelectedDay(day.key)} style={[styles.heatCell, { width: 9, height: 9, backgroundColor: ["#45454f", "#a7f3d0", "#6ee7b7", "#34d399", "#10b981"][level] }, selectedDay === day.key && styles.heatSelected]} />; })}</View><Text style={styles.monthLabel}>{month.label}</Text></View>)}
     </Animated.ScrollView>
     {contentWidth > viewportWidth && scrollbarVisible && <View style={styles.heatScrollbar}><Animated.View style={[styles.heatScrollbarThumb, { width: thumbWidth, transform: [{ translateX: thumbLeft }] }]} /></View>}
