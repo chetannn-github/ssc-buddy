@@ -10,7 +10,7 @@ import {
 } from "react";
 import { defaultData, type TrackerActivity, type TrackerData } from "./tracker";
 import { isFirebaseConfigured, observeFirebaseUser } from "../../../src/lib/firebase-sync";
-import { migrateTrackerIfEmpty, syncTrackerSections, watchTrackerSections } from "../../../src/lib/tracker-sync";
+import { syncTrackerSections } from "../../../src/lib/tracker-sync";
 import type { User } from "firebase/auth";
 
 export const TRACKER_STORAGE_KEY = "ssc-cgl-2027-tracker-v1";
@@ -132,7 +132,6 @@ export function TrackerProvider({ children }: { children: ReactNode }) {
   const loaded = useRef(false);
   const [syncUser, setSyncUser] = useState<User | null>(null);
   const lastSynced = useRef<TrackerData>(defaultData());
-  const applyingRemote = useRef(false);
   const localChangePending = useRef(false);
 
   useEffect(() => {
@@ -153,37 +152,9 @@ export function TrackerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!syncUser || !ready) return;
-    let disposed = false;
-    let stop: () => void = () => undefined;
-    void (async () => {
-      await migrateTrackerIfEmpty(syncUser, data);
-      if (disposed) return;
-      stop = watchTrackerSections(syncUser, (remote) => {
-        lastSynced.current = remote;
-        setData((current) => {
-          // Firestore also emits metadata-only snapshots. Keeping the current
-          // object for an identical payload prevents tracker tabs from being
-          // remounted for no data change.
-          if (isSameTrackerData(current, remote)) return current;
-          applyingRemote.current = true;
-          return remote;
-        });
-      });
-    })().catch(() => undefined);
-    return () => { disposed = true; stop(); };
-  // Initial migration is intentionally once per signed-in account.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [syncUser, ready]);
-
-  useEffect(() => {
     if (!loaded.current || !ready) return;
     try {
       localStorage.setItem(TRACKER_STORAGE_KEY, JSON.stringify(data));
-      if (applyingRemote.current) {
-        applyingRemote.current = false;
-        return;
-      }
       // Hydration and remote snapshots must never become new local writes.
       // Only an explicit CRUD action is allowed to broadcast and sync.
       if (!localChangePending.current) return;

@@ -1,4 +1,4 @@
-import { collection, deleteDoc, doc, getDocs, onSnapshot, setDoc, type Unsubscribe, writeBatch } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDocs, setDoc, type Unsubscribe, writeBatch } from "firebase/firestore";
 import type { User } from "firebase/auth";
 import { getFirebaseFirestore } from "@/lib/firebase-sync";
 import { loadFavoriteQuestionIds, loadHistory, loadMarking, loadSubjects, onPracticePersist, saveFavoriteQuestionIds, saveHistory, saveMarking, saveSubjects, type MarkingScheme, type Subject, type TestRecord } from "@/lib/exam";
@@ -24,7 +24,12 @@ async function syncCollection<T extends Item>(user: User, name: string, before: 
   ]);
 }
 
-/** Starts the entity-level practice backend. Legacy local storage is only an offline cache/migration source. */
+/**
+ * Hydrates practice data once on browser load, then keeps local CRUD writes in
+ * sync. We intentionally do not keep Firestore snapshot listeners open on the
+ * website: a large question bank can otherwise repeatedly serialize on the
+ * main thread and freeze unrelated routes.
+ */
 export async function startPracticeSync(user: User): Promise<Unsubscribe> {
   const localSubjects = loadSubjects();
   const localAttempts = loadHistory();
@@ -61,20 +66,7 @@ export async function startPracticeSync(user: User): Promise<Unsubscribe> {
   if (remoteAttempts.size) saveHistory(attempts);
   if (remoteFavourites.size) saveFavoriteQuestionIds(favourites.map((item) => item.id));
   if (marking) saveMarking(marking);
-  let applyingRemote = false;
-  const applyRemote = (fn: () => void) => {
-    applyingRemote = true;
-    fn();
-    queueMicrotask(() => { applyingRemote = false; });
-  };
-  const stops = [
-    onSnapshot(docsFor(user, "practiceSubjects"), (snapshot) => applyRemote(() => { subjects = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as Subject); saveSubjects(subjects); })),
-    onSnapshot(docsFor(user, "practiceAttempts"), (snapshot) => applyRemote(() => { attempts = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as TestRecord); saveHistory(attempts); })),
-    onSnapshot(docsFor(user, "practiceFavourites"), (snapshot) => applyRemote(() => { favourites = snapshot.docs.map((item) => ({ id: item.id })); saveFavoriteQuestionIds(favourites.map((item) => item.id)); })),
-    onSnapshot(settingsRef, (snapshot) => applyRemote(() => { const remote = snapshot.data()?.["marking"] as MarkingScheme | undefined; if (remote) { marking = remote; saveMarking(remote); } })),
-  ];
   const save = () => {
-    if (applyingRemote) return;
     const nextSubjects = loadSubjects(); const nextAttempts = loadHistory(); const nextFavourites = loadFavoriteQuestionIds().map((id) => ({ id })); const nextMarking = loadMarking();
     void syncCollection(user, "practiceSubjects", subjects, nextSubjects); subjects = nextSubjects;
     void syncCollection(user, "practiceAttempts", attempts, nextAttempts); attempts = nextAttempts;
@@ -83,7 +75,6 @@ export async function startPracticeSync(user: User): Promise<Unsubscribe> {
   };
   const stopPersistObserver = onPracticePersist(save);
   return () => {
-    stops.forEach((stop) => stop());
     stopPersistObserver();
   };
 }

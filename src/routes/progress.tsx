@@ -11,10 +11,8 @@ import {
   YAxis,
 } from "recharts";
 import { AppShell } from "@/components/layout/AppShell";
-import { loadTrackerData, saveTrackerData } from "@/lib/tracker-store";
+import { loadTrackerData } from "@/lib/tracker-store";
 import type { TestEntry, TrackerData } from "@/lib/tracker";
-import { watchTrackerSections } from "@/lib/tracker-sync";
-import { useAuthUser } from "@/lib/auth-context";
 
 type TestCategory = "Sectional" | "Pre" | "Mains";
 
@@ -200,7 +198,6 @@ function FilterMenu<T extends string>({
 
 function Progress() {
   const [tracker, setTracker] = useState<TrackerData>(() => loadTrackerData());
-  const user = useAuthUser();
   const [category, setCategory] = useState<TestCategory>("Sectional");
   const [subjectId, setSubjectId] = useState("all");
 
@@ -211,12 +208,6 @@ function Progress() {
       window.removeEventListener("cbt-tracker-updated", refresh);
     };
   }, []);
-
-  // Keep test analytics current when a test is logged from another client.
-  useEffect(() => {
-    if (!user) return;
-    return watchTrackerSections(user, (remote) => { setTracker(remote); saveTrackerData(remote); });
-  }, [user]);
 
   const tests = useMemo(() => {
     return (

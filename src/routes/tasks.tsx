@@ -26,7 +26,7 @@ import {
 } from "@/lib/daily-tasks";
 import { loadTrackerData } from "@/lib/tracker-store";
 import { isFirebaseConfigured, observeFirebaseUser } from "@/lib/firebase-sync";
-import { migrateTasksIfEmpty, syncTaskChanges, watchTasks } from "@/lib/task-sync";
+import { syncTaskChanges } from "@/lib/task-sync";
 
 export const Route = createFileRoute("/tasks")({ component: DailyTasks });
 
@@ -79,20 +79,6 @@ function DailyTasks() {
     if (!isFirebaseConfigured) return;
     return observeFirebaseUser(setSyncUser);
   }, []);
-  useEffect(() => {
-    if (!syncUser) return;
-    let stop: () => void = () => undefined;
-    void (async () => {
-      await migrateTasksIfEmpty(syncUser, tasks);
-      stop = watchTasks(syncUser, (remote) => {
-        setTasks(remote);
-        saveDailyTasks(remote);
-      });
-    })();
-    return () => stop();
-  // Live task sync, mutations remain document-level.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [syncUser]);
   const persist = (next: DailyTask[]) => {
     const previous = tasks;
     setTasks(next);

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { loadTrackerData, saveTrackerData } from "@/lib/tracker-store";
 import type { TrackerData } from "@/lib/tracker";
-import { syncTrackerSections, watchTrackerSections } from "@/lib/tracker-sync";
+import { syncTrackerSections } from "@/lib/tracker-sync";
 import { useAuthUser } from "@/lib/auth-context";
 
 type TestType = "all" | "Sectional" | "Pre" | "Mains";
@@ -79,12 +79,6 @@ function MockTests() {
       window.removeEventListener("cbt-tracker-updated", refresh);
     };
   }, []);
-
-  // Keep the standalone history page current without opening /track first.
-  useEffect(() => {
-    if (!user) return;
-    return watchTrackerSections(user, (remote) => { setTracker(remote); saveTrackerData(remote); });
-  }, [user]);
 
   const tests = useMemo(
     () =>

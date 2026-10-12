@@ -21,12 +21,14 @@ import {
   patchCloudPreferences,
   readCloudProfile,
   readCloudPreferences,
-  watchCloudProfile,
-  watchCloudPreferences,
 } from "@/lib/firebase-sync";
 import { PROFILE_KEY } from "@/lib/profile";
 import { startPracticeSync } from "@/lib/practice-sync";
 import { AuthUserContext } from "@/lib/auth-context";
+import { loadDailyTasks, saveDailyTasks } from "@/lib/daily-tasks";
+import { migrateTasksIfEmpty, readTasks } from "@/lib/task-sync";
+import { loadTrackerData, saveTrackerData } from "@/lib/tracker-store";
+import { migrateTrackerIfEmpty, readTrackerSections } from "@/lib/tracker-sync";
 import type { User } from "firebase/auth";
 
 function NotFoundComponent() {
@@ -153,6 +155,7 @@ function RootComponent() {
 
   const [syncUser, setSyncUser] = useState<User | null>(null);
   const [authResolved, setAuthResolved] = useState(!isFirebaseConfigured);
+  const [cloudHydrated, setCloudHydrated] = useState(false);
 
   useEffect(() => {
     if (!isFirebaseConfigured) return;
@@ -212,7 +215,6 @@ function RootComponent() {
         applying = false;
       });
     };
-    let stop: (() => void) | undefined;
     void (async () => {
       const remote = await readCloudPreferences(syncUser);
       if (remote) apply(remote);
@@ -221,9 +223,6 @@ function RootComponent() {
         await patchCloudPreferences(syncUser, initial);
         last = JSON.stringify(initial);
       }
-      stop = watchCloudPreferences(syncUser, (value) => {
-        if (value) apply(value);
-      });
     })().catch(() => undefined);
     const save = () => {
       if (applying) return;
@@ -241,20 +240,47 @@ function RootComponent() {
     };
     window.addEventListener("ssc-preferences-updated", save);
     return () => {
-      stop?.();
       window.removeEventListener("ssc-preferences-updated", save);
     };
   }, [syncUser]);
 
   useEffect(() => {
-    if (!syncUser) return;
-    let cleanup: (() => void) | undefined;
-    void startPracticeSync(syncUser)
-      .then((stop) => {
-        cleanup = stop;
-      })
-      .catch(() => undefined);
-    return () => cleanup?.();
+    if (!syncUser) {
+      setCloudHydrated(false);
+      return;
+    }
+    let disposed = false;
+    let stopPracticeSync: (() => void) | undefined;
+    setCloudHydrated(false);
+    void (async () => {
+      const localTasks = loadDailyTasks();
+      const localTracker = loadTrackerData();
+      const [stop, remoteTasks, remoteTracker] = await Promise.all([
+        startPracticeSync(syncUser),
+        (async () => {
+          await migrateTasksIfEmpty(syncUser, localTasks);
+          return readTasks(syncUser);
+        })(),
+        (async () => {
+          await migrateTrackerIfEmpty(syncUser, localTracker);
+          return readTrackerSections(syncUser);
+        })(),
+      ]);
+      if (disposed) {
+        stop();
+        return;
+      }
+      stopPracticeSync = stop;
+      saveDailyTasks(remoteTasks);
+      saveTrackerData(remoteTracker);
+      setCloudHydrated(true);
+    })().catch(() => {
+      if (!disposed) setCloudHydrated(true);
+    });
+    return () => {
+      disposed = true;
+      stopPracticeSync?.();
+    };
   }, [syncUser]);
 
   // Profile is deliberately synced as its own document: mobile writes cannot replace the
@@ -262,7 +288,6 @@ function RootComponent() {
   useEffect(() => {
     if (!syncUser) return;
     let disposed = false;
-    let stopWatch: (() => void) | undefined;
     let applyingRemote = false;
     let lastProfile = "";
     const clean = (profile: Record<string, unknown>) =>
@@ -324,15 +349,11 @@ function RootComponent() {
         lastProfile = JSON.stringify(clean(profile));
       }
       if (disposed) return;
-      stopWatch = watchCloudProfile(syncUser, (profile) => {
-        if (profile) apply(profile);
-      });
       window.addEventListener("cbt-profile-updated", save);
     };
     void start();
     return () => {
       disposed = true;
-      stopWatch?.();
       window.removeEventListener("cbt-profile-updated", save);
     };
   }, [syncUser]);
@@ -352,7 +373,9 @@ function RootComponent() {
     <AuthUserContext.Provider value={syncUser}>
       <QueryClientProvider client={queryClient}>
         {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-        <Outlet />
+        {syncUser && !cloudHydrated && path !== "/auth" ? (
+          <div className="flex min-h-screen items-center justify-center bg-[#121212] text-sm text-zinc-400">Loading your workspace…</div>
+        ) : <Outlet />}
         {musicOpen && <MotivationalMusic onClose={() => setMusicOpen(false)} />}
         {videosOpen && (
           <MotivationalVideos
