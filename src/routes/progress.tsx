@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ChevronDown } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Check, ChevronDown } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CartesianGrid,
   Line,
@@ -157,23 +157,44 @@ function FilterMenu<T extends string>({
   disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
   const label = options.find((option) => option.value === value)?.label ?? value;
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
+
   return (
-    <div className="relative">
+    <div ref={menuRef} className="relative">
       <button
         type="button"
         disabled={disabled}
         onClick={() => setOpen((current) => !current)}
-        className="flex h-9 items-center gap-2 rounded-lg bg-white/5 px-3 text-sm text-zinc-200 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+        className="flex h-9 items-center gap-2 rounded-lg border border-white/10 bg-white/[0.045] px-3 text-sm text-zinc-200 transition-colors hover:bg-white/[0.09] disabled:cursor-not-allowed disabled:opacity-40"
         aria-haspopup="listbox"
         aria-expanded={open}
       >
-        {label} <ChevronDown className="h-4 w-4 text-zinc-500" />
+        <span className="max-w-28 truncate">{label}</span>
+        <ChevronDown
+          className={open ? "h-4 w-4 rotate-180 text-zinc-300 transition-transform duration-200" : "h-4 w-4 text-zinc-500 transition-transform duration-200"}
+        />
       </button>
       {open && (
         <div
           role="listbox"
-          className="absolute top-10 right-0 z-20 min-w-full overflow-hidden rounded-lg bg-[#202020] py-1 shadow-xl ring-1 ring-white/5"
+          className="animate-in fade-in-0 zoom-in-95 slide-in-from-top-1 absolute top-10 right-0 z-30 min-w-[11rem] origin-top-right overflow-hidden rounded-lg border border-white/10 bg-[#202020] p-1 shadow-xl duration-200 ease-out"
         >
           {options.map((option) => (
             <button
@@ -185,9 +206,14 @@ function FilterMenu<T extends string>({
                 onChange(option.value);
                 setOpen(false);
               }}
-              className="w-full px-3 py-2 text-left text-sm text-zinc-300 transition-colors hover:bg-white/10 hover:text-white"
+              className={
+                option.value === value
+                  ? "flex w-full items-center justify-between rounded-md bg-zinc-100 px-3 py-2 text-left text-sm font-medium text-zinc-900"
+                  : "flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm text-zinc-300 transition-colors hover:bg-white/10 hover:text-white"
+              }
             >
               {option.label}
+              {option.value === value && <Check className="h-4 w-4" />}
             </button>
           ))}
         </div>

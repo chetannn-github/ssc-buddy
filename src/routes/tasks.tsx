@@ -4,6 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import type { User } from "firebase/auth";
 import { Button } from "@/components/ui/button";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -65,6 +73,7 @@ function DailyTasks() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<DailyTask | null>(null);
   const [completing, setCompleting] = useState<DailyTask | null>(null);
+  const [deleting, setDeleting] = useState<DailyTask | null>(null);
   const [selectedHistoryDate, setSelectedHistoryDate] = useState<string | null>(null);
   const [historyRange, setHistoryRange] = useState<RangeKey>("week");
   const [range, setRange] = useState<RangeKey>("week");
@@ -359,7 +368,7 @@ function DailyTasks() {
                       setEditing(task);
                       setFormOpen(true);
                     }}
-                    onDelete={() => persist(tasks.filter((item) => item.id !== task.id))}
+                    onDelete={() => setDeleting(task)}
                   />
                 ))
               ) : (
@@ -527,6 +536,31 @@ function DailyTasks() {
           onOpenChange={(open) => !open && setCompleting(null)}
           onComplete={complete}
         />
+        <Dialog open={Boolean(deleting)} onOpenChange={(open) => !open && setDeleting(null)}>
+          <DialogContent className="border-white/10 bg-[#1b1b1b] p-5 text-zinc-100 sm:max-w-sm">
+            <DialogHeader className="space-y-1">
+              <DialogTitle className="text-base">Delete task?</DialogTitle>
+              <DialogDescription className="text-sm text-zinc-400">
+                “{deleting?.name}” will be removed from your task history.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="mt-2 gap-2 sm:gap-2">
+              <Button variant="ghost" size="sm" onClick={() => setDeleting(null)}>
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={() => {
+                  if (deleting) persist(tasks.filter((item) => item.id !== deleting.id));
+                  setDeleting(null);
+                }}
+              >
+                Delete task
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </AppShell>
   );

@@ -33,7 +33,7 @@ function DarkDropdown({
         <span className="text-xs text-zinc-500">⌄</span>
       </button>
       {open && !disabled && (
-        <div className="absolute z-10 mt-1 w-full overflow-hidden rounded-xl bg-[#242424] py-1 shadow-xl ring-1 ring-white/5">
+        <div className="animate-in fade-in-0 zoom-in-95 slide-in-from-top-1 absolute z-10 mt-1 w-full origin-top overflow-hidden rounded-xl bg-[#242424] py-1 shadow-xl ring-1 ring-white/5 duration-200 ease-out">
           {options.map((option) => (
             <button
               key={option.value}

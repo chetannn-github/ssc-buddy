@@ -43,7 +43,7 @@ function FilterMenu<T extends string>({
       {open && (
         <div
           role="listbox"
-          className="absolute top-10 right-0 z-20 min-w-full overflow-hidden rounded-lg bg-[#202020] py-1 shadow-xl ring-1 ring-white/5"
+          className="animate-in fade-in-0 zoom-in-95 slide-in-from-top-1 absolute top-10 right-0 z-20 min-w-full origin-top-right overflow-hidden rounded-lg bg-[#202020] py-1 shadow-xl ring-1 ring-white/5 duration-200 ease-out"
         >
           {options.map((option) => (
             <button

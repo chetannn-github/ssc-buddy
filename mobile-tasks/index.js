@@ -11,6 +11,19 @@ if (Platform.OS === "android") {
   const { answerUnlockQuiz, advanceUnlockQuiz, getUnlockQuiz, startUnlockQuiz } = require("./src/domain/unlock-quiz");
   const { getFirebaseAuth, recordQuickRecallPractice, toggleTaskFromWidget, writeQuestionLearning } = require("./src/lib/firebase");
   const { onAuthStateChanged } = require("firebase/auth");
+  const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+  // Widget layouts are static snapshots. Refresh the correction UI while its
+  // lock is active so the countdown reaches a usable Next button without the
+  // user needing to reopen the app or tap a dead-looking control.
+  const refreshRecallCountdown = async (quiz, renderWidget) => {
+    const deadline = Number(quiz?.lockedUntil) || 0;
+    while (deadline > Date.now()) {
+      await wait(Math.min(1000, deadline - Date.now()));
+      const latest = await getUnlockQuiz();
+      renderWidget(renderQuickRecallWidget(latest));
+    }
+  };
 
   const getWidgetUser = async () => {
     const auth = getFirebaseAuth();
@@ -64,7 +77,10 @@ if (Platform.OS === "android") {
       // accepting the legacy data payload. Several Android launchers omit
       // clickActionData for home-screen widgets.
       const choice = clickActionData?.choice || clickAction?.replace("QUIZ_ANSWER_", "");
-      if (["A", "B", "C", "D"].includes(choice)) { quiz = await answerUnlockQuiz(choice); answered = true; }
+      if (["A", "B", "C", "D"].includes(choice)) {
+        quiz = await answerUnlockQuiz(choice);
+        answered = Boolean(quiz);
+      }
     } else if (widgetAction === "WIDGET_CLICK" && clickAction === "QUIZ_NEXT") {
       quiz = await advanceUnlockQuiz();
     } else if (widgetAction === "WIDGET_CLICK" && clickAction === "QUIZ_NEW_SESSION") {
@@ -72,6 +88,10 @@ if (Platform.OS === "android") {
     } else {
       quiz = await getUnlockQuiz();
     }
+    // Render the answer/result first. Cloud work must never block feedback on
+    // the home-screen widget, especially while Firebase restores auth.
+    renderWidget(renderQuickRecallWidget(quiz));
+
     let widgetUser = null;
     if (answered && quiz?.stats) {
       try {
@@ -79,7 +99,7 @@ if (Platform.OS === "android") {
         if (widgetUser) {
           await writeQuestionLearning(widgetUser, { stats: quiz.stats, lastSubject: quiz.subject });
           const question = quiz.questions?.[quiz.index];
-          const answer = quiz.answers?.at(-1);
+          const answer = quiz.answers?.[quiz.answers.length - 1];
           if (question && ["A", "B", "C", "D"].includes(answer)) {
             const now = new Date();
             const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
@@ -93,7 +113,9 @@ if (Platform.OS === "android") {
         }
       } catch {}
     }
-    renderWidget(renderQuickRecallWidget(quiz));
+    if (answered && quiz?.status === "correction") {
+      await refreshRecallCountdown(quiz, renderWidget);
+    }
   });
 }
 

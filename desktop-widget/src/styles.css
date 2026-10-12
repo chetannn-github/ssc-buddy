@@ -100,3 +100,13 @@ header, .toolbar, footer, .task { display: flex; align-items: center; } header {
 .task-dialog .form-grid > label:nth-child(2) .select-popover { top: calc(100% + 5px); bottom: auto; transform-origin: top; }
 .task-dialog, .task-dialog.editing { width: min(100%, 370px); max-height: none; overflow: visible; }
 .task-dialog .select-popover { max-height: none; overflow: visible; }
+
+/* Keep Task Type opening downward like the rest of the form, but cap its
+   compact menu so it stays within the desktop widget viewport. */
+.task-dialog .form-grid > label:nth-child(2) .select-popover {
+  top: calc(100% + 5px);
+  bottom: auto;
+  max-height: 118px;
+  overflow-y: auto;
+  transform-origin: top;
+}

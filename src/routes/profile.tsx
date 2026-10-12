@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
+  Check,
   ChevronDown,
   Copy,
   FilePenLine,
@@ -16,6 +17,14 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { aggregateRecords } from "@/lib/analytics";
 import { loadHistory, type TestRecord } from "@/lib/exam";
@@ -536,7 +545,7 @@ function TargetProgress({
   }, [rangeOpen]);
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-white/10 bg-[#1a1a1a]">
+    <section className="overflow-visible rounded-2xl border border-white/10 bg-[#1a1a1a]">
       <div className="flex items-center justify-between gap-3 px-4 pt-2 sm:px-5">
         <span className="text-[11px] font-semibold tracking-[0.16em] text-zinc-500 uppercase">
           Practice
@@ -545,16 +554,23 @@ function TargetProgress({
           <button
             type="button"
             onClick={() => setRangeOpen((open) => !open)}
-            className="flex h-7 items-center gap-1 rounded-md bg-white/5 px-2 text-xs text-zinc-300 transition-colors hover:bg-white/10"
+            className="flex h-7 items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.045] px-2.5 text-xs text-zinc-300 transition-colors hover:bg-white/[0.1]"
             aria-haspopup="listbox"
             aria-expanded={rangeOpen}
           >
-            {rangeLabels[range]} <ChevronDown className="h-3.5 w-3.5 text-zinc-500" />
+            <span>{rangeLabels[range]}</span>
+            <ChevronDown
+              className={
+                rangeOpen
+                  ? "h-3.5 w-3.5 rotate-180 text-zinc-200 transition-transform duration-200"
+                  : "h-3.5 w-3.5 text-zinc-500 transition-transform duration-200"
+              }
+            />
           </button>
           {rangeOpen && (
             <div
               role="listbox"
-              className="absolute top-8 right-0 z-20 min-w-28 overflow-hidden rounded-md bg-[#202020] py-1 shadow-lg ring-1 ring-white/5"
+              className="animate-in fade-in-0 zoom-in-95 slide-in-from-top-1 absolute top-8 right-0 z-30 min-w-32 origin-top-right rounded-md border border-white/10 bg-[#202020] p-1 shadow-xl duration-200 ease-out"
             >
               {(Object.keys(rangeLabels) as ActivityRange[]).map((option) => (
                 <button
@@ -566,9 +582,14 @@ function TargetProgress({
                     onRangeChange(option);
                     setRangeOpen(false);
                   }}
-                  className="w-full px-3 py-1.5 text-left text-xs text-zinc-300 transition-colors hover:bg-white/10 hover:text-white"
+                  className={
+                    option === range
+                      ? "flex w-full items-center justify-between rounded px-2.5 py-1.5 text-left text-xs font-medium text-zinc-900 bg-zinc-100"
+                      : "flex w-full items-center justify-between rounded px-2.5 py-1.5 text-left text-xs text-zinc-300 transition-colors hover:bg-white/10 hover:text-white"
+                  }
                 >
                   {rangeLabels[option]}
+                  {option === range && <Check className="h-3.5 w-3.5" />}
                 </button>
               ))}
             </div>
@@ -755,6 +776,7 @@ export function Profile() {
   const [editingProfile, setEditingProfile] = useState(false);
   const [importingData, setImportingData] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [previewingAvatar, setPreviewingAvatar] = useState(false);
   const [isAvatarChanging, setIsAvatarChanging] = useState(false);
   const [loggingMockTest, setLoggingMockTest] = useState(false);
@@ -1000,7 +1022,7 @@ export function Profile() {
                   size="icon"
                   variant="ghost"
                   className="h-7 w-7 shrink-0 text-zinc-500 hover:bg-rose-500/10 hover:text-rose-300"
-                  onClick={() => void logout()}
+                  onClick={() => setLogoutConfirmOpen(true)}
                   disabled={isLoggingOut}
                   aria-label="Log out"
                 >
@@ -1085,6 +1107,31 @@ export function Profile() {
           />
         </button>
       )}
+      <Dialog open={logoutConfirmOpen} onOpenChange={setLogoutConfirmOpen}>
+        <DialogContent className="border-white/10 bg-[#1b1b1b] p-5 text-zinc-100 sm:max-w-sm">
+          <DialogHeader className="space-y-1">
+            <DialogTitle className="text-base">Sign out?</DialogTitle>
+            <DialogDescription className="text-sm text-zinc-400">
+              Your synced SSC Buddy data will remain safely in your account.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-2 gap-2 sm:gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setLogoutConfirmOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => {
+                setLogoutConfirmOpen(false);
+                void logout();
+              }}
+            >
+              Sign out
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {editingProfile && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-md">
           <section className="w-full max-w-md rounded-2xl border border-white/10 bg-[#1e1e1e] p-6 text-zinc-100 shadow-2xl sm:p-8">

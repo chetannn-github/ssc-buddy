@@ -91,7 +91,7 @@ export function TaskFormDialog({
                     <SelectItem
                       key={item}
                       value={item}
-                      className="focus:bg-white/10 focus:text-zinc-100"
+                      className="focus:bg-white/10 focus:text-zinc-100 data-[state=checked]:bg-zinc-100 data-[state=checked]:font-medium data-[state=checked]:text-zinc-900"
                     >
                       {item}
                     </SelectItem>
@@ -110,7 +110,7 @@ export function TaskFormDialog({
                     <SelectItem
                       key={item}
                       value={item}
-                      className="focus:bg-white/10 focus:text-zinc-100"
+                      className="focus:bg-white/10 focus:text-zinc-100 data-[state=checked]:bg-zinc-100 data-[state=checked]:font-medium data-[state=checked]:text-zinc-900"
                     >
                       {item}
                     </SelectItem>
