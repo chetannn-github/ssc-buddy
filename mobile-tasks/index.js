@@ -9,7 +9,7 @@ if (Platform.OS === "android") {
   const { renderDailyTasksWidget } = require("./src/widgets/DailyTasksWidget");
   const { renderQuickRecallWidget } = require("./src/widgets/QuickRecallWidget");
   const { answerUnlockQuiz, advanceUnlockQuiz, getUnlockQuiz, startUnlockQuiz } = require("./src/domain/unlock-quiz");
-  const { getFirebaseAuth, toggleTaskFromWidget } = require("./src/lib/firebase");
+  const { getFirebaseAuth, recordQuickRecallPractice, toggleTaskFromWidget, writeQuestionLearning } = require("./src/lib/firebase");
   const { onAuthStateChanged } = require("firebase/auth");
 
   const getWidgetUser = async () => {
@@ -58,18 +58,40 @@ if (Platform.OS === "android") {
       return;
     }
     let quiz = await getUnlockQuiz();
+    let answered = false;
     if (widgetAction === "WIDGET_CLICK" && (clickAction === "QUIZ_ANSWER" || clickAction?.startsWith("QUIZ_ANSWER_"))) {
       // Answer choice is deliberately encoded in the action name as well as
       // accepting the legacy data payload. Several Android launchers omit
       // clickActionData for home-screen widgets.
       const choice = clickActionData?.choice || clickAction?.replace("QUIZ_ANSWER_", "");
-      if (["A", "B", "C", "D"].includes(choice)) quiz = await answerUnlockQuiz(choice);
+      if (["A", "B", "C", "D"].includes(choice)) { quiz = await answerUnlockQuiz(choice); answered = true; }
     } else if (widgetAction === "WIDGET_CLICK" && clickAction === "QUIZ_NEXT") {
       quiz = await advanceUnlockQuiz();
     } else if (widgetAction === "WIDGET_CLICK" && clickAction === "QUIZ_NEW_SESSION") {
       quiz = await startUnlockQuiz();
     } else {
       quiz = await getUnlockQuiz();
+    }
+    let widgetUser = null;
+    if (answered && quiz?.stats) {
+      try {
+        widgetUser = await getWidgetUser();
+        if (widgetUser) {
+          await writeQuestionLearning(widgetUser, { stats: quiz.stats, lastSubject: quiz.subject });
+          const question = quiz.questions?.[quiz.index];
+          const answer = quiz.answers?.at(-1);
+          if (question && ["A", "B", "C", "D"].includes(answer)) {
+            const now = new Date();
+            const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+            await recordQuickRecallPractice(widgetUser, {
+              // The question index is stable inside this sprint. A launcher
+              // retry can therefore safely repeat this same transaction.
+              runId: `${quiz.runId}:${quiz.index}`, date, startedAt: quiz.startedAt || new Date().toISOString(), subject: quiz.subject,
+              questions: [question], answers: [answer],
+            });
+          }
+        }
+      } catch {}
     }
     renderWidget(renderQuickRecallWidget(quiz));
   });

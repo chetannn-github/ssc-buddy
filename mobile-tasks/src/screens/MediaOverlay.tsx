@@ -15,6 +15,18 @@ export type MediaMode = "video" | "music" | null;
 const reelPages = Array.from({ length: videoTracks.length * 400 }, (_, index) => ({ id: index, track: videoTracks[index % videoTracks.length] }));
 const firstReelPage = Math.floor(reelPages.length / 2);
 const playlistName = (track: string) => decodeURIComponent(track).split("/").slice(0, -1).join(" / ") || "Music";
+/** Exact web weighting: a liked item is four times as likely as another item. */
+const weightedPick = (items: string[], likes: Set<string>) => {
+  if (!items.length) return null;
+  let cursor = Math.random() * items.reduce((total, item) => total + (likes.has(item) ? 4 : 1), 0);
+  return items.find((item) => ((cursor -= likes.has(item) ? 4 : 1) < 0)) ?? items[0] ?? null;
+};
+const reelIndexFor = (track: string) => {
+  const offset = videoTracks.indexOf(track);
+  if (offset < 0 || !videoTracks.length) return firstReelPage;
+  const base = firstReelPage - (firstReelPage % videoTracks.length);
+  return base + offset;
+};
 
 export function MediaOverlay({ user, mode, onClose, musicOpenRequest }: { user: User | null; mode: MediaMode; onClose: () => void; musicOpenRequest: number }) {
   if (mode === "video") return <VideoReels user={user} onClose={onClose} />;
@@ -26,9 +38,20 @@ function VideoReels({ user, onClose }: { user: User | null; onClose: () => void 
   const { height } = useWindowDimensions();
   const [index, setIndex] = useState(firstReelPage);
   const [swiping, setSwiping] = useState(false);
-  const [likes, toggleLike] = useCloudLikes(user, "ssc-buddy-liked-videos");
+  const [likes, toggleLike, likesReady] = useCloudLikes(user, "ssc-buddy-liked-videos");
+  const reelsRef = useRef<FlatList<{ id: number; track: string }>>(null);
+  const initialPickApplied = useRef(false);
+  useEffect(() => {
+    if (!likesReady || initialPickApplied.current) return;
+    initialPickApplied.current = true;
+    const track = weightedPick(videoTracks, likes);
+    if (!track) return;
+    const next = reelIndexFor(track);
+    setIndex(next);
+    requestAnimationFrame(() => reelsRef.current?.scrollToIndex({ index: next, animated: false }));
+  }, [likes, likesReady]);
   return <Modal visible animationType="slide" onRequestClose={onClose}><View style={styles.reel}>
-    <FlatList data={reelPages} keyExtractor={(item) => String(item.id)} pagingEnabled showsVerticalScrollIndicator={false} initialScrollIndex={firstReelPage} getItemLayout={(_, itemIndex) => ({ length: height, offset: height * itemIndex, index: itemIndex })} initialNumToRender={3} windowSize={3} onScrollBeginDrag={() => setSwiping(true)} onScrollEndDrag={(event) => { if (!event.nativeEvent.velocity?.y) setSwiping(false); }} onMomentumScrollEnd={(event) => { setIndex(Math.round(event.nativeEvent.contentOffset.y / height)); setSwiping(false); }} renderItem={({ item, index: itemIndex }) => <ReelPage track={item.track} active={index === itemIndex} height={height} onClose={onClose} liked={likes.has(item.track)} swiping={swiping} onToggleLike={() => toggleLike(item.track)} />} />
+    <FlatList ref={reelsRef} data={reelPages} keyExtractor={(item) => String(item.id)} pagingEnabled showsVerticalScrollIndicator={false} initialScrollIndex={firstReelPage} getItemLayout={(_, itemIndex) => ({ length: height, offset: height * itemIndex, index: itemIndex })} initialNumToRender={3} windowSize={3} onScrollBeginDrag={() => setSwiping(true)} onScrollEndDrag={(event) => { if (!event.nativeEvent.velocity?.y) setSwiping(false); }} onMomentumScrollEnd={(event) => { setIndex(Math.round(event.nativeEvent.contentOffset.y / height)); setSwiping(false); }} renderItem={({ item, index: itemIndex }) => <ReelPage track={item.track} active={index === itemIndex} height={height} onClose={onClose} liked={likes.has(item.track)} swiping={swiping} onToggleLike={() => toggleLike(item.track)} />} />
   </View></Modal>;
 }
 
@@ -75,7 +98,8 @@ function ReelPage({ track, active, height, onClose, liked, swiping, onToggleLike
 
 function MusicPlayer({ user, onClose, openRequest }: { user: User | null; onClose: () => void; openRequest: number }) {
   const [index, setIndex] = useState(0);
-  const [likes, toggleLike] = useCloudLikes(user, "ssc-buddy-liked-music");
+  const [likes, toggleLike, likesReady] = useCloudLikes(user, "ssc-buddy-liked-music");
+  const initialPickApplied = useRef(false);
   const [repeat, setRepeat] = useState(false);
   const [selectedPlaylist, setSelectedPlaylist] = useState(() => playlistName(musicTracks[0] ?? ""));
   const [minimized, setMinimized] = useState(false);
@@ -102,6 +126,17 @@ function MusicPlayer({ user, onClose, openRequest }: { user: User | null; onClos
   // Expo Go cannot include this project's custom foreground media service.
   // A development/standalone build receives the service from the expo-audio plugin.
   const supportsBackgroundControls = Constants.appOwnership !== AppOwnership.Expo;
+  useEffect(() => {
+    if (!likesReady || initialPickApplied.current) return;
+    initialPickApplied.current = true;
+    const initial = weightedPick(musicTracks, likes);
+    if (!initial) return;
+    const nextIndex = musicTracks.indexOf(initial);
+    if (nextIndex >= 0) {
+      setIndex(nextIndex);
+      setSelectedPlaylist(playlistName(initial));
+    }
+  }, [likes, likesReady]);
   useEffect(() => { if (openRequest) setMinimized(false); }, [openRequest]);
   useEffect(() => subscribeBottomNavigation(setBottomNavVisible), []);
   useEffect(() => {
@@ -244,11 +279,14 @@ function ProgressRing({ size, progress }: { size: number; progress: number }) {
 /** Uses the same preferences document and field names as the web media overlays. */
 function useCloudLikes(user: User | null, key: "ssc-buddy-liked-videos" | "ssc-buddy-liked-music") {
   const [likes, setLikes] = useState<Set<string>>(() => new Set());
+  const [ready, setReady] = useState(false);
   useEffect(() => {
-    if (!user) { setLikes(new Set()); return; }
+    if (!user) { setLikes(new Set()); setReady(true); return; }
+    setReady(false);
     return watchCloudPreferences(user, (preferences) => {
       const value = preferences?.[key];
       setLikes(new Set(Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []));
+      setReady(true);
     });
   }, [key, user?.uid]);
   const toggle = (track: string) => {
@@ -259,7 +297,7 @@ function useCloudLikes(user: User | null, key: "ssc-buddy-liked-videos" | "ssc-b
       return next;
     });
   };
-  return [likes, toggle] as const;
+  return [likes, toggle, ready] as const;
 }
 
 const styles = StyleSheet.create({

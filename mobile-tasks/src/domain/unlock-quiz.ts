@@ -13,12 +13,16 @@ export type UnlockQuestion = {
 
 type LearningStat = { askedCount: number; correctCount: number; wrongCount: number; lastAskedAt: string; lastOutcome: "correct" | "wrong" };
 export type UnlockQuizState = {
+  /** Stable for one three-question sprint; used to make its cloud write idempotent. */
+  runId: string;
+  startedAt: string;
   status: "active" | "correction" | "complete";
   subject: string;
   questions: UnlockQuestion[];
   index: number;
   correct: number;
   selected?: QuizChoice;
+  answers: QuizChoice[];
   lockedUntil?: number;
   stats: Record<string, LearningStat>;
 };
@@ -28,6 +32,7 @@ const SUBJECTS = "cbt-subjects";
 const HISTORY = "cbt-history";
 const FAVOURITES = "cbt-favorite-questions";
 const choices: QuizChoice[] = ["A", "B", "C", "D"];
+const makeRunId = () => `quick-recall-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
 const isChoice = (value: unknown): value is QuizChoice => typeof value === "string" && choices.includes(value as QuizChoice);
 const questionKey = (question: Pick<UnlockQuestion, "subjectId" | "id">) => `${question.subjectId}:${question.id}`;
@@ -100,12 +105,19 @@ export async function startUnlockQuiz(): Promise<UnlockQuizState | null> {
     return rightScore - leftScore;
   });
   const selected = ordered.slice(0, Math.min(3, ordered.length));
-  return save({ status: "active", subject: selected[0]?.subject ?? "General", questions: selected, index: 0, correct: 0, stats });
+  return save({ runId: makeRunId(), startedAt: new Date().toISOString(), status: "active", subject: selected[0]?.subject ?? "General", questions: selected, index: 0, correct: 0, answers: [], stats });
 }
 
 export async function getUnlockQuiz(): Promise<UnlockQuizState | null> {
   const current = await loadUnlockQuiz();
   if (!current || current.status === "complete") return startUnlockQuiz();
+  // Upgrade an interrupted pre-activity sprint without throwing away it answers.
+  if (!current.runId || !current.startedAt || !Array.isArray(current.answers)) {
+    current.runId ||= makeRunId();
+    current.startedAt ||= new Date().toISOString();
+    current.answers ||= [];
+    await save(current);
+  }
   return current;
 }
 
@@ -120,6 +132,7 @@ export async function answerUnlockQuiz(choice: QuizChoice): Promise<UnlockQuizSt
   stat.lastAskedAt = new Date().toISOString();
   state.stats[key] = stat;
   state.selected = choice;
+  state.answers = [...(state.answers ?? []), choice];
   if (choice === question.correctAnswer) {
     stat.correctCount += 1; stat.lastOutcome = "correct"; state.correct += 1;
     // Keep the answer visible before allowing the learner to move forward.

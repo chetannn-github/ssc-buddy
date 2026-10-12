@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "SSC Buddy",
-    "slug": "ssc-buddy-tasks",
+    "slug": "ewe",
     "scheme": "sscbuddy",
     "version": "1.0.0",
     "icon": "./assets/auth.jpg",
@@ -60,9 +60,9 @@
               "label": "Quick recall",
               "description": "Three focused SSC questions when you unlock your phone",
               "minWidth": "360dp",
-                "minHeight": "360dp",
+              "minHeight": "360dp",
               "targetCellWidth": 4,
-                "targetCellHeight": 6,
+              "targetCellHeight": 6,
               "resizeMode": "horizontal|vertical",
               "updatePeriodMillis": 1800000
             }
@@ -74,6 +74,7 @@
       "eas": {
         "projectId": "68ca4139-4833-4014-9e1f-dcc276167f6c"
       }
-    }
+    },
+    "owner": "chetannnws-team"
   }
 }

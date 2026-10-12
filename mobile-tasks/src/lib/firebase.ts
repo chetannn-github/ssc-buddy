@@ -317,6 +317,67 @@ export async function writeQuestionLearning(user: User, value: Record<string, un
   });
 }
 
+type QuickRecallAttemptInput = {
+  runId: string;
+  date: string;
+  startedAt: string;
+  subject: string;
+  questions: Array<{ id: string; subjectId: string; correctAnswer: string }>;
+  answers: string[];
+};
+
+/**
+ * Stores Quick Recall as the existing practiceAttempts contract. There is one
+ * document per local calendar day, while runIds make repeated widget delivery
+ * or a reconnect retry harmless. The accumulated answers retain the normal
+ * practice metrics without creating more than one activity for that day.
+ */
+export async function recordQuickRecallPractice(user: User, input: QuickRecallAttemptInput) {
+  const date = input.date;
+  const reference = doc(practiceCollection(user, "practiceAttempts"), `quick-recall:${date}`);
+  await runTransaction(getFirebaseFirestore(), async (transaction) => {
+    const snapshot = await transaction.get(reference);
+    const current = snapshot.data() ?? {};
+    const recordedRunIds = Array.isArray(current.quickRecallRunIds) ? current.quickRecallRunIds.map(String) : [];
+    if (recordedRunIds.includes(input.runId)) return;
+    const count = Math.min(input.questions.length, input.answers.length);
+    const answers = input.answers.slice(0, count);
+    const questions = input.questions.slice(0, count);
+    const correct = answers.reduce((total, answer, index) => total + (answer === questions[index]?.correctAnswer ? 1 : 0), 0);
+    const priorAnswers = Array.isArray(current.answers) ? current.answers : [];
+    const priorIds = Array.isArray(current.questionIds) ? current.questionIds : [];
+    const priorKey = Array.isArray(current.answerKey) ? current.answerKey : [];
+    const priorCorrect = Math.max(0, Number(current.correct) || 0);
+    const priorWrong = Math.max(0, Number(current.wrong) || 0);
+    const nextCorrect = priorCorrect + correct;
+    const nextWrong = priorWrong + count - correct;
+    transaction.set(reference, {
+      ...current,
+      id: `quick-recall:${date}`,
+      date,
+      createdAt: current.createdAt ?? input.startedAt,
+      updatedAt: new Date().toISOString(),
+      testMode: "quick-recall",
+      subjectId: "quick-recall",
+      subject: "Quick Recall",
+      chapter: "",
+      exercise: "Quick Recall",
+      startNumber: 1,
+      durationMinutes: null,
+      timeTakenSeconds: Math.max(0, Number(current.timeTakenSeconds) || 0),
+      answers: [...priorAnswers, ...answers],
+      questionIds: [...priorIds, ...questions.map((question) => question.id)],
+      answerKey: [...priorKey, ...questions.map((question) => question.correctAnswer)],
+      correct: nextCorrect,
+      wrong: nextWrong,
+      marking: { positive: 1, negative: 0 },
+      score: nextCorrect,
+      quickRecallRunIds: [...recordedRunIds, input.runId],
+      updatedAtServer: serverTimestamp(),
+    });
+  });
+}
+
 /** Replaces only SSC Buddy's canonical collections from an exported backup. */
 export async function replaceCloudBackup(user: User, backup: {
   tasks: CloudTask[]; subjects: PracticeEntity[]; attempts: PracticeEntity[]; favourites: string[];

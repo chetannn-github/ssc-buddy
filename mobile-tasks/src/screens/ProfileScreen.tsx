@@ -105,7 +105,7 @@ export function ProfileScreen({ user, tasks, profileSettings, onProfileSaved, on
   const [mockTests, setMockTests] = useState<MockTestLog[]>([]);
   const [syllabusSubjects, setSyllabusSubjects] = useState<string[]>([]);
   const [trackerData, setTrackerData] = useState<Record<string, any>>({ subjects: [], revision: {} });
-  const [practiceRecords, setPracticeRecords] = useState<Array<{ id: string; date: string; subject?: string; chapter?: string }>>([]);
+  const [practiceRecords, setPracticeRecords] = useState<Array<{ id: string; date: string; subject?: string; chapter?: string; questionCount: number; correct: number; wrong: number }>>([]);
   const [range, setRange] = useState<Range>("today");
   const [rangeOpen, setRangeOpen] = useState(false);
   const [rangeMenuVisible, setRangeMenuVisible] = useState(false);
@@ -167,7 +167,11 @@ export function ProfileScreen({ user, tasks, profileSettings, onProfileSaved, on
     if (!user) { setPracticeRecords([]); return; }
     return watchPracticeEntities(user, "practiceAttempts", (items) => setPracticeRecords(items
       .filter((item) => typeof item.date === "string")
-      .map((item) => ({ id: String(item.id), date: String(item.date), subject: typeof item.subject === "string" ? item.subject : "", chapter: typeof item.chapter === "string" ? item.chapter : "" }))));
+      .map((item) => ({
+        id: String(item.id), date: String(item.date), subject: typeof item.subject === "string" ? item.subject : "", chapter: typeof item.chapter === "string" ? item.chapter : "",
+        questionCount: Array.isArray(item.answers) ? item.answers.length : Math.max(0, Number(item.questionCount) || 0),
+        correct: Math.max(0, Number(item.correct) || 0), wrong: Math.max(0, Number(item.wrong) || 0),
+      }))));
   }, [user?.uid]);
   useEffect(() => {
     if (!profileSettings) return;
@@ -181,7 +185,11 @@ export function ProfileScreen({ user, tasks, profileSettings, onProfileSaved, on
   };
   const filteredTasks = tasks.filter((task) => withinRange(task.date, range));
   const filteredSummary = summarizeTasks(filteredTasks);
-  const practiceSessions = filteredTasks.filter((task) => task.type === "Practice Session").length;
+  const filteredPracticeRecords = practiceRecords.filter((record) => withinRange(record.date, range));
+  const practiceSessions = filteredPracticeRecords.length;
+  const practiceQuestions = filteredPracticeRecords.reduce((total, record) => total + record.questionCount, 0);
+  const practiceCorrect = filteredPracticeRecords.reduce((total, record) => total + record.correct, 0);
+  const practiceWrong = filteredPracticeRecords.reduce((total, record) => total + record.wrong, 0);
   // Match the web profile exactly: tracker figures represent completed
   // activity within the selected date range, not the syllabus totals.
   const trackerActivities = Array.isArray(trackerData.activity) ? trackerData.activity : [];
@@ -237,9 +245,9 @@ export function ProfileScreen({ user, tasks, profileSettings, onProfileSaved, on
         <View style={styles.practiceGrid}>
           <Stat columns={2} label="Question goal" value={goal || "0"} />
           <Stat columns={2} lastColumn label="Practice sessions" value={String(practiceSessions)} />
-          <Stat columns={2} label="Questions done" value="0" />
-          <Stat columns={2} lastColumn label="Correct" value="0" />
-          <Stat columns={2} lastRow label="Wrong" value="0" />
+          <Stat columns={2} label="Questions done" value={String(practiceQuestions)} />
+          <Stat columns={2} lastColumn label="Correct" value={String(practiceCorrect)} />
+          <Stat columns={2} lastRow label="Wrong" value={String(practiceWrong)} />
         </View>
         <View style={styles.divider} />
         <Text style={[styles.cardEyebrow, styles.trackerEyebrow]}>STUDY TRACKER</Text>
@@ -290,7 +298,7 @@ function AnimatedStatValue({ value }: { value: string }) {
   return <Text style={styles.statValue}>{isDuration ? formatMinutes(display) : String(display)}</Text>;
 }
 
-function ActivityHeatmap({ user, mockTests, practiceRecords }: { user: User | null; mockTests: MockTestLog[]; practiceRecords: Array<{ id: string; date: string; subject?: string; chapter?: string }> }) {
+function ActivityHeatmap({ user, mockTests, practiceRecords }: { user: User | null; mockTests: MockTestLog[]; practiceRecords: Array<{ id: string; date: string; subject?: string; chapter?: string; questionCount: number; correct: number; wrong: number }> }) {
   const [selectedDay, setSelectedDay] = useState<string>(() => localDayKey(new Date()));
   const [trackerActivity, setTrackerActivity] = useState<Array<{ id: string; date: string; count: number; type?: string; subjectId?: string; chapterId?: string; revisionTypeId?: string }>>([]);
   const [trackerSubjects, setTrackerSubjects] = useState<Array<{ id: string; name: string; chapters?: Array<{ id: string; name: string }> }>>([]);
@@ -351,7 +359,7 @@ function ActivityHeatmap({ user, mockTests, practiceRecords }: { user: User | nu
       else grouped.set(key, { label, detail, count });
     };
     practiceRecords.filter((record) => record.date === selectedDay).forEach((record) =>
-      add("Practice session", [record.subject, record.chapter].filter(Boolean).join(" · ") || "Practice session"),
+      add(record.subject === "Quick Recall" ? "Quick recall" : "Practice session", record.subject === "Quick Recall" ? `${record.questionCount} questions` : [record.subject, record.chapter].filter(Boolean).join(" · ") || "Practice session"),
     );
     mockTests.filter((test) => test.date === selectedDay).forEach((test) =>
       add(`${test.type} mock test`, `${test.subject ? (subjectName(test.subject) ?? test.subject) : test.type} · ${test.score}/${test.total}`),
