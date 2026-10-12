@@ -51,7 +51,7 @@ function VideoReels({ user, onClose }: { user: User | null; onClose: () => void 
     requestAnimationFrame(() => reelsRef.current?.scrollToIndex({ index: next, animated: false }));
   }, [likes, likesReady]);
   return <Modal visible animationType="slide" onRequestClose={onClose}><View style={styles.reel}>
-    <FlatList ref={reelsRef} data={reelPages} keyExtractor={(item) => String(item.id)} pagingEnabled showsVerticalScrollIndicator={false} initialScrollIndex={firstReelPage} getItemLayout={(_, itemIndex) => ({ length: height, offset: height * itemIndex, index: itemIndex })} initialNumToRender={3} windowSize={3} onScrollBeginDrag={() => setSwiping(true)} onScrollEndDrag={(event) => { if (!event.nativeEvent.velocity?.y) setSwiping(false); }} onMomentumScrollEnd={(event) => { setIndex(Math.round(event.nativeEvent.contentOffset.y / height)); setSwiping(false); }} renderItem={({ item, index: itemIndex }) => <ReelPage track={item.track} active={index === itemIndex} height={height} onClose={onClose} liked={likes.has(item.track)} swiping={swiping} onToggleLike={() => toggleLike(item.track)} />} />
+    <FlatList ref={reelsRef} data={reelPages} keyExtractor={(item) => String(item.id)} pagingEnabled showsVerticalScrollIndicator={false} initialScrollIndex={firstReelPage} getItemLayout={(_, itemIndex) => ({ length: height, offset: height * itemIndex, index: itemIndex })} initialNumToRender={2} maxToRenderPerBatch={2} windowSize={2} removeClippedSubviews onScrollBeginDrag={() => setSwiping(true)} onScrollEndDrag={(event) => { if (!event.nativeEvent.velocity?.y) setSwiping(false); }} onMomentumScrollEnd={(event) => { setIndex(Math.round(event.nativeEvent.contentOffset.y / height)); setSwiping(false); }} renderItem={({ item, index: itemIndex }) => index === itemIndex ? <ReelPage track={item.track} active height={height} onClose={onClose} liked={likes.has(item.track)} swiping={swiping} onToggleLike={() => toggleLike(item.track)} /> : <View style={[styles.reel, { height, flex: 0 }]} />} />
   </View></Modal>;
 }
 
@@ -86,7 +86,7 @@ function ReelPage({ track, active, height, onClose, liked, swiping, onToggleLike
     player.playbackRate = 1;
   };
   return <View style={[styles.reel, { height, flex: 0 }]}>
-    <VideoView style={styles.video} player={player} nativeControls={false} contentFit="cover" />
+    <VideoView style={styles.video} player={player} nativeControls={false} contentFit="contain" />
     <View pointerEvents="none" style={styles.reelShade} />
     {!swiping && <Pressable style={styles.close} onPress={onClose}><MaterialCommunityIcons name="close" size={24} color={colors.text} /></Pressable>}
     <Pressable style={styles.videoTap} delayLongPress={280} onLongPress={startFastForward} onPressOut={stopFastForward} onPress={() => { if (longPressRef.current) { longPressRef.current = false; return; } player.playing ? player.pause() : player.play(); }} />

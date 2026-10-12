@@ -383,9 +383,7 @@ export default function App() {
     .sort((a, b) => Number(a.completed) - Number(b.completed));
   const todaySummary = summarizeTasks(todayTasks);
   const tomorrowTaskCount = tasks.filter((task) => task.date === tomorrow).length;
-  const seven = tasksInLastDays(tasks, 7);
   const thirty = tasksInLastDays(tasks, 30);
-  const sevenSummary = summarizeTasks(seven.flat());
   const thirtySummary = summarizeTasks(thirty.flat());
   const analyticsTasks = tasks.filter((task) => inRange(task.date, analyticsRange) && (analyticsSubject === "All subjects" || task.subject === analyticsSubject));
   const analyticsSummary = summarizeTasks(analyticsTasks);
@@ -641,15 +639,6 @@ export default function App() {
             </View>
             <Breakdown title="Subject-wise study time" items={subjectBreakdown} tone="mint" />
             <Breakdown title="Task-type breakdown" items={typeBreakdown} tone="blue" />
-            <Text style={styles.sectionTitle}>LAST 7 DAYS</Text>
-            <View style={styles.chart}>
-              {seven.map((day, index) => (
-                <View key={index} style={styles.chartItem}>
-                  <AnalyticsChartBar percent={summarizeTasks(day).percent} delay={index * 55} />
-                  <Text style={styles.chartLabel}>{index === 6 ? "Today" : `${6 - index}d`}</Text>
-                </View>
-              ))}
-            </View>
           </>
         )}
         {tab === "History" && (
@@ -846,22 +835,6 @@ function Metric({ label, value, note }: { label: string; value: string; note: st
     </View>
   );
 }
-function AnalyticsChartBar({ percent, delay }: { percent: number; delay: number }) {
-  const progress = useRef(new Animated.Value(0)).current;
-  const height = Math.max(5, percent * 0.7);
-  useEffect(() => {
-    progress.setValue(0);
-    Animated.timing(progress, {
-      toValue: 1,
-      duration: 760,
-      delay,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: false,
-    }).start();
-  }, [delay, height, progress]);
-  return <Animated.View style={[styles.chartBar, { height: progress.interpolate({ inputRange: [0, 1], outputRange: [5, height] }) }]} />;
-}
-
 function Breakdown({
   title,
   items,
