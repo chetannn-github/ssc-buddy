@@ -1,13 +1,5 @@
 const mediaOrigin = (process.env.EXPO_PUBLIC_MEDIA_BASE_URL ?? "").replace(/\/$/, "");
-import { bundledMusic, bundledVideos, musicTracks, videoTracks } from "./generated-media";
-
-const bundledCovers: Record<string, number> = {
-  "motivation/1. Aarambh.mp3": require("../../assets/covers/aarambh.jpg"),
-  "motivation/13. Dhurandhar - Title Track (From _Dhurandhar_).mp3": require("../../assets/covers/dhurandhar.jpg"),
-  "motivation/15. Winning Speech.mp3": require("../../assets/covers/winning-speech.jpg"),
-  "19. Lakshya.mp3": require("../../assets/covers/lakshya.jpg"),
-  "20. Bismil.mp3": require("../../assets/covers/bismil.jpg"),
-};
+import { bundledCovers, bundledMusic, bundledVideos, musicTracks, videoTracks } from "./generated-media";
 
 export { musicTracks, videoTracks };
 

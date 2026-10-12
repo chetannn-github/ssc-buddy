@@ -58,8 +58,11 @@ if (Platform.OS === "android") {
       return;
     }
     let quiz;
-    if (widgetAction === "WIDGET_CLICK" && clickAction === "QUIZ_ANSWER") {
-      const choice = clickActionData?.choice;
+    if (widgetAction === "WIDGET_CLICK" && (clickAction === "QUIZ_ANSWER" || clickAction?.startsWith("QUIZ_ANSWER_"))) {
+      // Answer choice is deliberately encoded in the action name as well as
+      // accepting the legacy data payload. Several Android launchers omit
+      // clickActionData for home-screen widgets.
+      const choice = clickAction?.replace("QUIZ_ANSWER_", "") || clickActionData?.choice;
       if (["A", "B", "C", "D"].includes(choice)) quiz = await answerUnlockQuiz(choice);
     } else if (widgetAction === "WIDGET_CLICK" && clickAction === "QUIZ_NEXT") {
       quiz = await advanceUnlockQuiz();

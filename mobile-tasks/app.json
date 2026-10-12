@@ -59,9 +59,9 @@
               "label": "Quick recall",
               "description": "Three focused SSC questions when you unlock your phone",
               "minWidth": "360dp",
-              "minHeight": "250dp",
+                "minHeight": "360dp",
               "targetCellWidth": 4,
-              "targetCellHeight": 4,
+                "targetCellHeight": 6,
               "resizeMode": "horizontal|vertical",
               "updatePeriodMillis": 1800000
             }

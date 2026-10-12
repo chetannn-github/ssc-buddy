@@ -194,7 +194,7 @@ function ActivityHeatmap({
       const count = 1;
       activity.set(key, (activity.get(key) ?? 0) + count);
       addDetail(key, {
-        label: "Practice test",
+        label: "Practice session",
         detail: `${record.subject} · ${record.chapter}`,
         count,
       });
@@ -219,7 +219,8 @@ function ActivityHeatmap({
     tracker?.activity.forEach((entry) => {
       const key = activityDay(entry.date);
       if (!key) return;
-      activity.set(key, (activity.get(key) ?? 0) + entry.count);
+      const count = Math.max(1, Math.abs(Number(entry.count) || 1));
+      activity.set(key, (activity.get(key) ?? 0) + count);
       const subject = tracker.subjects.find((item) => item.id === entry.subjectId);
       const chapter = subject?.chapters.find((item) => item.id === entry.chapterId);
       const chapterLabel =
@@ -230,12 +231,12 @@ function ActivityHeatmap({
       addDetail(key, {
         label:
           entry.type === "lecture"
-            ? "Lectures"
+            ? "Lecture"
             : entry.type === "revision"
               ? `Revision${revisionType ? ` · ${revisionType.name}` : ""}`
-              : "Mock-test activity",
+              : "Mock test",
         detail: chapterLabel,
-        count: Math.abs(entry.count),
+        count,
       });
     });
     const values = entries.map((date) => Math.max(0, activity.get(localDay(date)) ?? 0));

@@ -69,17 +69,19 @@ function DailyTasks() {
   const [historyRange, setHistoryRange] = useState<RangeKey>("week");
   const [range, setRange] = useState<RangeKey>("week");
   const [subject, setSubject] = useState("All subjects");
-  const subjects = useMemo(
-    () => [...new Set(loadTrackerData().subjects.map((item) => item.name))],
-    [],
-  );
+  const [subjects, setSubjects] = useState(() => [...new Set(loadTrackerData().subjects.map((item) => item.name).filter(Boolean))]);
+  useEffect(() => {
+    const refreshSubjects = () => setSubjects([...new Set(loadTrackerData().subjects.map((item) => item.name).filter(Boolean))]);
+    window.addEventListener("cbt-tracker-updated", refreshSubjects);
+    return () => window.removeEventListener("cbt-tracker-updated", refreshSubjects);
+  }, []);
   useEffect(() => {
     if (!isFirebaseConfigured) return;
     return observeFirebaseUser(setSyncUser);
   }, []);
   useEffect(() => {
     if (!syncUser) return;
-    let stop = () => undefined;
+    let stop: () => void = () => undefined;
     void (async () => {
       await migrateTasksIfEmpty(syncUser, tasks);
       stop = watchTasks(syncUser, (remote) => {
@@ -531,7 +533,7 @@ function DailyTasks() {
           open={formOpen}
           onOpenChange={setFormOpen}
           task={editing}
-          subjects={allSubjects}
+          subjects={subjects.length ? subjects : ["Other"]}
           onSubmit={createOrUpdate}
         />
         <CompleteTaskDialog

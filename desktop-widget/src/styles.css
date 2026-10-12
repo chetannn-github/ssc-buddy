@@ -29,6 +29,11 @@ header, .toolbar, footer, .task { display: flex; align-items: center; } header {
 
 /* Auth actions should feel calm and secondary to the form heading. */
 .auth-primary, .auth-google { font-weight: 600; }
+/* Keep the task window calm and readable instead of overly bold. */
+.widget h1 { font-weight: 600; letter-spacing: -.025em; }.widget .brand, .widget .toolbar > span, .widget .hero-stats span { font-weight: 600; }.widget .hero-heading { font-weight: 500; letter-spacing: -.01em; }.widget .hero-stats strong, .widget .completion-ring strong { font-weight: 600; }.widget .task { border-color: #303030; background: linear-gradient(135deg, #202020, #1d1d1d); transition: border-color 160ms ease, background 160ms ease, transform 160ms ease; }.widget .task:hover { border-color: #454545; background: #222; transform: translateY(-1px); }.widget .task-main b { font-weight: 500; letter-spacing: -.01em; }.widget .task-main small { color: #99999f; font-weight: 400; }.widget .day-toggle { font-weight: 600; }
+.widget-splash { display: grid; min-height: 100vh; place-content: center; justify-items: center; gap: 13px; padding: 24px; color: #f4f4f5; background-color: #121212; background-position: center; background-size: cover; }.splash-copy { display: grid; gap: 4px; text-align: center; }.splash-copy span { color: #83efd4; font-size: 9px; font-weight: 600; letter-spacing: .17em; }.splash-copy strong { color: #e7e7e9; font-size: 13px; font-weight: 500; letter-spacing: -.01em; }.splash-loader { margin-top: 2px; color: #83efd4; }
+/* New-task form: dense enough for the compact widget and never clip its menu. */
+.task-dialog { gap: 8px; overflow: visible; }.task-dialog label { gap: 2px; }.task-dialog .form-grid { gap: 8px; }.task-dialog .schedule { gap: 4px; }.task-dialog .dialog-actions { gap: 7px; margin-top: 1px; }.task-dialog .primary, .task-dialog .secondary { height: 28px; min-height: 28px; padding-block: 0; border-radius: 8px; font-size: 11px; }.task-dialog .form-grid > label:nth-child(2) .select-popover { top: auto; bottom: calc(100% + 4px); max-height: 126px; transform-origin: bottom; }.task-dialog .select-popover { z-index: 40; border-color: #3a3a3a; background: #252525; box-shadow: 0 18px 34px rgba(0, 0, 0, .58); }.task-dialog .select-popover button { padding: 7px 8px; }
 
 /* Quick Recall is deliberately a view inside the widget, not a second window. */
 .quick-recall-trigger { display: flex; height: 30px; align-items: center; gap: 4px; padding: 0 8px; border: 1px solid #353535; border-radius: 9px; color: #c4c4c8; background: #242424; font-size: 10px; font-weight: 700; transition: border-color 160ms ease, background 160ms ease, color 160ms ease; }
@@ -53,7 +58,45 @@ header, .toolbar, footer, .task { display: flex; align-items: center; } header {
 .quick-option.wrong { border-color: #7f1d1d; background: #371d21; }
 .quick-success { padding: 8px 9px; border: 1px solid #286053; border-radius: 10px; color: #a7f3d0; background: #18342f; font-size: 10px; font-weight: 800; animation: quick-feedback-in 160ms ease-out; }
 .quick-correction { margin: 0; color: #fca5a5; font-size: 10px; }
-.quick-feedback { display: grid; gap: 7px; padding: 9px; border: 1px solid #663035; border-radius: 10px; background: #2f1c20; }
+.quick-feedback { display: grid; gap: 7px; padding: 9px; border: 1px solid #343434; border-radius: 10px; background: #222; }
 .quick-feedback p { margin: 0; color: #d4d4d8; font-size: 10px; line-height: 1.45; }
 .quick-heading small { color: #fcd34d; font-weight: 800; }
+.quick-progress { display: flex; align-items: center; gap: 7px; margin-left: auto; }.quick-heading .quick-progress small { margin-left: 0; }.quick-next { height: 24px; padding: 0 9px; border: 1px solid #347b6b; border-radius: 7px; color: #c9fff2; background: #1b493f; font-size: 10px; font-weight: 700; transition: background 160ms ease, border-color 160ms ease, opacity 160ms ease; }.quick-next:hover:not(:disabled) { border-color: #5eead4; background: #215a4d; }.quick-next:disabled { border-color: #3a3a3a; color: #77777d; background: #282828; cursor: not-allowed; opacity: .8; }
 @keyframes quick-feedback-in { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: translateY(0); } }
+
+/* Match the mobile app's calm blue action tint throughout the desktop widget. */
+.widget .brand, .widget .sync.ok, .widget-splash .splash-copy span, .widget-splash .splash-loader, .quick-heading { color: #93c5fd; }
+.widget .icon-button, .widget .primary { color: #082f49; background: #60a5fa; }
+.widget .completion-ring .ring-value { stroke: #60a5fa; }
+.widget .task.done { border-color: #285f94; background: #162c45; }
+.widget .check { color: #082f49; border-color: #60a5fa; }
+.widget .done .check { background: #60a5fa; }
+.widget .chip.active { color: #dbeafe; border-color: #60a5fa; background: #162c45; }
+.quick-recall-trigger:hover, .quick-recall-trigger.active { border-color: #285f94; color: #dbeafe; background: #162c45; }
+.quick-option:hover:not(:disabled) { border-color: #60a5fa; background: #162c45; }
+.quick-option b { color: #93c5fd; }
+.quick-next { border-color: #285f94; color: #dbeafe; background: #162c45; }
+.quick-next:hover:not(:disabled) { border-color: #60a5fa; background: #1e3a5f; }
+
+/* Authentication shares the same blue accent as the task widget and mobile app. */
+.desktop-auth .auth-kicker { color: #93c5fd; }
+.desktop-auth .auth-primary { color: #082f49; background: #60a5fa; }
+.desktop-auth .auth-primary:hover:not(:disabled) { background: #93c5fd; }
+.desktop-auth .auth-inputs input:focus { border-color: #60a5fa; box-shadow: 0 0 0 3px rgba(96, 165, 250, .12); }
+.desktop-auth .auth-switch:hover { color: #93c5fd; }
+
+/* Prevent accidental selection while using the compact desktop widget. */
+.widget { -webkit-user-select: none; user-select: none; }
+.widget .quick-question { -webkit-user-select: text; user-select: text; }
+
+/* Match the mobile selector: a calm dark trigger, white selected row and tick. */
+.task-dialog .select-trigger { border-color: #3a3a3a; border-radius: 11px; background: #191919; transition: border-color 160ms ease, background 160ms ease; }
+.task-dialog .select-trigger:hover, .task-dialog .select-trigger[aria-expanded="true"] { border-color: #52525b; background: #222; }
+.task-dialog .select-popover { padding: 5px; border-color: #3f3f46; border-radius: 12px; background: #181818; }
+.task-dialog .select-popover button { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 32px; padding: 7px 9px; border-radius: 8px; color: #b4b4b8; }
+.task-dialog .select-popover button:hover { color: #f4f4f5; background: #282828; }
+.task-dialog .select-popover button.selected { color: #18181b; background: #f4f4f5; font-weight: 600; }
+.task-dialog .select-popover button.selected svg { color: #18181b; }
+.task-dialog .form-grid > label:nth-child(2) .select-popover { top: calc(100% + 5px); bottom: auto; transform-origin: top; }
+.task-dialog, .task-dialog.editing { width: min(100%, 370px); max-height: none; overflow: visible; }
+.task-dialog .select-popover { max-height: none; overflow: visible; }

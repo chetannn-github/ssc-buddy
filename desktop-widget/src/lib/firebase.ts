@@ -13,10 +13,13 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
   initializeFirestore,
   onSnapshot,
   persistentLocalCache,
+  runTransaction,
+  serverTimestamp,
   setDoc,
   type Unsubscribe,
 } from "firebase/firestore";
@@ -35,7 +38,8 @@ export type DailyTask = {
   completedAt: string | null;
   minutesSpent: number | null;
 };
-export type QuickRecallSeed = { subjects: unknown[]; attempts: unknown[]; favouriteQuestionIds: string[] };
+export type QuickRecallLearningStat = { askedCount: number; correctCount: number; wrongCount: number; lastAskedAt: string; lastOutcome: "correct" | "wrong" };
+export type QuickRecallSeed = { subjects: unknown[]; attempts: unknown[]; favouriteQuestionIds: string[]; learningStats: Record<string, QuickRecallLearningStat> };
 
 const config = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -87,6 +91,14 @@ export function watchTasks(user: User, onChange: (tasks: DailyTask[], source: "c
   });
 }
 
+/** Reads users/{uid}/tracker/subjects.value — the existing web/mobile syllabus contract. */
+export function watchTrackerSubjects(user: User, callback: (subjects: string[]) => void): Unsubscribe {
+  return onSnapshot(doc(db!, "users", user.uid, "tracker", "subjects"), (snapshot) => {
+    const value = snapshot.data()?.value;
+    callback(Array.isArray(value) ? [...new Set(value.map((item) => typeof item?.name === "string" ? item.name.trim() : "").filter(Boolean))] : []);
+  });
+}
+
 /** Reads the same activity sources used by the Android header streak. */
 export function watchStreakActivity(user: User, callback: (dates: string[]) => void): Unsubscribe {
   let practiceDates: string[] = [];
@@ -106,16 +118,33 @@ export function watchStreakActivity(user: User, callback: (dates: string[]) => v
 
 /** Reads the existing practice collections without creating any widget-only data. */
 export async function loadQuickRecallSeed(user: User): Promise<QuickRecallSeed> {
-  const [subjects, attempts, favourites] = await Promise.all([
+  const [subjects, attempts, favourites, learning] = await Promise.all([
     getDocs(collection(db!, "users", user.uid, "practiceSubjects")),
     getDocs(collection(db!, "users", user.uid, "practiceAttempts")),
     getDocs(collection(db!, "users", user.uid, "practiceFavourites")),
+    getDoc(doc(db!, "users", user.uid, "questionLearning", "current")),
   ]);
   return {
     subjects: subjects.docs.map((entry) => ({ id: entry.id, ...entry.data() })),
     attempts: attempts.docs.map((entry) => ({ id: entry.id, ...entry.data() })),
     favouriteQuestionIds: favourites.docs.map((entry) => String(entry.data().id ?? entry.id)),
+    learningStats: (learning.data()?.stats && typeof learning.data()?.stats === "object" ? learning.data()?.stats : {}) as Record<string, QuickRecallLearningStat>,
   };
+}
+
+/** Atomically records a desktop Quick Recall answer in the same document used by Android. */
+export async function recordQuickRecallAnswer(user: User, question: { id: string; subjectId: string; subject: string }, correct: boolean) {
+  const reference = doc(db!, "users", user.uid, "questionLearning", "current");
+  const key = `${question.subjectId}:${question.id}`;
+  await runTransaction(db!, async (transaction) => {
+    const current = transaction.get(reference);
+    const snapshot = await current;
+    const data = snapshot.data() ?? {};
+    const stats = data.stats && typeof data.stats === "object" ? data.stats as Record<string, QuickRecallLearningStat> : {};
+    const before = stats[key] ?? { askedCount: 0, correctCount: 0, wrongCount: 0, lastAskedAt: "", lastOutcome: "correct" as const };
+    const next = { ...before, askedCount: Number(before.askedCount ?? 0) + 1, correctCount: Number(before.correctCount ?? 0) + (correct ? 1 : 0), wrongCount: Number(before.wrongCount ?? 0) + (correct ? 0 : 1), lastAskedAt: new Date().toISOString(), lastOutcome: correct ? "correct" as const : "wrong" as const };
+    transaction.set(reference, { ...data, stats: { ...stats, [key]: next }, lastSubject: question.subject, updatedAt: serverTimestamp() });
+  });
 }
 
 /** One document per task, matching the existing web's document-level CRUD. */

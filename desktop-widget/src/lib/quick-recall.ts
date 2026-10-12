@@ -53,13 +53,14 @@ export function createQuickRecallSession(seed: QuickRecallSeed): QuickRecallSess
     });
   });
   const favourites = new Set(seed.favouriteQuestionIds);
+  const learning = seed.learningStats ?? {};
   const subjectIds = [...new Set(questions.map((item) => item.subjectId))];
   const eligible = subjectIds.filter((id) => questions.filter((item) => item.subjectId === id).length >= 3);
   const subjectId = (eligible.length ? eligible : subjectIds)
-    .map((id) => ({ id, score: questions.filter((item) => item.subjectId === id).reduce((total, item) => total + (favourites.has(item.id) ? 24 : 0) + (wrongs.get(questionKey(item)) ?? 0) * 16, 0) + Math.random() * 4 }))
+    .map((id) => ({ id, score: questions.filter((item) => item.subjectId === id).reduce((total, item) => { const stat = learning[questionKey(item)]; return total + (favourites.has(item.id) ? 24 : 0) + (wrongs.get(questionKey(item)) ?? 0) * 16 + (stat?.wrongCount ?? 0) * 8 - (stat?.askedCount ?? 0) * 1.5; }, 0) + Math.random() * 4 }))
     .sort((left, right) => right.score - left.score)[0]?.id;
   const selected = questions.filter((item) => item.subjectId === subjectId).sort((left, right) => {
-    const score = (item: QuickRecallQuestion) => (favourites.has(item.id) ? 1000 : 0) + (wrongs.get(questionKey(item)) ?? 0) * 100 + Math.random() * 3;
+    const score = (item: QuickRecallQuestion) => { const stat = learning[questionKey(item)]; return (favourites.has(item.id) ? 1000 : 0) + (wrongs.get(questionKey(item)) ?? 0) * 100 + (stat?.wrongCount ?? 0) * 50 - (stat?.askedCount ?? 0) + Math.random() * 3; };
     return score(right) - score(left);
   }).slice(0, 3);
   return selected.length ? { subject: selected[0].subject, questions: selected } : null;

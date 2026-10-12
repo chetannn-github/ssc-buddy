@@ -1,5 +1,10 @@
 import {
   clearTestDarkMode,
+  loadFavoriteQuestionIds,
+  loadHistory,
+  loadMarking,
+  loadSubjects,
+  loadTestDarkMode,
   saveFavoriteQuestionIds,
   saveHistory,
   saveMarking,
@@ -16,8 +21,12 @@ import {
   type PracticeProfile,
 } from "@/lib/profile";
 import { saveTrackerData } from "@/lib/tracker-store";
+import { loadTrackerData } from "@/lib/tracker-store";
 import type { TrackerData } from "@/lib/tracker";
-import { saveDailyTasks, type DailyTask } from "@/lib/daily-tasks";
+import { loadDailyTasks, saveDailyTasks, type DailyTask } from "@/lib/daily-tasks";
+import type { User } from "firebase/auth";
+import { collection, doc, getDocs, writeBatch } from "firebase/firestore";
+import { getFirebaseFirestore } from "@/lib/firebase-sync";
 
 type PracticeBackup = {
   format: "mcq-practice-backup";
@@ -307,4 +316,83 @@ export async function restorePracticeBackup(file: File) {
   }
   window.dispatchEvent(new Event("cbt-backup-restored"));
   return parsed.profile ?? null;
+}
+
+/**
+ * Replaces a signed-in user's canonical Firestore records with a validated
+ * exported backup. Local storage remains the offline cache, while Firestore
+ * receives the same document-level schema used by the web and mobile apps.
+ */
+export async function importBackupToFirebase(user: User, file: File) {
+  // Validate before touching the local cache or cloud data.
+  const text = await file.text();
+  JSON.parse(text);
+  const validatedFile = new File([text], file.name, { type: "application/json" });
+  await restorePracticeBackup(validatedFile);
+
+  const db = getFirebaseFirestore();
+  const root = collection(db, "users", user.uid);
+  const names = [
+    "tasks", "practiceSubjects", "practiceAttempts", "practiceFavourites",
+    "practiceSettings", "tracker", "profile", "preferences", "sharedData",
+    "questionLearning", "appData",
+  ];
+  // Delete each known top-level feature collection first. This makes import a
+  // true replace operation and avoids stale entities surviving a restore.
+  for (const name of names) {
+    const snapshot = await getDocs(collection(root, name));
+    if (name === "appData") {
+      for (const legacy of snapshot.docs) {
+        const chunks = await getDocs(collection(legacy.ref, "chunks"));
+        for (let index = 0; index < chunks.docs.length; index += 450) {
+          const batch = writeBatch(db);
+          chunks.docs.slice(index, index + 450).forEach((item) => batch.delete(item.ref));
+          await batch.commit();
+        }
+      }
+    }
+    for (let index = 0; index < snapshot.docs.length; index += 450) {
+      const batch = writeBatch(db);
+      snapshot.docs.slice(index, index + 450).forEach((item) => batch.delete(item.ref));
+      await batch.commit();
+    }
+  }
+
+  const write = async (entries: Array<[string, string, unknown]>) => {
+    for (let index = 0; index < entries.length; index += 450) {
+      const batch = writeBatch(db);
+      entries.slice(index, index + 450).forEach(([group, id, value]) =>
+        batch.set(doc(root, group, id), value),
+      );
+      await batch.commit();
+    }
+  };
+  const tasks = loadDailyTasks();
+  const subjects = loadSubjects();
+  const attempts = loadHistory();
+  const favourites = loadFavoriteQuestionIds();
+  const tracker = loadTrackerData();
+  const profile = loadPracticeProfile();
+  const marking = loadMarking();
+  const darkMode = loadTestDarkMode();
+  const sharedKeys = [VIDEO_LIKES_KEY, MUSIC_LIKES_KEY, MANIFESTATION_COMPLETION_KEY];
+
+  await write([
+    ...tasks.map((task) => ["tasks", task.id, task] as [string, string, unknown]),
+    ...subjects.map((subject) => ["practiceSubjects", subject.id, subject] as [string, string, unknown]),
+    ...attempts.map((attempt) => ["practiceAttempts", attempt.id, attempt] as [string, string, unknown]),
+    ...favourites.map((id) => ["practiceFavourites", id, { id }] as [string, string, unknown]),
+    ...(marking ? [["practiceSettings", "current", { marking }] as [string, string, unknown]] : []),
+    ...(["meta", "subjects", "revision", "tests", "activity", "pinned"] as const).map((section) => {
+      const value = section === "pinned" ? tracker.pinnedChapterIds : tracker[section];
+      return ["tracker", section, { value }] as [string, string, unknown];
+    }),
+    ...(profile ? [["profile", "current", profile] as [string, string, unknown]] : []),
+    ...(darkMode === null ? [] : [["preferences", "current", { testDarkMode: darkMode }] as [string, string, unknown]]),
+    ...sharedKeys.flatMap((key) => {
+      const value = localStorage.getItem(key);
+      return value === null ? [] : [["sharedData", key, { value }]] as Array<[string, string, unknown]>;
+    }),
+  ]);
+  return profile;
 }

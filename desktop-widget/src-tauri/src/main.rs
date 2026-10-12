@@ -1,6 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use tauri::{menu::{Menu, MenuItem}, tray::{TrayIconBuilder, TrayIconEvent}, Manager};
+use tauri::{menu::{Menu, MenuItem}, tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}, Manager};
 use tauri_plugin_autostart::ManagerExt;
 
 fn show_window(app: &tauri::AppHandle) {
@@ -15,9 +15,9 @@ fn main() {
     .setup(|app| {
       app.handle().plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, None))?;
       let _ = app.autolaunch().enable();
-      let show = MenuItem::with_id(app, "show", "Show tasks", true, None::<&str>)?;
-      let hide = MenuItem::with_id(app, "hide", "Hide", true, None::<&str>)?;
-      let quit = MenuItem::with_id(app, "quit", "Quit SSC Buddy", true, None::<&str>)?;
+      let show = MenuItem::with_id(app, "show", "Show window", true, None::<&str>)?;
+      let hide = MenuItem::with_id(app, "hide", "Hide window", true, None::<&str>)?;
+      let quit = MenuItem::with_id(app, "quit", "Exit", true, None::<&str>)?;
       let menu = Menu::with_items(app, &[&show, &hide, &quit])?;
       let tray_icon = app.default_window_icon().cloned().ok_or("SSC Buddy tray icon is unavailable")?;
       TrayIconBuilder::with_id("ssc-buddy-tray")
@@ -30,7 +30,11 @@ fn main() {
           "quit" => app.exit(0),
           _ => {}
         })
-        .on_tray_icon_event(|tray, event| { if let TrayIconEvent::Click { .. } = event { show_window(tray.app_handle()); } })
+        .on_tray_icon_event(|tray, event| {
+          if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
+            show_window(tray.app_handle());
+          }
+        })
         .build(app)?;
       Ok(())
     })

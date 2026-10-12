@@ -82,7 +82,8 @@ const FAVORITE_QUESTIONS_KEY = "cbt-favorite-questions";
 const STUDY_STORE_VERSION_KEY = "cbt-study-store-version";
 
 export function newDocumentId(prefix: string) {
-  const random = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const random =
+    globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   return `${prefix}_${random}`;
 }
 
@@ -108,7 +109,11 @@ function write(key: string, value: unknown) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
     practicePersistenceSubscribers.forEach((callback) => {
-      try { callback(); } catch { /* a sync observer must never break a write */ }
+      try {
+        callback();
+      } catch {
+        /* a sync observer must never break a write */
+      }
     });
   } catch {
     /* storage unavailable */
@@ -124,7 +129,8 @@ export function loadMarking(): MarkingScheme | null {
   if (!value) return null;
   const positive = Number(value.positive);
   const negative = Number(value.negative);
-  if (!Number.isFinite(positive) || positive < 0 || !Number.isFinite(negative) || negative < 0) return null;
+  if (!Number.isFinite(positive) || positive < 0 || !Number.isFinite(negative) || negative < 0)
+    return null;
   return { positive, negative };
 }
 
@@ -168,12 +174,11 @@ function normalizeQuestion(question: RawQuestion, index: number): McqQuestion {
 }
 
 function normalizeExercise(exercise: RawExercise): Exercise {
+  const { questions, ...base } = exercise;
   return {
-    ...exercise,
+    ...base,
     id: exercise.id || newDocumentId("exercise"),
-    ...(exercise.questions
-      ? { questions: exercise.questions.map(normalizeQuestion) }
-      : {}),
+    ...(questions ? { questions: questions.map(normalizeQuestion) } : {}),
   };
 }
 
@@ -189,11 +194,19 @@ function normalizeChapter(c: string | RawChapter): Chapter {
   }
   // Legacy chapter-only data gets one compatible exercise. Newly-created chapters
   // persist as an empty exercise list until the student explicitly adds one.
-  const exercises = c.exercises !== undefined
-    ? c.exercises.map(normalizeExercise)
-    : c.questionCount !== undefined || c.answerKey !== undefined
-      ? [{ id: newDocumentId("exercise"), name: DEFAULT_EXERCISE, questionCount: c.questionCount ?? null, answerKey: c.answerKey ?? null }]
-      : [];
+  const exercises =
+    c.exercises !== undefined
+      ? c.exercises.map(normalizeExercise)
+      : c.questionCount !== undefined || c.answerKey !== undefined
+        ? [
+            {
+              id: newDocumentId("exercise"),
+              name: DEFAULT_EXERCISE,
+              questionCount: c.questionCount ?? null,
+              answerKey: c.answerKey ?? null,
+            },
+          ]
+        : [];
   return {
     id: c.id || newDocumentId("chapter"),
     name: c.name,
@@ -256,7 +269,13 @@ export function upsertExercise(
 
   let chapter = subject.chapters.find((c) => c.name.toLowerCase() === chapterName.toLowerCase());
   if (!chapter) {
-    chapter = { id: newDocumentId("chapter"), name: chapterName, questionCount: null, answerKey: null, exercises: [] };
+    chapter = {
+      id: newDocumentId("chapter"),
+      name: chapterName,
+      questionCount: null,
+      answerKey: null,
+      exercises: [],
+    };
     subject.chapters.push(chapter);
   }
 
@@ -267,7 +286,13 @@ export function upsertExercise(
     existing.answerKey = answerKey;
     existing.questions = questions?.map(normalizeQuestion);
   } else {
-    chapter.exercises.push({ id: newDocumentId("exercise"), name, questionCount, answerKey, questions: questions?.map(normalizeQuestion) });
+    chapter.exercises.push({
+      id: newDocumentId("exercise"),
+      name,
+      questionCount,
+      answerKey,
+      questions: questions?.map(normalizeQuestion),
+    });
   }
   chapter.questionCount = chapter.exercises[0]?.questionCount ?? null;
   chapter.answerKey = chapter.exercises[0]?.answerKey ?? null;
@@ -376,7 +401,9 @@ export function loadHistory(): TestRecord[] {
   const normalized = history.map((record) => {
     const recordId = record.id || newDocumentId("test");
     const questions = record.questions?.map(normalizeQuestion);
-    const subject = subjects.find((item) => item.id === record.subjectId || item.name === record.subject);
+    const subject = subjects.find(
+      (item) => item.id === record.subjectId || item.name === record.subject,
+    );
     const chapter = subject?.chapters.find(
       (item) => item.id === record.chapterId || item.name === record.chapter,
     );
@@ -385,17 +412,21 @@ export function loadHistory(): TestRecord[] {
     );
     const isLegacyRandom = Boolean(
       record.questions?.length &&
-        record.questionNumbers?.some((number, index) => number !== record.startNumber + index),
+      record.questionNumbers?.some((number, index) => number !== record.startNumber + index),
     );
     const testMode = record.testMode ?? (isLegacyRandom ? "random" : "standard");
     return {
       ...record,
       id: recordId,
-      ...(testMode === "random" ? { testMode, attemptGroupId: record.attemptGroupId ?? recordId } : {}),
+      ...(testMode === "random"
+        ? { testMode, attemptGroupId: record.attemptGroupId ?? recordId }
+        : {}),
       ...(subject ? { subjectId: subject.id } : {}),
       ...(chapter ? { chapterId: chapter.id } : {}),
       ...(exercise ? { exerciseId: exercise.id } : {}),
-      ...(questions ? { questions, questionIds: record.questionIds ?? questions.map((question) => question.id) } : {}),
+      ...(questions
+        ? { questions, questionIds: record.questionIds ?? questions.map((question) => question.id) }
+        : {}),
     };
   });
   if (JSON.stringify(history) !== JSON.stringify(normalized)) write(HISTORY_KEY, normalized);

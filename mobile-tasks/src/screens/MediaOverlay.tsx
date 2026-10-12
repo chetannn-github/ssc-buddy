@@ -3,8 +3,8 @@ import type { User } from "firebase/auth";
 import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import Constants, { AppOwnership } from "expo-constants";
 import { useVideoPlayer, VideoView } from "expo-video";
-import { useEffect, useRef, useState } from "react";
-import { Animated, Easing, FlatList, Image, Modal, PanResponder, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Animated, Easing, FlatList, Image, Modal, PanResponder, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 import { musicCover, musicSource, musicTracks, trackTitle, videoSource, videoTracks } from "../lib/media";
 import { colors } from "../theme";
@@ -14,6 +14,7 @@ import { patchCloudPreferences, watchCloudPreferences } from "../lib/firebase";
 export type MediaMode = "video" | "music" | null;
 const reelPages = Array.from({ length: videoTracks.length * 400 }, (_, index) => ({ id: index, track: videoTracks[index % videoTracks.length] }));
 const firstReelPage = Math.floor(reelPages.length / 2);
+const playlistName = (track: string) => decodeURIComponent(track).split("/").slice(0, -1).join(" / ") || "Music";
 
 export function MediaOverlay({ user, mode, onClose, musicOpenRequest }: { user: User | null; mode: MediaMode; onClose: () => void; musicOpenRequest: number }) {
   if (mode === "video") return <VideoReels user={user} onClose={onClose} />;
@@ -76,6 +77,7 @@ function MusicPlayer({ user, onClose, openRequest }: { user: User | null; onClos
   const [index, setIndex] = useState(0);
   const [likes, toggleLike] = useCloudLikes(user, "ssc-buddy-liked-music");
   const [repeat, setRepeat] = useState(false);
+  const [selectedPlaylist, setSelectedPlaylist] = useState(() => playlistName(musicTracks[0] ?? ""));
   const [minimized, setMinimized] = useState(false);
   const [bottomNavVisible, setBottomNavVisible] = useState(true);
   const [dragProgress, setDragProgress] = useState<number | null>(null);
@@ -91,8 +93,11 @@ function MusicPlayer({ user, onClose, openRequest }: { user: User | null; onClos
   const artworkAnimation = useRef<Animated.CompositeAnimation | null>(null);
   const shouldSpin = useRef(false);
   const activeTrack = musicTracks[index] ?? musicTracks[0];
+  const playlists = useMemo(() => [...new Set(musicTracks.map(playlistName))], []);
+  const visibleTracks = useMemo(() => musicTracks.filter((track) => playlistName(track) === selectedPlaylist), [selectedPlaylist]);
+  const playingPlaylistTracks = useMemo(() => musicTracks.filter((track) => playlistName(track) === playlistName(activeTrack ?? "")), [activeTrack]);
   const liked = likes.has(activeTrack);
-  const discSize = 148;
+  const discSize = 126;
   const cover = musicCover(activeTrack);
   // Expo Go cannot include this project's custom foreground media service.
   // A development/standalone build receives the service from the expo-audio plugin.
@@ -163,7 +168,13 @@ function MusicPlayer({ user, onClose, openRequest }: { user: User | null; onClos
     spinOnce();
     return () => { artworkAnimation.current?.stop(); };
   }, [artworkSpin, status.playing]);
-  const shift = (amount: number) => setIndex((current) => (current + amount + musicTracks.length) % musicTracks.length);
+  const shift = (amount: number) => {
+    const currentTrackIndex = playingPlaylistTracks.indexOf(activeTrack);
+    if (currentTrackIndex < 0 || !playingPlaylistTracks.length) return;
+    const nextTrack = playingPlaylistTracks[(currentTrackIndex + amount + playingPlaylistTracks.length) % playingPlaylistTracks.length];
+    const nextIndex = musicTracks.indexOf(nextTrack);
+    if (nextIndex >= 0) setIndex(nextIndex);
+  };
   const rotation = artworkSpin.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
   const playbackProgress = status.duration > 0 ? Math.max(0, Math.min(1, status.currentTime / status.duration)) : 0;
   const progress = dragProgress ?? playbackProgress;
@@ -206,12 +217,12 @@ function MusicPlayer({ user, onClose, openRequest }: { user: User | null; onClos
       </View>
     </Animated.View>;
   }
-  return <Modal transparent visible animationType="fade" onRequestClose={() => setMinimized(true)}><Pressable style={[styles.backdrop, { padding: 12 }]} onPress={() => setMinimized(true)}><Pressable style={[styles.musicCard, { height: "94%", maxHeight: "94%", padding: 24 }]} onPress={() => undefined}>
+  return <Modal transparent visible animationType="fade" onRequestClose={() => setMinimized(true)}><Pressable style={[styles.backdrop, { padding: 18 }]} onPress={() => setMinimized(true)}><Pressable style={[styles.musicCard, { height: "78%", maxHeight: "78%", padding: 18 }]} onPress={() => undefined}>
     <View style={styles.musicHead}><View /><View style={styles.musicHeaderActions}><Pressable onPress={() => setMinimized(true)} hitSlop={9}><MaterialCommunityIcons name="arrow-collapse" size={20} color={colors.muted} /></Pressable><Pressable onPress={onClose} hitSlop={9}><MaterialCommunityIcons name="close" size={21} color={colors.muted} /></Pressable></View></View>
-    <View style={[styles.disc, { width: discSize, height: discSize, marginTop: 10 }]} {...discPan.panHandlers}><Animated.View style={[styles.artwork, { width: 124, height: 124, borderRadius: 62, transform: [{ rotate: rotation }] }]}>{cover ? <Image source={cover} style={styles.coverImage} /> : <MaterialCommunityIcons name="music" size={48} color={colors.accent} />}</Animated.View><ProgressRing size={discSize} progress={progress} /></View>
+    <View style={[styles.disc, { width: discSize, height: discSize, marginTop: 5 }]} {...discPan.panHandlers}><Animated.View style={[styles.artwork, { width: 104, height: 104, borderRadius: 52, transform: [{ rotate: rotation }] }]}>{cover ? <Image source={cover} style={styles.coverImage} /> : <MaterialCommunityIcons name="music" size={40} color={colors.accent} />}</Animated.View><ProgressRing size={discSize} progress={progress} /></View>
     <Text style={styles.songTitle} numberOfLines={1}>{trackTitle(musicTracks[index] ?? "")}</Text>
     <View style={styles.controls}><Pressable style={styles.round} onPress={() => toggleLike(activeTrack)}><MaterialCommunityIcons name={liked ? "heart" : "heart-outline"} size={21} color={liked ? "#fb7185" : colors.text} /></Pressable><Pressable style={[styles.round, repeat && { backgroundColor: "#284d7f" }]} onPress={() => setRepeat((value) => !value)}><MaterialCommunityIcons name="repeat" size={20} color={colors.text} /></Pressable><Pressable style={styles.round} onPress={() => shift(-1)}><MaterialCommunityIcons name="chevron-left" size={28} color={colors.text} /></Pressable><Pressable style={styles.round} onPress={() => shift(1)}><MaterialCommunityIcons name="chevron-right" size={28} color={colors.text} /></Pressable></View>
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginTop: 26 }}><Text style={[styles.playlistLabel, { marginTop: 0 }]}>Music</Text><View style={{ borderRadius: 7, paddingHorizontal: 10, paddingVertical: 4, backgroundColor: "#3a3a3a" }}><Text style={{ color: colors.text, fontSize: 10, fontWeight: "700" }}>motivation</Text></View></View><View style={styles.playlist}>{musicTracks.map((track, trackIndex) => <Pressable key={track} onPress={() => setIndex(trackIndex)} style={[styles.track, trackIndex === index && styles.trackActive]}><Text numberOfLines={1} style={[styles.trackText, trackIndex === index && styles.trackTextActive]}>{trackTitle(track)}</Text></Pressable>)}</View>
+    <View style={styles.playlistHeader}><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.playlistChips}>{playlists.map((playlist) => <Pressable key={playlist} onPress={() => setSelectedPlaylist(playlist)} style={[styles.playlistChip, playlist === selectedPlaylist && styles.playlistChipActive]}><Text numberOfLines={1} style={[styles.playlistChipText, playlist === selectedPlaylist && styles.playlistChipTextActive]}>{playlist}</Text></Pressable>)}</ScrollView></View><ScrollView nestedScrollEnabled showsVerticalScrollIndicator style={[styles.playlist, { flex: 1, marginTop: 5 }]} contentContainerStyle={styles.playlistContent}>{visibleTracks.map((track) => { const trackIndex = musicTracks.indexOf(track); return <Pressable key={track} onPress={() => setIndex(trackIndex)} style={[styles.track, { paddingVertical: 5 }, trackIndex === index && styles.trackActive]}><Text numberOfLines={1} style={[styles.trackText, trackIndex === index && styles.trackTextActive]}>{trackTitle(track)}</Text></Pressable>; })}</ScrollView>
   </Pressable></Pressable></Modal>;
 }
 
@@ -253,7 +264,8 @@ function useCloudLikes(user: User | null, key: "ssc-buddy-liked-videos" | "ssc-b
 
 const styles = StyleSheet.create({
   reel: { flex: 1, backgroundColor: "#000" }, video: { flex: 1 }, reelShade: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,.14)" }, close: { position: "absolute", zIndex: 3, top: 25, right: 18, padding: 8 }, videoTap: { ...StyleSheet.absoluteFill, zIndex: 1 }, speedBadge: { position: "absolute", zIndex: 2, top: 28, right: 65, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: "rgba(220,38,38,.9)" }, speedText: { color: "#fff", fontSize: 13, fontWeight: "900" }, reelControls: { position: "absolute", zIndex: 2, left: 20, right: 20, bottom: 34 }, reelCaption: { color: colors.accent, fontSize: 10, fontWeight: "800", letterSpacing: 1.7, marginTop: 18 }, reelFile: { color: colors.text, fontSize: 15, fontWeight: "700", marginTop: 5 }, videoProgressTrack: { position: "absolute", zIndex: 3, bottom: 0, left: 0, right: 0, height: 4, backgroundColor: "rgba(255,255,255,.22)" }, videoProgressFill: { height: "100%", backgroundColor: "#ef4444" },
-  backdrop: { flex: 1, justifyContent: "center", padding: 18, backgroundColor: "rgba(0,0,0,.82)" }, musicCard: { maxHeight: "82%", borderRadius: 24, padding: 20, backgroundColor: "#1b1b1b", borderWidth: 1, borderColor: colors.border }, musicHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }, musicHeaderActions: { flexDirection: "row", alignItems: "center", gap: 17 }, musicKicker: { color: colors.muted, fontSize: 10, letterSpacing: 1.5, fontWeight: "800" }, disc: { width: 148, height: 148, alignSelf: "center", alignItems: "center", justifyContent: "center", marginTop: 18 }, progressRing: { position: "absolute" }, artwork: { alignItems: "center", justifyContent: "center", width: 128, height: 128, borderRadius: 64, overflow: "hidden", backgroundColor: "#292929" }, songTitle: { color: colors.text, textAlign: "center", marginTop: 18, fontSize: 17, fontWeight: "700" }, controls: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 12, marginTop: 20 }, round: { width: 43, height: 43, alignItems: "center", justifyContent: "center", borderRadius: 22, backgroundColor: "#292929" }, play: { backgroundColor: colors.accent }, playlistLabel: { color: colors.muted, fontSize: 10, letterSpacing: 1.5, fontWeight: "800", marginTop: 23 }, playlist: { marginTop: 10, gap: 2 }, track: { borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 }, trackActive: { backgroundColor: "#303030" }, trackText: { color: colors.muted, fontSize: 13 }, trackTextActive: { color: colors.text, fontWeight: "700" },
+  backdrop: { flex: 1, justifyContent: "center", padding: 18, backgroundColor: "rgba(0,0,0,.82)" }, musicCard: { maxHeight: "82%", borderRadius: 22, padding: 18, backgroundColor: "#1b1b1b", borderWidth: 1, borderColor: colors.border }, musicHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }, musicHeaderActions: { flexDirection: "row", alignItems: "center", gap: 14 }, musicKicker: { color: colors.muted, fontSize: 10, letterSpacing: 1.5, fontWeight: "800" }, disc: { width: 126, height: 126, alignSelf: "center", alignItems: "center", justifyContent: "center", marginTop: 8 }, progressRing: { position: "absolute" }, artwork: { alignItems: "center", justifyContent: "center", width: 104, height: 104, borderRadius: 52, overflow: "hidden", backgroundColor: "#292929" }, songTitle: { color: colors.text, textAlign: "center", marginTop: 11, fontSize: 15, fontWeight: "700" }, controls: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 10, marginTop: 12 }, round: { width: 39, height: 39, alignItems: "center", justifyContent: "center", borderRadius: 20, backgroundColor: "#292929" }, play: { backgroundColor: colors.accent }, playlistLabel: { color: colors.muted, fontSize: 10, letterSpacing: 1.5, fontWeight: "800", marginTop: 23 }, playlist: { marginTop: 5, gap: 0 }, track: { borderRadius: 9, paddingHorizontal: 11, paddingVertical: 5 }, trackActive: { backgroundColor: "#303030" }, trackText: { color: colors.muted, fontSize: 12 }, trackTextActive: { color: colors.text, fontWeight: "700" },
+  playlistHeader: { flexDirection: "row", alignItems: "center", marginTop: 15 }, playlistChips: { gap: 6, paddingRight: 8 }, playlistChip: { maxWidth: 112, borderRadius: 7, paddingHorizontal: 9, paddingVertical: 4, backgroundColor: "#292929" }, playlistChipActive: { backgroundColor: "#e4e4e7" }, playlistChipText: { color: colors.muted, fontSize: 10, fontWeight: "700" }, playlistChipTextActive: { color: "#171717" }, playlistContent: { gap: 0, paddingBottom: 4 },
   coverImage: { width: "100%", height: "100%", borderRadius: 999 },
   miniLayer: { ...StyleSheet.absoluteFill, justifyContent: "flex-end", alignItems: "flex-end", paddingHorizontal: 11 }, miniPlayer: { width: 214, minHeight: 54, flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 15, paddingHorizontal: 9, backgroundColor: "#202020", borderWidth: 1, borderColor: colors.border, shadowColor: "#000", shadowOpacity: 0.45, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 10 }, miniDisc: { width: 38, height: 38, alignItems: "center", justifyContent: "center" }, miniArtwork: { width: 31, height: 31, alignItems: "center", justifyContent: "center", borderRadius: 16, overflow: "hidden", backgroundColor: "#292929" }, miniText: { flex: 1, minWidth: 0 }, miniTitle: { color: colors.text, fontSize: 11, fontWeight: "700" }, miniStatus: { color: colors.muted, fontSize: 9, marginTop: 2 },
 });

@@ -2362,7 +2362,9 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#303030",
   },
-  timingPreset: { minWidth: 63, paddingHorizontal: 8, paddingVertical: 7 },
+  // Four presets always share the available row width. Using minWidth here
+  // caused Android to squeeze the text on narrow devices ("30" became "3").
+  timingPreset: { flex: 1, minWidth: 0, paddingHorizontal: 4, paddingVertical: 7 },
   presetActive: { backgroundColor: examAccent, borderColor: examAccent },
   presetText: { color: colors.muted, fontFamily: "Manrope_700Bold", fontSize: 12 },
   presetTextActive: { color: examAccentDeep },

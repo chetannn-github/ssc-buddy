@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { BrainCircuit, Check, ChevronDown, CloudOff, Eye, EyeOff, Flame, LoaderCircle, LogOut, Plus, Trash2, X } from "lucide-react";
 import type { User } from "firebase/auth";
-import { TASK_TYPES, type DailyTask, type TaskType, createAccount, firebaseConfigured, loadQuickRecallSeed, logout, makeTaskId, observeAuth, removeTask, saveTask, signIn, signInGoogle, todayKey, watchStreakActivity, watchTasks } from "./lib/firebase";
+import { TASK_TYPES, type DailyTask, type TaskType, createAccount, firebaseConfigured, loadQuickRecallSeed, logout, makeTaskId, observeAuth, recordQuickRecallAnswer, removeTask, saveTask, signIn, signInGoogle, todayKey, watchStreakActivity, watchTasks, watchTrackerSubjects } from "./lib/firebase";
 import { createQuickRecallSession, type QuickRecallSession } from "./lib/quick-recall";
 import { QuickRecallPanel } from "./components/QuickRecallPanel";
 import authImage from "./assets/auth.jpg";
@@ -10,13 +10,50 @@ import googleImage from "./assets/google.png";
 import "./styles.css";
 
 type Draft = Pick<DailyTask, "name" | "subject" | "type" | "date">;
-const blankDraft = (): Draft => ({ name: "", subject: "Other", type: "Lecture", date: todayKey() });
+type SavedQuickRecall = { session: QuickRecallSession; open: boolean };
+const QUICK_RECALL_SESSION_KEY = "ssc-buddy-desktop-quick-recall-session";
+const blankDraft = (subject = "Other"): Draft => ({ name: "", subject, type: "Lecture", date: todayKey() });
 const tomorrowKey = () => { const date = new Date(); date.setDate(date.getDate() + 1); return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`; };
 const intentionalActionDelay = () => new Promise<void>((resolve) => window.setTimeout(resolve, 420));
+const loadSavedQuickRecall = (): SavedQuickRecall | null => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(QUICK_RECALL_SESSION_KEY) ?? "null") as SavedQuickRecall | null;
+    return saved?.open && Array.isArray(saved.session?.questions) && saved.session.questions.length ? saved : null;
+  } catch { return null; }
+};
+
+function useAnimatedNumber(value: number, duration = 420) {
+  const [displayed, setDisplayed] = useState(value);
+  const current = useRef(value);
+  const frame = useRef<number | null>(null);
+
+  useEffect(() => {
+    const start = current.current;
+    const difference = value - start;
+    if (!difference) return;
+    const startedAt = performance.now();
+    if (frame.current) cancelAnimationFrame(frame.current);
+    const tick = (now: number) => {
+      const progress = Math.min((now - startedAt) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const next = Math.round(start + difference * eased);
+      current.current = next;
+      setDisplayed(next);
+      if (progress < 1) frame.current = requestAnimationFrame(tick);
+    };
+    frame.current = requestAnimationFrame(tick);
+    return () => { if (frame.current) cancelAnimationFrame(frame.current); };
+  }, [duration, value]);
+
+  return displayed;
+}
 
 function App() {
+  const savedQuickRecall = loadSavedQuickRecall();
   const [user, setUser] = useState<User | null>(null);
+  const [authReady, setAuthReady] = useState(!firebaseConfigured);
   const [tasks, setTasks] = useState<DailyTask[]>([]);
+  const [syllabusSubjects, setSyllabusSubjects] = useState<string[]>([]);
   const [activityDates, setActivityDates] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [editor, setEditor] = useState<DailyTask | null | "new">(null);
@@ -30,17 +67,24 @@ function App() {
   const [deletingTask, setDeletingTask] = useState<DailyTask | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [ringProgress, setRingProgress] = useState(0);
-  const [quickRecallOpen, setQuickRecallOpen] = useState(false);
+  const [quickRecallOpen, setQuickRecallOpen] = useState(() => Boolean(savedQuickRecall));
   const [quickRecallLoading, setQuickRecallLoading] = useState(false);
-  const [quickRecallSession, setQuickRecallSession] = useState<QuickRecallSession | null>(null);
+  const [quickRecallSession, setQuickRecallSession] = useState<QuickRecallSession | null>(() => savedQuickRecall?.session ?? null);
 
   useEffect(() => {
     if (!firebaseConfigured) return;
-    return observeAuth(setUser);
+    return observeAuth((nextUser) => {
+      setUser(nextUser);
+      setAuthReady(true);
+    });
   }, []);
   useEffect(() => {
     if (!user) { setTasks([]); return; }
     return watchTasks(user, (next) => setTasks(next));
+  }, [user?.uid]);
+  useEffect(() => {
+    if (!user) { setSyllabusSubjects([]); return; }
+    return watchTrackerSubjects(user, setSyllabusSubjects);
   }, [user?.uid]);
   useEffect(() => {
     if (!user) { setActivityDates([]); return; }
@@ -54,6 +98,9 @@ function App() {
   const done = todayTasks.filter((task) => task.completed);
   const minutesDone = done.reduce((total, task) => total + (task.minutesSpent ?? 0), 0);
   const completionPercent = todayTasks.length ? Math.round((done.length / todayTasks.length) * 100) : 0;
+  const animatedDone = useAnimatedNumber(done.length);
+  const animatedTotal = useAnimatedNumber(todayTasks.length);
+  const animatedMinutes = useAnimatedNumber(minutesDone);
   const streak = useMemo(() => {
     const toKey = (value: string | Date) => { const date = new Date(value); return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`; };
     const activeDays = new Set(activityDates.map(toKey));
@@ -68,9 +115,14 @@ function App() {
     const frame = requestAnimationFrame(() => setRingProgress(completionPercent));
     return () => cancelAnimationFrame(frame);
   }, [completionPercent]);
+  useEffect(() => {
+    if (quickRecallOpen && quickRecallSession) localStorage.setItem(QUICK_RECALL_SESSION_KEY, JSON.stringify({ open: true, session: quickRecallSession }));
+    else localStorage.removeItem(QUICK_RECALL_SESSION_KEY);
+  }, [quickRecallOpen, quickRecallSession]);
 
-  const openNew = () => { setDraft(blankDraft()); setSchedule(taskDay); setEditor("new"); };
-  const openEdit = (task: DailyTask) => { setDraft({ name: task.name, subject: task.subject, type: task.type, date: task.date }); setEditor(task); };
+  const taskSubjects = syllabusSubjects.length ? syllabusSubjects : ["Other"];
+  const openNew = () => { setDraft(blankDraft(taskSubjects[0])); setSchedule(taskDay); setEditor("new"); };
+  const openEdit = (task: DailyTask) => { setDraft({ name: task.name, subject: taskSubjects.includes(task.subject) ? task.subject : taskSubjects[0], type: task.type, date: task.date }); setEditor(task); };
   const submitTask = async () => {
     if (!user || !draft.name.trim()) return;
     setBusy(true);
@@ -109,16 +161,21 @@ function App() {
   };
 
   if (!firebaseConfigured) return <main className="auth"><section className="auth-card"><CloudOff /><h1>Firebase setup required</h1><p>Add the same Firebase web values used by SSC Buddy to <code>desktop-widget/.env</code>, then restart the desktop app.</p></section></main>;
+  if (!authReady) return <WidgetSplash />;
   if (!user) return <AuthPanel />;
 
   return <main className="widget">
-    <header><div className="window-drag"><span className="brand">STUDY PLANNER</span><h1>{quickRecallOpen ? "Quick Recall" : "Daily Tasks"}</h1></div>{!quickRecallOpen && <div className="header-actions"><button className="quick-recall-trigger" title="Quick Recall" onClick={() => void openQuickRecall()}><BrainCircuit size={16} /><span>Recall</span></button><div className={`streak-pill ${streak > 0 ? "active" : ""}`} title={`${streak} day consistency`}><Flame size={16} /><span>{streak}</span></div><button className="logout" title="Sign out" onClick={() => setLogoutConfirm(true)}><LogOut size={15} /></button></div>}</header>
-    {quickRecallOpen ? <QuickRecallPanel session={quickRecallSession} loading={quickRecallLoading} onBack={() => setQuickRecallOpen(false)} onRestart={() => void openQuickRecall()} /> : <><section className="task-hero"><div className="hero-heading"><span>{taskDay === "today" ? "Today’s tasks" : "Tomorrow’s tasks"}</span><div className="hero-actions">{(tomorrowTaskCount > 0 || taskDay === "tomorrow") && <button className="day-toggle" onClick={() => setTaskDay((value) => value === "today" ? "tomorrow" : "today")}>{taskDay === "today" ? `Tomorrow (${tomorrowTaskCount})` : "Today"}<ChevronDown size={14} /></button>}<button className="icon-button" onClick={openNew} title="Add task"><Plus size={18} /></button></div></div><div className="progress-row"><div className="completion-ring"><svg viewBox="0 0 84 84" aria-hidden="true"><circle className="ring-track" cx="42" cy="42" r="35" /><circle className="ring-value" cx="42" cy="42" r="35" style={{ strokeDashoffset: 220 - (220 * ringProgress) / 100 }} /></svg><div><strong>{completionPercent}%</strong></div></div><div className="hero-stats"><div><span>TASKS</span><strong>{done.length} / {todayTasks.length}</strong></div><div><span>COMPLETED TIME</span><strong>{formatMinutes(minutesDone)}</strong></div></div></div></section><div className="toolbar"><span>{taskDay === "today" ? "TODAY'S TASKS" : "TOMORROW'S TASKS"}</span></div><section className="task-list">{todayTasks.length ? todayTasks.map((task) => <article className={`task ${task.completed ? "done" : ""}`} key={task.id}><button className="check" onClick={() => task.completed ? void reopen(task) : (setMinutes(String(task.minutesSpent ?? 30)), setComplete(task))}>{task.completed && <Check size={14} />}</button><button className="task-main" onClick={() => openEdit(task)}><b>{task.name}</b><small>{task.subject} · {task.type}{task.completed && task.minutesSpent ? ` · ${formatMinutes(task.minutesSpent)}` : ""}</small></button><button className="subtle delete-trigger" onClick={() => setDeletingTask(task)} title="Delete task"><Trash2 size={15} /></button></article>) : <div className="empty"><p>No tasks for {taskDay}.</p><button className="primary" onClick={openNew}><Plus size={16} /> Add task</button></div>}</section></>}
-    {editor && <TaskEditor draft={draft} setDraft={setDraft} subjects={[...new Set([...tasks.map((task) => task.subject), "Other"])]} schedule={schedule} setSchedule={setSchedule} busy={busy} editing={editor !== "new"} onClose={() => setEditor(null)} onSave={() => void submitTask()} />}
+    <header><div className="window-drag"><span className="brand">STUDY PLANNER</span><h1>{quickRecallOpen ? "Quick Recall" : "Daily Tasks"}</h1></div>{!quickRecallOpen && <div className="header-actions"><button className="quick-recall-trigger" onClick={() => void openQuickRecall()}><BrainCircuit size={16} /><span>Recall</span></button><div className={`streak-pill ${streak > 0 ? "active" : ""}`}><Flame size={16} /><span>{streak}</span></div><button className="logout" onClick={() => setLogoutConfirm(true)}><LogOut size={15} /></button></div>}</header>
+    {quickRecallOpen ? <QuickRecallPanel session={quickRecallSession} loading={quickRecallLoading} onAnswered={(question, correct) => { if (user) void recordQuickRecallAnswer(user, question, correct).catch(() => undefined); }} onBack={() => { localStorage.removeItem("ssc-buddy-desktop-quick-recall-progress"); setQuickRecallOpen(false); setQuickRecallSession(null); }} onRestart={() => void openQuickRecall()} /> : <><section className="task-hero"><div className="hero-heading"><span>{taskDay === "today" ? "Today’s tasks" : "Tomorrow’s tasks"}</span><div className="hero-actions">{(tomorrowTaskCount > 0 || taskDay === "tomorrow") && <button className="day-toggle" onClick={() => setTaskDay((value) => value === "today" ? "tomorrow" : "today")}>{taskDay === "today" ? `Tomorrow (${tomorrowTaskCount})` : "Today"}<ChevronDown size={14} /></button>}<button className="icon-button" onClick={openNew}><Plus size={18} /></button></div></div><div className="progress-row"><div className="completion-ring"><svg viewBox="0 0 84 84" aria-hidden="true"><circle className="ring-track" cx="42" cy="42" r="35" /><circle className="ring-value" cx="42" cy="42" r="35" style={{ strokeDashoffset: 220 - (220 * ringProgress) / 100 }} /></svg><div><strong>{completionPercent}%</strong></div></div><div className="hero-stats"><div><span>TASKS</span><strong>{animatedDone} / {animatedTotal}</strong></div><div><span>COMPLETED TIME</span><strong>{formatMinutes(animatedMinutes)}</strong></div></div></div></section><div className="toolbar"><span>{taskDay === "today" ? "TODAY'S TASKS" : "TOMORROW'S TASKS"}</span></div><section className="task-list">{todayTasks.length ? todayTasks.map((task) => <article className={`task ${task.completed ? "done" : ""}`} key={task.id}><button className="check" onClick={() => task.completed ? void reopen(task) : (setMinutes(String(task.minutesSpent ?? 30)), setComplete(task))}>{task.completed && <Check size={14} />}</button><button className="task-main" onClick={() => openEdit(task)}><b>{task.name}</b><small>{task.subject} · {task.type}{task.completed && task.minutesSpent ? ` · ${formatMinutes(task.minutesSpent)}` : ""}</small></button><button className="subtle delete-trigger" onClick={() => setDeletingTask(task)}><Trash2 size={15} /></button></article>) : <div className="empty"><p>No tasks for {taskDay}.</p><button className="primary" onClick={openNew}><Plus size={16} /> Add task</button></div>}</section></>}
+    {editor && <TaskEditor draft={draft} setDraft={setDraft} subjects={taskSubjects} schedule={schedule} setSchedule={setSchedule} busy={busy} editing={editor !== "new"} onClose={() => setEditor(null)} onSave={() => void submitTask()} />}
     {complete && <CompleteDialog task={complete} minutes={minutes} setMinutes={setMinutes} busy={busy} onClose={() => setComplete(null)} onSave={() => void completeTask()} />}
     {logoutConfirm && <LogoutDialog busy={loggingOut} onClose={() => setLogoutConfirm(false)} onConfirm={() => void confirmLogout()} />}
     {deletingTask && <DeleteTaskDialog task={deletingTask} busy={deleting} onClose={() => setDeletingTask(null)} onConfirm={() => void confirmDelete()} />}
   </main>;
+}
+
+function WidgetSplash() {
+  return <main className="widget-splash" style={{ backgroundImage: `linear-gradient(135deg, rgba(12,12,12,.76), rgba(12,12,12,.9)), url(${authImage})` }}><div className="splash-copy"><span>SSC BUDDY</span><strong>Loading your workspace</strong></div><LoaderCircle className="spin splash-loader" size={16} /></main>;
 }
 
 function AuthPanel() {
@@ -143,13 +200,13 @@ function AuthPanel() {
 function authMessage(error: unknown) { const code = typeof error === "object" && error && "code" in error ? String(error.code) : ""; return ({ "auth/invalid-credential": "Email or password is incorrect.", "auth/email-already-in-use": "An account already exists. Please sign in.", "auth/weak-password": "Password should be at least 6 characters.", "auth/invalid-email": "Enter a valid email address.", "auth/network-request-failed": "Network issue. Check your connection." } as Record<string, string>)[code] ?? "Could not continue. Please try again."; }
 
 function TaskEditor({ draft, setDraft, subjects, schedule, setSchedule, busy, editing, onClose, onSave }: { draft: Draft; setDraft: (draft: Draft) => void; subjects: string[]; schedule: "today" | "tomorrow"; setSchedule: (value: "today" | "tomorrow") => void; busy: boolean; editing: boolean; onClose: () => void; onSave: () => void }) {
-  return <div className="modal" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><div className={`dialog task-dialog ${editing ? "editing" : ""}`}><button className="close" onClick={onClose}><X size={18} /></button><h2>{editing ? "Edit task" : "New task"}</h2>{editing && <p className="muted dialog-copy">Update this task.</p>}<label>Task name<input autoFocus value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} onKeyDown={(event) => event.key === "Enter" && onSave()} placeholder="Lecture 5 of Polity" /></label><div className="form-grid"><label>Subject<SelectMenu value={draft.subject} options={subjects} onChange={(subject) => setDraft({ ...draft, subject })} /></label><label>Task type<SelectMenu value={draft.type} options={[...TASK_TYPES]} onChange={(type) => setDraft({ ...draft, type: type as TaskType })} /></label></div>{!editing && <div className="schedule"><span>Schedule for</span><div><button type="button" className={schedule === "today" ? "active" : ""} onClick={() => setSchedule("today")}>Today</button><button type="button" className={schedule === "tomorrow" ? "active" : ""} onClick={() => setSchedule("tomorrow")}>Tomorrow</button></div></div>}<div className="dialog-actions"><button className="secondary" disabled={busy} onClick={onClose}>Cancel</button><button className="primary" disabled={busy || !draft.name.trim()} onClick={onSave}>{busy ? <LoaderCircle className="spin" /> : editing ? "Save changes" : "Add task"}</button></div></div></div>;
+  return <div className="modal" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><div className={`dialog task-dialog ${editing ? "editing" : ""}`}><button className="close" onClick={onClose}><X size={18} /></button><h2>{editing ? "Edit task" : "New task"}</h2><label>Task name<input autoFocus value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} onKeyDown={(event) => event.key === "Enter" && onSave()} placeholder="Lecture 5 of Polity" /></label><div className="form-grid"><label>Subject<SelectMenu value={draft.subject} options={subjects} onChange={(subject) => setDraft({ ...draft, subject })} /></label><label>Task type<SelectMenu value={draft.type} options={[...TASK_TYPES]} onChange={(type) => setDraft({ ...draft, type: type as TaskType })} /></label></div>{!editing && <div className="schedule"><span>Schedule for</span><div><button type="button" className={schedule === "today" ? "active" : ""} onClick={() => setSchedule("today")}>Today</button><button type="button" className={schedule === "tomorrow" ? "active" : ""} onClick={() => setSchedule("tomorrow")}>Tomorrow</button></div></div>}<div className="dialog-actions"><button className="secondary" disabled={busy} onClick={onClose}>Cancel</button><button className="primary" disabled={busy || !draft.name.trim()} onClick={onSave}>{busy ? <LoaderCircle className="spin" /> : editing ? "Save changes" : "Add task"}</button></div></div></div>;
 }
 function SelectMenu({ value, options, onChange }: { value: string; options: string[]; onChange: (value: string) => void }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   useEffect(() => { const close = (event: MouseEvent) => { if (!root.current?.contains(event.target as Node)) setOpen(false); }; document.addEventListener("mousedown", close); return () => document.removeEventListener("mousedown", close); }, []);
-  return <div className="select-menu" ref={root}><button type="button" className="select-trigger" aria-expanded={open} onClick={() => setOpen((value) => !value)}><span>{value}</span><ChevronDown size={15} /></button>{open && <div className="select-popover">{options.map((option) => <button type="button" key={option} className={option === value ? "selected" : ""} onClick={() => { onChange(option); setOpen(false); }}>{option}</button>)}</div>}</div>;
+  return <div className="select-menu" ref={root}><button type="button" className="select-trigger" aria-expanded={open} onClick={() => setOpen((value) => !value)}><span>{value}</span><ChevronDown size={15} /></button>{open && <div className="select-popover">{options.map((option) => <button type="button" key={option} className={option === value ? "selected" : ""} onClick={() => { onChange(option); setOpen(false); }}><span>{option}</span>{option === value && <Check size={14} strokeWidth={2.5} />}</button>)}</div>}</div>;
 }
 function CompleteDialog({ task, minutes, setMinutes, busy, onClose, onSave }: { task: DailyTask; minutes: string; setMinutes: (value: string) => void; busy: boolean; onClose: () => void; onSave: () => void }) {
   return <div className="modal" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><div className="dialog complete-dialog"><button className="close" onClick={onClose}><X size={18} /></button><h2>Complete task</h2><p className="muted complete-name">{task.name}</p><label>Actual study minutes<input autoFocus inputMode="numeric" value={minutes} onChange={(event) => setMinutes(event.target.value.replace(/\D/g, ""))} placeholder="30" /></label><div className="chips">{[30, 45, 60, 90, 120].map((value) => <button type="button" className={Number(minutes) === value ? "chip active" : "chip"} key={value} onClick={() => setMinutes(String(value))}>{formatMinutes(value)}</button>)}</div><div className="dialog-actions"><button className="secondary" disabled={busy} onClick={onClose}>Cancel</button><button className="primary" disabled={busy} onClick={onSave}>{busy ? <LoaderCircle className="spin" /> : "Mark complete"}</button></div></div></div>;

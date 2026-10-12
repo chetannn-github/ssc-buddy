@@ -1,9 +1,8 @@
-import { useEffect, useState } from "react";
-import { Copy } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -58,7 +57,6 @@ export type TestConfig = {
 
 const PRESETS = [15, 30, 45, 60];
 const MAX_DURATION_MINUTES = 300;
-const GPT_QUESTION_PROMPT = `Create SSC-style MCQ questions for this chapter. Return ONLY a valid JSON array—no markdown, notes, or extra text. Every item must have: question (string), options (array of exactly 4 strings), correctAnswer (0 for first option through 3 for fourth), and optional explanation (string).`;
 
 const optionLetters: Option[] = ["A", "B", "C", "D"];
 
@@ -136,7 +134,8 @@ export function SetupScreen({
   const [jsonExerciseName, setJsonExerciseName] = useState("");
   const [jsonText, setJsonText] = useState("");
   const [jsonError, setJsonError] = useState("");
-  const [promptCopied, setPromptCopied] = useState(false);
+  const [jsonFileName, setJsonFileName] = useState("");
+  const questionFileInput = useRef<HTMLInputElement>(null);
 
   const [minutes, setMinutes] = useState(
     String(Math.min(MAX_DURATION_MINUTES, prefill?.minutes ?? 30)),
@@ -306,6 +305,7 @@ export function SetupScreen({
         ),
       );
       setJsonError("");
+      setJsonFileName("Current question file");
       setJsonDialogOpen(true);
       return;
     }
@@ -339,7 +339,7 @@ export function SetupScreen({
     setJsonExerciseName(`Practice Set ${exercises.length + 1}`);
     setJsonText("");
     setJsonError("");
-    setPromptCopied(false);
+    setJsonFileName("");
     setJsonDialogOpen(true);
   };
 
@@ -365,6 +365,22 @@ export function SetupScreen({
       setJsonDialogOpen(false);
     } catch (error) {
       setJsonError(error instanceof Error ? error.message : "Invalid JSON.");
+    }
+  };
+  const chooseQuestionFile = async (file: File | undefined) => {
+    if (!file) return;
+    try {
+      const raw = await file.text();
+      parseQuestionsJson(raw);
+      setJsonText(raw);
+      setJsonFileName(file.name);
+      setJsonError("");
+    } catch (error) {
+      setJsonText("");
+      setJsonFileName("");
+      setJsonError(error instanceof Error ? error.message : "Choose a valid question JSON file.");
+    } finally {
+      if (questionFileInput.current) questionFileInput.current.value = "";
     }
   };
 
@@ -826,19 +842,6 @@ export function SetupScreen({
         <DialogContent className="exam-dialog-content max-w-3xl">
           <DialogHeader className="flex-row items-center justify-between gap-3 space-y-0 pr-8">
             <DialogTitle>Add question exercise to {chapter}</DialogTitle>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="h-7 shrink-0 gap-1.5 text-xs"
-              onClick={() => {
-                void navigator.clipboard.writeText(GPT_QUESTION_PROMPT);
-                setPromptCopied(true);
-              }}
-            >
-              <Copy className="h-3.5 w-3.5" />
-              {promptCopied ? "Copied" : "Copy GPT prompt"}
-            </Button>
           </DialogHeader>
           <div className="space-y-3">
             <Input
@@ -846,17 +849,12 @@ export function SetupScreen({
               onChange={(e) => setJsonExerciseName(e.target.value)}
               placeholder="Exercise name e.g. Practice Set 1"
             />
-            <Textarea
-              value={jsonText}
-              onChange={(e) => {
-                setJsonText(e.target.value);
-                setJsonError("");
-              }}
-              className="min-h-72 font-mono text-xs"
-              placeholder={
-                '[\n  {\n    "question": "25% of 240 is?",\n    "options": ["40", "50", "60", "80"],\n    "correctAnswer": 2,\n    "explanation": "25% × 240 = 60"\n  }\n]'
-              }
-            />
+            <input ref={questionFileInput} className="hidden" type="file" accept="application/json,.json" onChange={(event) => void chooseQuestionFile(event.target.files?.[0])} />
+            <button type="button" onClick={() => questionFileInput.current?.click()} className="flex min-h-28 w-full flex-col items-center justify-center rounded-xl border border-dashed border-white/15 bg-white/[.025] px-4 text-center transition hover:border-sky-400/50 hover:bg-sky-400/5">
+              <Upload className="mb-2 h-5 w-5 text-sky-300" />
+              <span className="text-sm font-medium text-zinc-100">{jsonFileName || "Choose question JSON file"}</span>
+              <span className="mt-1 text-xs text-zinc-500">JSON array with question, four options and correctAnswer.</span>
+            </button>
             {jsonError && <p className="text-sm text-destructive">{jsonError}</p>}
             <Button onClick={saveJsonExercise}>Validate & save exercise</Button>
           </div>

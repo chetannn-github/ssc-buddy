@@ -156,7 +156,10 @@ function RootComponent() {
 
   useEffect(() => {
     if (!isFirebaseConfigured) return;
-    return observeFirebaseUser((user) => { setSyncUser(user); setAuthResolved(true); });
+    return observeFirebaseUser((user) => {
+      setSyncUser(user);
+      setAuthResolved(true);
+    });
   }, []);
 
   const navigate = useNavigate();
@@ -169,46 +172,88 @@ function RootComponent() {
 
   useEffect(() => {
     if (!syncUser) return;
-    const keys = ["ssc-buddy-liked-videos", "ssc-buddy-liked-music", "ssc-buddy-manifestation-completed", "cbt-test-dark-mode"] as const;
+    const keys = [
+      "ssc-buddy-liked-videos",
+      "ssc-buddy-liked-music",
+      "ssc-buddy-manifestation-completed",
+      "cbt-test-dark-mode",
+    ] as const;
     let applying = false;
     let last = "";
-    const read = () => Object.fromEntries(keys.flatMap((key) => {
-      const value = localStorage.getItem(key);
-      return value === null ? [] : [[key, key.includes("liked") || key === "cbt-test-dark-mode" ? JSON.parse(value) : value]];
-    }));
+    const read = () =>
+      Object.fromEntries(
+        keys.flatMap((key) => {
+          const value = localStorage.getItem(key);
+          return value === null
+            ? []
+            : [
+                [
+                  key,
+                  key.includes("liked") || key === "cbt-test-dark-mode" ? JSON.parse(value) : value,
+                ],
+              ];
+        }),
+      );
     const apply = (value: Record<string, unknown>) => {
       applying = true;
       keys.forEach((key) => {
-        if (value[key] !== undefined) localStorage.setItem(key, typeof value[key] === "string" ? value[key] as string : JSON.stringify(value[key]));
+        if (value[key] !== undefined)
+          localStorage.setItem(
+            key,
+            typeof value[key] === "string" ? (value[key] as string) : JSON.stringify(value[key]),
+          );
       });
       const next = JSON.stringify(read());
       if (next !== last) {
         last = next;
         window.dispatchEvent(new Event("ssc-preferences-updated"));
       }
-      queueMicrotask(() => { applying = false; });
+      queueMicrotask(() => {
+        applying = false;
+      });
     };
     let stop: (() => void) | undefined;
     void (async () => {
       const remote = await readCloudPreferences(syncUser);
       if (remote) apply(remote);
-      else { const initial = read(); await patchCloudPreferences(syncUser, initial); last = JSON.stringify(initial); }
-      stop = watchCloudPreferences(syncUser, (value) => { if (value) apply(value); });
+      else {
+        const initial = read();
+        await patchCloudPreferences(syncUser, initial);
+        last = JSON.stringify(initial);
+      }
+      stop = watchCloudPreferences(syncUser, (value) => {
+        if (value) apply(value);
+      });
     })().catch(() => undefined);
     const save = () => {
       if (applying) return;
-      const next = read(); const previous = last ? JSON.parse(last) as Record<string, unknown> : {};
-      const changed = Object.fromEntries(Object.entries(next).filter(([key, value]) => JSON.stringify(previous[key]) !== JSON.stringify(value)));
-      if (Object.keys(changed).length) { last = JSON.stringify(next); void patchCloudPreferences(syncUser, changed); }
+      const next = read();
+      const previous = last ? (JSON.parse(last) as Record<string, unknown>) : {};
+      const changed = Object.fromEntries(
+        Object.entries(next).filter(
+          ([key, value]) => JSON.stringify(previous[key]) !== JSON.stringify(value),
+        ),
+      );
+      if (Object.keys(changed).length) {
+        last = JSON.stringify(next);
+        void patchCloudPreferences(syncUser, changed);
+      }
     };
     window.addEventListener("ssc-preferences-updated", save);
-    return () => { stop?.(); window.removeEventListener("ssc-preferences-updated", save); };
+    return () => {
+      stop?.();
+      window.removeEventListener("ssc-preferences-updated", save);
+    };
   }, [syncUser]);
 
   useEffect(() => {
     if (!syncUser) return;
     let cleanup: (() => void) | undefined;
-    void startPracticeSync(syncUser).then((stop) => { cleanup = stop; }).catch(() => undefined);
+    void startPracticeSync(syncUser)
+      .then((stop) => {
+        cleanup = stop;
+      })
+      .catch(() => undefined);
     return () => cleanup?.();
   }, [syncUser]);
 
@@ -220,11 +265,12 @@ function RootComponent() {
     let stopWatch: (() => void) | undefined;
     let applyingRemote = false;
     let lastProfile = "";
-    const clean = (profile: Record<string, unknown>) => Object.fromEntries(
-      ["name", "questionGoal", "examName", "manifestation", "avatar"]
-        .filter((key) => profile[key] !== undefined)
-        .map((key) => [key, profile[key]]),
-    );
+    const clean = (profile: Record<string, unknown>) =>
+      Object.fromEntries(
+        ["name", "questionGoal", "examName", "manifestation", "avatar"]
+          .filter((key) => profile[key] !== undefined)
+          .map((key) => [key, profile[key]]),
+      );
     const apply = (profile: Record<string, unknown>) => {
       const raw = JSON.stringify(clean(profile));
       // `savePracticeProfile` and Firestore can serialize identical fields in a different
@@ -232,7 +278,10 @@ function RootComponent() {
       // fresh local event, which could repeatedly refresh the Profile route after Save.
       try {
         const stored = localStorage.getItem(PROFILE_KEY);
-        if (stored && JSON.stringify(clean(JSON.parse(stored) as Record<string, unknown>)) === raw) {
+        if (
+          stored &&
+          JSON.stringify(clean(JSON.parse(stored) as Record<string, unknown>)) === raw
+        ) {
           lastProfile = raw;
           return;
         }
@@ -243,20 +292,26 @@ function RootComponent() {
       localStorage.setItem(PROFILE_KEY, raw);
       lastProfile = raw;
       window.dispatchEvent(new Event("cbt-profile-updated"));
-      queueMicrotask(() => { applyingRemote = false; });
+      queueMicrotask(() => {
+        applyingRemote = false;
+      });
     };
     const save = () => {
       const value = localStorage.getItem(PROFILE_KEY);
       if (applyingRemote || !value) return;
       try {
         const next = clean(JSON.parse(value) as Record<string, unknown>);
-        const previous = lastProfile ? JSON.parse(lastProfile) as Record<string, unknown> : {};
-        const changed = Object.fromEntries(Object.entries(next).filter(([key, field]) => previous[key] !== field));
+        const previous = lastProfile ? (JSON.parse(lastProfile) as Record<string, unknown>) : {};
+        const changed = Object.fromEntries(
+          Object.entries(next).filter(([key, field]) => previous[key] !== field),
+        );
         if (Object.keys(changed).length) {
           lastProfile = JSON.stringify(next);
           void patchCloudProfile(syncUser, changed);
         }
-      } catch { /* invalid local profile is ignored */ }
+      } catch {
+        /* invalid local profile is ignored */
+      }
     };
     const start = async () => {
       const remote = await readCloudProfile(syncUser);
@@ -269,11 +324,17 @@ function RootComponent() {
         lastProfile = JSON.stringify(clean(profile));
       }
       if (disposed) return;
-      stopWatch = watchCloudProfile(syncUser, (profile) => { if (profile) apply(profile); });
+      stopWatch = watchCloudProfile(syncUser, (profile) => {
+        if (profile) apply(profile);
+      });
       window.addEventListener("cbt-profile-updated", save);
     };
     void start();
-    return () => { disposed = true; stopWatch?.(); window.removeEventListener("cbt-profile-updated", save); };
+    return () => {
+      disposed = true;
+      stopWatch?.();
+      window.removeEventListener("cbt-profile-updated", save);
+    };
   }, [syncUser]);
 
   useEffect(() => {
