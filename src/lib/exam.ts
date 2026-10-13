@@ -104,7 +104,9 @@ const practicePersistenceSubscribers = new Set<(key: string) => void>();
  * cannot escape through `window.dispatchEvent` and freeze the active route. */
 export function onPracticePersist(callback: (key: string) => void) {
   practicePersistenceSubscribers.add(callback);
-  return () => practicePersistenceSubscribers.delete(callback);
+  return () => {
+    practicePersistenceSubscribers.delete(callback);
+  };
 }
 
 function write(key: string, value: unknown, notify = true) {

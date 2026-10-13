@@ -147,6 +147,21 @@ export function TrackerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    const applyExternalTrackerUpdate = () => {
+      const next = loadTrackerData();
+      setData((current) => {
+        if (isSameTrackerData(current, next)) return current;
+        // Root already persisted a remote snapshot; do not echo it as a CRUD write.
+        localChangePending.current = false;
+        lastSynced.current = next;
+        return next;
+      });
+    };
+    window.addEventListener("cbt-tracker-updated", applyExternalTrackerUpdate);
+    return () => window.removeEventListener("cbt-tracker-updated", applyExternalTrackerUpdate);
+  }, []);
+
+  useEffect(() => {
     if (!isFirebaseConfigured) return;
     return observeFirebaseUser(setSyncUser);
   }, []);

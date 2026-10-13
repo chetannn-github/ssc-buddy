@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { attemptKey, deleteRecord, loadHistory, type TestRecord } from "@/lib/exam";
+import { attemptKey, deleteRecord, loadHistory, onPracticePersist, type TestRecord } from "@/lib/exam";
 
 function friendlyDate(timestamp: string, fallbackDate?: string) {
   // Android records use `date` as a local calendar key (YYYY-MM-DD) and keep
@@ -68,6 +68,9 @@ function HistoryPage() {
     const timer = window.setTimeout(() => setIsLoading(false), 700);
     return () => window.clearTimeout(timer);
   }, [isLoading]);
+  useEffect(() => onPracticePersist((key) => {
+    if (key === "cbt-history") setRecords(loadHistory());
+  }), []);
 
   // Quick Recall is counted in daily activity, not as a user-started test.
   // Keep it out of the Practice history even though it shares the canonical

@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { BookOpen } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,16 +10,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { loadSubjects, type Exercise, type Subject } from "@/lib/exam";
+import { loadSubjects, onPracticePersist, type Exercise, type Subject } from "@/lib/exam";
 
 export const Route = createFileRoute("/question-bank")({ component: QuestionBank });
 
 type QuestionExercise = { subject: Subject; chapter: string; exercise: Exercise };
 
 function QuestionBank() {
-  const [subjects] = useState(() => loadSubjects());
+  const [subjects, setSubjects] = useState(() => loadSubjects());
   const [subjectName, setSubjectName] = useState("all");
   const [chapterName, setChapterName] = useState("all");
+  useEffect(() => onPracticePersist((key) => {
+    if (key !== "cbt-subjects") return;
+    setSubjects(loadSubjects());
+  }), []);
 
   const chapters = useMemo(() => {
     if (subjectName === "all") {

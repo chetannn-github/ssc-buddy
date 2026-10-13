@@ -98,6 +98,13 @@ if (Platform.OS === "android") {
     // the home-screen widget, especially while Firebase restores auth.
     renderWidget(renderQuickRecallWidget(quiz));
 
+    // Begin the visible 15-second tick immediately. Firebase auth/write work
+    // can take a few seconds in the widget process; waiting for it previously
+    // made the timer look frozen even though the correction lock was active.
+    const countdown = answered && quiz?.status === "correction"
+      ? refreshRecallCountdown(quiz, renderWidget)
+      : null;
+
     let widgetUser = null;
     if (answered && quiz?.stats) {
       try {
@@ -119,9 +126,7 @@ if (Platform.OS === "android") {
         }
       } catch {}
     }
-    if (answered && quiz?.status === "correction") {
-      await refreshRecallCountdown(quiz, renderWidget);
-    }
+    if (countdown) await countdown;
   });
 }
 

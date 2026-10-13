@@ -1,11 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Star } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
 import {
   loadFavoriteQuestionIds,
   loadSubjects,
+  onPracticePersist,
   questionFavoriteId,
   toggleFavoriteQuestion,
   type McqQuestion,
@@ -27,11 +28,16 @@ function QuestionViewer() {
   const { subject: subjectName, chapter: chapterName, exercise: exerciseName } = Route.useSearch();
   const [current, setCurrent] = useState(0);
   const [favoriteIds, setFavoriteIds] = useState(() => new Set(loadFavoriteQuestionIds()));
+  const [subjects, setSubjects] = useState(() => loadSubjects());
+  useEffect(() => onPracticePersist((key) => {
+    if (key === "cbt-subjects") setSubjects(loadSubjects());
+    if (key === "cbt-favorite-questions") setFavoriteIds(new Set(loadFavoriteQuestionIds()));
+  }), []);
   const exercise = useMemo(() => {
-    const subject = loadSubjects().find((item) => item.name === subjectName);
+    const subject = subjects.find((item) => item.name === subjectName);
     const chapter = subject?.chapters.find((item) => item.name === chapterName);
     return chapter?.exercises.find((item) => item.name === exerciseName && item.questions?.length);
-  }, [chapterName, exerciseName, subjectName]);
+  }, [chapterName, exerciseName, subjectName, subjects]);
   const questions = exercise?.questions ?? [];
   const question = questions[current];
   const favoriteId = question

@@ -2084,19 +2084,22 @@ function QuestionBank({
                   <Text style={s.sessionTitle}>Question palette</Text>
                   <Text style={s.bankSubhead}>Jump to any question</Text>
                   <View style={s.palette}>
-                    {viewing.questions.map((item, index) => (
-                      <Pressable
+                    {viewing.questions.map((item, index) => {
+                      const isFavourite = favourites.includes(item.id);
+                      const isCurrent = index === currentQuestion;
+                      return <Pressable
                         key={item.id}
                         onPress={() => setCurrentQuestion(index)}
                         style={[
                           s.paletteItem,
-                          index === currentQuestion && s.paletteCurrent,
-                          favourites.includes(item.id) && s.paletteFavourite,
+                          isCurrent && s.paletteCurrent,
+                          isFavourite && s.paletteFavourite,
+                          isFavourite && isCurrent && s.paletteFavouriteCurrent,
                         ]}
                       >
-                        <Text style={s.paletteText}>{index + 1}</Text>
-                      </Pressable>
-                    ))}
+                        <Text style={[s.paletteText, isFavourite && isCurrent && s.paletteFavouriteCurrentText]}>{index + 1}</Text>
+                      </Pressable>;
+                    })}
                   </View>
                 </View>
               </>
@@ -2960,7 +2963,9 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  paletteFavourite: { borderColor: "#c99b1b" },
+  paletteFavourite: { borderWidth: 1, borderColor: "rgba(251,191,36,.45)", backgroundColor: "rgba(251,191,36,.10)" },
+  paletteFavouriteCurrent: { borderColor: "#fcd34d", backgroundColor: "#fbbf24" },
+  paletteFavouriteCurrentText: { color: "#451a03" },
   explanation: {
     color: "#cbd5e1",
     fontSize: 12,

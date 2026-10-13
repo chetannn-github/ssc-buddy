@@ -28,6 +28,7 @@ import {
   newDocumentId,
   loadMarking,
   loadSubjects,
+  onPracticePersist,
   saveMarking,
   type MarkingScheme,
   type McqQuestion,
@@ -169,6 +170,23 @@ export function SetupScreen({
     const timer = window.setTimeout(() => setIsLoading(false), 700);
     return () => window.clearTimeout(timer);
   }, [isLoading]);
+
+  useEffect(() =>
+    onPracticePersist((key) => {
+      if (key === "cbt-subjects") {
+        const next = loadSubjects();
+        setSubjects(next);
+        setSubject((current) => next.some((item) => item.name === current) ? current : (next[0]?.name ?? ""));
+      }
+      if (key === "cbt-marking") {
+        const next = loadMarking();
+        if (!next) return;
+        setMarking(next);
+        setPositive(String(next.positive));
+        setNegative(String(next.negative));
+      }
+    }),
+  []);
 
   const chapters = subjects.find((s) => s.name === subject)?.chapters ?? [];
   const exercises = chapters.find((c) => c.name === chapter)?.exercises ?? [];

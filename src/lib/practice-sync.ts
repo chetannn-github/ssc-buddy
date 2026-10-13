@@ -1,4 +1,4 @@
-import { collection, deleteDoc, doc, getDocs, setDoc, type Unsubscribe, writeBatch } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDocs, onSnapshot, setDoc, type Unsubscribe, writeBatch } from "firebase/firestore";
 import type { User } from "firebase/auth";
 import { getFirebaseFirestore } from "@/lib/firebase-sync";
 import { loadFavoriteQuestionIds, loadHistory, loadMarking, loadSubjects, onPracticePersist, saveFavoriteQuestionIds, saveHistory, saveMarking, saveSubjects, type MarkingScheme, type Subject, type TestRecord } from "@/lib/exam";
@@ -95,7 +95,9 @@ export async function startPracticeSync(
   if (remoteAttempts.size) saveHistory(attempts);
   if (remoteFavourites.size) saveFavoriteQuestionIds(favourites.map((item) => item.id));
   if (marking) saveMarking(marking);
+  let applyingRemote = false;
   const save = (key: string) => {
+    if (applyingRemote) return;
     // Persist only the collection that actually changed. Loading/stringifying all
     // question-bank data for every answer or preference write was the source of
     // the cross-route UI stalls.
@@ -132,7 +134,54 @@ export async function startPracticeSync(
     }
   };
   const stopPersistObserver = onPracticePersist(save);
+  const stopLiveListeners: Unsubscribe[] = [];
+  const applyRemote = (fn: () => void) => {
+    applyingRemote = true;
+    try {
+      fn();
+    } finally {
+      queueMicrotask(() => {
+        applyingRemote = false;
+      });
+    }
+  };
+  if (includeSubjects) {
+    stopLiveListeners.push(onSnapshot(docsFor(user, "practiceSubjects"), (snapshot) => {
+      const next = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as Subject);
+      if (equal(subjects, next)) return;
+      applyRemote(() => {
+        subjects = next;
+        subjectBaselines.set(user.uid, next);
+        saveSubjects(next);
+      });
+    }));
+  }
+  stopLiveListeners.push(onSnapshot(docsFor(user, "practiceAttempts"), (snapshot) => {
+    const next = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as TestRecord);
+    if (equal(attempts, next)) return;
+    applyRemote(() => {
+      attempts = next;
+      saveHistory(next);
+    });
+  }));
+  stopLiveListeners.push(onSnapshot(docsFor(user, "practiceFavourites"), (snapshot) => {
+    const next = snapshot.docs.map((item) => ({ id: item.id }));
+    if (equal(favourites, next)) return;
+    applyRemote(() => {
+      favourites = next;
+      saveFavoriteQuestionIds(next.map((item) => item.id));
+    });
+  }));
+  stopLiveListeners.push(onSnapshot(settingsRef, (snapshot) => {
+    const next = snapshot.data()?.["marking"] as MarkingScheme | undefined;
+    if (!next || equal(marking, next)) return;
+    applyRemote(() => {
+      marking = next;
+      saveMarking(next);
+    });
+  }));
   return () => {
     stopPersistObserver();
+    stopLiveListeners.forEach((stop) => stop());
   };
 }

@@ -85,6 +85,11 @@ function DailyTasks() {
     return () => window.removeEventListener("cbt-tracker-updated", refreshSubjects);
   }, []);
   useEffect(() => {
+    const refreshTasks = () => setTasks(loadDailyTasks());
+    window.addEventListener("ssc-daily-tasks-updated", refreshTasks);
+    return () => window.removeEventListener("ssc-daily-tasks-updated", refreshTasks);
+  }, []);
+  useEffect(() => {
     if (!isFirebaseConfigured) return;
     return observeFirebaseUser(setSyncUser);
   }, []);

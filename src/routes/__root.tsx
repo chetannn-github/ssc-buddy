@@ -21,14 +21,16 @@ import {
   patchCloudPreferences,
   readCloudProfile,
   readCloudPreferences,
+  watchCloudProfile,
+  watchCloudPreferences,
 } from "@/lib/firebase-sync";
 import { PROFILE_KEY } from "@/lib/profile";
 import { startPracticeSync } from "@/lib/practice-sync";
 import { AuthUserContext } from "@/lib/auth-context";
 import { loadDailyTasks, saveDailyTasks } from "@/lib/daily-tasks";
-import { migrateTasksIfEmpty, readTasks } from "@/lib/task-sync";
+import { migrateTasksIfEmpty, readTasks, watchTasks } from "@/lib/task-sync";
 import { loadTrackerData, saveTrackerData } from "@/lib/tracker-store";
-import { migrateTrackerIfEmpty, readTrackerSections } from "@/lib/tracker-sync";
+import { migrateTrackerIfEmpty, readTrackerSections, watchTrackerSections } from "@/lib/tracker-sync";
 import { WEB_CLOUD_SYNC_ENABLED } from "@/lib/web-cloud-sync";
 import { prepareWebAccountCache } from "@/lib/account-cache";
 import type { User } from "firebase/auth";
@@ -287,7 +289,11 @@ function RootComponent() {
       }
     };
     window.addEventListener("ssc-preferences-updated", save);
+    const stopPreferencesWatch = watchCloudPreferences(syncUser, (remote) => {
+      if (remote) apply(remote);
+    });
     return () => {
+      stopPreferencesWatch();
       window.removeEventListener("ssc-preferences-updated", save);
     };
   }, [syncUser]);
@@ -327,6 +333,22 @@ function RootComponent() {
       stopPracticeSync = stop;
       saveDailyTasks(remoteTasks);
       saveTrackerData(remoteTracker);
+      // Start listeners only after migration/hydration. Their equality guard makes
+      // Firestore's initial snapshot a no-op and prevents local-event feedback.
+      const stopTasks = watchTasks(syncUser, (remote) => {
+        if (disposed || JSON.stringify(loadDailyTasks()) === JSON.stringify(remote)) return;
+        saveDailyTasks(remote);
+      });
+      const stopTracker = watchTrackerSections(syncUser, (remote) => {
+        if (disposed || JSON.stringify(loadTrackerData()) === JSON.stringify(remote)) return;
+        saveTrackerData(remote);
+      });
+      const stopPractice = stopPracticeSync;
+      stopPracticeSync = () => {
+        stopTasks();
+        stopTracker();
+        stopPractice?.();
+      };
       debugFreeze("core cloud hydration finished", {
         path,
         durationMs: Math.round(performance.now() - startedAt),
@@ -349,6 +371,7 @@ function RootComponent() {
     let disposed = false;
     let applyingRemote = false;
     let lastProfile = "";
+    let stopProfileWatch: (() => void) | undefined;
     const clean = (profile: Record<string, unknown>) =>
       Object.fromEntries(
         ["name", "questionGoal", "examName", "manifestation", "avatar"]
@@ -409,10 +432,14 @@ function RootComponent() {
       }
       if (disposed) return;
       window.addEventListener("cbt-profile-updated", save);
+      stopProfileWatch = watchCloudProfile(syncUser, (remote) => {
+        if (!disposed && remote) apply(remote);
+      });
     };
     void start();
     return () => {
       disposed = true;
+      stopProfileWatch?.();
       window.removeEventListener("cbt-profile-updated", save);
     };
   }, [syncUser]);
