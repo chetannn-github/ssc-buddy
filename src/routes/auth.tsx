@@ -3,9 +3,11 @@ import { Eye, EyeOff, GraduationCap, LoaderCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
   downloadCloudSnapshot,
+  completeGoogleRedirectSignIn,
   hasCloudSnapshot,
   hasMeaningfulLocalData,
   isFirebaseConfigured,
+  isTauriWebview,
   observeFirebaseUser,
   signInFirebase,
   signInWithGoogleFirebase,
@@ -24,6 +26,7 @@ function AuthPage() {
   const [checking, setChecking] = useState(isFirebaseConfigured);
   const [message, setMessage] = useState("");
   const hasCheckedExistingSession = useRef(false);
+  const hasCheckedGoogleRedirect = useRef(false);
 
   useEffect(() => {
     if (!isFirebaseConfigured) return;
@@ -41,6 +44,14 @@ function AuthPage() {
     if (!hasMeaningfulLocalData() && await hasCloudSnapshot(user)) await downloadCloudSnapshot(user);
     await navigate({ to: "/", replace: true });
   };
+
+  useEffect(() => {
+    if (!isFirebaseConfigured || !isTauriWebview() || hasCheckedGoogleRedirect.current) return;
+    hasCheckedGoogleRedirect.current = true;
+    void completeGoogleRedirectSignIn()
+      .then((user) => user ? finishAuthentication(user) : undefined)
+      .catch((error: unknown) => setMessage(error instanceof Error ? error.message : "Could not complete Google sign-in."));
+  }, [navigate]);
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -61,7 +72,8 @@ function AuthPage() {
     setLoading(true);
     setMessage("");
     try {
-      await finishAuthentication(await signInWithGoogleFirebase());
+      const user = await signInWithGoogleFirebase();
+      if (user) await finishAuthentication(user);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not sign in with Google.");
     } finally {

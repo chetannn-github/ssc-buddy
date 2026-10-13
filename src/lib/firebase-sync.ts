@@ -5,6 +5,8 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   GoogleAuthProvider,
+  getRedirectResult,
+  signInWithRedirect,
   signInWithPopup,
   signOut,
   type Auth,
@@ -47,6 +49,13 @@ let db: Firestore | null = null;
 export const isFirebaseConfigured = Boolean(
   FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.authDomain && FIREBASE_CONFIG.projectId && FIREBASE_CONFIG.appId,
 );
+
+/** Google blocks OAuth popups in an embedded WebView. Tauri must use redirect auth. */
+export function isTauriWebview() {
+  if (typeof window === "undefined") return false;
+  const scope = window as Window & { __TAURI__?: unknown; __TAURI_INTERNALS__?: unknown };
+  return Boolean(scope.__TAURI__ || scope.__TAURI_INTERNALS__);
+}
 
 function getClientId() {
   const existing = localStorage.getItem("ssc-buddy-firebase-client-id");
@@ -249,7 +258,17 @@ export async function signInWithGoogleFirebase() {
   const { auth: authValue } = services();
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: "select_account" });
+  if (isTauriWebview()) {
+    await signInWithRedirect(authValue, provider);
+    return null;
+  }
   return (await signInWithPopup(authValue, provider)).user;
+}
+
+/** Reads Google redirect sign-in once the Tauri webview returns to the app. */
+export async function completeGoogleRedirectSignIn() {
+  if (!isTauriWebview()) return null;
+  return (await getRedirectResult(services().auth))?.user ?? null;
 }
 
 export async function signOutFirebase() {
