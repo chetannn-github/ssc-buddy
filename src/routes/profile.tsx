@@ -645,7 +645,7 @@ function TrackerRow({
   tone?: string;
 }) {
   return (
-    <div className="grid grid-cols-[5.5rem_minmax(0,1fr)_auto] items-center gap-3 py-2 text-sm sm:grid-cols-[7rem_minmax(0,1fr)_auto]">
+    <div className="grid grid-cols-[5.5rem_minmax(0,1fr)_auto] items-center gap-2 py-1.5 text-sm sm:grid-cols-[7rem_minmax(0,1fr)_auto]">
       <span className="truncate text-zinc-300">{label}</span>
       <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
         <div
@@ -663,8 +663,6 @@ function TrackerRow({
 function StudyTrackerOverview({ tracker }: { tracker: TrackerData | null }) {
   if (!tracker) return null;
   const syllabus = overallSyllabus(tracker);
-  const mockDone = tracker.tests.mocks.pre.done + tracker.tests.mocks.mains.done;
-  const mockTarget = tracker.tests.mocks.pre.target + tracker.tests.mocks.mains.target;
 
   return (
     <section className="-mt-3 border-t border-white/10 pt-4 sm:pt-5">
@@ -679,17 +677,17 @@ function StudyTrackerOverview({ tracker }: { tracker: TrackerData | null }) {
           {syllabus.done}/{syllabus.total} Lectures
         </span>
       </div>
-      <div className="mt-4 grid gap-3 md:grid-cols-3">
-        <Link
+      <div className={`mt-3 grid gap-2 ${tracker.subjects.length ? "md:grid-cols-3" : "max-w-md"}`}>
+        {tracker.subjects.length > 0 && <Link
           to="/track"
           search={{ tab: "Syllabus" }}
-          className="rounded-xl border border-white/10 bg-white/[0.025] p-3 transition-colors hover:bg-white/[0.06] sm:p-4"
+          className="rounded-xl border border-white/10 bg-white/[0.025] p-3 transition-colors hover:bg-white/[0.06]"
         >
           <p className="text-xs font-medium text-zinc-400">Syllabus</p>
           <p className="mt-1 text-lg font-semibold text-zinc-100">
             {pct(syllabus.done, syllabus.total)}%
           </p>
-          <div className="mt-3 divide-y divide-white/5">
+          <div className="mt-2 divide-y divide-white/5">
             {tracker.subjects.map((subject) => {
               const progress = subjectSyllabus(subject);
               return (
@@ -702,16 +700,16 @@ function StudyTrackerOverview({ tracker }: { tracker: TrackerData | null }) {
               );
             })}
           </div>
-        </Link>
+        </Link>}
 
-        <Link
+        {tracker.subjects.length > 0 && <Link
           to="/track"
           search={{ tab: "Revision" }}
-          className="rounded-xl border border-white/10 bg-white/[0.025] p-3 transition-colors hover:bg-white/[0.06] sm:p-4"
+          className="rounded-xl border border-white/10 bg-white/[0.025] p-3 transition-colors hover:bg-white/[0.06]"
         >
           <p className="text-xs font-medium text-zinc-400">Revision</p>
           <p className="mt-1 text-lg font-semibold text-zinc-100">By subject</p>
-          <div className="mt-3 divide-y divide-white/5">
+          <div className="mt-2 divide-y divide-white/5">
             {tracker.subjects.map((subject) => {
               const progress = subjectRevision(tracker, subject);
               return (
@@ -725,16 +723,16 @@ function StudyTrackerOverview({ tracker }: { tracker: TrackerData | null }) {
               );
             })}
           </div>
-        </Link>
+        </Link>}
 
         <Link
           to="/track"
           search={{ tab: "Mock Test" }}
-          className="rounded-xl border border-white/10 bg-white/[0.025] p-3 transition-colors hover:bg-white/[0.06] sm:p-4"
+          className="rounded-xl border border-white/10 bg-white/[0.025] p-3 transition-colors hover:bg-white/[0.06]"
         >
           <p className="text-xs font-medium text-zinc-400">Mock tests</p>
           <p className="mt-1 text-lg font-semibold text-zinc-100">Practice progress</p>
-          <div className="mt-3 divide-y divide-white/5">
+          <div className="mt-2 divide-y divide-white/5">
             {tracker.subjects.map((subject) => (
               <TrackerRow
                 key={subject.id}
@@ -745,9 +743,15 @@ function StudyTrackerOverview({ tracker }: { tracker: TrackerData | null }) {
               />
             ))}
             <TrackerRow
-              label="Full mocks"
-              done={mockDone}
-              total={mockTarget}
+              label="Pre"
+              done={tracker.tests.mocks.pre.done}
+              total={tracker.tests.mocks.pre.target}
+              tone="bg-violet-500"
+            />
+            <TrackerRow
+              label="Mains"
+              done={tracker.tests.mocks.mains.done}
+              total={tracker.tests.mocks.mains.target}
               tone="bg-violet-500"
             />
           </div>
