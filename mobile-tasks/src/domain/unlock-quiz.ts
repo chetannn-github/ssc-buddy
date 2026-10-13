@@ -16,7 +16,7 @@ export type UnlockQuizState = {
   /** Stable for one three-question sprint; used to make its cloud write idempotent. */
   runId: string;
   startedAt: string;
-  status: "active" | "correction" | "complete";
+  status: "active" | "correction" | "review" | "complete";
   subject: string;
   questions: UnlockQuestion[];
   index: number;
@@ -135,16 +135,8 @@ export async function answerUnlockQuiz(choice: QuizChoice): Promise<UnlockQuizSt
   state.answers = [...(state.answers ?? []), choice];
   if (choice === question.correctAnswer) {
     stat.correctCount += 1; stat.lastOutcome = "correct"; state.correct += 1;
-    // The home-screen widget must stay one-tap simple. A correct choice moves
-    // on immediately; Android widget taps are not reliable enough for a
-    // second, mandatory Next interaction.
-    if (state.index + 1 >= state.questions.length) state.status = "complete";
-    else {
-      state.status = "active";
-      state.index += 1;
-      state.selected = undefined;
-      state.lockedUntil = undefined;
-    }
+    state.status = "review";
+    state.lockedUntil = undefined;
   } else {
     // Keep the correction visible, but do not make the unlock interaction feel
     // punitive. The widget counts this down live for fifteen seconds.
@@ -155,8 +147,17 @@ export async function answerUnlockQuiz(choice: QuizChoice): Promise<UnlockQuizSt
 
 export async function advanceUnlockQuiz(): Promise<UnlockQuizState | null> {
   const state = await loadUnlockQuiz();
-  if (!state || state.status !== "correction" || (state.lockedUntil ?? 0) > Date.now()) return state;
+  if (!state || state.status !== "review") return state;
   if (state.index + 1 >= state.questions.length) state.status = "complete";
   else { state.status = "active"; state.index += 1; state.selected = undefined; state.lockedUntil = undefined; }
+  return save(state);
+}
+
+/** Makes a wrong-answer review actionable after its visible countdown ends. */
+export async function releaseUnlockQuizReview(): Promise<UnlockQuizState | null> {
+  const state = await loadUnlockQuiz();
+  if (!state || state.status !== "correction" || (state.lockedUntil ?? 0) > Date.now()) return state;
+  state.status = "review";
+  state.lockedUntil = undefined;
   return save(state);
 }

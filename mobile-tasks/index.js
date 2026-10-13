@@ -8,7 +8,7 @@ if (Platform.OS === "android") {
   const { registerWidgetTaskHandler } = require("react-native-android-widget");
   const { renderDailyTasksWidget } = require("./src/widgets/DailyTasksWidget");
   const { renderQuickRecallWidget } = require("./src/widgets/QuickRecallWidget");
-  const { answerUnlockQuiz, advanceUnlockQuiz, getUnlockQuiz, startUnlockQuiz } = require("./src/domain/unlock-quiz");
+  const { answerUnlockQuiz, advanceUnlockQuiz, getUnlockQuiz, releaseUnlockQuizReview, startUnlockQuiz } = require("./src/domain/unlock-quiz");
   const { getFirebaseAuth, recordQuickRecallPractice, toggleTaskFromWidget, writeQuestionLearning } = require("./src/lib/firebase");
   const { onAuthStateChanged } = require("firebase/auth");
   const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -20,10 +20,9 @@ if (Platform.OS === "android") {
     const deadline = Number(quiz?.lockedUntil) || 0;
     while (deadline > Date.now()) {
       await wait(Math.min(1000, deadline - Date.now()));
-      // Once the correction window ends, advance in storage too. Merely
-      // repainting the same correction state left the widget stuck at 0s.
+      // Once the correction window ends, unlock the manual Next button.
       const latest = Date.now() >= deadline
-        ? await advanceUnlockQuiz()
+        ? await releaseUnlockQuizReview()
         : await getUnlockQuiz();
       renderWidget(renderQuickRecallWidget(latest));
     }
@@ -91,6 +90,8 @@ if (Platform.OS === "android") {
       }
     } else if (widgetAction === "WIDGET_CLICK" && clickAction === "QUIZ_NEW_SESSION") {
       quiz = await startUnlockQuiz();
+    } else if (widgetAction === "WIDGET_CLICK" && clickAction === "QUIZ_NEXT") {
+      quiz = await advanceUnlockQuiz();
     } else {
       quiz = await getUnlockQuiz();
     }
