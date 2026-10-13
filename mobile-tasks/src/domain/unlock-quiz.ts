@@ -135,8 +135,16 @@ export async function answerUnlockQuiz(choice: QuizChoice): Promise<UnlockQuizSt
   state.answers = [...(state.answers ?? []), choice];
   if (choice === question.correctAnswer) {
     stat.correctCount += 1; stat.lastOutcome = "correct"; state.correct += 1;
-    // Keep the answer visible before allowing the learner to move forward.
-    state.status = "correction"; state.lockedUntil = Date.now() + 10_000;
+    // The home-screen widget must stay one-tap simple. A correct choice moves
+    // on immediately; Android widget taps are not reliable enough for a
+    // second, mandatory Next interaction.
+    if (state.index + 1 >= state.questions.length) state.status = "complete";
+    else {
+      state.status = "active";
+      state.index += 1;
+      state.selected = undefined;
+      state.lockedUntil = undefined;
+    }
   } else {
     // Keep the correction visible, but do not make the unlock interaction feel
     // punitive. The widget counts this down live for fifteen seconds.

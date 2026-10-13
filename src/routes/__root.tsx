@@ -23,7 +23,7 @@ import {
   readCloudPreferences,
 } from "@/lib/firebase-sync";
 import { PROFILE_KEY } from "@/lib/profile";
-import { hydratePracticeSubjects, startPracticeSync } from "@/lib/practice-sync";
+import { startPracticeSync } from "@/lib/practice-sync";
 import { AuthUserContext } from "@/lib/auth-context";
 import { loadDailyTasks, saveDailyTasks } from "@/lib/daily-tasks";
 import { migrateTasksIfEmpty, readTasks } from "@/lib/task-sync";
@@ -290,27 +290,6 @@ function RootComponent() {
     };
   }, [syncUser]);
 
-  // Question banks include complete question text, options and explanations. Loading them
-  // after every route render blocked the browser for seconds on a large bank. Core data is
-  // still hydrated above for every page; this heavy collection is only required by Practice.
-  const requiresPracticeBank = path === "/test" || path === "/question-bank" || path.startsWith("/question/");
-  useEffect(() => {
-    if (!syncUser || !requiresPracticeBank) {
-      return;
-    }
-    if (!WEB_CLOUD_SYNC_ENABLED) {
-      return;
-    }
-    const startedAt = performance.now();
-    debugFreeze("practice bank hydration started", { path });
-    void hydratePracticeSubjects(syncUser)
-      .catch(() => undefined)
-      .finally(() => {
-        debugFreeze("practice bank hydration finished", { path, durationMs: Math.round(performance.now() - startedAt) });
-      });
-    return;
-  }, [requiresPracticeBank, syncUser]);
-
   useEffect(() => {
     if (!syncUser) {
       return;
@@ -326,7 +305,10 @@ function RootComponent() {
       const localTasks = loadDailyTasks();
       const localTracker = loadTrackerData();
       const [stop, remoteTasks, remoteTracker] = await Promise.all([
-        startPracticeSync(syncUser),
+        // Keep the complete practice workspace ready from the first app load.
+        // Practice routes therefore reuse the global cache and do not issue a
+        // separate bank fetch or show a route-specific loader.
+        startPracticeSync(syncUser, { includeSubjects: true }),
         (async () => {
           await migrateTasksIfEmpty(syncUser, localTasks);
           return readTasks(syncUser);

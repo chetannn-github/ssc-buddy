@@ -20,7 +20,11 @@ if (Platform.OS === "android") {
     const deadline = Number(quiz?.lockedUntil) || 0;
     while (deadline > Date.now()) {
       await wait(Math.min(1000, deadline - Date.now()));
-      const latest = await getUnlockQuiz();
+      // Once the correction window ends, advance in storage too. Merely
+      // repainting the same correction state left the widget stuck at 0s.
+      const latest = Date.now() >= deadline
+        ? await advanceUnlockQuiz()
+        : await getUnlockQuiz();
       renderWidget(renderQuickRecallWidget(latest));
     }
   };
@@ -72,17 +76,19 @@ if (Platform.OS === "android") {
     }
     let quiz = await getUnlockQuiz();
     let answered = false;
+    let answeredQuestion = null;
+    let answeredChoice = null;
     if (widgetAction === "WIDGET_CLICK" && (clickAction === "QUIZ_ANSWER" || clickAction?.startsWith("QUIZ_ANSWER_"))) {
       // Answer choice is deliberately encoded in the action name as well as
       // accepting the legacy data payload. Several Android launchers omit
       // clickActionData for home-screen widgets.
       const choice = clickActionData?.choice || clickAction?.replace("QUIZ_ANSWER_", "");
       if (["A", "B", "C", "D"].includes(choice)) {
+        answeredQuestion = quiz?.questions?.[quiz.index] ?? null;
+        answeredChoice = choice;
         quiz = await answerUnlockQuiz(choice);
         answered = Boolean(quiz);
       }
-    } else if (widgetAction === "WIDGET_CLICK" && clickAction === "QUIZ_NEXT") {
-      quiz = await advanceUnlockQuiz();
     } else if (widgetAction === "WIDGET_CLICK" && clickAction === "QUIZ_NEW_SESSION") {
       quiz = await startUnlockQuiz();
     } else {
@@ -98,8 +104,8 @@ if (Platform.OS === "android") {
         widgetUser = await getWidgetUser();
         if (widgetUser) {
           await writeQuestionLearning(widgetUser, { stats: quiz.stats, lastSubject: quiz.subject });
-          const question = quiz.questions?.[quiz.index];
-          const answer = quiz.answers?.[quiz.answers.length - 1];
+          const question = answeredQuestion;
+          const answer = answeredChoice;
           if (question && ["A", "B", "C", "D"].includes(answer)) {
             const now = new Date();
             const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
