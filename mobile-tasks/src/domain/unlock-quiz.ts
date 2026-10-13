@@ -1,17 +1,22 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getFirebaseAuth, loadQuickRecallSeed } from "../lib/firebase";
 
 export type QuizChoice = "A" | "B" | "C" | "D";
 export type UnlockQuestion = {
   id: string;
   subjectId: string;
   subject: string;
+  chapter: string;
   question: string;
   options: [string, string, string, string];
   correctAnswer: QuizChoice;
   explanation?: string;
 };
+export type QuickRecallScope = { subjectId: string; chapter: string };
+export const RANDOM_RECALL_SCOPE = "random";
 
 type LearningStat = { askedCount: number; correctCount: number; wrongCount: number; lastAskedAt: string; lastOutcome: "correct" | "wrong" };
+type PracticePerformance = { askedCount: number; correctCount: number; wrongCount: number };
 export type UnlockQuizState = {
   /** Stable for one three-question sprint; used to make its cloud write idempotent. */
   runId: string;
@@ -32,10 +37,35 @@ const SUBJECTS = "cbt-subjects";
 const HISTORY = "cbt-history";
 const FAVOURITES = "cbt-favorite-questions";
 const choices: QuizChoice[] = ["A", "B", "C", "D"];
+/** Keep every Quick Recall surface on the same correction pause. */
+export const QUICK_RECALL_CORRECTION_MS = 10_000;
 const makeRunId = () => `quick-recall-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
 const isChoice = (value: unknown): value is QuizChoice => typeof value === "string" && choices.includes(value as QuizChoice);
 const questionKey = (question: Pick<UnlockQuestion, "subjectId" | "id">) => `${question.subjectId}:${question.id}`;
+const accuracyPriority = (stat?: LearningStat) => !stat?.askedCount ? 0 : (1 - stat.correctCount / stat.askedCount) * 25;
+
+function practiceStats(records: any[]) {
+  const performance = new Map<string, PracticePerformance>();
+  records.forEach((record) => {
+    // Quick Recall has its own atomic learning entry, so do not double-count it.
+    if (record?.testMode === "quick-recall") return;
+    const ids = Array.isArray(record?.questionIds) ? record.questionIds : [];
+    const answers = Array.isArray(record?.answers) ? record.answers : [];
+    const key = Array.isArray(record?.answerKey) ? record.answerKey : Array.isArray(record?.key) ? record.key : [];
+    const subjectId = String(record?.subjectId ?? "");
+    ids.forEach((id: unknown, index: number) => {
+      if (typeof id !== "string" || !isChoice(answers[index]) || !isChoice(key[index])) return;
+      const itemKey = `${subjectId}:${id}`;
+      const prior = performance.get(itemKey) ?? { askedCount: 0, correctCount: 0, wrongCount: 0 };
+      prior.askedCount += 1;
+      if (answers[index] === key[index]) prior.correctCount += 1;
+      else prior.wrongCount += 1;
+      performance.set(itemKey, prior);
+    });
+  });
+  return performance;
+}
 
 function asQuestions() {
   return Promise.all([AsyncStorage.getItem(SUBJECTS), AsyncStorage.getItem(HISTORY), AsyncStorage.getItem(FAVOURITES)]).then(([rawSubjects, rawHistory, rawFavourites]) => {
@@ -48,23 +78,11 @@ function asQuestions() {
       const answer = item?.correctAnswer;
       if (!item?.id || !item?.question || !Array.isArray(item?.options) || item.options.length !== 4 || !isChoice(answer)) return;
       questions.push({
-        id: String(item.id), subjectId: String(subject.id ?? subject.name ?? "general"), subject: String(subject.name ?? "General"),
+        id: String(item.id), subjectId: String(subject.id ?? subject.name ?? "general"), subject: String(subject.name ?? "General"), chapter: String(chapter.name ?? "Practice"),
         question: String(item.question), options: item.options as [string, string, string, string], correctAnswer: answer, explanation: typeof item.explanation === "string" ? item.explanation : "",
       });
     }))));
-    const wrongs = new Map<string, number>();
-    history.forEach((record) => {
-      const ids = Array.isArray(record?.questionIds) ? record.questionIds : [];
-      const answers = Array.isArray(record?.answers) ? record.answers : [];
-      const key = Array.isArray(record?.answerKey) ? record.answerKey : Array.isArray(record?.key) ? record.key : [];
-      const subjectId = String(record?.subjectId ?? "");
-      ids.forEach((id: unknown, index: number) => {
-        if (typeof id !== "string" || !isChoice(answers[index]) || !isChoice(key[index]) || answers[index] === key[index]) return;
-        const statKey = `${subjectId}:${id}`;
-        wrongs.set(statKey, (wrongs.get(statKey) ?? 0) + 1);
-      });
-    });
-    return { questions, favourites: new Set(favourites), wrongs };
+    return { questions, favourites: new Set(favourites), practice: practiceStats(history) };
   });
 }
 
@@ -77,35 +95,56 @@ async function save(state: UnlockQuizState) { await AsyncStorage.setItem(STORE, 
 const shuffle = <T,>(items: T[]) => [...items].sort(() => Math.random() - 0.5);
 
 /** Builds a 3-question same-subject session, favouring favourites and earlier mistakes. */
-export async function startUnlockQuiz(): Promise<UnlockQuizState | null> {
-  const { questions, favourites, wrongs } = await asQuestions();
+export async function startUnlockQuiz(scope: QuickRecallScope = { subjectId: RANDOM_RECALL_SCOPE, chapter: RANDOM_RECALL_SCOPE }): Promise<UnlockQuizState | null> {
+  const local = await asQuestions();
+  const user = getFirebaseAuth().currentUser;
+  const remote = user ? await loadQuickRecallSeed(user).catch(() => null) : null;
+  const source = remote ? toQuestionSource(remote) : local;
+  const { questions, favourites, practice } = source;
   if (!questions.length) return null;
   const old = await loadUnlockQuiz();
-  const stats = old?.stats ?? {};
-  const allSubjects = [...new Set(questions.map((item) => item.subjectId))];
+  const stats = (remote?.stats as unknown as Record<string, LearningStat> | undefined) ?? old?.stats ?? {};
+  const scopedQuestions = questions.filter((item) => (scope.subjectId === RANDOM_RECALL_SCOPE || item.subjectId === scope.subjectId) && (scope.chapter === RANDOM_RECALL_SCOPE || item.chapter === scope.chapter));
+  if (!scopedQuestions.length) return null;
+  const allSubjects = [...new Set(scopedQuestions.map((item) => item.subjectId))];
   // A full unlock sprint must remain within one subject. Prefer only subjects
   // with at least three question-bank questions; fall back gracefully while a
   // new bank is still being built.
-  const subjects = allSubjects.filter((id) => questions.filter((item) => item.subjectId === id).length >= 3);
+  const subjects = allSubjects.filter((id) => scopedQuestions.filter((item) => item.subjectId === id).length >= 3);
   const eligibleSubjects = subjects.length ? subjects : allSubjects;
   const subjectId = eligibleSubjects
     .map((id) => {
-      const items = questions.filter((item) => item.subjectId === id);
+      const items = scopedQuestions.filter((item) => item.subjectId === id);
       const score = items.reduce((total, item) => {
         const stat = stats[questionKey(item)];
-        return total + (favourites.has(item.id) ? 24 : 0) + (wrongs.get(questionKey(item)) ?? 0) * 16 + (stat?.wrongCount ?? 0) * 8 - (stat?.askedCount ?? 0) * 1.5;
+        const normal = practice.get(questionKey(item)); const askedCount = (normal?.askedCount ?? 0) + (stat?.askedCount ?? 0); const correctCount = (normal?.correctCount ?? 0) + (stat?.correctCount ?? 0);
+        return total + (favourites.has(item.id) ? 24 : 0) + (normal?.wrongCount ?? 0) * 16 + (stat?.wrongCount ?? 0) * 8 + accuracyPriority({ askedCount, correctCount, wrongCount: 0, lastAskedAt: "", lastOutcome: "correct" }) - askedCount * 1.5;
       }, 0);
       return { id, score: score + Math.random() * 4 };
     })
     .sort((a, b) => b.score - a.score)[0]?.id;
-  const pool = questions.filter((item) => item.subjectId === subjectId);
+  const pool = scopedQuestions.filter((item) => item.subjectId === subjectId);
   const ordered = shuffle(pool).sort((left, right) => {
-    const leftScore = (favourites.has(left.id) ? 1000 : 0) + (wrongs.get(questionKey(left)) ?? 0) * 100 + (stats[questionKey(left)]?.wrongCount ?? 0) * 50 - (stats[questionKey(left)]?.askedCount ?? 0);
-    const rightScore = (favourites.has(right.id) ? 1000 : 0) + (wrongs.get(questionKey(right)) ?? 0) * 100 + (stats[questionKey(right)]?.wrongCount ?? 0) * 50 - (stats[questionKey(right)]?.askedCount ?? 0);
+    const leftStat = stats[questionKey(left)];
+    const rightStat = stats[questionKey(right)];
+    const leftNormal = practice.get(questionKey(left)); const rightNormal = practice.get(questionKey(right));
+    const leftAsked = (leftNormal?.askedCount ?? 0) + (leftStat?.askedCount ?? 0); const rightAsked = (rightNormal?.askedCount ?? 0) + (rightStat?.askedCount ?? 0);
+    const leftCorrect = (leftNormal?.correctCount ?? 0) + (leftStat?.correctCount ?? 0); const rightCorrect = (rightNormal?.correctCount ?? 0) + (rightStat?.correctCount ?? 0);
+    const leftScore = (favourites.has(left.id) ? 1000 : 0) + (leftNormal?.wrongCount ?? 0) * 100 + (leftStat?.wrongCount ?? 0) * 50 + accuracyPriority({ askedCount: leftAsked, correctCount: leftCorrect, wrongCount: 0, lastAskedAt: "", lastOutcome: "correct" }) - leftAsked;
+    const rightScore = (favourites.has(right.id) ? 1000 : 0) + (rightNormal?.wrongCount ?? 0) * 100 + (rightStat?.wrongCount ?? 0) * 50 + accuracyPriority({ askedCount: rightAsked, correctCount: rightCorrect, wrongCount: 0, lastAskedAt: "", lastOutcome: "correct" }) - rightAsked;
     return rightScore - leftScore;
   });
   const selected = ordered.slice(0, Math.min(3, ordered.length));
   return save({ runId: makeRunId(), startedAt: new Date().toISOString(), status: "active", subject: selected[0]?.subject ?? "General", questions: selected, index: 0, correct: 0, answers: [], stats });
+}
+
+function toQuestionSource(seed: Awaited<ReturnType<typeof loadQuickRecallSeed>>) {
+  const questions: UnlockQuestion[] = [];
+  seed.subjects.forEach((subject: any) => subject?.chapters?.forEach((chapter: any) => chapter?.exercises?.forEach((exercise: any) => exercise?.questions?.forEach((item: any) => {
+    if (!item?.id || !item?.question || !Array.isArray(item?.options) || item.options.length !== 4 || !isChoice(item?.correctAnswer)) return;
+    questions.push({ id: String(item.id), subjectId: String(subject.id ?? subject.name ?? "general"), subject: String(subject.name ?? "General"), chapter: String(chapter?.name ?? "Practice"), question: String(item.question), options: item.options as [string, string, string, string], correctAnswer: item.correctAnswer, explanation: typeof item.explanation === "string" ? item.explanation : "" });
+  }))));
+  return { questions, favourites: new Set(seed.favourites), practice: practiceStats(seed.attempts) };
 }
 
 export async function getUnlockQuiz(): Promise<UnlockQuizState | null> {
@@ -139,8 +178,8 @@ export async function answerUnlockQuiz(choice: QuizChoice): Promise<UnlockQuizSt
     state.lockedUntil = undefined;
   } else {
     // Keep the correction visible, but do not make the unlock interaction feel
-    // punitive. The widget counts this down live for fifteen seconds.
-    stat.wrongCount += 1; stat.lastOutcome = "wrong"; state.status = "correction"; state.lockedUntil = Date.now() + 15_000;
+    // punitive. Every surface counts this down live for ten seconds.
+    stat.wrongCount += 1; stat.lastOutcome = "wrong"; state.status = "correction"; state.lockedUntil = Date.now() + QUICK_RECALL_CORRECTION_MS;
   }
   return save(state);
 }

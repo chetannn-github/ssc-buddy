@@ -319,6 +319,23 @@ export async function writeQuestionLearning(user: User, value: Record<string, un
   });
 }
 
+/** Canonical Quick Recall seed shared with the web and Windows widget. */
+export async function loadQuickRecallSeed(user: User) {
+  const [subjects, attempts, favourites, learning] = await Promise.all([
+    getDocs(practiceCollection(user, "practiceSubjects")),
+    getDocs(practiceCollection(user, "practiceAttempts")),
+    getDocs(practiceCollection(user, "practiceFavourites")),
+    getDoc(questionLearningDoc(user)),
+  ]);
+  const stats = learning.data()?.stats;
+  return {
+    subjects: subjects.docs.map((item) => ({ id: item.id, ...item.data() })),
+    attempts: attempts.docs.map((item) => ({ id: item.id, ...item.data() })),
+    favourites: favourites.docs.map((item) => String(item.data().id ?? item.id)),
+    stats: stats && typeof stats === "object" ? stats as Record<string, Record<string, unknown>> : {},
+  };
+}
+
 type QuickRecallAttemptInput = {
   runId: string;
   date: string;

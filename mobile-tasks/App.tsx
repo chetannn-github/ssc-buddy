@@ -47,6 +47,7 @@ import { MediaOverlay, type MediaMode } from "./src/screens/MediaOverlay";
 import { PracticeScreen } from "./src/screens/PracticeScreen";
 import { TrackScreen } from "./src/screens/TrackScreen";
 import { ProgressScreen } from "./src/screens/ProgressScreen";
+import { QuickRecallScreen } from "./src/screens/QuickRecallScreen";
 import { reportVerticalTouch } from "./src/navigation/bottomNavigationVisibility";
 import type { User } from "firebase/auth";
 import { reportVerticalScroll, resetBottomNavigation } from "./src/navigation/bottomNavigationVisibility";
@@ -134,6 +135,7 @@ export default function App() {
   const [authenticated, setAuthenticated] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [mediaMode, setMediaMode] = useState<MediaMode>(null);
+  const [quickRecallOpen, setQuickRecallOpen] = useState(false);
   const [musicOpenRequest, setMusicOpenRequest] = useState(0);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [tasksLoaded, setTasksLoaded] = useState(false);
@@ -569,7 +571,7 @@ export default function App() {
     <SafeAreaProvider>
       <SafeAreaView style={styles.safe} edges={["top", "left", "right"]} onTouchStart={() => resetBottomNavigation()}>
       <StatusBar hidden />
-      {appTab === "profile" ? (
+      {quickRecallOpen ? <QuickRecallScreen user={user} onClose={() => setQuickRecallOpen(false)} onGoProfile={() => { setQuickRecallOpen(false); setAppTab("profile"); }} /> : appTab === "profile" ? (
         <ProfileScreen
           user={user}
           tasks={tasks}
@@ -581,6 +583,7 @@ export default function App() {
             setTrackTab(tab);
             setAppTab("track");
           }}
+          onOpenQuickRecall={() => setQuickRecallOpen(true)}
           streak={streak}
           onLogout={() => {
             void logout();
@@ -776,7 +779,7 @@ export default function App() {
       ) : (
         <ComingSoonScreen title={activeAppTab.label} />
       )}
-      <BottomNavigation activeTab={appTab} onChange={setAppTab} />
+      {!quickRecallOpen && <BottomNavigation activeTab={appTab} onChange={setAppTab} />}
       <MediaOverlay user={user} mode={mediaMode} musicOpenRequest={musicOpenRequest} onClose={() => setMediaMode(null)} />
       <DailyManifestationDialog
         phrase={dailyManifestation}

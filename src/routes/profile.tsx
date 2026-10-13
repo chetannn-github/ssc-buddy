@@ -4,6 +4,7 @@ import {
   ChevronDown,
   Copy,
   FilePenLine,
+  Sparkles,
   LoaderCircle,
   LogOut,
   Music2,
@@ -1014,6 +1015,14 @@ export function Profile() {
                   onClick={() => setLoggingMockTest(true)}
                 >
                   <FilePenLine className="h-4 w-4" /> Log mock test
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-9 gap-1.5 px-2.5 text-sm text-zinc-300 hover:bg-white/10 hover:text-white"
+                  onClick={() => void navigate({ to: "/quick-recall" })}
+                >
+                  <Sparkles className="h-4 w-4" /> Quick recall
                 </Button>
                 <Button
                   type="button"

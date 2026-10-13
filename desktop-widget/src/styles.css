@@ -41,6 +41,14 @@ header, .toolbar, footer, .task { display: flex; align-items: center; } header {
 .quick-recall-trigger { display: flex; height: 30px; align-items: center; gap: 4px; padding: 0 8px; border: 1px solid #353535; border-radius: 9px; color: #c4c4c8; background: #242424; font-size: 10px; font-weight: 700; transition: border-color 160ms ease, background 160ms ease, color 160ms ease; }
 .quick-recall-trigger:hover, .quick-recall-trigger.active { border-color: #266a5b; color: #bff9eb; background: #173a33; }
 .quick-recall-panel { display: grid; gap: 10px; margin-top: 12px; padding: 12px; border: 1px solid #323232; border-radius: 14px; background: #1b1b1b; }
+.quick-setup { gap: 9px; padding: 15px; border-color: transparent; background: #1b1b1b; }
+.quick-setup-kicker { color: #93c5fd; font-size: 9px; font-weight: 700; letter-spacing: .15em; }
+.quick-setup-title { color: #f4f4f5; font-family: "Sora", ui-sans-serif, system-ui, sans-serif; font-size: 18px; font-weight: 500; letter-spacing: -.03em; }
+.quick-setup-copy { margin: -4px 0 5px; color: #a1a1aa; font-size: 10px; line-height: 1.4; }
+.quick-setup label { display: grid; gap: 5px; color: #a1a1aa; font-size: 9px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.quick-setup select { width: 100%; height: 39px; padding: 0 10px; border: 1px solid #373737; border-radius: 9px; color: #f4f4f5; background: #202020; outline: none; font-size: 11px; font-weight: 500; letter-spacing: 0; text-transform: none; transition: border-color 160ms ease, background 160ms ease; }
+.quick-setup select:hover, .quick-setup select:focus { border-color: #5a5a5a; background: #252525; }.quick-setup select:disabled { opacity: .42; }
+.quick-setup .primary { min-height: 37px; margin-top: 5px; border-radius: 10px; color: #082f49; background: #60a5fa; font-size: 11px; font-weight: 600; }
 .quick-state { min-height: 250px; place-content: center; text-align: center; color: #a1a1aa; }
 .quick-loading { display: flex; min-height: 180px; align-items: center; justify-content: center; gap: 8px; }
 .quick-state strong { color: #f4f4f5; font-size: 15px; }
@@ -247,3 +255,14 @@ header, .toolbar, footer, .task { display: flex; align-items: center; } header {
   from { opacity: 0; transform: translateY(10px) scale(.985); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
+.quick-setup-back { display:flex; align-items:center; gap:4px; width:max-content; padding:2px 0; border:0; color:#a1a1aa; background:transparent; font-size:11px; }
+.quick-setup-disabled { display:flex; height:42px; align-items:center; padding:0 10px; border:1px solid #373737; border-radius:10px; color:#777; background:#202020; }
+.quick-setup .primary { color:#082f49; background:#60a5fa; }
+.quick-setup .select-menu { position:relative; width:100%; }
+.quick-setup .select-trigger { height:42px; border-color:#3f3f46; border-radius:10px; background:#202020; color:#f4f4f5; font-size:12px; font-weight:500; }
+.quick-setup .select-trigger:hover, .quick-setup .select-trigger[aria-expanded="true"] { border-color:#60a5fa; background:#22272a; }
+.quick-setup .select-popover { z-index:80; top:calc(100% + 5px); max-height:180px; padding:4px; border-color:#3b3b3b; border-radius:10px; background:#282828; box-shadow:0 18px 34px rgba(0,0,0,.58); animation:quick-select-in 160ms ease-out; }
+.quick-setup .select-popover button { display:flex; min-height:37px; align-items:center; justify-content:space-between; padding:7px 9px; border-radius:7px; color:#e4e4e7; font-size:11px; }
+.quick-setup .select-popover button.selected { color:#171717; background:#f4f4f5; }
+.quick-setup .select-popover button:hover:not(.selected) { background:#343434; }
+@keyframes quick-select-in { from { opacity:0; transform:translateY(-5px) scale(.98); } to { opacity:1; transform:translateY(0) scale(1); } }

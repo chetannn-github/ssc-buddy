@@ -60,6 +60,7 @@ type Props = {
   onOpenVideo: () => void;
   onOpenMusic: () => void;
   onOpenTracker: (tab: "Syllabus" | "Revision" | "Mock Test") => void;
+  onOpenQuickRecall: () => void;
   streak: number;
 };
 
@@ -89,7 +90,7 @@ function parseSubjectsFile(value: unknown): ImportedSubject[] {
   });
 }
 
-export function ProfileScreen({ user, tasks, profileSettings, onProfileSaved, onLogout, onOpenVideo, onOpenMusic, onOpenTracker, streak }: Props) {
+export function ProfileScreen({ user, tasks, profileSettings, onProfileSaved, onLogout, onOpenVideo, onOpenMusic, onOpenTracker, onOpenQuickRecall, streak }: Props) {
   const [profileName, setProfileName] = useState(profileSettings?.name ?? "");
   const [profileReady, setProfileReady] = useState(profileSettings !== null);
   const [examName, setExamName] = useState(profileSettings?.examName ?? "");
@@ -235,6 +236,7 @@ export function ProfileScreen({ user, tasks, profileSettings, onProfileSaved, on
 
       <View style={[styles.actionRow, { marginTop: 7 }]}>
         <Pressable style={styles.action} onPress={() => setLoggingMockTest(true)}><MaterialCommunityIcons name="file-edit-outline" size={18} color={colors.text} /><Text style={styles.actionText}>Log mock test</Text></Pressable>
+        <Pressable style={styles.action} onPress={onOpenQuickRecall}><MaterialCommunityIcons name="creation-outline" size={18} color={colors.text} /><Text style={styles.actionText}>Recall</Text></Pressable>
         <Pressable style={styles.action} onPress={onOpenVideo}><MaterialCommunityIcons name="play-outline" size={18} color={colors.text} /><Text style={styles.actionText}>Videos</Text></Pressable>
         <Pressable style={styles.action} onPress={onOpenMusic}><MaterialCommunityIcons name="music-note" size={18} color={colors.text} /><Text style={styles.actionText}>Music</Text></Pressable>
       </View>

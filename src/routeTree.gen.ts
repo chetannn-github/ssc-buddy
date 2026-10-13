@@ -16,6 +16,7 @@ import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as ProgressRouteImport } from './routes/progress'
 import { Route as QuestionBankRouteImport } from './routes/question-bank'
 import { Route as QuestionViewRouteImport } from './routes/question-view'
+import { Route as QuickRecallRouteImport } from './routes/quick-recall'
 import { Route as TasksRouteImport } from './routes/tasks'
 import { Route as TestRouteImport } from './routes/test'
 import { Route as TrackRouteImport } from './routes/track'
@@ -57,6 +58,11 @@ const QuestionViewRoute = QuestionViewRouteImport.update({
   path: '/question-view',
   getParentRoute: () => rootRouteImport,
 } as any)
+const QuickRecallRoute = QuickRecallRouteImport.update({
+  id: '/quick-recall',
+  path: '/quick-recall',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TasksRoute = TasksRouteImport.update({
   id: '/tasks',
   path: '/tasks',
@@ -91,6 +97,7 @@ export interface FileRoutesByFullPath {
   '/progress': typeof ProgressRoute
   '/question-bank': typeof QuestionBankRoute
   '/question-view': typeof QuestionViewRoute
+  '/quick-recall': typeof QuickRecallRoute
   '/tasks': typeof TasksRoute
   '/test': typeof TestRoute
   '/track': typeof TrackRoute
@@ -105,6 +112,7 @@ export interface FileRoutesByTo {
   '/progress': typeof ProgressRoute
   '/question-bank': typeof QuestionBankRoute
   '/question-view': typeof QuestionViewRoute
+  '/quick-recall': typeof QuickRecallRoute
   '/tasks': typeof TasksRoute
   '/test': typeof TestRoute
   '/track': typeof TrackRoute
@@ -120,6 +128,7 @@ export interface FileRoutesById {
   '/progress': typeof ProgressRoute
   '/question-bank': typeof QuestionBankRoute
   '/question-view': typeof QuestionViewRoute
+  '/quick-recall': typeof QuickRecallRoute
   '/tasks': typeof TasksRoute
   '/test': typeof TestRoute
   '/track': typeof TrackRoute
@@ -136,6 +145,7 @@ export interface FileRouteTypes {
     | '/progress'
     | '/question-bank'
     | '/question-view'
+    | '/quick-recall'
     | '/tasks'
     | '/test'
     | '/track'
@@ -150,6 +160,7 @@ export interface FileRouteTypes {
     | '/progress'
     | '/question-bank'
     | '/question-view'
+    | '/quick-recall'
     | '/tasks'
     | '/test'
     | '/track'
@@ -164,6 +175,7 @@ export interface FileRouteTypes {
     | '/progress'
     | '/question-bank'
     | '/question-view'
+    | '/quick-recall'
     | '/tasks'
     | '/test'
     | '/track'
@@ -179,6 +191,7 @@ export interface RootRouteChildren {
   ProgressRoute: typeof ProgressRoute
   QuestionBankRoute: typeof QuestionBankRoute
   QuestionViewRoute: typeof QuestionViewRoute
+  QuickRecallRoute: typeof QuickRecallRoute
   TasksRoute: typeof TasksRoute
   TestRoute: typeof TestRoute
   TrackRoute: typeof TrackRoute
@@ -237,6 +250,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof QuestionViewRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/quick-recall': {
+      id: '/quick-recall'
+      path: '/quick-recall'
+      fullPath: '/quick-recall'
+      preLoaderRoute: typeof QuickRecallRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/tasks': {
       id: '/tasks'
       path: '/tasks'
@@ -283,6 +303,7 @@ const rootRouteChildren: RootRouteChildren = {
   ProgressRoute: ProgressRoute,
   QuestionBankRoute: QuestionBankRoute,
   QuestionViewRoute: QuestionViewRoute,
+  QuickRecallRoute: QuickRecallRoute,
   TasksRoute: TasksRoute,
   TestRoute: TestRoute,
   TrackRoute: TrackRoute,

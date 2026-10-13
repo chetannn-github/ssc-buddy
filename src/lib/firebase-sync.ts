@@ -20,6 +20,7 @@ import {
   getDocs,
   getFirestore,
   onSnapshot,
+  runTransaction,
   serverTimestamp,
   setDoc,
   writeBatch,
@@ -77,6 +78,167 @@ function services() {
 
 export function getFirebaseFirestore() {
   return services().db;
+}
+
+/** Shared per-question recall stats. This is the same document used by Android. */
+export async function writeQuestionLearning(user: User, value: Record<string, unknown>) {
+  const reference = doc(getFirebaseFirestore(), "users", user.uid, "questionLearning", "current");
+  await runTransaction(getFirebaseFirestore(), async (transaction) => {
+    const remote = (await transaction.get(reference)).data() ?? {};
+    const incoming = value["stats"] && typeof value["stats"] === "object"
+      ? value["stats"] as Record<string, Record<string, unknown>>
+      : {};
+    const current = remote["stats"] && typeof remote["stats"] === "object"
+      ? remote["stats"] as Record<string, Record<string, unknown>>
+      : {};
+    const stats = { ...current };
+    Object.entries(incoming).forEach(([key, local]) => {
+      const cloud = current[key] ?? {};
+      const localIsNewer = String(local["lastAskedAt"] ?? "") >= String(cloud["lastAskedAt"] ?? "");
+      stats[key] = {
+        ...cloud,
+        ...local,
+        askedCount: Math.max(Number(cloud["askedCount"] ?? 0), Number(local["askedCount"] ?? 0)),
+        correctCount: Math.max(Number(cloud["correctCount"] ?? 0), Number(local["correctCount"] ?? 0)),
+        wrongCount: Math.max(Number(cloud["wrongCount"] ?? 0), Number(local["wrongCount"] ?? 0)),
+        lastAskedAt: localIsNewer ? local["lastAskedAt"] : cloud["lastAskedAt"],
+        lastOutcome: localIsNewer ? local["lastOutcome"] : cloud["lastOutcome"],
+      };
+    });
+    transaction.set(reference, { ...remote, ...value, stats, updatedAt: serverTimestamp() }, { merge: true });
+  });
+}
+
+export type QuickRecallSeed = {
+  subjects: Array<Record<string, unknown>>;
+  attempts: Array<Record<string, unknown>>;
+  favouriteQuestionIds: string[];
+  learningStats: Record<string, Record<string, unknown>>;
+};
+
+/** Uses the exact seed sources used by the Windows and Android Quick Recall widgets. */
+export async function loadQuickRecallSeed(user: User): Promise<QuickRecallSeed> {
+  const database = getFirebaseFirestore();
+  const [subjects, attempts, favourites, learning] = await Promise.all([
+    getDocs(collection(database, "users", user.uid, "practiceSubjects")),
+    getDocs(collection(database, "users", user.uid, "practiceAttempts")),
+    getDocs(collection(database, "users", user.uid, "practiceFavourites")),
+    getDoc(doc(database, "users", user.uid, "questionLearning", "current")),
+  ]);
+  const rawStats = learning.data()?.["stats"];
+  return {
+    subjects: subjects.docs.map((item) => ({ id: item.id, ...item.data() })),
+    attempts: attempts.docs.map((item) => ({ id: item.id, ...item.data() })),
+    favouriteQuestionIds: favourites.docs.map((item) => String(item.data()["id"] ?? item.id)),
+    learningStats: rawStats && typeof rawStats === "object" ? rawStats as Record<string, Record<string, unknown>> : {},
+  };
+}
+
+/**
+ * Live, feature-scoped Quick Recall data. This deliberately watches only the
+ * question-bank sources rather than the old global snapshot, so a practice
+ * change updates recall without causing app-wide reloads or render loops.
+ */
+export function watchQuickRecallSeed(user: User, callback: (seed: QuickRecallSeed) => void): Unsubscribe {
+  const database = getFirebaseFirestore();
+  let subjects: Array<Record<string, unknown>> = [];
+  let attempts: Array<Record<string, unknown>> = [];
+  let favouriteQuestionIds: string[] = [];
+  let learningStats: Record<string, Record<string, unknown>> = {};
+  let queued = false;
+  const emit = () => {
+    if (queued) return;
+    queued = true;
+    queueMicrotask(() => {
+      queued = false;
+      callback({ subjects, attempts, favouriteQuestionIds, learningStats });
+    });
+  };
+  const stopSubjects = onSnapshot(collection(database, "users", user.uid, "practiceSubjects"), (snapshot) => {
+    subjects = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+    emit();
+  });
+  const stopAttempts = onSnapshot(collection(database, "users", user.uid, "practiceAttempts"), (snapshot) => {
+    attempts = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+    emit();
+  });
+  const stopFavourites = onSnapshot(collection(database, "users", user.uid, "practiceFavourites"), (snapshot) => {
+    favouriteQuestionIds = snapshot.docs.map((item) => String(item.data()["id"] ?? item.id));
+    emit();
+  });
+  const stopLearning = onSnapshot(doc(database, "users", user.uid, "questionLearning", "current"), (snapshot) => {
+    const stats = snapshot.data()?.["stats"];
+    learningStats = stats && typeof stats === "object" ? stats as Record<string, Record<string, unknown>> : {};
+    emit();
+  });
+  return () => { stopSubjects(); stopAttempts(); stopFavourites(); stopLearning(); };
+}
+
+/** Atomic, per-answer learning update shared by web, Android and the desktop widget. */
+export async function recordQuickRecallAnswer(user: User, question: { id: string; subjectId: string; subject: string }, correct: boolean) {
+  const database = getFirebaseFirestore();
+  const reference = doc(database, "users", user.uid, "questionLearning", "current");
+  const key = `${question.subjectId}:${question.id}`;
+  await runTransaction(database, async (transaction) => {
+    const data = (await transaction.get(reference)).data() ?? {};
+    const stats = data["stats"] && typeof data["stats"] === "object" ? data["stats"] as Record<string, Record<string, unknown>> : {};
+    const before = stats[key] ?? {};
+    transaction.set(reference, {
+      ...data,
+      stats: {
+        ...stats,
+        [key]: {
+          ...before,
+          askedCount: Number(before["askedCount"] ?? 0) + 1,
+          correctCount: Number(before["correctCount"] ?? 0) + Number(correct),
+          wrongCount: Number(before["wrongCount"] ?? 0) + Number(!correct),
+          lastAskedAt: new Date().toISOString(),
+          lastOutcome: correct ? "correct" : "wrong",
+        },
+      },
+      lastSubject: question.subject,
+      updatedAt: serverTimestamp(),
+    });
+  });
+}
+
+/** One daily practice-attempt document, deduplicated by run ID, matching Android/widget behavior. */
+export async function recordQuickRecallPractice(user: User, input: { runId: string; date: string; startedAt: string; questions: Array<{ id: string; correctAnswer: string }>; answers: string[] }) {
+  const database = getFirebaseFirestore();
+  const reference = doc(database, "users", user.uid, "practiceAttempts", `quick-recall:${input.date}`);
+  await runTransaction(database, async (transaction) => {
+    const current = (await transaction.get(reference)).data() ?? {};
+    const runIds = Array.isArray(current["quickRecallRunIds"]) ? current["quickRecallRunIds"].map(String) : [];
+    if (runIds.includes(input.runId)) return;
+    const count = Math.min(input.questions.length, input.answers.length);
+    const questions = input.questions.slice(0, count);
+    const answers = input.answers.slice(0, count);
+    const correct = answers.reduce((total, answer, index) => total + Number(answer === questions[index]?.correctAnswer), 0);
+    transaction.set(reference, {
+      ...current,
+      id: `quick-recall:${input.date}`,
+      date: input.date,
+      createdAt: current["createdAt"] ?? input.startedAt,
+      updatedAt: new Date().toISOString(),
+      testMode: "quick-recall",
+      subjectId: "quick-recall",
+      subject: "Quick Recall",
+      chapter: "",
+      exercise: "Quick Recall",
+      startNumber: 1,
+      durationMinutes: null,
+      timeTakenSeconds: Number(current["timeTakenSeconds"] ?? 0),
+      answers: [...(Array.isArray(current["answers"]) ? current["answers"] : []), ...answers],
+      questionIds: [...(Array.isArray(current["questionIds"]) ? current["questionIds"] : []), ...questions.map((question) => question.id)],
+      answerKey: [...(Array.isArray(current["answerKey"]) ? current["answerKey"] : []), ...questions.map((question) => question.correctAnswer)],
+      correct: Number(current["correct"] ?? 0) + correct,
+      wrong: Number(current["wrong"] ?? 0) + count - correct,
+      marking: { positive: 1, negative: 0 },
+      score: Number(current["score"] ?? 0) + correct,
+      quickRecallRunIds: [...runIds, input.runId],
+      updatedAtServer: serverTimestamp(),
+    });
+  });
 }
 
 function snapshotLocalStorage(): Record<string, string> {
