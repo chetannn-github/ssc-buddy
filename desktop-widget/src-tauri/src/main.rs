@@ -23,7 +23,7 @@ fn main() {
       TrayIconBuilder::with_id("ssc-buddy-tray")
         .icon(tray_icon)
         .menu(&menu)
-        .tooltip("SSC Buddy")
+        .tooltip("SSC Buddy Widget")
         .on_menu_event(|app, event| match event.id.as_ref() {
           "show" => show_window(app),
           "hide" => { if let Some(window) = app.get_webview_window("main") { let _ = window.hide(); } }

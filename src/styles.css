@@ -3,6 +3,32 @@
 @source "../tracker/src";
 @import "tw-animate-css";
 
+/* Edge/WebView2 renders its own password-reveal glyph. Auth already provides
+   a deliberate custom eye control, so keep only that one visible. */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}
+
+/* Password managers/autofill must not replace the auth screen's dark fields
+   with the browser's light/yellow default background. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-text-fill-color: #f4f4f5 !important;
+  caret-color: #f4f4f5 !important;
+  background-color: #1b1b1b !important;
+  -webkit-box-shadow: 0 0 0 1000px #1b1b1b inset !important;
+  box-shadow: 0 0 0 1000px #1b1b1b inset !important;
+  transition: background-color 99999s ease-out 0s;
+}
+
+input:-moz-autofill {
+  box-shadow: 0 0 0 1000px #1b1b1b inset;
+  color: #f4f4f5;
+}
+
 @keyframes consistency-flame {
   0%,
   100% {

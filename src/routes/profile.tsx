@@ -50,7 +50,6 @@ import { formatDuration, loadDailyTasks, type DailyTask } from "@/lib/daily-task
 const title = "Profile";
 const description = "Your yearly practice activity and progress.";
 type ActivityRange = "today" | "week" | "month" | "lastMonth" | "year" | "all";
-let hasShownProfileLoader = false;
 
 const rangeLabels: Record<ActivityRange, string> = {
   today: "Today",
@@ -767,19 +766,10 @@ export function Profile() {
   const [tracker, setTracker] = useState<TrackerData | null>(null);
   const [range, setRange] = useState<ActivityRange>("today");
   const [profile, setProfile] = useState<PracticeProfile | null>(null);
-  const [isLoading, setIsLoading] = useState(() => {
-    if (typeof window === "undefined") return false;
-    const navigation = window.performance.getEntriesByType("navigation")[0] as
-      PerformanceNavigationTiming | undefined;
-    const legacyNavigation = window.performance.navigation;
-    return (
-      !hasShownProfileLoader &&
-      (navigation?.type === "reload" || legacyNavigation?.type === legacyNavigation.TYPE_RELOAD)
-    );
-  });
   const [editingProfile, setEditingProfile] = useState(false);
   const [importingData, setImportingData] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [previewingAvatar, setPreviewingAvatar] = useState(false);
   const [isAvatarChanging, setIsAvatarChanging] = useState(false);
@@ -795,16 +785,12 @@ export function Profile() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    hasShownProfileLoader = true;
-    let loaderTimer: ReturnType<typeof setTimeout> | undefined;
-    let loaderFailSafe: ReturnType<typeof setTimeout> | undefined;
     let avatarsLoaded = false;
     let refreshPending = false;
     let refreshing = false;
     const refresh = async () => {
       if (refreshing) { refreshPending = true; return; }
       refreshing = true;
-      const startedAt = Date.now();
       const saved = loadPracticeProfile();
       setRecords(loadHistory());
       setDailyTasks(loadDailyTasks());
@@ -815,8 +801,6 @@ export function Profile() {
       setNameDraft(saved?.name ?? "");
       setGoalDraft(saved ? String(saved.questionGoal) : "100");
       setManifestationDraft(saved?.manifestation ?? "");
-      // Never leave the screen blocked if a static avatar file stalls on a weak connection.
-      loaderFailSafe = setTimeout(() => setIsLoading(false), 1500);
       try {
         if (!avatarsLoaded) {
           const response = await fetch("/avatars/manifest.json", { cache: "no-store" });
@@ -831,11 +815,6 @@ export function Profile() {
       } catch {
         setAvatarFiles([]);
       } finally {
-        if (loaderFailSafe) clearTimeout(loaderFailSafe);
-        loaderTimer = setTimeout(
-          () => setIsLoading(false),
-          Math.max(0, 700 - (Date.now() - startedAt)),
-        );
         refreshing = false;
         if (refreshPending) {
           refreshPending = false;
@@ -848,8 +827,6 @@ export function Profile() {
     window.addEventListener("cbt-tracker-updated", refresh);
     window.addEventListener("ssc-daily-tasks-updated", refresh);
     return () => {
-      if (loaderTimer) clearTimeout(loaderTimer);
-      if (loaderFailSafe) clearTimeout(loaderFailSafe);
       window.removeEventListener("cbt-profile-updated", refresh);
       window.removeEventListener("cbt-tracker-updated", refresh);
       window.removeEventListener("ssc-daily-tasks-updated", refresh);
@@ -887,8 +864,9 @@ export function Profile() {
       incomplete: tasks.length - completed.length,
     };
   }, [dailyTasks, range]);
-  const saveProfile = () => {
-    if (!nameDraft.trim() || Number(goalDraft) < 1) return;
+  const saveProfile = async () => {
+    if (!nameDraft.trim() || Number(goalDraft) < 1 || isSavingProfile) return;
+    setIsSavingProfile(true);
     const next = {
       name: nameDraft.trim(),
       questionGoal: Math.min(100000, Number(goalDraft)),
@@ -896,20 +874,26 @@ export function Profile() {
       ...(manifestationDraft.trim() ? { manifestation: manifestationDraft.trim() } : {}),
       ...(examNameDraft.trim() ? { examName: examNameDraft.trim() } : {}),
     };
-    savePracticeProfile(next);
-    if (tracker) {
-      const nextTracker = saveTrackerData({
-        ...tracker,
-        meta: {
-          ...tracker.meta,
-          examName: examNameDraft.trim() || tracker.meta.examName,
-          prepStartDate: tracker.meta.prepStartDate || localDay(new Date()),
-        },
-      });
-      setTracker(nextTracker);
+    try {
+      savePracticeProfile(next);
+      if (tracker) {
+        const nextTracker = saveTrackerData({
+          ...tracker,
+          meta: {
+            ...tracker.meta,
+            examName: examNameDraft.trim() || tracker.meta.examName,
+            prepStartDate: tracker.meta.prepStartDate || localDay(new Date()),
+          },
+        });
+        setTracker(nextTracker);
+      }
+      // Keep the confirmation visible through the local-to-cloud handoff.
+      await new Promise((resolve) => window.setTimeout(resolve, 180));
+      setProfile(next);
+      setEditingProfile(false);
+    } finally {
+      setIsSavingProfile(false);
     }
-    setProfile(next);
-    setEditingProfile(false);
   };
   const displayName = profile?.name ?? "Your profile";
   const questionGoal = profile?.questionGoal ?? 100;
@@ -956,17 +940,6 @@ export function Profile() {
       setIsLoggingOut(false);
     }
   };
-
-  if (isLoading) {
-    return (
-      <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[#121212] text-zinc-300 backdrop-blur-xl">
-        <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-[#1d1d1d] px-4 py-3 shadow-2xl">
-          <LoaderCircle className="h-4 w-4 animate-spin text-emerald-400" />
-          <span className="text-sm font-medium">Loading profile</span>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <AppShell title="Your Profile">
@@ -1191,8 +1164,8 @@ export function Profile() {
               >
                 Cancel
               </Button>
-              <Button className="bg-emerald-600 hover:bg-emerald-500" onClick={saveProfile}>
-                <Save className="h-4 w-4" /> Save profile
+              <Button disabled={isSavingProfile} className="bg-emerald-600 hover:bg-emerald-500" onClick={saveProfile}>
+                {isSavingProfile ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save profile
               </Button>
             </div>
           </section>

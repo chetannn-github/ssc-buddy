@@ -1,3 +1,4 @@
+import { LoaderCircle } from "lucide-react";
 import { createContext, useContext, useState, type ReactNode } from "react";
 
 type DialogField = {
@@ -15,7 +16,7 @@ type FormDialog = {
   description?: string;
   fields: DialogField[];
   confirmLabel?: string;
-  onConfirm: (values: Record<string, string>) => void;
+  onConfirm: (values: Record<string, string>) => void | Promise<void>;
 };
 
 type ConfirmDialog = {
@@ -24,7 +25,7 @@ type ConfirmDialog = {
   description?: string;
   confirmLabel?: string;
   danger?: boolean | undefined;
-  onConfirm: () => void;
+  onConfirm: () => void | Promise<void>;
 };
 
 type DialogContextValue = {
@@ -43,6 +44,7 @@ export function useTrackerDialog() {
 export function TrackerDialogProvider({ children }: { children: ReactNode }) {
   const [dialog, setDialog] = useState<(FormDialog | ConfirmDialog) | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const openForm = (next: Omit<FormDialog, "kind">) => {
     setValues(
@@ -83,8 +85,14 @@ export function TrackerDialogProvider({ children }: { children: ReactNode }) {
                 className="mt-4 space-y-3"
                 onSubmit={(event) => {
                   event.preventDefault();
-                  dialog.onConfirm(values);
-                  close();
+                  if (isSubmitting) return;
+                  setIsSubmitting(true);
+                  Promise.all([
+                    Promise.resolve(dialog.onConfirm(values)),
+                    new Promise<void>((resolve) => window.setTimeout(resolve, 160)),
+                  ])
+                    .then(close)
+                    .finally(() => setIsSubmitting(false));
                 }}
               >
                 {dialog.fields.map((field) => (
@@ -104,7 +112,7 @@ export function TrackerDialogProvider({ children }: { children: ReactNode }) {
                     />
                   </label>
                 ))}
-                <DialogActions confirmLabel={dialog.confirmLabel ?? "Save"} onCancel={close} />
+                <DialogActions confirmLabel={dialog.confirmLabel ?? "Save"} onCancel={close} loading={isSubmitting} />
               </form>
             ) : (
               <div className="mt-5">
@@ -112,9 +120,16 @@ export function TrackerDialogProvider({ children }: { children: ReactNode }) {
                   confirmLabel={dialog.confirmLabel ?? "Confirm"}
                   danger={dialog.danger}
                   onCancel={close}
+                  loading={isSubmitting}
                   onConfirm={() => {
-                    dialog.onConfirm();
-                    close();
+                    if (isSubmitting) return;
+                    setIsSubmitting(true);
+                    Promise.all([
+                      Promise.resolve(dialog.onConfirm()),
+                      new Promise<void>((resolve) => window.setTimeout(resolve, 160)),
+                    ])
+                      .then(close)
+                      .finally(() => setIsSubmitting(false));
                   }}
                 />
               </div>
@@ -131,16 +146,19 @@ function DialogActions({
   danger = false,
   onCancel,
   onConfirm,
+  loading = false,
 }: {
   confirmLabel: string;
   danger?: boolean | undefined;
   onCancel: () => void;
   onConfirm?: () => void;
+  loading?: boolean;
 }) {
   return (
     <div className="flex justify-end gap-2 pt-2">
       <button
         type="button"
+        disabled={loading}
         onClick={onCancel}
         className="rounded-xl bg-white/8 px-3 py-2 text-sm text-zinc-200 transition hover:bg-white/12"
       >
@@ -148,12 +166,13 @@ function DialogActions({
       </button>
       <button
         type={onConfirm ? "button" : "submit"}
+        disabled={loading}
         onClick={onConfirm}
         className={`rounded-xl px-3 py-2 text-sm font-medium text-white transition ${
           danger ? "bg-red-500 hover:bg-red-400" : "bg-blue-500 hover:bg-blue-400"
         }`}
       >
-        {confirmLabel}
+        {loading && <LoaderCircle className="mr-1 inline h-3.5 w-3.5 animate-spin" />}{confirmLabel}
       </button>
     </div>
   );

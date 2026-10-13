@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Check, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Check, LoaderCircle, Plus, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { User } from "firebase/auth";
 import { Button } from "@/components/ui/button";
@@ -74,6 +74,7 @@ function DailyTasks() {
   const [editing, setEditing] = useState<DailyTask | null>(null);
   const [completing, setCompleting] = useState<DailyTask | null>(null);
   const [deleting, setDeleting] = useState<DailyTask | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [selectedHistoryDate, setSelectedHistoryDate] = useState<string | null>(null);
   const [historyRange, setHistoryRange] = useState<RangeKey>("week");
   const [range, setRange] = useState<RangeKey>("week");
@@ -93,11 +94,14 @@ function DailyTasks() {
     if (!isFirebaseConfigured) return;
     return observeFirebaseUser(setSyncUser);
   }, []);
-  const persist = (next: DailyTask[]) => {
+  const persist = async (next: DailyTask[]) => {
     const previous = tasks;
     setTasks(next);
     saveDailyTasks(next);
-    if (syncUser) void syncTaskChanges(syncUser, previous, next);
+    await Promise.all([
+      syncUser ? syncTaskChanges(syncUser, previous, next) : Promise.resolve(),
+      new Promise<void>((resolve) => window.setTimeout(resolve, 160)),
+    ]);
   };
   const today = todayKey();
   const tomorrowDate = useMemo(() => {
@@ -160,12 +164,12 @@ function DailyTasks() {
   const progress = daySummary.total
     ? Math.round((daySummary.completed / daySummary.total) * 100)
     : 0;
-  const createOrUpdate = (draft: TaskDraft) => {
+  const createOrUpdate = async (draft: TaskDraft) => {
     if (editing)
-      persist(tasks.map((task) => (task.id === editing.id ? { ...task, ...draft } : task)));
+      await persist(tasks.map((task) => (task.id === editing.id ? { ...task, ...draft } : task)));
     else {
       const now = new Date();
-      persist([
+      await persist([
         {
           id: crypto.randomUUID(),
           ...draft,
@@ -179,16 +183,16 @@ function DailyTasks() {
       ]);
     }
   };
-  const complete = (id: string, minutesSpent: number) =>
-    persist(
+  const complete = async (id: string, minutesSpent: number) =>
+    await persist(
       tasks.map((task) =>
         task.id === id
           ? { ...task, completed: true, completedAt: new Date().toISOString(), minutesSpent }
           : task,
       ),
     );
-  const reopen = (id: string) =>
-    persist(
+  const reopen = async (id: string) =>
+    await persist(
       tasks.map((task) =>
         task.id === id
           ? { ...task, completed: false, completedAt: null, minutesSpent: null }
@@ -550,17 +554,25 @@ function DailyTasks() {
               </DialogDescription>
             </DialogHeader>
             <DialogFooter className="mt-2 gap-2 sm:gap-2">
-              <Button variant="ghost" size="sm" onClick={() => setDeleting(null)}>
+              <Button variant="ghost" size="sm" disabled={isDeleting} onClick={() => setDeleting(null)}>
                 Cancel
               </Button>
               <Button
                 size="sm"
                 variant="destructive"
-                onClick={() => {
-                  if (deleting) persist(tasks.filter((item) => item.id !== deleting.id));
-                  setDeleting(null);
+                disabled={isDeleting}
+                onClick={async () => {
+                  if (!deleting || isDeleting) return;
+                  setIsDeleting(true);
+                  try {
+                    await persist(tasks.filter((item) => item.id !== deleting.id));
+                    setDeleting(null);
+                  } finally {
+                    setIsDeleting(false);
+                  }
                 }}
               >
+                {isDeleting && <LoaderCircle className="h-3.5 w-3.5 animate-spin" />}
                 Delete task
               </Button>
             </DialogFooter>
@@ -587,11 +599,29 @@ function TaskRow({
   readOnly?: boolean;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-white/10 bg-[#1b1b1b] px-3 py-2.5">
+    <div
+      role={readOnly ? undefined : "button"}
+      tabIndex={readOnly ? undefined : 0}
+      onClick={readOnly ? undefined : onEdit}
+      onKeyDown={
+        readOnly
+          ? undefined
+          : (event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onEdit();
+              }
+            }
+      }
+      className={`flex items-center gap-3 rounded-lg border border-white/10 bg-[#1b1b1b] px-3 py-2.5 ${readOnly ? "" : "cursor-pointer transition-colors hover:border-white/20 hover:bg-white/[0.035] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60"}`}
+    >
       <button
         type="button"
         disabled={readOnly}
-        onClick={() => (task.completed ? onReopen(task.id) : onComplete(task))}
+        onClick={(event) => {
+          event.stopPropagation();
+          task.completed ? onReopen(task.id) : onComplete(task);
+        }}
         className={`grid h-6 w-6 shrink-0 place-items-center rounded-md border disabled:cursor-default ${task.completed ? "border-emerald-400 bg-emerald-500 text-white" : readOnly ? "border-red-500/50 bg-red-500/10 text-red-400" : "border-white/20 text-transparent hover:border-emerald-400"}`}
       >
         {task.completed && <Check className="h-4 w-4" />}
@@ -614,10 +644,7 @@ function TaskRow({
       </div>
       {!readOnly && (
         <>
-          <Button size="icon" variant="ghost" onClick={onEdit}>
-            <Pencil />
-          </Button>
-          <Button size="icon" variant="ghost" onClick={onDelete}>
+          <Button size="icon" variant="ghost" onClick={(event) => { event.stopPropagation(); onDelete(); }}>
             <Trash2 />
           </Button>
         </>

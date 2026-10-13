@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "SSC Buddy",
+  "productName": "SSC Buddy Widget",
   "version": "1.0.0",
   "identifier": "com.sscbuddy.tasks.desktop",
   "build": {
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "SSC Buddy",
+        "title": "SSC Buddy Widget",
         "width": 400,
         "height": 475,
         "minWidth": 350,

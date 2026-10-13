@@ -1,8 +1,9 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { ActivityIndicator, Image, ImageBackground, Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
+import * as Google from "expo-auth-session/providers/google";
+import { ActivityIndicator, Image, ImageBackground, Platform, Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { useEffect, useRef, useState } from "react";
 
-import { continueWithEmail, isFirebaseConfigured } from "../lib/firebase";
+import { continueWithEmail, continueWithGoogleIdToken, isFirebaseConfigured } from "../lib/firebase";
 import { colors } from "../theme";
 
 const authImage = require("../../assets/auth.jpg");
@@ -20,11 +21,39 @@ export function AuthScreen({ onAuthenticated }: Props) {
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const androidClientId = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
+  const iosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
+  const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+  const [googleRequest, googleResponse, promptGoogle] = Google.useIdTokenAuthRequest({
+    androidClientId: androidClientId || undefined,
+    iosClientId: iosClientId || undefined,
+    webClientId: webClientId || undefined,
+    selectAccount: true,
+  });
   const schedulePasswordHide = () => {
     if (passwordHideTimer.current) clearTimeout(passwordHideTimer.current);
     passwordHideTimer.current = setTimeout(() => setShowPassword(false), 6500);
   };
   useEffect(() => () => { if (passwordHideTimer.current) clearTimeout(passwordHideTimer.current); }, []);
+
+  useEffect(() => {
+    if (!googleResponse) return;
+    if (googleResponse.type !== "success") {
+      if (googleResponse.type === "error") setMessage("Google sign-in was not completed. Please try again.");
+      return;
+    }
+    const idToken = googleResponse.params.id_token;
+    if (!idToken) {
+      setMessage("Google did not return an identity token. Check the OAuth client configuration.");
+      return;
+    }
+    setLoading(true);
+    setMessage("");
+    void continueWithGoogleIdToken(idToken)
+      .then(() => onAuthenticated())
+      .catch((error) => setMessage(authErrorMessage(error)))
+      .finally(() => setLoading(false));
+  }, [googleResponse, onAuthenticated]);
 
   const submit = async () => {
     if (!email.trim() || !password) return;
@@ -109,7 +138,19 @@ export function AuthScreen({ onAuthenticated }: Props) {
               </Pressable>
             </View>
             <View style={styles.divider}><View style={styles.dividerLine} /><Text style={styles.dividerText}>OR</Text><View style={styles.dividerLine} /></View>
-            <Pressable disabled={loading} style={[styles.google, loading && styles.disabled]} onPress={() => setMessage("Google sign-in will be enabled after Google OAuth client IDs are added to .env.")}>
+            <Pressable
+              disabled={loading || !googleRequest}
+              style={[styles.google, (loading || !googleRequest) && styles.disabled]}
+              onPress={() => {
+                const configured = Platform.OS === "ios" ? iosClientId : androidClientId;
+                if (!configured) {
+                  setMessage(`Google sign-in is not configured for ${Platform.OS === "ios" ? "iOS" : "Android"} yet.`);
+                  return;
+                }
+                setMessage("");
+                void promptGoogle();
+              }}
+            >
               <Image source={googleImage} style={styles.googleIcon} />
               <Text style={styles.googleText}>Continue with Google</Text>
             </Pressable>

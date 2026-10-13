@@ -1,3 +1,4 @@
+import { LoaderCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,12 +37,13 @@ export function TaskFormDialog({
   onOpenChange: (open: boolean) => void;
   task: DailyTask | null;
   subjects: string[];
-  onSubmit: (draft: TaskDraft) => void;
+  onSubmit: (draft: TaskDraft) => void | Promise<void>;
 }) {
   const [name, setName] = useState("");
   const [subject, setSubject] = useState("Other");
   const [type, setType] = useState<TaskType>("Lecture");
   const [schedule, setSchedule] = useState<"today" | "tomorrow">("today");
+  const [isSaving, setIsSaving] = useState(false);
   useEffect(() => {
     if (!open) return;
     setName(task?.name ?? "");
@@ -51,12 +53,17 @@ export function TaskFormDialog({
     tomorrow.setDate(tomorrow.getDate() + 1);
     setSchedule(task?.date === todayKey(tomorrow) ? "tomorrow" : "today");
   }, [open, task, subjects]);
-  const submit = () => {
-    if (!name.trim()) return;
+  const submit = async () => {
+    if (!name.trim() || isSaving) return;
     const date = new Date();
     if (schedule === "tomorrow") date.setDate(date.getDate() + 1);
-    onSubmit({ name: name.trim(), subject, type, date: task?.date ?? todayKey(date) });
-    onOpenChange(false);
+    setIsSaving(true);
+    try {
+      await onSubmit({ name: name.trim(), subject, type, date: task?.date ?? todayKey(date) });
+      onOpenChange(false);
+    } finally {
+      setIsSaving(false);
+    }
   };
   const subjectOptions = [...new Set([...subjects, "Other"])];
   return (
@@ -138,11 +145,11 @@ export function TaskFormDialog({
           )}
         </div>
         <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+          <Button variant="ghost" disabled={isSaving} onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={submit} disabled={!name.trim()}>
-            {" "}
+          <Button onClick={submit} disabled={!name.trim() || isSaving}>
+            {isSaving && <LoaderCircle className="h-4 w-4 animate-spin" />}
             {task ? "Save changes" : "Add task"}
           </Button>
         </DialogFooter>
@@ -158,9 +165,10 @@ export function CompleteTaskDialog({
 }: {
   task: DailyTask | null;
   onOpenChange: (open: boolean) => void;
-  onComplete: (id: string, minutes: number) => void;
+  onComplete: (id: string, minutes: number) => void | Promise<void>;
 }) {
   const [minutes, setMinutes] = useState("30");
+  const [isSaving, setIsSaving] = useState(false);
   useEffect(() => {
     if (task) {
       setMinutes("30");
@@ -206,12 +214,19 @@ export function CompleteTaskDialog({
             Cancel
           </Button>
           <Button
-            disabled={!task || total <= 0}
-            onClick={() => {
-              if (task) onComplete(task.id, total);
-              onOpenChange(false);
+            disabled={!task || total <= 0 || isSaving}
+            onClick={async () => {
+              if (!task || isSaving) return;
+              setIsSaving(true);
+              try {
+                await onComplete(task.id, total);
+                onOpenChange(false);
+              } finally {
+                setIsSaving(false);
+              }
             }}
           >
+            {isSaving && <LoaderCircle className="h-4 w-4 animate-spin" />}
             Save & complete
           </Button>
         </DialogFooter>

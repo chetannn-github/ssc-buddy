@@ -10,6 +10,7 @@ import {
   Scripts,
 } from "@tanstack/react-router";
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { LoaderCircle } from "lucide-react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -165,12 +166,14 @@ function RootComponent() {
 
   const [syncUser, setSyncUser] = useState<User | null>(null);
   const [authResolved, setAuthResolved] = useState(!isFirebaseConfigured);
+  const [workspaceReady, setWorkspaceReady] = useState(!isFirebaseConfigured);
 
   useEffect(() => {
     if (!isFirebaseConfigured) return;
     return observeFirebaseUser((user) => {
       if (user) prepareWebAccountCache(user.uid);
       setSyncUser(user);
+      setWorkspaceReady(!user);
       setAuthResolved(true);
     });
   }, []);
@@ -300,12 +303,15 @@ function RootComponent() {
 
   useEffect(() => {
     if (!syncUser) {
+      setWorkspaceReady(true);
       return;
     }
     if (!WEB_CLOUD_SYNC_ENABLED) {
+      setWorkspaceReady(true);
       return;
     }
     let disposed = false;
+    setWorkspaceReady(false);
     let stopPracticeSync: (() => void) | undefined;
     const startedAt = performance.now();
     debugFreeze("core cloud hydration started", { path });
@@ -355,8 +361,10 @@ function RootComponent() {
         tasks: remoteTasks.length,
         subjects: remoteTracker.subjects.length,
       });
+      if (!disposed) setWorkspaceReady(true);
     })().catch((error: unknown) => {
       console.error("[SSC Buddy debug] core cloud hydration failed", error);
+      if (!disposed) setWorkspaceReady(true);
     });
     return () => {
       disposed = true;
@@ -460,6 +468,14 @@ function RootComponent() {
       <QueryClientProvider client={queryClient}>
         {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
         <Outlet />
+        {syncUser && !workspaceReady && path !== "/auth" && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#121212] text-zinc-300 backdrop-blur-xl">
+            <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-[#1d1d1d] px-4 py-3 shadow-2xl">
+              <LoaderCircle className="h-4 w-4 animate-spin text-emerald-400" />
+              <span className="text-sm font-medium">Syncing your workspace</span>
+            </div>
+          </div>
+        )}
         {musicOpen && <MotivationalMusic onClose={() => setMusicOpen(false)} />}
         {videosOpen && (
           <MotivationalVideos

@@ -4,10 +4,12 @@ import { collection, deleteDoc, doc, getDoc, getDocs, getFirestore, onSnapshot, 
 import * as FirebaseAuth from "firebase/auth";
 import {
   createUserWithEmailAndPassword,
+  GoogleAuthProvider,
   getAuth,
   initializeAuth,
   onAuthStateChanged,
   signInWithEmailAndPassword,
+  signInWithCredential,
   signOut,
   type Auth,
   type User,
@@ -432,6 +434,13 @@ export async function continueWithEmail(email: string, password: string, createA
     ? await createUserWithEmailAndPassword(firebaseAuth, email, password)
     : await signInWithEmailAndPassword(firebaseAuth, email, password);
   return result.user;
+}
+
+/** Exchanges a native Google ID token for the same Firebase user used by web. */
+export async function continueWithGoogleIdToken(idToken: string) {
+  if (!idToken) throw new Error("Google did not return an identity token. Try again.");
+  const credential = GoogleAuthProvider.credential(idToken);
+  return (await signInWithCredential(getFirebaseAuth(), credential)).user;
 }
 
 export async function logout() {

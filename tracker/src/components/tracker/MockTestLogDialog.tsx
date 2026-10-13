@@ -1,3 +1,4 @@
+import { LoaderCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { todayISO, uid, type TrackerData } from "@/lib/tracker";
 
@@ -64,7 +65,7 @@ export function MockTestLogDialog({
   open: boolean;
   data: TrackerData;
   onClose: () => void;
-  onSave: (next: TrackerData) => void;
+  onSave: (next: TrackerData) => void | Promise<void>;
 }) {
   const [subjectId, setSubjectId] = useState(data.subjects[0]?.id ?? "");
   const [type, setType] = useState("Sectional");
@@ -73,6 +74,7 @@ export function MockTestLogDialog({
   const [total, setTotal] = useState("");
   const [accuracy, setAccuracy] = useState("");
   const [error, setError] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
   const isSectional = type === "Sectional";
 
   useEffect(() => {
@@ -90,7 +92,7 @@ export function MockTestLogDialog({
   const field =
     "h-10 w-full appearance-none rounded-xl border border-white/10 bg-black/20 px-3 text-sm text-white outline-none transition focus:border-blue-400/70 disabled:cursor-not-allowed disabled:opacity-40 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
 
-  const submit = (event: React.FormEvent<HTMLFormElement>) => {
+  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const numericScore = Number(score);
     const numericTotal = Number(total);
@@ -124,8 +126,17 @@ export function MockTestLogDialog({
       accuracy: numericAccuracy,
       notes: "",
     });
-    onSave(next);
-    onClose();
+    if (isSaving) return;
+    setIsSaving(true);
+    try {
+      await Promise.all([
+        onSave(next),
+        new Promise<void>((resolve) => window.setTimeout(resolve, 160)),
+      ]);
+      onClose();
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -221,6 +232,7 @@ export function MockTestLogDialog({
           <div className="flex justify-end gap-2 pt-2 sm:col-span-2">
             <button
               type="button"
+              disabled={isSaving}
               onClick={onClose}
               className="rounded-xl bg-white/8 px-3 py-2 text-sm text-zinc-200 hover:bg-white/12"
             >
@@ -228,9 +240,10 @@ export function MockTestLogDialog({
             </button>
             <button
               type="submit"
-              className="rounded-xl bg-blue-500 px-3 py-2 text-sm font-medium text-white hover:bg-blue-400"
+              disabled={isSaving}
+              className="rounded-xl bg-blue-500 px-3 py-2 text-sm font-medium text-white hover:bg-blue-400 disabled:cursor-wait disabled:opacity-70"
             >
-              Save mock test
+              {isSaving && <LoaderCircle className="mr-1 inline h-3.5 w-3.5 animate-spin" />} Save mock test
             </button>
           </div>
         </form>
