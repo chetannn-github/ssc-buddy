@@ -10,6 +10,7 @@ import {
   signInFirebase,
   signInWithGoogleFirebase,
 } from "@/lib/firebase-sync";
+import { prepareWebAccountCache } from "@/lib/account-cache";
 
 export const Route = createFileRoute("/auth")({ component: AuthPage });
 
@@ -36,6 +37,7 @@ function AuthPage() {
   }, [navigate]);
 
   const finishAuthentication = async (user: Awaited<ReturnType<typeof signInFirebase>>) => {
+    prepareWebAccountCache(user.uid);
     if (!hasMeaningfulLocalData() && await hasCloudSnapshot(user)) await downloadCloudSnapshot(user);
     await navigate({ to: "/", replace: true });
   };

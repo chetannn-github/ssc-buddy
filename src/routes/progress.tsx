@@ -327,16 +327,15 @@ function Progress() {
             </div>
           </div>
 
-          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            <Stat label="Tests" value={tests.length} />
-            <Stat label="Highest" value={summary.highest} suffix="marks" />
-            <Stat label="Lowest" value={summary.lowest} suffix="marks" />
-            <Stat label="Average" value={summary.averageMarks} suffix="marks" />
-            <Stat label="Avg. accuracy" value={summary.averageAccuracy} suffix="%" />
-          </div>
-
           {tests.length ? (
             <>
+              <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                <Stat label="Tests" value={tests.length} />
+                <Stat label="Highest" value={summary.highest} suffix="marks" />
+                <Stat label="Lowest" value={summary.lowest} suffix="marks" />
+                <Stat label="Average" value={summary.averageMarks} suffix="marks" />
+                <Stat label="Avg. accuracy" value={summary.averageAccuracy} suffix="%" />
+              </div>
               <div className="mt-6 grid gap-4 lg:grid-cols-2">
                 <ChartCard
                   title="Marks trend"

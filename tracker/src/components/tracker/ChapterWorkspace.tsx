@@ -197,6 +197,18 @@ export function ChapterWorkspace({ mode }: { mode: Mode }) {
     });
   };
 
+  if (!data.subjects.length) {
+    return (
+      <div className="mt-6 rounded-xl border border-dashed border-white/15 bg-card/60 px-5 py-10 text-center">
+        <Label>{mode === "syllabus" ? "Syllabus" : "Revision"}</Label>
+        <h2 className="mt-2 text-base font-medium text-foreground">No subjects yet</h2>
+        <GhostButton tone="blue" className="mt-4" onClick={addSubject}>
+          + Add subject
+        </GhostButton>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-3">
       <div className="sticky top-0 z-10 -mx-3 border-b border-white/10 bg-[#121212]/95 px-3 pt-1 pb-3 backdrop-blur sm:-mx-4 sm:px-4">

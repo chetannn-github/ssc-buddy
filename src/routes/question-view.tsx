@@ -112,7 +112,15 @@ function QuestionViewer() {
                 </Button>
               </div>
             </section>
-            <QuestionPalette questions={questions} current={current} onSelect={setCurrent} />
+            <QuestionPalette
+              questions={questions}
+              current={current}
+              favoriteIds={favoriteIds}
+              subjectName={subjectName}
+              chapterName={chapterName}
+              exerciseName={exerciseName}
+              onSelect={setCurrent}
+            />
           </div>
         ) : (
           <div className="mx-auto max-w-lg rounded-xl border border-dashed border-white/15 px-6 py-16 text-center">
@@ -168,32 +176,45 @@ function AnswerOption({
 function QuestionPalette({
   questions,
   current,
+  favoriteIds,
+  subjectName,
+  chapterName,
+  exerciseName,
   onSelect,
 }: {
   questions: McqQuestion[];
   current: number;
+  favoriteIds: Set<string>;
+  subjectName: string;
+  chapterName: string;
+  exerciseName: string;
   onSelect: (index: number) => void;
 }) {
   return (
     <aside className="h-fit rounded-xl border border-white/10 bg-[#1b1b1b] p-4 lg:sticky lg:top-24">
       <h3 className="text-sm font-semibold">Question palette</h3>
-      <p className="mt-1 text-xs text-zinc-500">Jump to any question</p>
+      <p className="mt-1 text-xs text-zinc-500">Gold = favourite</p>
       <div className="mt-4 grid max-h-[420px] grid-cols-5 gap-2 overflow-y-auto pt-2 pr-1 pb-2 pl-2">
-        {questions.map((question, index) => (
-          <button
+        {questions.map((question, index) => {
+          const isFavorite = favoriteIds.has(questionFavoriteId(subjectName, chapterName, exerciseName, question, index));
+          return <button
             key={`${question.number ?? index}-${index}`}
             type="button"
             className={cn(
-              "flex h-10 w-10 items-center justify-center rounded-md border text-xs font-semibold transition-all hover:scale-105",
+              "relative flex h-10 w-10 items-center justify-center rounded-md border text-xs font-semibold transition-all hover:scale-105",
               index === current
-                ? "border-primary bg-primary text-primary-foreground ring-2 ring-primary ring-offset-2 ring-offset-[#1b1b1b]"
+                ? isFavorite
+                  ? "border-amber-300 bg-amber-400 text-amber-950 ring-2 ring-amber-300 ring-offset-2 ring-offset-[#1b1b1b]"
+                  : "border-primary bg-primary text-primary-foreground ring-2 ring-primary ring-offset-2 ring-offset-[#1b1b1b]"
+                : isFavorite
+                  ? "border-amber-400/45 bg-amber-400/10 text-amber-300 hover:bg-amber-400/20"
                 : "border-white/10 bg-white/[0.03] text-zinc-400 hover:bg-white/10",
             )}
             onClick={() => onSelect(index)}
           >
             {question.number ?? index + 1}
           </button>
-        ))}
+        })}
       </div>
     </aside>
   );

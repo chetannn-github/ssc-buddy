@@ -30,6 +30,7 @@ import { migrateTasksIfEmpty, readTasks } from "@/lib/task-sync";
 import { loadTrackerData, saveTrackerData } from "@/lib/tracker-store";
 import { migrateTrackerIfEmpty, readTrackerSections } from "@/lib/tracker-sync";
 import { WEB_CLOUD_SYNC_ENABLED } from "@/lib/web-cloud-sync";
+import { prepareWebAccountCache } from "@/lib/account-cache";
 import type { User } from "firebase/auth";
 
 const DEBUG_FREEZE = import.meta.env.DEV;
@@ -166,6 +167,7 @@ function RootComponent() {
   useEffect(() => {
     if (!isFirebaseConfigured) return;
     return observeFirebaseUser((user) => {
+      if (user) prepareWebAccountCache(user.uid);
       setSyncUser(user);
       setAuthResolved(true);
     });

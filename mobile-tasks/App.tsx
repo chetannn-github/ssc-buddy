@@ -40,7 +40,8 @@ import { ComingSoonScreen } from "./src/screens/ComingSoonScreen";
 import { AuthScreen } from "./src/screens/AuthScreen";
 import { isFirebaseConfigured, migrateTasksIfEmpty, observeSession, patchCloudProfile, readCloudProfile, syncTaskChanges, watchCloudProfile, watchPracticeEntities, watchTasks, watchTrackerSections, writeQuestionLearning } from "./src/lib/firebase";
 import { logout } from "./src/lib/firebase";
-import { loadProfile, normalizeProfile, saveProfile, type PracticeProfile } from "./src/lib/profile-store";
+import { defaultProfile, loadProfile, normalizeProfile, saveProfile, type PracticeProfile } from "./src/lib/profile-store";
+import { prepareMobileAccountCache } from "./src/lib/account-cache";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
 import { MediaOverlay, type MediaMode } from "./src/screens/MediaOverlay";
 import { PracticeScreen } from "./src/screens/PracticeScreen";
@@ -147,6 +148,9 @@ export default function App() {
   const [manifestationRepeats, setManifestationRepeats] = useState(0);
   const [manifestationError, setManifestationError] = useState("");
   const learningFingerprint = useRef("");
+  const authChangeVersion = useRef(0);
+  const taskCacheVersion = useRef(0);
+  const profileCacheVersion = useRef(0);
   const [tab, setTab] = useState<"Tasks" | "Analytics" | "History">("Tasks");
   const [taskTabsWidth, setTaskTabsWidth] = useState(0);
   const taskTabIndicator = useRef(new Animated.Value(0)).current;
@@ -211,10 +215,32 @@ export default function App() {
   };
   useEffect(() => {
     if (!isFirebaseConfigured) return;
-    return observeSession((user) => {
-      setAuthenticated(Boolean(user));
-      setUser(user);
-      setAuthReady(true);
+    return observeSession((nextUser) => {
+      const version = ++authChangeVersion.current;
+      if (!nextUser) {
+        setAuthenticated(false);
+        setUser(null);
+        setAuthReady(true);
+        return;
+      }
+      void prepareMobileAccountCache(nextUser.uid).then((switchedAccount) => {
+        if (version !== authChangeVersion.current) return;
+        if (switchedAccount) {
+          taskCacheVersion.current += 1;
+          profileCacheVersion.current += 1;
+          setTasks([]);
+          setProfileSettings(defaultProfile());
+          learningFingerprint.current = "";
+        }
+        setUser(nextUser);
+        setAuthenticated(true);
+        setAuthReady(true);
+      }).catch(() => {
+        if (version !== authChangeVersion.current) return;
+        setUser(nextUser);
+        setAuthenticated(true);
+        setAuthReady(true);
+      });
     });
   }, []);
   useEffect(() => {
@@ -222,7 +248,10 @@ export default function App() {
     return () => clearTimeout(timer);
   }, []);
   useEffect(() => {
-    void loadProfile().then(setProfileSettings);
+    const version = profileCacheVersion.current;
+    void loadProfile().then((profile) => {
+      if (version === profileCacheVersion.current) setProfileSettings(profile);
+    });
   }, []);
   useEffect(() => {
     if (!authenticated || !profileSettings) return;
@@ -301,13 +330,16 @@ export default function App() {
 
   useEffect(() => {
     void (async () => {
+      const version = taskCacheVersion.current;
       const current = await AsyncStorage.getItem(TASK_STORAGE_KEY);
       const raw = current ?? await AsyncStorage.getItem(LEGACY_TASK_STORAGE_KEY);
+      if (version !== taskCacheVersion.current) return;
       const stored = raw ? (JSON.parse(raw) as Task[]) : [];
       const normalized = stored.map((storedTask) => {
         const { targetMinutes: _legacyTarget, ...task } = storedTask as Task & { targetMinutes?: number };
         return task;
       }).filter((task) => !task.id.startsWith("demo-"));
+      if (version !== taskCacheVersion.current) return;
       setTasks(normalized);
       await AsyncStorage.setItem(TASK_STORAGE_KEY, JSON.stringify(normalized));
       if (!current && raw) await AsyncStorage.removeItem(LEGACY_TASK_STORAGE_KEY);
@@ -528,7 +560,7 @@ export default function App() {
     return (
       <SafeAreaProvider>
         <StatusBar hidden />
-        <AuthScreen onAuthenticated={() => setAuthenticated(true)} />
+        <AuthScreen onAuthenticated={() => undefined} />
       </SafeAreaProvider>
     );
   }
