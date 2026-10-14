@@ -34,6 +34,8 @@ import {
 } from "@/lib/daily-tasks";
 import { loadTrackerData } from "@/lib/tracker-store";
 import { isFirebaseConfigured, observeFirebaseUser } from "@/lib/firebase-sync";
+import { publishLeaderboardEntry } from "@/lib/leaderboard";
+import { loadPracticeProfile } from "@/lib/profile";
 import { syncTaskChanges } from "@/lib/task-sync";
 
 export const Route = createFileRoute("/tasks")({ component: DailyTasks });
@@ -98,8 +100,12 @@ function DailyTasks() {
     const previous = tasks;
     setTasks(next);
     saveDailyTasks(next);
+    const profile = loadPracticeProfile();
     await Promise.all([
       syncUser ? syncTaskChanges(syncUser, previous, next) : Promise.resolve(),
+      syncUser && profile?.username
+        ? publishLeaderboardEntry(syncUser, profile, next).catch(() => undefined)
+        : Promise.resolve(),
       new Promise<void>((resolve) => window.setTimeout(resolve, 160)),
     ]);
   };

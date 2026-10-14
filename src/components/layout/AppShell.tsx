@@ -23,10 +23,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getStreaks } from "@/lib/analytics";
-import { loadHistory, type TestRecord } from "@/lib/exam";
+import { loadHistory, onPracticePersist, type TestRecord } from "@/lib/exam";
 import { trackerActiveDates } from "@/lib/tracker";
 import { loadTrackerData, saveTrackerData } from "@/lib/tracker-store";
+import { loadDailyTasks } from "@/lib/daily-tasks";
 import { loadPracticeProfile, savePracticeProfile, type PracticeProfile } from "@/lib/profile";
+import { checkUsernameAvailability, normalizeUsername, readCloudProfile, saveProfileWithUsername, savePublicProfileActivity, usernameValidationMessage, watchCloudProfile } from "@/lib/firebase-sync";
 import type { User } from "firebase/auth";
 import { useAuthUser } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
@@ -75,6 +77,20 @@ function localDateKey() {
   ).padStart(2, "0")}`;
 }
 
+function cloudPracticeProfile(value: Record<string, unknown> | null): PracticeProfile | null {
+  if (!value || typeof value["name"] !== "string" || !value["name"].trim()) return null;
+  const questionGoal = Number(value["questionGoal"]);
+  if (!Number.isFinite(questionGoal) || questionGoal < 1) return null;
+  return {
+    name: value["name"].trim(),
+    questionGoal: Math.round(questionGoal),
+    ...(typeof value["username"] === "string" && value["username"].trim() ? { username: value["username"].trim().toLowerCase() } : {}),
+    ...(typeof value["avatar"] === "string" && value["avatar"] ? { avatar: value["avatar"] } : {}),
+    ...(typeof value["manifestation"] === "string" && value["manifestation"].trim() ? { manifestation: value["manifestation"].trim().toUpperCase() } : {}),
+    ...(typeof value["examName"] === "string" && value["examName"].trim() ? { examName: value["examName"].trim() } : {}),
+  };
+}
+
 function hasCompletedTodayManifestation() {
   try {
     return localStorage.getItem(MANIFESTATION_COMPLETION_KEY) === localDateKey();
@@ -92,42 +108,66 @@ function completeTodayManifestation() {
   }
 }
 
-function ProfileOnboarding({ onComplete, user }: { onComplete: (profile: PracticeProfile) => void; user: User }) {
-  const [name, setName] = useState("");
-  const [goal, setGoal] = useState("100");
-  const [examName, setExamName] = useState("SSC CGL 2027");
-  const [examDate, setExamDate] = useState("");
+function ProfileOnboarding({ onComplete, user, existingProfile }: { onComplete: (profile: PracticeProfile) => void; user: User; existingProfile: PracticeProfile | null }) {
+  const [name, setName] = useState(existingProfile?.name ?? user.displayName?.trim() ?? "");
+  const [username, setUsername] = useState("");
+  const [usernameStatus, setUsernameStatus] = useState<"idle" | "checking" | "available" | "taken" | "invalid">("idle");
+  const [usernameMessage, setUsernameMessage] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [goal, setGoal] = useState(String(existingProfile?.questionGoal ?? 100));
+  const [examName, setExamName] = useState(existingProfile?.examName ?? "SSC CGL 2027");
+  const [manifestation, setManifestation] = useState(existingProfile?.manifestation ?? "");
   const parsedGoal = Math.max(1, Math.min(100000, Number(goal) || 0));
-  const canContinue = name.trim().length > 0 && Number(goal) >= 1;
+  const canContinue = name.trim().length > 0 && Number(goal) >= 1 && usernameStatus === "available";
+
+  useEffect(() => {
+    const value = normalizeUsername(username);
+    const validationError = usernameValidationMessage(value);
+    if (validationError) { setUsernameStatus(value ? "invalid" : "idle"); setUsernameMessage(value ? validationError : ""); return; }
+    setUsernameStatus("checking"); setUsernameMessage("Checking availability…");
+    const timer = window.setTimeout(() => {
+      void checkUsernameAvailability(user, value).then((result) => {
+        setUsernameStatus(result.available ? "available" : "taken");
+        setUsernameMessage(result.available ? "Username is available." : result.reason);
+      }).catch((error) => { const code = typeof error === "object" && error && "code" in error ? String(error.code) : ""; setUsernameStatus("idle"); setUsernameMessage(code === "permission-denied" ? "Username checks need the latest Firestore rules." : "Could not check availability. Try again."); });
+    }, 360);
+    return () => window.clearTimeout(timer);
+  }, [username, user]);
 
   const submit = async () => {
-    if (!canContinue) return;
+    if (!canContinue || isSaving) return;
+    setIsSaving(true);
     const profile = {
       name: name.trim(),
+      username: normalizeUsername(username),
       questionGoal: parsedGoal,
+      ...(existingProfile?.avatar ? { avatar: existingProfile.avatar } : {}),
+      ...(manifestation.trim() ? { manifestation: manifestation.trim().toUpperCase() } : {}),
       ...(examName.trim() ? { examName: examName.trim() } : {}),
     };
-    savePracticeProfile(profile);
-    const tracker = loadTrackerData();
-    saveTrackerData({
-      ...tracker,
-      meta: {
-        ...tracker.meta,
-        examName: examName.trim() || tracker.meta.examName,
-        prepStartDate: localDateKey(),
-        examDate,
-      },
-    });
-    onComplete(profile);
+    try {
+      await saveProfileWithUsername(user, profile);
+      savePracticeProfile(profile);
+      const tracker = loadTrackerData();
+      saveTrackerData({
+        ...tracker,
+        meta: {
+          ...tracker.meta,
+          examName: examName.trim() || tracker.meta.examName,
+          prepStartDate: localDateKey(),
+        },
+      });
+      onComplete(profile);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not save your username. Try again.";
+      setUsernameStatus(message.toLowerCase().includes("taken") ? "taken" : "idle");
+      setUsernameMessage(message);
+    } finally { setIsSaving(false); }
   };
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4 backdrop-blur-md">
-      <section className="w-full max-w-md rounded-3xl border border-white/10 bg-[#202020] p-6 text-zinc-100 shadow-[0_24px_70px_-24px_black] sm:p-8">
-        <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-400/15 text-emerald-300">
-          <GraduationCap className="h-6 w-6" />
-        </span>
-        <h2 className="mt-5 text-2xl font-semibold">Setup your profile</h2>
-        <p className="mt-1 text-sm text-zinc-400">Signed in as {user.email ?? "your account"}</p>
+      <section className="w-full max-w-md rounded-2xl border border-white/10 bg-[#1e1e1e] p-6 text-zinc-100 shadow-2xl sm:p-8">
+        <h2 className="text-xl font-semibold tracking-tight text-zinc-50">Setup your profile</h2>
           <div className="mt-6 space-y-4">
           <label className="block text-sm font-medium text-zinc-200">
             Your name
@@ -138,6 +178,23 @@ function ProfileOnboarding({ onComplete, user }: { onComplete: (profile: Practic
               placeholder="Enter your name"
               autoFocus
             />
+          </label>
+          <label className="block text-sm font-medium text-zinc-200">
+            Username
+            <div className="relative mt-2">
+              <Input
+                className="h-11 border-white/10 bg-zinc-900 pr-10 text-zinc-100 lowercase"
+                value={username}
+                onChange={(event) => setUsername(event.target.value.toLowerCase())}
+                placeholder="e.g. ssc_aspirant"
+                autoCapitalize="none"
+                autoCorrect="off"
+              />
+              {usernameStatus === "checking" && <span className="absolute inset-y-0 right-3 flex items-center text-xs text-zinc-500">…</span>}
+              {usernameStatus === "available" && <span className="absolute inset-y-0 right-3 flex items-center text-emerald-400">✓</span>}
+              {usernameStatus === "taken" && <span className="absolute inset-y-0 right-3 flex items-center text-red-400">×</span>}
+            </div>
+            {usernameMessage && <span className={cn("mt-1 block text-xs font-normal", usernameStatus === "available" ? "text-emerald-400" : "text-red-300")}>{usernameMessage}</span>}
           </label>
           <label className="block text-sm font-medium text-zinc-200">
             Questions you want to complete
@@ -159,24 +216,24 @@ function ProfileOnboarding({ onComplete, user }: { onComplete: (profile: Practic
             />
           </label>
           <label className="block text-sm font-medium text-zinc-200">
-            Exam date <span className="font-normal text-zinc-500">(optional)</span>
-            <Input
-              className="mt-2 h-11 border-white/10 bg-zinc-900 text-zinc-100"
-              type="date"
-              value={examDate}
-              onChange={(event) => setExamDate(event.target.value)}
+            Daily manifestation <span className="font-normal text-zinc-500">(optional)</span>
+            <textarea
+              className="mt-2 min-h-24 w-full rounded-md border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 uppercase placeholder:text-zinc-500 focus-visible:border-zinc-500 focus-visible:outline-none"
+              value={manifestation}
+              onChange={(event) => setManifestation(event.target.value.toUpperCase())}
+              placeholder="Write the sentence you want to type daily"
             />
             <span className="mt-1 block text-xs font-normal text-zinc-500">
-              Your preparation start date will be set to today.
+              Leave blank to keep the daily manifestation disabled.
             </span>
           </label>
         </div>
         <Button
           className="mt-6 h-11 w-full bg-emerald-600 hover:bg-emerald-500"
-          disabled={!canContinue}
+          disabled={!canContinue || isSaving}
           onClick={() => void submit()}
         >
-          Create my profile
+          {isSaving ? "Creating profile…" : "Create my profile"}
         </Button>
       </section>
     </div>
@@ -1071,6 +1128,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
   const [records, setRecords] = useState<TestRecord[]>([]);
   const [trackerActivityDates, setTrackerActivityDates] = useState<string[]>([]);
   const [profile, setProfile] = useState<PracticeProfile | null | undefined>(undefined);
+  const [profileHydrated, setProfileHydrated] = useState(false);
   const [celebratedStreak, setCelebratedStreak] = useState<number | null>(null);
   const [streakReady, setStreakReady] = useState(false);
   const [manifestationOpen, setManifestationOpen] = useState(false);
@@ -1086,8 +1144,14 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
     };
     refresh();
     window.addEventListener("cbt-tracker-updated", refresh);
+    window.addEventListener("ssc-daily-tasks-updated", refresh);
+    const stopPracticeObserver = onPracticePersist((key) => {
+      if (key === "cbt-history") refresh();
+    });
     return () => {
       window.removeEventListener("cbt-tracker-updated", refresh);
+      window.removeEventListener("ssc-daily-tasks-updated", refresh);
+      stopPracticeObserver();
     };
   }, []);
 
@@ -1099,11 +1163,50 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
   }, []);
 
   useEffect(() => {
+    let active = true;
+    if (!authUser) { setProfileHydrated(true); return; }
+    setProfileHydrated(false);
+    const applyCloudProfile = (raw: Record<string, unknown> | null) => {
+      const next = cloudPracticeProfile(raw);
+      if (next) savePracticeProfile(next);
+      if (active && next) setProfile(next);
+      if (active) setProfileHydrated(true);
+    };
+    void readCloudProfile(authUser).then(applyCloudProfile).catch(() => { if (active) setProfileHydrated(true); });
+    const unsubscribe = watchCloudProfile(authUser, applyCloudProfile);
+    return () => { active = false; unsubscribe(); };
+  }, [authUser?.uid]);
+
+  useEffect(() => {
     if (!profile) return;
     setManifestationOpen(
       Boolean(profile.manifestation?.trim()) && !hasCompletedTodayManifestation(),
     );
   }, [profile]);
+
+  useEffect(() => {
+    if (!authUser || !profile?.username) return;
+    const activity: Record<string, number> = {};
+    const add = (value: string, count = 1) => {
+      const date = value.slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+      activity[date] = (activity[date] ?? 0) + Math.max(1, Math.round(count));
+    };
+    records.forEach((record) => add(record.date));
+    const tracker = loadTrackerData();
+    tracker.tests.log.forEach((test) => add(test.date));
+    tracker.activity.forEach((entry) => add(entry.date, Math.abs(Number(entry.count) || 1)));
+    const publicRecords = records.map(({ questions: _questions, answerKey: _answerKey, questionIds: _questionIds, answers, ...record }) => ({
+      ...record,
+      // Retain only the number attempted for dashboard metrics, never selected answers.
+      answers: answers.map((answer) => (answer ? "A" : null)),
+    }));
+    void savePublicProfileActivity(authUser, profile, activity, {
+      records: publicRecords,
+      tracker,
+      dailyTasks: loadDailyTasks(),
+    }).catch(() => undefined);
+  }, [authUser, profile, records, trackerActivityDates]);
 
   const currentStreak = getStreaks([
     ...records,
@@ -1124,32 +1227,9 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
     setCelebratedStreak(currentStreak);
   }, [currentStreak, streakReady]);
 
-  const isDarkPage =
-    path === "/" ||
-    path === "/profile" ||
-    path === "/tasks" ||
-    path === "/track" ||
-    path === "/progress" ||
-    path === "/mock-tests" ||
-    path === "/test" ||
-    path === "/quick-recall" ||
-    path.startsWith("/question-bank") ||
-    path === "/question-view" ||
-    path.startsWith("/history");
   return (
-    <div
-      className={cn(
-        "flex min-h-screen w-full flex-col",
-        isDarkPage ? "bg-[#121212]" : "bg-background",
-      )}
-    >
-      <header
-        className={cn(
-          "h-16 border-0 shadow-none",
-          isDarkPage ? "bg-[#1b1b1b] text-zinc-100" : "text-exam-header-foreground",
-        )}
-        style={isDarkPage ? undefined : { backgroundImage: "var(--gradient-header)" }}
-      >
+    <div className="flex min-h-screen w-full flex-col bg-[#121212] text-zinc-100">
+      <header className="h-16 border-0 bg-[#1b1b1b] text-zinc-100 shadow-none">
         <div className="mx-auto flex h-16 w-full max-w-5xl items-center gap-4 px-4 sm:px-6">
           <Link
             to="/tasks"
@@ -1217,7 +1297,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
       >
         {children}
       </main>
-      {profile === null && authUser && <ProfileOnboarding user={authUser} onComplete={setProfile} />}
+      {profileHydrated && profile !== undefined && !profile?.username && authUser && <ProfileOnboarding user={authUser} existingProfile={profile} onComplete={setProfile} />}
       {profile?.manifestation && manifestationOpen && (
         <DailyManifestation
           manifestation={profile.manifestation}

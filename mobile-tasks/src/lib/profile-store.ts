@@ -5,6 +5,7 @@ const LEGACY_PROFILE_KEY = "ssc-buddy-mobile:profile:v1";
 
 export type PracticeProfile = {
   name: string;
+  username?: string;
   questionGoal: number;
   avatar?: string;
   manifestation?: string;
@@ -19,6 +20,7 @@ export function normalizeProfile(value: unknown): PracticeProfile {
   const questionGoal = typeof profile.questionGoal === "number" ? profile.questionGoal : legacyGoal;
   return {
     name: typeof profile.name === "string" ? profile.name.trim() : "",
+    ...(typeof profile.username === "string" && profile.username.trim() ? { username: profile.username.trim().toLowerCase() } : {}),
     questionGoal: Math.max(1, Math.min(100000, Math.round(Number.isFinite(questionGoal) ? questionGoal : 100))),
     ...(typeof profile.avatar === "string" && profile.avatar ? { avatar: profile.avatar } : {}),
     ...(typeof profile.manifestation === "string" && profile.manifestation.trim() ? { manifestation: profile.manifestation.trim().toUpperCase() } : {}),

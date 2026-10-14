@@ -10,7 +10,9 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as UsernameRouteImport } from './routes/$username'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as LeaderboardRouteImport } from './routes/leaderboard'
 import { Route as MockTestsRouteImport } from './routes/mock-tests'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as ProgressRouteImport } from './routes/progress'
@@ -28,9 +30,19 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const UsernameRoute = UsernameRouteImport.update({
+  id: '/$username',
+  path: '/$username',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LeaderboardRoute = LeaderboardRouteImport.update({
+  id: '/leaderboard',
+  path: '/leaderboard',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MockTestsRoute = MockTestsRouteImport.update({
@@ -91,7 +103,9 @@ const HistoryIdRoute = HistoryIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/$username': typeof UsernameRoute
   '/auth': typeof AuthRoute
+  '/leaderboard': typeof LeaderboardRoute
   '/mock-tests': typeof MockTestsRoute
   '/profile': typeof ProfileRoute
   '/progress': typeof ProgressRoute
@@ -106,7 +120,9 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/$username': typeof UsernameRoute
   '/auth': typeof AuthRoute
+  '/leaderboard': typeof LeaderboardRoute
   '/mock-tests': typeof MockTestsRoute
   '/profile': typeof ProfileRoute
   '/progress': typeof ProgressRoute
@@ -122,7 +138,9 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/$username': typeof UsernameRoute
   '/auth': typeof AuthRoute
+  '/leaderboard': typeof LeaderboardRoute
   '/mock-tests': typeof MockTestsRoute
   '/profile': typeof ProfileRoute
   '/progress': typeof ProgressRoute
@@ -139,7 +157,9 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/$username'
     | '/auth'
+    | '/leaderboard'
     | '/mock-tests'
     | '/profile'
     | '/progress'
@@ -154,7 +174,9 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/$username'
     | '/auth'
+    | '/leaderboard'
     | '/mock-tests'
     | '/profile'
     | '/progress'
@@ -169,7 +191,9 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/$username'
     | '/auth'
+    | '/leaderboard'
     | '/mock-tests'
     | '/profile'
     | '/progress'
@@ -185,7 +209,9 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  UsernameRoute: typeof UsernameRoute
   AuthRoute: typeof AuthRoute
+  LeaderboardRoute: typeof LeaderboardRoute
   MockTestsRoute: typeof MockTestsRoute
   ProfileRoute: typeof ProfileRoute
   ProgressRoute: typeof ProgressRoute
@@ -208,11 +234,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/$username': {
+      id: '/$username'
+      path: '/$username'
+      fullPath: '/$username'
+      preLoaderRoute: typeof UsernameRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth': {
       id: '/auth'
       path: '/auth'
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/leaderboard': {
+      id: '/leaderboard'
+      path: '/leaderboard'
+      fullPath: '/leaderboard'
+      preLoaderRoute: typeof LeaderboardRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/mock-tests': {
@@ -297,7 +337,9 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  UsernameRoute: UsernameRoute,
   AuthRoute: AuthRoute,
+  LeaderboardRoute: LeaderboardRoute,
   MockTestsRoute: MockTestsRoute,
   ProfileRoute: ProfileRoute,
   ProgressRoute: ProgressRoute,

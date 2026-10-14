@@ -5,5 +5,36 @@ service cloud.firestore {
     match /users/{userId}/{document=**} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
+
+    // A small global index makes profile usernames unique across accounts.
+    // The mobile app claims/replaces these records in a Firestore transaction.
+    match /usernames/{username} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.username == username;
+      allow update: if request.auth != null
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.username == username;
+      allow delete: if request.auth != null && resource.data.uid == request.auth.uid;
+    }
+
+    // Public, deliberately limited profile data. Private study records remain
+    // under /users and are never readable by profile visitors.
+    match /publicProfiles/{username} {
+      allow read: if true;
+      allow create, update: if request.auth != null
+        && request.resource.data.uid == request.auth.uid
+        && getAfter(/databases/$(database)/documents/usernames/$(username)).data.uid == request.auth.uid;
+      allow delete: if request.auth != null && resource.data.uid == request.auth.uid;
+    }
+
+    match /leaderboards/{week}/entries/{userId} {
+      allow read: if true;
+      allow create, update: if request.auth != null && request.auth.uid == userId
+        && request.resource.data.uid == request.auth.uid;
+      allow delete: if request.auth != null && request.auth.uid == userId;
+    }
   }
 }

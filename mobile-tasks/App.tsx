@@ -38,11 +38,12 @@ import { BottomNavigation } from "./src/components/BottomNavigation";
 import { type TabKey, tabs } from "./src/navigation/tabs";
 import { ComingSoonScreen } from "./src/screens/ComingSoonScreen";
 import { AuthScreen } from "./src/screens/AuthScreen";
-import { isFirebaseConfigured, migrateTasksIfEmpty, observeSession, patchCloudProfile, readCloudProfile, syncTaskChanges, watchCloudProfile, watchPracticeEntities, watchTasks, watchTrackerSections, writeQuestionLearning } from "./src/lib/firebase";
+import { isFirebaseConfigured, migrateTasksIfEmpty, observeSession, patchCloudProfile, publishLeaderboardEntry, readCloudProfile, saveProfileWithUsername, syncTaskChanges, watchCloudProfile, watchPracticeEntities, watchTasks, watchTrackerSections, writeQuestionLearning } from "./src/lib/firebase";
 import { logout } from "./src/lib/firebase";
 import { defaultProfile, loadProfile, normalizeProfile, saveProfile, type PracticeProfile } from "./src/lib/profile-store";
 import { prepareMobileAccountCache } from "./src/lib/account-cache";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
+import { LeaderboardScreen } from "./src/screens/LeaderboardScreen";
 import { MediaOverlay, type MediaMode } from "./src/screens/MediaOverlay";
 import { PracticeScreen } from "./src/screens/PracticeScreen";
 import { TrackScreen } from "./src/screens/TrackScreen";
@@ -136,6 +137,7 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [mediaMode, setMediaMode] = useState<MediaMode>(null);
   const [quickRecallOpen, setQuickRecallOpen] = useState(false);
+  const [leaderboardOpen, setLeaderboardOpen] = useState(false);
   const [musicOpenRequest, setMusicOpenRequest] = useState(0);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [tasksLoaded, setTasksLoaded] = useState(false);
@@ -319,16 +321,21 @@ export default function App() {
     return () => { cancelled = true; unsubscribe?.(); };
   }, [authenticated, user?.uid]);
 
-  const saveSharedProfile = (next: PracticeProfile) => {
+  const saveSharedProfile = async (next: PracticeProfile) => {
     const normalized = normalizeProfile(next);
     const previous: Partial<PracticeProfile> = profileSettings ?? {};
     const changed = Object.fromEntries(
       Object.entries(normalized).filter(([key, value]) => previous[key as keyof PracticeProfile] !== value),
     );
+    if (user && normalized.username) await saveProfileWithUsername(user, normalized);
     setProfileSettings(normalized);
-    void saveProfile(normalized);
-    if (user && Object.keys(changed).length) void patchCloudProfile(user, changed);
+    await saveProfile(normalized);
+    if (user && Object.keys(changed).length && !normalized.username) void patchCloudProfile(user, changed);
   };
+
+  useEffect(() => {
+    if (authenticated && profileSettings && !profileSettings.username) setAppTab("profile");
+  }, [authenticated, profileSettings?.username]);
 
   useEffect(() => {
     void (async () => {
@@ -408,6 +415,7 @@ export default function App() {
     void AsyncStorage.setItem(TASK_STORAGE_KEY, JSON.stringify(next));
     refreshDailyTasksWidget(next);
     if (user) void syncTaskChanges(user, previous, next);
+    if (user && profileSettings?.username) void publishLeaderboardEntry(user, profileSettings, next).catch(() => undefined);
   };
   const today = dateKey();
   const tomorrow = dateKeyFromOffset(1);
@@ -571,7 +579,7 @@ export default function App() {
     <SafeAreaProvider>
       <SafeAreaView style={styles.safe} edges={["top", "left", "right"]} onTouchStart={() => resetBottomNavigation()}>
       <StatusBar hidden />
-      {quickRecallOpen ? <QuickRecallScreen user={user} onClose={() => setQuickRecallOpen(false)} onGoProfile={() => { setQuickRecallOpen(false); setAppTab("profile"); }} /> : appTab === "profile" ? (
+      {leaderboardOpen ? <LeaderboardScreen user={user} onClose={() => setLeaderboardOpen(false)} /> : quickRecallOpen ? <QuickRecallScreen user={user} onClose={() => setQuickRecallOpen(false)} onGoProfile={() => { setQuickRecallOpen(false); setAppTab("profile"); }} /> : appTab === "profile" ? (
         <ProfileScreen
           user={user}
           tasks={tasks}
@@ -584,6 +592,7 @@ export default function App() {
             setAppTab("track");
           }}
           onOpenQuickRecall={() => setQuickRecallOpen(true)}
+            onOpenLeaderboard={() => setLeaderboardOpen(true)}
           streak={streak}
           onLogout={() => {
             void logout();

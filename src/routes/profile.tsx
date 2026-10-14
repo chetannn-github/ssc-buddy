@@ -4,6 +4,7 @@ import {
   ChevronDown,
   Copy,
   FilePenLine,
+  Flame,
   Sparkles,
   LoaderCircle,
   LogOut,
@@ -13,6 +14,7 @@ import {
   RefreshCw,
   Save,
   Upload,
+  Trophy,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -27,7 +29,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { aggregateRecords } from "@/lib/analytics";
+import { aggregateRecords, getStreaks } from "@/lib/analytics";
 import { loadHistory, type TestRecord } from "@/lib/exam";
 import { loadPracticeProfile, savePracticeProfile, type PracticeProfile } from "@/lib/profile";
 import { restorePracticeBackup } from "@/lib/backup";
@@ -45,6 +47,9 @@ import {
 import { IMPORT_PROMPT } from "@/lib/tracker";
 import { loadTrackerData, saveTrackerData } from "@/lib/tracker-store";
 import { cn } from "@/lib/utils";
+import { useAuthUser } from "@/lib/auth-context";
+import { checkUsernameAvailability, normalizeUsername, saveProfileWithUsername, usernameValidationMessage } from "@/lib/firebase-sync";
+import type { PublicProfile } from "@/lib/firebase-sync";
 import { MockTestLogDialog } from "../../tracker/src/components/tracker/MockTestLogDialog";
 import { formatDuration, loadDailyTasks, type DailyTask } from "@/lib/daily-tasks";
 
@@ -162,10 +167,12 @@ function ActivityHeatmap({
   records,
   tracker,
   range,
+  publicActivity,
 }: {
   records: TestRecord[];
   tracker: TrackerData | null;
   range: ActivityRange;
+  publicActivity?: Record<string, number> | undefined;
 }) {
   const { days, months, totalActivity, activeDays, maxStreak } = useMemo(() => {
     const today = new Date();
@@ -270,6 +277,11 @@ function ActivityHeatmap({
         count,
       });
     });
+    Object.entries(publicActivity ?? {}).forEach(([key, rawCount]) => {
+      const count = Math.max(1, Math.round(Number(rawCount) || 1));
+      activity.set(key, (activity.get(key) ?? 0) + count);
+      addDetail(key, { label: "Study activity", detail: "Shared profile", count });
+    });
     const values = entries.map((date) => Math.max(0, activity.get(localDay(date)) ?? 0));
     const maximum = Math.max(...values, 1);
     let longest = 0;
@@ -308,7 +320,7 @@ function ActivityHeatmap({
       activeDays: values.filter(Boolean).length,
       maxStreak: longest,
     };
-  }, [records, tracker, range]);
+  }, [publicActivity, records, tracker, range]);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [hoveredTooltip, setHoveredTooltip] = useState<{
     text: string;
@@ -660,7 +672,7 @@ function TrackerRow({
   );
 }
 
-function StudyTrackerOverview({ tracker }: { tracker: TrackerData | null }) {
+function StudyTrackerOverview({ tracker, readOnly = false }: { tracker: TrackerData | null; readOnly?: boolean }) {
   if (!tracker) return null;
   const syllabus = overallSyllabus(tracker);
 
@@ -681,7 +693,7 @@ function StudyTrackerOverview({ tracker }: { tracker: TrackerData | null }) {
         {tracker.subjects.length > 0 && <Link
           to="/track"
           search={{ tab: "Syllabus" }}
-          className="rounded-xl border border-white/10 bg-white/[0.025] p-3 transition-colors hover:bg-white/[0.06]"
+          className={cn("rounded-xl border border-white/10 bg-white/[0.025] p-3 transition-colors hover:bg-white/[0.06]", readOnly && "pointer-events-none")}
         >
           <p className="text-xs font-medium text-zinc-400">Syllabus</p>
           <p className="mt-1 text-lg font-semibold text-zinc-100">
@@ -705,7 +717,7 @@ function StudyTrackerOverview({ tracker }: { tracker: TrackerData | null }) {
         {tracker.subjects.length > 0 && <Link
           to="/track"
           search={{ tab: "Revision" }}
-          className="rounded-xl border border-white/10 bg-white/[0.025] p-3 transition-colors hover:bg-white/[0.06]"
+          className={cn("rounded-xl border border-white/10 bg-white/[0.025] p-3 transition-colors hover:bg-white/[0.06]", readOnly && "pointer-events-none")}
         >
           <p className="text-xs font-medium text-zinc-400">Revision</p>
           <p className="mt-1 text-lg font-semibold text-zinc-100">By subject</p>
@@ -728,7 +740,7 @@ function StudyTrackerOverview({ tracker }: { tracker: TrackerData | null }) {
         <Link
           to="/track"
           search={{ tab: "Mock Test" }}
-          className="rounded-xl border border-white/10 bg-white/[0.025] p-3 transition-colors hover:bg-white/[0.06]"
+          className={cn("rounded-xl border border-white/10 bg-white/[0.025] p-3 transition-colors hover:bg-white/[0.06]", readOnly && "pointer-events-none")}
         >
           <p className="text-xs font-medium text-zinc-400">Mock tests</p>
           <p className="mt-1 text-lg font-semibold text-zinc-100">Practice progress</p>
@@ -761,7 +773,13 @@ function StudyTrackerOverview({ tracker }: { tracker: TrackerData | null }) {
   );
 }
 
-export function Profile() {
+type ProfileProps = {
+  /** Renders the same profile surface for a visitor, without personal controls. */
+  readOnly?: boolean;
+  publicProfile?: PublicProfile;
+};
+
+export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
   const [records, setRecords] = useState<TestRecord[]>([]);
   const [dailyTasks, setDailyTasks] = useState<DailyTask[]>([]);
   const [tracker, setTracker] = useState<TrackerData | null>(null);
@@ -777,6 +795,10 @@ export function Profile() {
   const [loggingMockTest, setLoggingMockTest] = useState(false);
   const [avatarFiles, setAvatarFiles] = useState<string[]>([]);
   const [nameDraft, setNameDraft] = useState("");
+  const [usernameDraft, setUsernameDraft] = useState("");
+  const [usernameTouched, setUsernameTouched] = useState(false);
+  const [usernameStatus, setUsernameStatus] = useState<"idle" | "checking" | "available" | "taken" | "invalid">("idle");
+  const [usernameMessage, setUsernameMessage] = useState("");
   const [goalDraft, setGoalDraft] = useState("");
   const [manifestationDraft, setManifestationDraft] = useState("");
   const [examNameDraft, setExamNameDraft] = useState("");
@@ -784,8 +806,30 @@ export function Profile() {
   const [promptCopied, setPromptCopied] = useState(false);
   const importFileRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
+  const authUser = useAuthUser();
 
   useEffect(() => {
+    if (readOnly) {
+      const sharedProfile: PracticeProfile | null = publicProfile
+        ? {
+            name: publicProfile.name,
+            username: publicProfile.username,
+            questionGoal: publicProfile.questionGoal,
+            ...(publicProfile.avatar ? { avatar: publicProfile.avatar } : {}),
+            ...(publicProfile.examName ? { examName: publicProfile.examName } : {}),
+          }
+        : null;
+      setRecords(publicProfile?.dashboard?.records ?? []);
+      setDailyTasks(publicProfile?.dashboard?.dailyTasks ?? []);
+      setTracker(publicProfile?.dashboard?.tracker ?? null);
+      setProfile(sharedProfile);
+      setNameDraft(sharedProfile?.name ?? "");
+      setUsernameDraft(sharedProfile?.username ?? "");
+      setGoalDraft(sharedProfile ? String(sharedProfile.questionGoal) : "100");
+      setManifestationDraft("");
+      setExamNameDraft(sharedProfile?.examName ?? "");
+      return;
+    }
     let avatarsLoaded = false;
     let refreshPending = false;
     let refreshing = false;
@@ -800,6 +844,7 @@ export function Profile() {
       setExamNameDraft(trackerData.meta.examName);
       setProfile(saved);
       setNameDraft(saved?.name ?? "");
+      setUsernameDraft(saved?.username ?? ""); setUsernameTouched(false);
       setGoalDraft(saved ? String(saved.questionGoal) : "100");
       setManifestationDraft(saved?.manifestation ?? "");
       try {
@@ -832,7 +877,24 @@ export function Profile() {
       window.removeEventListener("cbt-tracker-updated", refresh);
       window.removeEventListener("ssc-daily-tasks-updated", refresh);
     };
-  }, []);
+  }, [publicProfile, readOnly]);
+
+  useEffect(() => {
+    if (readOnly) return;
+    if (!authUser) return;
+    const value = normalizeUsername(usernameDraft);
+    if (!usernameTouched) { setUsernameStatus(value ? "available" : "idle"); setUsernameMessage(""); return; }
+    const validationError = usernameValidationMessage(value);
+    if (validationError) { setUsernameStatus(value ? "invalid" : "idle"); setUsernameMessage(value ? validationError : ""); return; }
+    setUsernameStatus("checking"); setUsernameMessage("Checking availability…");
+    const timer = window.setTimeout(() => {
+      void checkUsernameAvailability(authUser, value).then((result) => {
+        setUsernameStatus(result.available ? "available" : "taken");
+        setUsernameMessage(result.available ? "Username is available." : result.reason);
+      }).catch((error) => { const code = typeof error === "object" && error && "code" in error ? String(error.code) : ""; setUsernameStatus("idle"); setUsernameMessage(code === "permission-denied" ? "Username checks need the latest Firestore rules." : "Could not check availability. Try again."); });
+    }, 360);
+    return () => window.clearTimeout(timer);
+  }, [authUser, readOnly, usernameDraft, usernameTouched]);
 
   const filteredRecords = useMemo(
     () => records.filter((record) => isInRange(record.date, range)),
@@ -866,16 +928,18 @@ export function Profile() {
     };
   }, [dailyTasks, range]);
   const saveProfile = async () => {
-    if (!nameDraft.trim() || Number(goalDraft) < 1 || isSavingProfile) return;
+    if (!nameDraft.trim() || Number(goalDraft) < 1 || isSavingProfile || (authUser && usernameStatus !== "available")) return;
     setIsSavingProfile(true);
     const next = {
       name: nameDraft.trim(),
+      ...(usernameDraft.trim() ? { username: normalizeUsername(usernameDraft) } : {}),
       questionGoal: Math.min(100000, Number(goalDraft)),
       ...(profile?.avatar ? { avatar: profile.avatar } : {}),
       ...(manifestationDraft.trim() ? { manifestation: manifestationDraft.trim() } : {}),
       ...(examNameDraft.trim() ? { examName: examNameDraft.trim() } : {}),
     };
     try {
+      if (authUser) await saveProfileWithUsername(authUser, next);
       savePracticeProfile(next);
       if (tracker) {
         const nextTracker = saveTrackerData({
@@ -892,6 +956,10 @@ export function Profile() {
       await new Promise((resolve) => window.setTimeout(resolve, 180));
       setProfile(next);
       setEditingProfile(false);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not save your username. Try again.";
+      setUsernameStatus(message.toLowerCase().includes("taken") ? "taken" : "idle");
+      setUsernameMessage(message);
     } finally {
       setIsSavingProfile(false);
     }
@@ -899,18 +967,28 @@ export function Profile() {
   const displayName = profile?.name ?? "Your profile";
   const questionGoal = profile?.questionGoal ?? 100;
   const avatar = profile?.avatar ?? defaultAvatar(displayName, avatarFiles);
+  const consistencyStreak = useMemo(
+    () => getStreaks([
+      ...records.map((record) => ({ date: record.date })),
+      ...(tracker?.tests.log ?? []).map((test) => ({ date: test.date })),
+      ...(tracker?.activity ?? []).map((entry) => ({ date: entry.date })),
+    ]).current,
+    [records, tracker],
+  );
   const updateAvatar = () => {
     const options = avatarFiles.filter((file) => file !== avatar);
     const nextAvatar = options[Math.floor(Math.random() * options.length)] ?? avatar;
     if (!nextAvatar) return;
     const next = {
       name: displayName,
+      ...(profile?.username ? { username: profile.username } : {}),
       questionGoal,
       avatar: nextAvatar,
       ...(profile?.manifestation ? { manifestation: profile.manifestation } : {}),
       ...(profile?.examName ? { examName: profile.examName } : {}),
     };
     savePracticeProfile(next);
+    if (authUser && next.username) void saveProfileWithUsername(authUser, next).catch(() => undefined);
     setProfile(next);
     setIsAvatarChanging(true);
     window.setTimeout(() => setIsAvatarChanging(false), 550);
@@ -965,7 +1043,7 @@ export function Profile() {
               ) : (
                 <div className="h-24 w-24 rounded-full bg-white/10" />
               )}
-              <Button
+              {!readOnly && <Button
                 type="button"
                 size="icon"
                 variant="ghost"
@@ -975,7 +1053,7 @@ export function Profile() {
                 aria-label="Change profile image"
               >
                 <RefreshCw className={cn("h-3.5 w-3.5", isAvatarChanging && "animate-spin")} />
-              </Button>
+              </Button>}
             </div>
             <div className="min-w-0 flex-1">
               {tracker?.meta.examName && (
@@ -985,17 +1063,26 @@ export function Profile() {
               )}
               <div className="mt-0.5 flex items-center justify-center gap-1 sm:justify-start">
                 <h2 className="truncate text-xl font-semibold text-zinc-50">{displayName}</h2>
-                <Button
+                {readOnly && (
+                  <span
+                    title={`${consistencyStreak}-day consistency streak`}
+                    className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-400/15 px-2 py-1 text-xs font-semibold text-amber-200"
+                  >
+                    <Flame className="h-3.5 w-3.5 fill-amber-300 text-amber-300" />
+                    {consistencyStreak}
+                  </span>
+                )}
+                {!readOnly && <Button
                   type="button"
                   size="icon"
                   variant="ghost"
                   className="h-7 w-7 shrink-0 text-zinc-500 hover:bg-white/10 hover:text-zinc-100"
-                  onClick={() => setEditingProfile(true)}
+                  onClick={() => { setUsernameTouched(false); setUsernameStatus(usernameDraft ? "available" : "idle"); setUsernameMessage(""); setEditingProfile(true); }}
                   aria-label="Edit profile"
                 >
                   <Pencil className="h-3.5 w-3.5" />
-                </Button>
-                <Button
+                </Button>}
+                {!readOnly && <Button
                   type="button"
                   size="icon"
                   variant="ghost"
@@ -1005,9 +1092,12 @@ export function Profile() {
                   aria-label="Log out"
                 >
                   <LogOut className="h-3.5 w-3.5" />
-                </Button>
+                </Button>}
               </div>
-              <div className="mt-3 flex flex-wrap items-center justify-center gap-1.5 sm:justify-start">
+              {!readOnly && <div className="mt-3 flex flex-wrap items-center justify-center gap-1.5 sm:justify-start">
+                <Button type="button" variant="ghost" className="h-9 gap-1.5 px-2.5 text-sm text-zinc-300 hover:bg-white/10 hover:text-white" onClick={() => void navigate({ to: "/leaderboard" })}>
+                  <Trophy className="h-4 w-4" /> Leaderboard
+                </Button>
                 <Button
                   type="button"
                   variant="ghost"
@@ -1043,7 +1133,7 @@ export function Profile() {
                 >
                   <Music2 className="h-4 w-4" /> Music
                 </Button>
-              </div>
+              </div>}
             </div>
           </section>
 
@@ -1073,10 +1163,10 @@ export function Profile() {
               onRangeChange={setRange}
             />
 
-            <ActivityHeatmap records={records} tracker={tracker} range="year" />
+            <ActivityHeatmap records={records} tracker={tracker} range="year" publicActivity={readOnly && !publicProfile?.dashboard ? publicProfile?.activity : undefined} />
           </div>
 
-          <StudyTrackerOverview tracker={tracker} />
+          <StudyTrackerOverview tracker={tracker} readOnly={readOnly} />
         </div>
       </div>
       {previewingAvatar && avatar && (
@@ -1135,6 +1225,23 @@ export function Profile() {
                 />
               </label>
               <label className="block text-sm font-medium text-zinc-200">
+                Username
+                <div className="relative mt-2">
+                  <Input
+                    className="h-11 border-white/10 bg-[#151515] pr-10 text-zinc-100 lowercase placeholder:text-zinc-500 focus-visible:border-zinc-500"
+                    value={usernameDraft}
+                    onChange={(event) => { setUsernameTouched(true); setUsernameDraft(event.target.value.toLowerCase()); }}
+                    placeholder="e.g. ssc_aspirant"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                  />
+                  {usernameStatus === "checking" && <span className="absolute inset-y-0 right-3 flex items-center text-sm text-zinc-500">…</span>}
+                  {usernameStatus === "available" && <span className="absolute inset-y-0 right-3 flex items-center text-emerald-400">✓</span>}
+                  {usernameStatus === "taken" && <span className="absolute inset-y-0 right-3 flex items-center text-red-400">×</span>}
+                </div>
+                {usernameMessage && <span className={cn("mt-1 block text-xs font-normal", usernameStatus === "available" ? "text-emerald-400" : "text-red-300")}>{usernameMessage}</span>}
+              </label>
+              <label className="block text-sm font-medium text-zinc-200">
                 Question goal
                 <Input
                   className="mt-2 h-11 border-white/10 bg-[#151515] text-zinc-100 placeholder:text-zinc-500 focus-visible:border-zinc-500"
@@ -1173,7 +1280,7 @@ export function Profile() {
               >
                 Cancel
               </Button>
-              <Button disabled={isSavingProfile} className="bg-emerald-600 hover:bg-emerald-500" onClick={saveProfile}>
+              <Button disabled={isSavingProfile || (Boolean(authUser) && usernameStatus !== "available")} className="bg-emerald-600 hover:bg-emerald-500" onClick={saveProfile}>
                 {isSavingProfile ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save profile
               </Button>
             </div>

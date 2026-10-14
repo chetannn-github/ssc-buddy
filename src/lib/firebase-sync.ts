@@ -27,6 +27,9 @@ import {
   type Firestore,
   type Unsubscribe,
 } from "firebase/firestore";
+import type { TestRecord } from "@/lib/exam";
+import type { TrackerData } from "@/lib/tracker";
+import type { DailyTask } from "@/lib/daily-tasks";
 
 const FIREBASE_CONFIG = {
   apiKey: import.meta.env["VITE_FIREBASE_API_KEY"],
@@ -382,6 +385,141 @@ export async function patchCloudProfile(user: User, fields: Record<string, unkno
 export function watchCloudProfile(user: User, callback: (profile: Record<string, unknown> | null) => void) {
   const { db: dbValue } = services();
   return onSnapshot(profileDoc(dbValue, user.uid), (snapshot) => callback(snapshot.data() ?? null));
+}
+
+const USERNAME_PATTERN = /^[a-z0-9._]{3,24}$/;
+
+export function normalizeUsername(value: string) {
+  return value.trim().toLowerCase();
+}
+
+export function usernameValidationMessage(value: string) {
+  const username = normalizeUsername(value);
+  if (!username) return "Choose a username.";
+  if (!USERNAME_PATTERN.test(username)) return "Use 3–24 lowercase letters, numbers, dots, or underscores.";
+  return "";
+}
+
+function usernameDoc(dbValue: Firestore, username: string) {
+  return doc(dbValue, "usernames", username);
+}
+
+export type PublicProfileDashboard = {
+  records: TestRecord[];
+  tracker: TrackerData | null;
+  dailyTasks: DailyTask[];
+};
+
+export type PublicProfile = {
+  uid: string;
+  username: string;
+  name: string;
+  questionGoal: number;
+  avatar?: string;
+  examName?: string;
+  /** Aggregated per-day counts only; no questions, answers, or task details. */
+  activity?: Record<string, number>;
+  dashboard?: PublicProfileDashboard;
+};
+
+function publicProfileDoc(dbValue: Firestore, username: string) {
+  return doc(dbValue, "publicProfiles", username);
+}
+
+function publicProfileFields(user: User, username: string, fields: Record<string, unknown>): PublicProfile {
+  const name = typeof fields["name"] === "string" ? fields["name"].trim() : "Student";
+  const questionGoal = Math.max(1, Math.round(Number(fields["questionGoal"]) || 100));
+  return {
+    uid: user.uid, username, name, questionGoal,
+    ...(typeof fields["avatar"] === "string" && fields["avatar"] ? { avatar: fields["avatar"] } : {}),
+    ...(typeof fields["examName"] === "string" && fields["examName"].trim() ? { examName: fields["examName"].trim() } : {}),
+  };
+}
+
+export async function readPublicProfile(value: string): Promise<PublicProfile | null> {
+  const username = normalizeUsername(value.replace(/^@/, ""));
+  if (usernameValidationMessage(username)) return null;
+  const { db: dbValue } = services();
+  const data = (await getDoc(publicProfileDoc(dbValue, username))).data();
+  if (!data || typeof data["uid"] !== "string" || typeof data["name"] !== "string") return null;
+  return {
+    uid: data["uid"], username,
+    name: data["name"], questionGoal: Math.max(1, Math.round(Number(data["questionGoal"]) || 100)),
+    ...(typeof data["avatar"] === "string" && data["avatar"] ? { avatar: data["avatar"] } : {}),
+    ...(typeof data["examName"] === "string" && data["examName"].trim() ? { examName: data["examName"].trim() } : {}),
+    ...(data["activity"] && typeof data["activity"] === "object" ? {
+      activity: Object.fromEntries(
+        Object.entries(data["activity"] as Record<string, unknown>).flatMap(([date, count]) =>
+          /^\d{4}-\d{2}-\d{2}$/.test(date) && Number.isFinite(Number(count)) && Number(count) > 0
+            ? [[date, Math.max(1, Math.round(Number(count)))]]
+            : [],
+        ),
+      ),
+    } : {}),
+    ...(data["dashboard"] && typeof data["dashboard"] === "object" ? { dashboard: data["dashboard"] as PublicProfileDashboard } : {}),
+  };
+}
+
+/** Publishes only daily activity totals needed for a public heatmap. */
+export async function savePublicProfileActivity(
+  user: User,
+  profile: Record<string, unknown>,
+  activity: Record<string, number>,
+  dashboard: PublicProfileDashboard,
+) {
+  const username = normalizeUsername(String(profile["username"] ?? ""));
+  if (usernameValidationMessage(username)) return;
+  const sanitizedActivity = Object.fromEntries(
+    Object.entries(activity).flatMap(([date, count]) =>
+      /^\d{4}-\d{2}-\d{2}$/.test(date) && Number.isFinite(count) && count > 0
+        ? [[date, Math.max(1, Math.round(count))]]
+        : [],
+    ),
+  );
+  const { db: dbValue } = services();
+  await setDoc(
+    publicProfileDoc(dbValue, username),
+    { ...publicProfileFields(user, username, profile), activity: sanitizedActivity, dashboard, updatedAt: serverTimestamp() },
+    { merge: true },
+  );
+}
+
+export async function checkUsernameAvailability(user: User, value: string) {
+  const username = normalizeUsername(value);
+  const validationError = usernameValidationMessage(username);
+  if (validationError) return { username, available: false, reason: validationError };
+  const { db: dbValue } = services();
+  const claimed = await getDoc(usernameDoc(dbValue, username));
+  const ownerId = typeof claimed.data()?.["uid"] === "string" ? claimed.data()!["uid"] : "";
+  return { username, available: !claimed.exists() || ownerId === user.uid, reason: claimed.exists() && ownerId !== user.uid ? "This username is already taken." : "" };
+}
+
+/** Atomically reserves the username and persists the corresponding profile. */
+export async function saveProfileWithUsername(user: User, fields: Record<string, unknown>) {
+  const username = normalizeUsername(String(fields["username"] ?? ""));
+  const validationError = usernameValidationMessage(username);
+  if (validationError) throw new Error(validationError);
+  const { db: dbValue } = services();
+  const profileRef = profileDoc(dbValue, user.uid);
+  const nextUsernameRef = usernameDoc(dbValue, username);
+  const nextPublicProfileRef = publicProfileDoc(dbValue, username);
+  await runTransaction(dbValue, async (transaction) => {
+    const currentProfile = await transaction.get(profileRef);
+    const previousUsername = normalizeUsername(String(currentProfile.data()?.["username"] ?? ""));
+    const previousUsernameRef = previousUsername && previousUsername !== username ? usernameDoc(dbValue, previousUsername) : null;
+    const previousPublicProfileRef = previousUsername && previousUsername !== username ? publicProfileDoc(dbValue, previousUsername) : null;
+    const [claimed, previousClaim] = await Promise.all([
+      transaction.get(nextUsernameRef),
+      previousUsernameRef ? transaction.get(previousUsernameRef) : Promise.resolve(null),
+    ]);
+    const claimedBy = typeof claimed.data()?.["uid"] === "string" ? claimed.data()!["uid"] : "";
+    if (claimed.exists() && claimedBy !== user.uid) throw new Error("This username is already taken.");
+    transaction.set(nextUsernameRef, { uid: user.uid, username, updatedAt: serverTimestamp() }, { merge: true });
+    transaction.set(profileRef, { ...fields, username, updatedAt: serverTimestamp() }, { merge: true });
+    transaction.set(nextPublicProfileRef, { ...publicProfileFields(user, username, fields), updatedAt: serverTimestamp() }, { merge: true });
+    if (previousUsernameRef && previousClaim?.data()?.["uid"] === user.uid) transaction.delete(previousUsernameRef);
+    if (previousPublicProfileRef) transaction.delete(previousPublicProfileRef);
+  });
 }
 
 export async function readSharedData(user: User, key: string) {

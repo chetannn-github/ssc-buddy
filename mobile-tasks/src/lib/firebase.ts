@@ -71,6 +71,22 @@ export function getFirebaseFirestore() {
   return firestore;
 }
 
+export async function publishLeaderboardEntry(user: User, profile: Record<string, unknown>, tasks: Array<Record<string, unknown>>) {
+  const username = typeof profile.username === "string" ? profile.username.trim().toLowerCase() : "";
+  if (!username) return;
+  const now = new Date(); const start = new Date(now); start.setHours(0, 0, 0, 0); start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+  const week = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}-${String(start.getDate()).padStart(2, "0")}`;
+  const end = new Date(start); end.setDate(end.getDate() + 6);
+  const endKey = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}-${String(end.getDate()).padStart(2, "0")}`;
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const scoped = tasks.filter((task) => typeof task.date === "string" && task.date >= week && task.date <= endKey);
+  const completed = scoped.filter((task) => task.completed === true);
+  const overdue = scoped.filter((task) => task.completed !== true && typeof task.date === "string" && task.date < today).length;
+  const studyMinutes = completed.reduce((sum, task) => sum + Math.max(0, Number(task.minutesSpent) || 0), 0);
+  const points = completed.length * 10 - overdue * 5 + Math.min(210, Math.floor(studyMinutes / 10));
+  await setDoc(doc(getFirebaseFirestore(), "leaderboards", week, "entries", user.uid), { uid: user.uid, username, name: String(profile.name ?? "Student"), ...(typeof profile.avatar === "string" && profile.avatar ? { avatar: profile.avatar } : {}), week, completed: completed.length, completedTasks: completed.map((task) => ({ name: String(task.name ?? "Task"), subject: String(task.subject ?? "") })), overdue, studyMinutes, points, updatedAt: serverTimestamp() }, { merge: true });
+}
+
 const cloudProfileDoc = (user: User) => doc(getFirebaseFirestore(), "users", user.uid, "profile", "current");
 
 export async function readCloudProfile(user: User) {
@@ -84,6 +100,72 @@ export async function patchCloudProfile(user: User, fields: Record<string, unkno
 
 export function watchCloudProfile(user: User, callback: (profile: Record<string, unknown> | null) => void) {
   return onSnapshot(cloudProfileDoc(user), (snapshot) => callback(snapshot.data() ?? null));
+}
+
+const USERNAME_PATTERN = /^[a-z0-9._]{3,24}$/;
+
+export function normalizeUsername(value: string) {
+  return value.trim().toLowerCase();
+}
+
+export function usernameValidationMessage(value: string) {
+  const username = normalizeUsername(value);
+  if (!username) return "Choose a username.";
+  if (!USERNAME_PATTERN.test(username)) return "Use 3–24 lowercase letters, numbers, dots, or underscores.";
+  return "";
+}
+
+const usernameDoc = (username: string) => doc(getFirebaseFirestore(), "usernames", username);
+const publicProfileDoc = (username: string) => doc(getFirebaseFirestore(), "publicProfiles", username);
+
+function publicProfileFields(user: User, username: string, fields: Record<string, unknown>) {
+  const name = typeof fields.name === "string" ? fields.name.trim() : "Student";
+  return {
+    uid: user.uid, username, name,
+    questionGoal: Math.max(1, Math.round(Number(fields.questionGoal) || 100)),
+    ...(typeof fields.avatar === "string" && fields.avatar ? { avatar: fields.avatar } : {}),
+    ...(typeof fields.examName === "string" && fields.examName.trim() ? { examName: fields.examName.trim() } : {}),
+  };
+}
+
+export async function checkUsernameAvailability(user: User, value: string) {
+  const username = normalizeUsername(value);
+  const validationError = usernameValidationMessage(username);
+  if (validationError) return { username, available: false, reason: validationError };
+  const existing = await getDoc(usernameDoc(username));
+  const ownerId = typeof existing.data()?.uid === "string" ? existing.data()!.uid : "";
+  return { username, available: !existing.exists() || ownerId === user.uid, reason: existing.exists() && ownerId !== user.uid ? "This username is already taken." : "" };
+}
+
+/**
+ * Claims a globally unique username and saves the matching profile in one
+ * transaction, so simultaneous sign-ups cannot take the same name.
+ */
+export async function saveProfileWithUsername(user: User, fields: Record<string, unknown>) {
+  const username = normalizeUsername(String(fields.username ?? ""));
+  const validationError = usernameValidationMessage(username);
+  if (validationError) throw new Error(validationError);
+  const db = getFirebaseFirestore();
+  const profileRef = cloudProfileDoc(user);
+  const nextUsernameRef = doc(db, "usernames", username);
+  const nextPublicProfileRef = doc(db, "publicProfiles", username);
+  await runTransaction(db, async (transaction) => {
+    const currentProfile = await transaction.get(profileRef);
+    const previousUsername = normalizeUsername(String(currentProfile.data()?.username ?? ""));
+    const currentUsernameRef = previousUsername && previousUsername !== username ? doc(db, "usernames", previousUsername) : null;
+    const previousPublicProfileRef = previousUsername && previousUsername !== username ? doc(db, "publicProfiles", previousUsername) : null;
+    const [claimedUsername, previousClaim] = await Promise.all([
+      transaction.get(nextUsernameRef),
+      currentUsernameRef ? transaction.get(currentUsernameRef) : Promise.resolve(null),
+    ]);
+    const claimedBy = typeof claimedUsername.data()?.uid === "string" ? claimedUsername.data()!.uid : "";
+    if (claimedUsername.exists() && claimedBy !== user.uid) throw new Error("This username is already taken.");
+    transaction.set(nextUsernameRef, { uid: user.uid, username, updatedAt: serverTimestamp() }, { merge: true });
+    transaction.set(profileRef, { ...fields, username, updatedAt: serverTimestamp() }, { merge: true });
+    transaction.set(nextPublicProfileRef, { ...publicProfileFields(user, username, fields), updatedAt: serverTimestamp() });
+    if (currentUsernameRef && previousClaim?.data()?.uid === user.uid) transaction.delete(currentUsernameRef);
+    if (previousPublicProfileRef) transaction.delete(previousPublicProfileRef);
+  });
 }
 
 const cloudPreferencesDoc = (user: User) => doc(getFirebaseFirestore(), "users", user.uid, "preferences", "current");

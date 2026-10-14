@@ -1,5 +1,6 @@
 export type PracticeProfile = {
   name: string;
+  username?: string;
   questionGoal: number;
   avatar?: string;
   manifestation?: string;
@@ -24,6 +25,9 @@ export function loadPracticeProfile(): PracticeProfile | null {
     }
     return {
       name: profile.name.trim(),
+      ...(typeof profile.username === "string" && profile.username.trim()
+        ? { username: profile.username.trim().toLowerCase() }
+        : {}),
       questionGoal: Math.round(profile.questionGoal),
       ...(typeof profile.avatar === "string" ? { avatar: profile.avatar } : {}),
       ...(typeof profile.manifestation === "string" && profile.manifestation.trim()
@@ -43,6 +47,7 @@ export function savePracticeProfile(profile: PracticeProfile) {
     PROFILE_KEY,
     JSON.stringify({
       name: profile.name.trim(),
+      ...(profile.username?.trim() ? { username: profile.username.trim().toLowerCase() } : {}),
       questionGoal: Math.max(1, Math.round(profile.questionGoal)),
       ...(profile.avatar ? { avatar: profile.avatar } : {}),
       ...(profile.manifestation?.trim()
