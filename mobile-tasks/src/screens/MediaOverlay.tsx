@@ -34,7 +34,11 @@ function VideoReels({ user, onClose }: { user: User | null; onClose: () => void 
   const { height } = useWindowDimensions();
   const [swiping, setSwiping] = useState(false);
   const [likes, toggleLike, likesReady] = useCloudLikes(user, "ssc-buddy-liked-videos");
-  const orderedTracks = useMemo(() => prioritizeLikes(videoTracks, likes), [likes]);
+  // Apply the liked-first order once when this overlay opens. Reordering after a
+  // heart tap changes FlatList's pages and recreates the active native video.
+  const [orderedTracks, setOrderedTracks] = useState(() => [...videoTracks]);
+  const [orderReady, setOrderReady] = useState(false);
+  const likedOrderApplied = useRef(false);
   const reelPages = useMemo(
     () => Array.from({ length: orderedTracks.length * 400 }, (_, index) => ({ id: index, track: orderedTracks[index % orderedTracks.length] })),
     [orderedTracks],
@@ -44,25 +48,38 @@ function VideoReels({ user, onClose }: { user: User | null; onClose: () => void 
   const reelsRef = useRef<FlatList<{ id: number; track: string }>>(null);
   const initialPickApplied = useRef(false);
   useEffect(() => {
-    if (!likesReady || initialPickApplied.current) return;
+    if (!likesReady || likedOrderApplied.current) return;
+    likedOrderApplied.current = true;
+    setOrderedTracks(prioritizeLikes(videoTracks, likes));
+    setOrderReady(true);
+  }, [likes, likesReady]);
+  useEffect(() => {
+    if (!orderReady || initialPickApplied.current) return;
     initialPickApplied.current = true;
     const track = orderedTracks[0];
     if (!track) return;
     const next = reelIndexFor(track, orderedTracks, firstReelPage);
     setIndex(next);
     requestAnimationFrame(() => reelsRef.current?.scrollToIndex({ index: next, animated: false }));
-  }, [firstReelPage, likesReady, orderedTracks]);
+  }, [firstReelPage, orderReady, orderedTracks]);
   return <Modal visible animationType="slide" onRequestClose={onClose}><View style={styles.reel}>
     <FlatList ref={reelsRef} data={reelPages} keyExtractor={(item) => String(item.id)} pagingEnabled showsVerticalScrollIndicator={false} initialScrollIndex={firstReelPage} getItemLayout={(_, itemIndex) => ({ length: height, offset: height * itemIndex, index: itemIndex })} initialNumToRender={2} maxToRenderPerBatch={2} windowSize={2} removeClippedSubviews onScrollBeginDrag={() => setSwiping(true)} onScrollEndDrag={(event) => { if (!event.nativeEvent.velocity?.y) setSwiping(false); }} onMomentumScrollEnd={(event) => { setIndex(Math.round(event.nativeEvent.contentOffset.y / height)); setSwiping(false); }} renderItem={({ item, index: itemIndex }) => index === itemIndex ? <ReelPage track={item.track} active height={height} onClose={onClose} liked={likes.has(item.track)} swiping={swiping} onToggleLike={() => toggleLike(item.track)} /> : <View style={[styles.reel, { height, flex: 0 }]} />} />
   </View></Modal>;
 }
 
 function ReelPage({ track, active, height, onClose, liked, swiping, onToggleLike }: { track: string; active: boolean; height: number; onClose: () => void; liked: boolean; swiping: boolean; onToggleLike: () => void }) {
+  const { width } = useWindowDimensions();
   const [speeding, setSpeeding] = useState(false);
   const [videoTime, setVideoTime] = useState(0);
-  const [playbackFeedback, setPlaybackFeedback] = useState<"play" | "pause" | null>(null);
+  const [playbackFeedback, setPlaybackFeedback] = useState<"play" | "pause" | "heart" | null>(null);
+  const [feedbackPoint, setFeedbackPoint] = useState<{ x: number; y: number } | null>(null);
   const longPressRef = useRef(false);
+  const pausedByLongPressRef = useRef(false);
+  const lastTapAt = useRef(0);
+  const singleTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const feedbackOpacity = useRef(new Animated.Value(0)).current;
+  const heartWiggle = useRef(new Animated.Value(0)).current;
+  const heartTravel = useRef(new Animated.Value(0)).current;
   const source = videoSource(track);
   const player = useVideoPlayer(source, (item) => {
     item.loop = true;
@@ -78,6 +95,7 @@ function ReelPage({ track, active, height, onClose, liked, swiping, onToggleLike
     const subscription = player.addListener("timeUpdate", ({ currentTime }) => setVideoTime(currentTime));
     return () => subscription.remove();
   }, [player]);
+  useEffect(() => () => { if (singleTapTimer.current) clearTimeout(singleTapTimer.current); }, []);
   const progress = player.duration > 0 ? Math.max(0, Math.min(1, videoTime / player.duration)) : 0;
   const startFastForward = () => {
     longPressRef.current = true;
@@ -100,12 +118,47 @@ function ReelPage({ track, active, height, onClose, liked, swiping, onToggleLike
       Animated.timing(feedbackOpacity, { toValue: 0, duration: 340, delay: 420, easing: Easing.in(Easing.quad), useNativeDriver: true }),
     ]).start(({ finished }) => { if (finished) setPlaybackFeedback(null); });
   };
+  const pauseFromLongPress = () => {
+    longPressRef.current = true;
+    pausedByLongPressRef.current = true;
+    player.pause();
+  };
+  const showLikeFeedback = () => {
+    setPlaybackFeedback("heart");
+    feedbackOpacity.stopAnimation();
+    feedbackOpacity.setValue(0);
+    heartWiggle.setValue(0);
+    heartTravel.setValue(0);
+    Animated.parallel([
+      Animated.sequence([
+        Animated.timing(feedbackOpacity, { toValue: 1, duration: 120, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+        Animated.timing(feedbackOpacity, { toValue: 0, duration: 340, delay: 360, easing: Easing.in(Easing.quad), useNativeDriver: true }),
+      ]),
+      Animated.timing(heartWiggle, { toValue: 1, duration: 520, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(heartTravel, { toValue: 1, duration: 460, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+    ]).start(({ finished }) => { if (finished) setPlaybackFeedback(null); });
+  };
+  const handleVideoTap = (x: number, y: number) => {
+    if (longPressRef.current) { longPressRef.current = false; return; }
+    const now = Date.now();
+    if (now - lastTapAt.current < 260) {
+      if (singleTapTimer.current) clearTimeout(singleTapTimer.current);
+      singleTapTimer.current = null;
+      lastTapAt.current = 0;
+      setFeedbackPoint({ x, y });
+      if (!liked) onToggleLike();
+      showLikeFeedback();
+      return;
+    }
+    lastTapAt.current = now;
+    singleTapTimer.current = setTimeout(() => { lastTapAt.current = 0; togglePlayback(); }, 230);
+  };
   return <View style={[styles.reel, { height, flex: 0 }]}>
     <VideoView style={styles.video} player={player} nativeControls={false} contentFit="contain" />
     <View pointerEvents="none" style={styles.reelShade} />
     {!swiping && <Pressable style={styles.close} onPress={onClose}><MaterialCommunityIcons name="close" size={24} color={colors.text} /></Pressable>}
-    <Pressable style={styles.videoTap} delayLongPress={280} onLongPress={startFastForward} onPressOut={stopFastForward} onPress={() => { if (longPressRef.current) { longPressRef.current = false; return; } togglePlayback(); }} />
-    {playbackFeedback && <Animated.View pointerEvents="none" style={[styles.playbackFeedback, { opacity: feedbackOpacity, transform: [{ scale: feedbackOpacity.interpolate({ inputRange: [0, 1], outputRange: [0.78, 1] }) }] }]}><MaterialCommunityIcons name={playbackFeedback} size={34} color="#fff" /></Animated.View>}
+    <Pressable style={styles.videoTap} delayLongPress={280} onLongPress={(event) => { if (event.nativeEvent.locationY <= height * 0.3) startFastForward(); else pauseFromLongPress(); }} onPressOut={() => { if (pausedByLongPressRef.current) { pausedByLongPressRef.current = false; player.play(); } else stopFastForward(); }} onPress={(event) => handleVideoTap(event.nativeEvent.locationX, event.nativeEvent.locationY)} />
+    {playbackFeedback && <Animated.View pointerEvents="none" style={[styles.playbackFeedback, playbackFeedback === "heart" && styles.likeFeedback, playbackFeedback === "heart" && feedbackPoint ? { left: feedbackPoint.x - 48, top: feedbackPoint.y - 48, marginLeft: 0, marginTop: 0 } : null, { opacity: feedbackOpacity, transform: playbackFeedback === "heart" ? [{ scale: feedbackOpacity.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1.12] }) }, { rotate: heartWiggle.interpolate({ inputRange: [0, 0.36, 0.68, 1], outputRange: ["0deg", "-10deg", "8deg", "0deg"] }) }, { translateX: heartTravel.interpolate({ inputRange: [0, 1], outputRange: [0, feedbackPoint ? width / 2 - feedbackPoint.x : 0] }) }, { translateY: heartTravel.interpolate({ inputRange: [0, 1], outputRange: [0, feedbackPoint ? height / 2 - feedbackPoint.y : 0] }) }] : [{ scale: feedbackOpacity.interpolate({ inputRange: [0, 1], outputRange: [0.78, 1] }) }] }]}><MaterialCommunityIcons name={playbackFeedback} size={playbackFeedback === "heart" ? 82 : 34} color={playbackFeedback === "heart" ? "#ef4444" : "#fff"} /></Animated.View>}
     {speeding && <View pointerEvents="none" style={styles.speedBadge}><Text style={styles.speedText}>2×</Text></View>}
     <View style={styles.reelControls}><Pressable style={styles.round} onPress={onToggleLike}><MaterialCommunityIcons name={liked ? "heart" : "heart-outline"} size={23} color={liked ? "#fb7185" : colors.text} /></Pressable></View>
     {!swiping && <View pointerEvents="none" style={styles.videoProgressTrack}><View style={[styles.videoProgressFill, { width: `${progress * 100}%` }]} /></View>}
@@ -116,6 +169,7 @@ function MusicPlayer({ user, onClose, openRequest }: { user: User | null; onClos
   const [index, setIndex] = useState(0);
   const [likes, toggleLike, likesReady] = useCloudLikes(user, "ssc-buddy-liked-music");
   const initialPickApplied = useRef(false);
+  const likedOrderApplied = useRef(false);
   const [repeat, setRepeat] = useState(false);
   const [selectedPlaylist, setSelectedPlaylist] = useState(() => playlistName(musicTracks[0] ?? ""));
   const [minimized, setMinimized] = useState(false);
@@ -133,7 +187,10 @@ function MusicPlayer({ user, onClose, openRequest }: { user: User | null; onClos
   const artworkAnimation = useRef<Animated.CompositeAnimation | null>(null);
   const shouldSpin = useRef(false);
   const activeTrack = musicTracks[index] ?? musicTracks[0];
-  const orderedTracks = useMemo(() => prioritizeLikes(musicTracks, likes), [likes]);
+  // Same as reels: keep the in-session queue fixed so a heart tap never
+  // rebuilds playlists or interferes with the currently playing audio.
+  const [orderedTracks, setOrderedTracks] = useState(() => [...musicTracks]);
+  const [orderReady, setOrderReady] = useState(false);
   const playlists = useMemo(() => [...new Set(orderedTracks.map(playlistName))], [orderedTracks]);
   const visibleTracks = useMemo(() => orderedTracks.filter((track) => playlistName(track) === selectedPlaylist), [orderedTracks, selectedPlaylist]);
   const playingPlaylistTracks = useMemo(() => orderedTracks.filter((track) => playlistName(track) === playlistName(activeTrack ?? "")), [activeTrack, orderedTracks]);
@@ -144,7 +201,13 @@ function MusicPlayer({ user, onClose, openRequest }: { user: User | null; onClos
   // A development/standalone build receives the service from the expo-audio plugin.
   const supportsBackgroundControls = Constants.appOwnership !== AppOwnership.Expo;
   useEffect(() => {
-    if (!likesReady || initialPickApplied.current) return;
+    if (!likesReady || likedOrderApplied.current) return;
+    likedOrderApplied.current = true;
+    setOrderedTracks(prioritizeLikes(musicTracks, likes));
+    setOrderReady(true);
+  }, [likes, likesReady]);
+  useEffect(() => {
+    if (!orderReady || initialPickApplied.current) return;
     initialPickApplied.current = true;
     const initial = orderedTracks[0];
     if (!initial) return;
@@ -153,7 +216,7 @@ function MusicPlayer({ user, onClose, openRequest }: { user: User | null; onClos
       setIndex(nextIndex);
       setSelectedPlaylist(playlistName(initial));
     }
-  }, [likesReady, orderedTracks]);
+  }, [orderReady, orderedTracks]);
   useEffect(() => { if (openRequest) setMinimized(false); }, [openRequest]);
   useEffect(() => subscribeBottomNavigation(setBottomNavVisible), []);
   useEffect(() => {
@@ -318,7 +381,7 @@ function useCloudLikes(user: User | null, key: "ssc-buddy-liked-videos" | "ssc-b
 }
 
 const styles = StyleSheet.create({
-  reel: { flex: 1, backgroundColor: "#000" }, video: { flex: 1 }, reelShade: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,.14)" }, close: { position: "absolute", zIndex: 3, top: 25, right: 18, padding: 8 }, videoTap: { ...StyleSheet.absoluteFill, zIndex: 1 }, playbackFeedback: { position: "absolute", zIndex: 4, top: "50%", left: "50%", width: 70, height: 70, marginLeft: -35, marginTop: -35, alignItems: "center", justifyContent: "center", borderRadius: 35, backgroundColor: "rgba(0,0,0,.58)" }, speedBadge: { position: "absolute", zIndex: 2, top: 28, right: 65, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: "rgba(220,38,38,.9)" }, speedText: { color: "#fff", fontSize: 13, fontWeight: "900" }, reelControls: { position: "absolute", zIndex: 2, left: 20, right: 20, bottom: 34 }, reelCaption: { color: colors.accent, fontSize: 10, fontWeight: "800", letterSpacing: 1.7, marginTop: 18 }, reelFile: { color: colors.text, fontSize: 15, fontWeight: "700", marginTop: 5 }, videoProgressTrack: { position: "absolute", zIndex: 3, bottom: 0, left: 0, right: 0, height: 4, backgroundColor: "rgba(255,255,255,.22)" }, videoProgressFill: { height: "100%", backgroundColor: "#ef4444" },
+  reel: { flex: 1, backgroundColor: "#000" }, video: { flex: 1 }, reelShade: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,.14)" }, close: { position: "absolute", zIndex: 3, top: 25, right: 18, padding: 8 }, videoTap: { ...StyleSheet.absoluteFill, zIndex: 1 }, playbackFeedback: { position: "absolute", zIndex: 4, top: "50%", left: "50%", width: 70, height: 70, marginLeft: -35, marginTop: -35, alignItems: "center", justifyContent: "center", borderRadius: 35, backgroundColor: "rgba(0,0,0,.58)" }, likeFeedback: { width: 96, height: 96, marginLeft: -48, marginTop: -48, backgroundColor: "transparent" }, speedBadge: { position: "absolute", zIndex: 2, top: 28, right: 65, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: "rgba(220,38,38,.9)" }, speedText: { color: "#fff", fontSize: 13, fontWeight: "900" }, reelControls: { position: "absolute", zIndex: 2, left: 20, right: 20, bottom: 34 }, reelCaption: { color: colors.accent, fontSize: 10, fontWeight: "800", letterSpacing: 1.7, marginTop: 18 }, reelFile: { color: colors.text, fontSize: 15, fontWeight: "700", marginTop: 5 }, videoProgressTrack: { position: "absolute", zIndex: 3, bottom: 0, left: 0, right: 0, height: 4, backgroundColor: "rgba(255,255,255,.22)" }, videoProgressFill: { height: "100%", backgroundColor: "#ef4444" },
   backdrop: { flex: 1, justifyContent: "center", padding: 18, backgroundColor: "rgba(0,0,0,.82)" }, musicCard: { maxHeight: "82%", borderRadius: 20, padding: 15, backgroundColor: "#1b1b1b", borderWidth: 1, borderColor: colors.border }, musicHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }, musicHeaderActions: { flexDirection: "row", alignItems: "center", gap: 12 }, musicKicker: { color: colors.muted, fontSize: 10, letterSpacing: 1.5, fontWeight: "800" }, disc: { width: 112, height: 112, alignSelf: "center", alignItems: "center", justifyContent: "center", marginTop: 4 }, progressRing: { position: "absolute" }, artwork: { alignItems: "center", justifyContent: "center", width: 90, height: 90, borderRadius: 45, overflow: "hidden", backgroundColor: "#292929" }, songTitle: { color: colors.text, textAlign: "center", marginTop: 7, fontSize: 14, fontWeight: "700" }, controls: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 8, marginTop: 9 }, round: { width: 36, height: 36, alignItems: "center", justifyContent: "center", borderRadius: 18, backgroundColor: "#292929" }, play: { backgroundColor: colors.accent }, playlistLabel: { color: colors.muted, fontSize: 10, letterSpacing: 1.5, fontWeight: "800", marginTop: 23 }, playlist: { height: 160, flexGrow: 0, gap: 0 }, track: { borderRadius: 8, paddingHorizontal: 9, paddingVertical: 4 }, trackActive: { backgroundColor: "#303030" }, trackText: { color: colors.muted, fontSize: 11 }, trackTextActive: { color: colors.text, fontWeight: "700" },
   playlistHeader: { flexDirection: "row", alignItems: "center", marginTop: 15 }, playlistChips: { gap: 5, paddingRight: 7 }, playlistChip: { maxWidth: 105, borderRadius: 7, paddingHorizontal: 8, paddingVertical: 3, backgroundColor: "#292929" }, playlistChipActive: { backgroundColor: "#e4e4e7" }, playlistChipText: { color: colors.muted, fontSize: 10, fontWeight: "700" }, playlistChipTextActive: { color: "#171717" }, playlistContent: { gap: 0, paddingBottom: 2 },
   coverImage: { width: "100%", height: "100%", borderRadius: 999 },
