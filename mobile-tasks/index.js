@@ -9,7 +9,7 @@ if (Platform.OS === "android") {
   const { renderDailyTasksWidget } = require("./src/widgets/DailyTasksWidget");
   const { renderQuickRecallWidget } = require("./src/widgets/QuickRecallWidget");
   const { answerUnlockQuiz, advanceUnlockQuiz, getUnlockQuiz, releaseUnlockQuizReview, startUnlockQuiz } = require("./src/domain/unlock-quiz");
-  const { getFirebaseAuth, recordQuickRecallPractice, toggleTaskFromWidget, writeQuestionLearning } = require("./src/lib/firebase");
+  const { getFirebaseAuth, publishLeaderboardAfterWidgetTask, recordQuickRecallPractice, toggleTaskFromWidget, writeQuestionLearning } = require("./src/lib/firebase");
   const { onAuthStateChanged } = require("firebase/auth");
   const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
@@ -66,6 +66,7 @@ if (Platform.OS === "android") {
             if (updated) {
               tasks = tasks.map((task) => task.id === taskId ? updated : task);
               await AsyncStorage.setItem("ssc-buddy:tasks:v2", JSON.stringify(tasks));
+              await publishLeaderboardAfterWidgetTask(user).catch(() => undefined);
             }
           } catch {}
         }

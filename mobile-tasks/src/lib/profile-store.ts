@@ -10,6 +10,8 @@ export type PracticeProfile = {
   avatar?: string;
   manifestation?: string;
   examName?: string;
+  practiceSessionEnabled?: boolean;
+  trackProgressEnabled?: boolean;
 };
 
 export const defaultProfile = (): PracticeProfile => ({ name: "", questionGoal: 100, manifestation: "" });
@@ -25,6 +27,8 @@ export function normalizeProfile(value: unknown): PracticeProfile {
     ...(typeof profile.avatar === "string" && profile.avatar ? { avatar: profile.avatar } : {}),
     ...(typeof profile.manifestation === "string" && profile.manifestation.trim() ? { manifestation: profile.manifestation.trim().toUpperCase() } : {}),
     ...(typeof profile.examName === "string" && profile.examName.trim() ? { examName: profile.examName.trim() } : {}),
+    ...(typeof profile.practiceSessionEnabled === "boolean" ? { practiceSessionEnabled: profile.practiceSessionEnabled } : {}),
+    ...(typeof profile.trackProgressEnabled === "boolean" ? { trackProgressEnabled: profile.trackProgressEnabled } : {}),
   };
 }
 

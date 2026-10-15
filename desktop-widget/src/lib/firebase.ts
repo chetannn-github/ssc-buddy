@@ -59,6 +59,55 @@ const auth = app ? getAuth(app) : null;
 
 const tasksFor = (user: User) => collection(db!, "users", user.uid, "tasks");
 const taskRef = (user: User, id: string) => doc(db!, "users", user.uid, "tasks", id);
+const profileRef = (user: User) => doc(db!, "users", user.uid, "profile", "current");
+
+const dayKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+const currentWeekKey = () => {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+  return dayKey(start);
+};
+
+/** Rebuilds the same weekly leaderboard entry used by the web and mobile apps. */
+async function publishLeaderboardAfterTaskChange(user: User) {
+  const [profileSnapshot, taskSnapshot] = await Promise.all([getDoc(profileRef(user)), getDocs(tasksFor(user))]);
+  const profile = profileSnapshot.data() ?? {};
+  const username = typeof profile.username === "string" ? profile.username.trim().toLowerCase() : "";
+  if (!username) return;
+
+  const week = currentWeekKey();
+  const end = new Date(`${week}T00:00:00`);
+  end.setDate(end.getDate() + 6);
+  const endKey = dayKey(end);
+  const today = dayKey(new Date());
+  const tasks = taskSnapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() } as DailyTask));
+  const scoped = tasks.filter((task) => task.date >= week && task.date <= endKey);
+  const completed = scoped.filter((task) => task.completed);
+  const overdue = scoped.filter((task) => !task.completed && task.date < today).length;
+  const studyMinutes = completed.reduce((total, task) => total + Math.max(0, task.minutesSpent ?? 0), 0);
+  let creditedMinutes = 0;
+  const leaderboardTasks = scoped.map((task) => {
+    if (!task.completed) return { name: task.name, subject: task.subject, completed: false, date: task.date, points: task.date < today ? -5 : 0 };
+    const before = Math.min(210, Math.floor(creditedMinutes / 10));
+    creditedMinutes += Math.max(0, task.minutesSpent ?? 0);
+    return { name: task.name, subject: task.subject, completed: true, date: task.date, points: 10 + Math.min(210, Math.floor(creditedMinutes / 10)) - before };
+  });
+
+  await setDoc(doc(db!, "leaderboards", week, "entries", user.uid), {
+    uid: user.uid,
+    username,
+    name: typeof profile.name === "string" && profile.name.trim() ? profile.name.trim() : "Student",
+    ...(typeof profile.avatar === "string" && profile.avatar ? { avatar: profile.avatar } : {}),
+    week,
+    completed: completed.length,
+    overdue,
+    studyMinutes,
+    points: completed.length * 10 - overdue * 5 + Math.min(210, Math.floor(studyMinutes / 10)),
+    leaderboardTasks,
+    updatedAt: serverTimestamp(),
+  }, { merge: true });
+}
 
 export function observeAuth(callback: (user: User | null) => void): Unsubscribe {
   if (!auth) return () => callback(null);
@@ -185,8 +234,14 @@ export async function recordQuickRecallPractice(user: User, input: QuickRecallPr
 }
 
 /** One document per task, matching the existing web's document-level CRUD. */
-export async function saveTask(user: User, task: DailyTask) { await setDoc(taskRef(user, task.id), task); }
-export async function removeTask(user: User, id: string) { await deleteDoc(taskRef(user, id)); }
+export async function saveTask(user: User, task: DailyTask) {
+  await setDoc(taskRef(user, task.id), task);
+  await publishLeaderboardAfterTaskChange(user);
+}
+export async function removeTask(user: User, id: string) {
+  await deleteDoc(taskRef(user, id));
+  await publishLeaderboardAfterTaskChange(user);
+}
 export const makeTaskId = () => `${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
 export const todayKey = () => {
   const now = new Date();

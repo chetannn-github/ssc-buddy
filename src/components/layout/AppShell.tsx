@@ -88,6 +88,8 @@ function cloudPracticeProfile(value: Record<string, unknown> | null): PracticePr
     ...(typeof value["avatar"] === "string" && value["avatar"] ? { avatar: value["avatar"] } : {}),
     ...(typeof value["manifestation"] === "string" && value["manifestation"].trim() ? { manifestation: value["manifestation"].trim().toUpperCase() } : {}),
     ...(typeof value["examName"] === "string" && value["examName"].trim() ? { examName: value["examName"].trim() } : {}),
+    ...(typeof value["practiceSessionEnabled"] === "boolean" ? { practiceSessionEnabled: value["practiceSessionEnabled"] } : {}),
+    ...(typeof value["trackProgressEnabled"] === "boolean" ? { trackProgressEnabled: value["trackProgressEnabled"] } : {}),
   };
 }
 
@@ -1244,7 +1246,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
           </div>
           {actions}
           <nav className="flex shrink-0 items-center gap-1">
-            {nav.map((item) => {
+            {nav.filter((item) => (item.url !== "/test" || profile?.practiceSessionEnabled !== false) && (!(["/track", "/progress"] as string[]).includes(item.url) || profile?.trackProgressEnabled !== false)).map((item) => {
               const active = path.startsWith(item.url);
               return (
                 <Link

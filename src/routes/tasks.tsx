@@ -34,7 +34,7 @@ import {
 } from "@/lib/daily-tasks";
 import { loadTrackerData } from "@/lib/tracker-store";
 import { isFirebaseConfigured, observeFirebaseUser } from "@/lib/firebase-sync";
-import { publishLeaderboardEntry } from "@/lib/leaderboard";
+import { publishLeaderboardEntry, weeklyTaskPoints } from "@/lib/leaderboard";
 import { loadPracticeProfile } from "@/lib/profile";
 import { syncTaskChanges } from "@/lib/task-sync";
 
@@ -121,6 +121,7 @@ function DailyTasks() {
     .filter((task) => task.date === activeTaskDate)
     .sort((a, b) => Number(a.completed) - Number(b.completed));
   const daySummary = summarizeTasks(dayTasks);
+  const taskPoints = useMemo(() => weeklyTaskPoints(tasks), [tasks]);
   const scopedTasks = useMemo(() => {
     const bounds = rangeBounds(range);
     return tasks.filter(
@@ -377,6 +378,7 @@ function DailyTasks() {
                   <TaskRow
                     key={task.id}
                     task={task}
+                    points={taskPoints.get(task.id) ?? 0}
                     onComplete={setCompleting}
                     onReopen={reopen}
                     onEdit={() => {
@@ -519,6 +521,7 @@ function DailyTasks() {
                         <TaskRow
                           key={task.id}
                           task={task}
+                          points={taskPoints.get(task.id) ?? 0}
                           onComplete={setCompleting}
                           onReopen={reopen}
                           onEdit={() => {
@@ -591,6 +594,7 @@ function DailyTasks() {
 
 function TaskRow({
   task,
+  points,
   onComplete,
   onReopen,
   onEdit,
@@ -598,6 +602,7 @@ function TaskRow({
   readOnly = false,
 }: {
   task: DailyTask;
+  points: number;
   onComplete: (task: DailyTask) => void;
   onReopen: (id: string) => void;
   onEdit: () => void;
@@ -634,15 +639,7 @@ function TaskRow({
         {!task.completed && readOnly && <X className="h-4 w-4" />}
       </button>
       <div className="min-w-0 flex-1">
-        <p
-          className={
-            task.completed
-              ? "truncate text-sm text-zinc-500 line-through"
-              : "truncate text-sm font-medium"
-          }
-        >
-          {task.name}
-        </p>
+        <div className="flex items-center gap-2"><p className={task.completed ? "truncate text-sm text-zinc-500 line-through" : "truncate text-sm font-medium"}>{task.name}</p><span className={`shrink-0 font-mono text-[11px] font-semibold ${points > 0 ? "text-emerald-300" : points < 0 ? "text-red-300" : "text-zinc-500"}`}>{points > 0 ? `+${points}` : points < 0 ? `−${Math.abs(points)}` : "0"} pts</span></div>
         <p className="mt-0.5 text-xs text-zinc-500">
           {task.subject} · {task.type}
           {task.completed && task.minutesSpent ? ` · ${formatDuration(task.minutesSpent)}` : ""}

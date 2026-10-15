@@ -1,11 +1,10 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
+  ArrowLeft,
   Check,
   ChevronDown,
   Copy,
-  FilePenLine,
   Flame,
-  Sparkles,
   LoaderCircle,
   LogOut,
   Music2,
@@ -13,6 +12,7 @@ import {
   Play,
   RefreshCw,
   Save,
+  Settings,
   Upload,
   Trophy,
 } from "lucide-react";
@@ -50,8 +50,8 @@ import { cn } from "@/lib/utils";
 import { useAuthUser } from "@/lib/auth-context";
 import { checkUsernameAvailability, normalizeUsername, saveProfileWithUsername, usernameValidationMessage } from "@/lib/firebase-sync";
 import type { PublicProfile } from "@/lib/firebase-sync";
-import { MockTestLogDialog } from "../../tracker/src/components/tracker/MockTestLogDialog";
 import { formatDuration, loadDailyTasks, type DailyTask } from "@/lib/daily-tasks";
+import { weeklyScore } from "@/lib/leaderboard";
 
 const title = "Profile";
 const description = "Your yearly practice activity and progress.";
@@ -512,6 +512,8 @@ function TargetProgress({
   incompleteTasks,
   range,
   onRangeChange,
+  showPractice = true,
+  showTracker = true,
 }: {
   attempted: number;
   goal: number;
@@ -526,6 +528,8 @@ function TargetProgress({
   incompleteTasks: number;
   range: ActivityRange;
   onRangeChange: (range: ActivityRange) => void;
+  showPractice?: boolean;
+  showTracker?: boolean;
 }) {
   const [rangeOpen, setRangeOpen] = useState(false);
   const rangeMenuRef = useRef<HTMLDivElement>(null);
@@ -560,7 +564,7 @@ function TargetProgress({
     <section className="overflow-visible rounded-2xl border border-white/10 bg-[#1a1a1a]">
       <div className="flex items-center justify-between gap-3 px-4 pt-2 sm:px-5">
         <span className="text-[11px] font-semibold tracking-[0.16em] text-zinc-500 uppercase">
-          Practice
+          {showPractice ? "Practice" : "Study tracker"}
         </span>
         <div ref={rangeMenuRef} className="relative">
           <button
@@ -608,7 +612,7 @@ function TargetProgress({
           )}
         </div>
       </div>
-      <div className="grid grid-cols-2 divide-x-0 divide-y divide-white/10 px-2 py-1.5 sm:grid-cols-5 sm:divide-x sm:divide-y-0 sm:px-3">
+      {showPractice && <div className="grid grid-cols-2 divide-x-0 divide-y divide-white/10 px-2 py-1.5 sm:grid-cols-5 sm:divide-x sm:divide-y-0 sm:px-3">
         <StatCell label="Question goal">
           <AnimatedNumber value={goal} />
         </StatCell>
@@ -623,16 +627,21 @@ function TargetProgress({
             <AnimatedNumber value={value} />
           </StatCell>
         ))}
-      </div>
-      <div className="border-t border-white/10 px-4 pt-2 text-[11px] font-semibold tracking-[0.16em] text-zinc-500 uppercase sm:px-5">
+      </div>}
+      {showPractice && showTracker && <div className="border-t border-white/10 px-4 pt-2 text-[11px] font-semibold tracking-[0.16em] text-zinc-500 uppercase sm:px-5">
         Study tracker
-      </div>
-      <div className="grid grid-cols-3 divide-x divide-y divide-white/10 px-2 py-1.5 sm:grid-cols-6 sm:divide-y-0 sm:px-3">
+      </div>}
+      {showTracker && <div className="grid grid-cols-3 divide-x divide-y divide-white/10 px-2 py-1.5 sm:px-3">
         {trackerStats.map(({ label, value }) => (
           <StatCell key={label} label={label}>
             <AnimatedNumber value={value} />
           </StatCell>
         ))}
+      </div>}
+      {showTracker && <div className="border-t border-white/10 px-4 pt-2 text-[11px] font-semibold tracking-[0.16em] text-zinc-500 uppercase sm:px-5">
+        Tasks
+      </div>}
+      <div className="grid grid-cols-3 divide-x divide-y divide-white/10 px-2 py-1.5 sm:px-3">
         <StatCell label="Study time">{formatDuration(studyMinutes)}</StatCell>
         <StatCell label="Tasks completed">
           <AnimatedNumber value={completedTasks} />
@@ -789,10 +798,10 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
   const [importingData, setImportingData] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [savingFeature, setSavingFeature] = useState<"practice" | "track" | null>(null);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [previewingAvatar, setPreviewingAvatar] = useState(false);
   const [isAvatarChanging, setIsAvatarChanging] = useState(false);
-  const [loggingMockTest, setLoggingMockTest] = useState(false);
   const [avatarFiles, setAvatarFiles] = useState<string[]>([]);
   const [nameDraft, setNameDraft] = useState("");
   const [usernameDraft, setUsernameDraft] = useState("");
@@ -802,6 +811,9 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
   const [goalDraft, setGoalDraft] = useState("");
   const [manifestationDraft, setManifestationDraft] = useState("");
   const [examNameDraft, setExamNameDraft] = useState("");
+  const [practiceSessionEnabledDraft, setPracticeSessionEnabledDraft] = useState(true);
+  const [trackProgressEnabledDraft, setTrackProgressEnabledDraft] = useState(true);
+  const [profileSettingsOpen, setProfileSettingsOpen] = useState(false);
   const [importMessage, setImportMessage] = useState("");
   const [promptCopied, setPromptCopied] = useState(false);
   const importFileRef = useRef<HTMLInputElement>(null);
@@ -842,6 +854,8 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
       const trackerData = loadTrackerData();
       setTracker(trackerData);
       setExamNameDraft(trackerData.meta.examName);
+      setPracticeSessionEnabledDraft(saved?.practiceSessionEnabled !== false);
+      setTrackProgressEnabledDraft(saved?.trackProgressEnabled !== false);
       setProfile(saved);
       setNameDraft(saved?.name ?? "");
       setUsernameDraft(saved?.username ?? ""); setUsernameTouched(false);
@@ -927,6 +941,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
       incomplete: tasks.length - completed.length,
     };
   }, [dailyTasks, range]);
+  const currentWeekPoints = useMemo(() => weeklyScore(dailyTasks).points, [dailyTasks]);
   const saveProfile = async () => {
     if (!nameDraft.trim() || Number(goalDraft) < 1 || isSavingProfile || (authUser && usernameStatus !== "available")) return;
     setIsSavingProfile(true);
@@ -937,6 +952,8 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
       ...(profile?.avatar ? { avatar: profile.avatar } : {}),
       ...(manifestationDraft.trim() ? { manifestation: manifestationDraft.trim() } : {}),
       ...(examNameDraft.trim() ? { examName: examNameDraft.trim() } : {}),
+      practiceSessionEnabled: practiceSessionEnabledDraft,
+      trackProgressEnabled: trackProgressEnabledDraft,
     };
     try {
       if (authUser) await saveProfileWithUsername(authUser, next);
@@ -964,6 +981,42 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
       setIsSavingProfile(false);
     }
   };
+  const saveFeature = async (feature: "practice" | "track") => {
+    if (savingFeature || isSavingProfile) return;
+    const nextPractice = feature === "practice" ? !practiceSessionEnabledDraft : practiceSessionEnabledDraft;
+    const nextTrack = feature === "track" ? !trackProgressEnabledDraft : trackProgressEnabledDraft;
+    const previousPractice = practiceSessionEnabledDraft;
+    const previousTrack = trackProgressEnabledDraft;
+    const nextManifestation = manifestationDraft.trim() || profile?.manifestation || "";
+    const nextExamName = examNameDraft.trim() || profile?.examName || "";
+    setPracticeSessionEnabledDraft(nextPractice);
+    setTrackProgressEnabledDraft(nextTrack);
+    setSavingFeature(feature);
+    const next = {
+      name: nameDraft.trim() || profile?.name || "Student",
+      ...(normalizeUsername(usernameDraft || profile?.username || "")
+        ? { username: normalizeUsername(usernameDraft || profile?.username || "") }
+        : {}),
+      questionGoal: Math.min(100000, Number(goalDraft) || profile?.questionGoal || 100),
+      ...(profile?.avatar ? { avatar: profile.avatar } : {}),
+      ...(nextManifestation ? { manifestation: nextManifestation } : {}),
+      ...(nextExamName ? { examName: nextExamName } : {}),
+      practiceSessionEnabled: nextPractice,
+      trackProgressEnabled: nextTrack,
+    };
+    try {
+      if (authUser && next.username) await saveProfileWithUsername(authUser, next);
+      savePracticeProfile(next);
+      setProfile(next);
+    } catch (error) {
+      setPracticeSessionEnabledDraft(previousPractice);
+      setTrackProgressEnabledDraft(previousTrack);
+      const message = error instanceof Error ? error.message : "Could not update this setting.";
+      setUsernameMessage(message);
+    } finally {
+      setSavingFeature(null);
+    }
+  };
   const displayName = profile?.name ?? "Your profile";
   const questionGoal = profile?.questionGoal ?? 100;
   const avatar = profile?.avatar ?? defaultAvatar(displayName, avatarFiles);
@@ -986,6 +1039,8 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
       avatar: nextAvatar,
       ...(profile?.manifestation ? { manifestation: profile.manifestation } : {}),
       ...(profile?.examName ? { examName: profile.examName } : {}),
+      practiceSessionEnabled: profile?.practiceSessionEnabled !== false,
+      trackProgressEnabled: profile?.trackProgressEnabled !== false,
     };
     savePracticeProfile(next);
     if (authUser && next.username) void saveProfileWithUsername(authUser, next).catch(() => undefined);
@@ -1062,7 +1117,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
                 </p>
               )}
               <div className="mt-0.5 flex items-center justify-center gap-1 sm:justify-start">
-                <h2 className="truncate text-xl font-semibold text-zinc-50">{displayName}</h2>
+                <h2 className="truncate text-xl font-semibold text-zinc-50">{displayName}</h2><span className={cn("shrink-0 rounded-full px-1.5 py-0.5 font-mono text-[10px] font-semibold", currentWeekPoints > 0 ? "bg-emerald-400/10 text-emerald-300" : currentWeekPoints < 0 ? "bg-red-400/10 text-red-300" : "bg-white/10 text-zinc-400")}>{currentWeekPoints} pts</span>
                 {readOnly && (
                   <span
                     title={`${consistencyStreak}-day consistency streak`}
@@ -1102,22 +1157,6 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
                   type="button"
                   variant="ghost"
                   className="h-9 gap-1.5 px-2.5 text-sm text-zinc-300 hover:bg-white/10 hover:text-white"
-                  onClick={() => setLoggingMockTest(true)}
-                >
-                  <FilePenLine className="h-4 w-4" /> Log mock test
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="h-9 gap-1.5 px-2.5 text-sm text-zinc-300 hover:bg-white/10 hover:text-white"
-                  onClick={() => void navigate({ to: "/quick-recall" })}
-                >
-                  <Sparkles className="h-4 w-4" /> Quick recall
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="h-9 gap-1.5 px-2.5 text-sm text-zinc-300 hover:bg-white/10 hover:text-white"
                   onClick={() => window.dispatchEvent(new Event("ssc-videos-open"))}
                 >
                   <Play className="h-4 w-4" /> Videos
@@ -1137,15 +1176,6 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
             </div>
           </section>
 
-          {tracker && (
-            <MockTestLogDialog
-              open={loggingMockTest}
-              data={tracker}
-              onClose={() => setLoggingMockTest(false)}
-              onSave={(next) => setTracker(saveTrackerData(next))}
-            />
-          )}
-
           <div className="space-y-3">
             <TargetProgress
               attempted={totals.attempted}
@@ -1161,12 +1191,14 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
               incompleteTasks={dailyTaskTotals.incomplete}
               range={range}
               onRangeChange={setRange}
+              showPractice={profile?.practiceSessionEnabled !== false}
+              showTracker={profile?.trackProgressEnabled !== false}
             />
 
-            <ActivityHeatmap records={records} tracker={tracker} range="year" publicActivity={readOnly && !publicProfile?.dashboard ? publicProfile?.activity : undefined} />
+            {!(profile?.practiceSessionEnabled === false && profile?.trackProgressEnabled === false) && <ActivityHeatmap records={records} tracker={tracker} range="year" publicActivity={readOnly && !publicProfile?.dashboard ? publicProfile?.activity : undefined} />}
           </div>
 
-          <StudyTrackerOverview tracker={tracker} readOnly={readOnly} />
+          {profile?.trackProgressEnabled !== false && <StudyTrackerOverview tracker={tracker} readOnly={readOnly} />}
         </div>
       </div>
       {previewingAvatar && avatar && (
@@ -1210,15 +1242,13 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
       </Dialog>
       {editingProfile && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-md">
-          <section className="w-full max-w-md rounded-2xl border border-white/10 bg-[#1e1e1e] p-6 text-zinc-100 shadow-2xl sm:p-8">
-            <h2 className="text-xl font-semibold tracking-tight text-zinc-50">
-              Setup your profile
-            </h2>
-            <div className="mt-6 space-y-4">
+          <section className="relative w-full max-w-md rounded-2xl border border-white/10 bg-[#1e1e1e] p-4 text-zinc-100 shadow-2xl sm:p-5">
+            <div className="flex items-center justify-between gap-3"><h2 className="text-lg font-semibold tracking-tight text-zinc-50">Setup your profile</h2><button type="button" aria-label="Profile settings" onClick={() => setProfileSettingsOpen((open) => !open)} className="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 transition hover:bg-white/10 hover:text-zinc-100"><Settings className="h-4 w-4" /></button></div>
+            <div className="mt-4 space-y-3">
               <label className="block text-sm font-medium text-zinc-200">
                 Your name
                 <Input
-                  className="mt-2 h-11 border-white/10 bg-[#151515] text-zinc-100 placeholder:text-zinc-500 focus-visible:border-zinc-500"
+                  className="mt-1.5 h-10 border-white/10 bg-[#151515] text-zinc-100 placeholder:text-zinc-500 focus-visible:border-zinc-500"
                   value={nameDraft}
                   onChange={(event) => setNameDraft(event.target.value)}
                   autoFocus
@@ -1228,7 +1258,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
                 Username
                 <div className="relative mt-2">
                   <Input
-                    className="h-11 border-white/10 bg-[#151515] pr-10 text-zinc-100 lowercase placeholder:text-zinc-500 focus-visible:border-zinc-500"
+                    className="h-10 border-white/10 bg-[#151515] pr-10 text-zinc-100 lowercase placeholder:text-zinc-500 focus-visible:border-zinc-500"
                     value={usernameDraft}
                     onChange={(event) => { setUsernameTouched(true); setUsernameDraft(event.target.value.toLowerCase()); }}
                     placeholder="e.g. ssc_aspirant"
@@ -1244,7 +1274,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
               <label className="block text-sm font-medium text-zinc-200">
                 Question goal
                 <Input
-                  className="mt-2 h-11 border-white/10 bg-[#151515] text-zinc-100 placeholder:text-zinc-500 focus-visible:border-zinc-500"
+                  className="mt-1.5 h-10 border-white/10 bg-[#151515] text-zinc-100 placeholder:text-zinc-500 focus-visible:border-zinc-500"
                   inputMode="numeric"
                   value={goalDraft}
                   onChange={(event) => setGoalDraft(event.target.value.replace(/\D/g, ""))}
@@ -1253,7 +1283,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
               <label className="block text-sm font-medium text-zinc-200">
                 Daily manifestation <span className="font-normal text-zinc-500">(optional)</span>
                 <textarea
-                  className="mt-2 min-h-24 w-full rounded-md border border-white/10 bg-[#151515] px-3 py-2 text-sm text-zinc-100 uppercase placeholder:text-zinc-500 focus-visible:border-zinc-500 focus-visible:outline-none"
+                  className="mt-1.5 min-h-20 w-full rounded-md border border-white/10 bg-[#151515] px-3 py-2 text-sm text-zinc-100 uppercase placeholder:text-zinc-500 focus-visible:border-zinc-500 focus-visible:outline-none"
                   value={manifestationDraft}
                   onChange={(event) => setManifestationDraft(event.target.value.toUpperCase())}
                   placeholder="Write the sentence you want to type daily"
@@ -1265,14 +1295,19 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
               <label className="block text-sm font-medium text-zinc-200">
                 Exam name
                 <Input
-                  className="mt-2 h-11 border-white/10 bg-[#151515] text-zinc-100 placeholder:text-zinc-500 focus-visible:border-zinc-500"
+                  className="mt-1.5 h-10 border-white/10 bg-[#151515] text-zinc-100 placeholder:text-zinc-500 focus-visible:border-zinc-500"
                   value={examNameDraft}
                   onChange={(event) => setExamNameDraft(event.target.value)}
                   placeholder="e.g. SSC CGL 2027"
                 />
               </label>
+              {false && <button type="button" onClick={() => setPracticeSessionEnabledDraft((value) => !value)} className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-[#151515] px-3 py-3 text-left transition hover:bg-white/[.04]">
+                <span><span className="block text-sm font-medium text-zinc-200">Practice session</span><span className="mt-0.5 block text-xs font-normal text-zinc-500">Show the practice tab and practice statistics.</span></span>
+                <span className={cn("relative h-6 w-11 rounded-full transition-colors", practiceSessionEnabledDraft ? "bg-emerald-500" : "bg-zinc-700")}><span className={cn("absolute top-1 h-4 w-4 rounded-full bg-white transition-transform", practiceSessionEnabledDraft ? "translate-x-6" : "translate-x-1")} /></span>
+              </button>}
             </div>
-            <div className="mt-6 flex justify-end gap-2">
+            {profileSettingsOpen && <div className="absolute inset-0 z-10 rounded-2xl bg-[#1e1e1e] p-6 sm:p-8"><div className="flex items-center gap-2"><button type="button" aria-label="Back to profile form" onClick={() => setProfileSettingsOpen(false)} className="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 hover:bg-white/10 hover:text-white"><ArrowLeft className="h-4 w-4" /></button><h3 className="text-lg font-semibold">Settings</h3></div><div className="mt-6 space-y-3"><button type="button" disabled={savingFeature !== null} onClick={() => void saveFeature("practice")} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#151515] px-3 py-3 text-left disabled:cursor-wait disabled:opacity-70"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Practice session</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Take practice tests, review answers and track your results.</span></span>{savingFeature === "practice" ? <LoaderCircle className="h-5 w-5 shrink-0 animate-spin text-emerald-400" /> : <span className={cn("relative h-6 w-11 shrink-0 rounded-full transition-colors", practiceSessionEnabledDraft ? "bg-emerald-500" : "bg-zinc-700")}><span className={cn("absolute top-1 h-4 w-4 rounded-full bg-white transition-transform", practiceSessionEnabledDraft ? "translate-x-6" : "translate-x-1")} /></span>}</button><button type="button" disabled={savingFeature !== null} onClick={() => void saveFeature("track")} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#151515] px-3 py-3 text-left disabled:cursor-wait disabled:opacity-70"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Track</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Track syllabus, revision and mock test progress.</span></span>{savingFeature === "track" ? <LoaderCircle className="h-5 w-5 shrink-0 animate-spin text-emerald-400" /> : <span className={cn("relative h-6 w-11 shrink-0 rounded-full transition-colors", trackProgressEnabledDraft ? "bg-emerald-500" : "bg-zinc-700")}><span className={cn("absolute top-1 h-4 w-4 rounded-full bg-white transition-transform", trackProgressEnabledDraft ? "translate-x-6" : "translate-x-1")} /></span>}</button></div></div>}
+            <div className="mt-4 flex justify-end gap-2">
               <Button
                 variant="outline"
                 className="border-white/10 bg-white/5 text-zinc-200 hover:bg-white/10 hover:text-white"

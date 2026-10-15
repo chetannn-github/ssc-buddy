@@ -9,14 +9,17 @@ import { resetBottomNavigation, subscribeBottomNavigation } from "../navigation/
 type Props = {
   activeTab: TabKey;
   onChange: (tab: TabKey) => void;
+  practiceSessionEnabled?: boolean;
+  trackProgressEnabled?: boolean;
 };
 
-export function BottomNavigation({ activeTab, onChange }: Props) {
+export function BottomNavigation({ activeTab, onChange, practiceSessionEnabled = true, trackProgressEnabled = true }: Props) {
   const [visible, setVisible] = useState(true);
   const [navWidth, setNavWidth] = useState(0);
   const height = useRef(new Animated.Value(66)).current;
   const indicatorX = useRef(new Animated.Value(0)).current;
-  const activeIndex = Math.max(0, tabs.findIndex((tab) => tab.key === activeTab));
+  const visibleTabs = tabs.filter((tab) => (tab.key !== "practice" || practiceSessionEnabled) && (!(["track", "progress"] as TabKey[]).includes(tab.key) || trackProgressEnabled));
+  const activeIndex = Math.max(0, visibleTabs.findIndex((tab) => tab.key === activeTab));
   useEffect(() => subscribeBottomNavigation(setVisible), []);
   useEffect(() => {
     Animated.timing(height, { toValue: visible ? 66 : 0, duration: 180, useNativeDriver: false }).start();
@@ -24,7 +27,7 @@ export function BottomNavigation({ activeTab, onChange }: Props) {
   useEffect(() => {
     if (!navWidth) return;
     Animated.spring(indicatorX, {
-      toValue: activeIndex * (navWidth / tabs.length),
+      toValue: activeIndex * (navWidth / visibleTabs.length),
       damping: 18,
       stiffness: 210,
       mass: 0.7,
@@ -34,8 +37,8 @@ export function BottomNavigation({ activeTab, onChange }: Props) {
   return (
     <Animated.View pointerEvents={visible ? "auto" : "none"} style={[styles.container, { height }]}>
       <View style={styles.wrap} onLayout={(event) => setNavWidth(event.nativeEvent.layout.width)}>
-      {navWidth > 0 && <Animated.View pointerEvents="none" style={[styles.indicator, { width: navWidth / tabs.length, transform: [{ translateX: indicatorX }] }]} />}
-      {tabs.map((tab) => <NavigationItem key={tab.key} tab={tab} active={tab.key === activeTab} onPress={() => { resetBottomNavigation(); onChange(tab.key); }} />)}</View>
+      {navWidth > 0 && <Animated.View pointerEvents="none" style={[styles.indicator, { width: navWidth / visibleTabs.length, transform: [{ translateX: indicatorX }] }]} />}
+      {visibleTabs.map((tab) => <NavigationItem key={tab.key} tab={tab} active={tab.key === activeTab} onPress={() => { resetBottomNavigation(); onChange(tab.key); }} />)}</View>
     </Animated.View>
   );
 }

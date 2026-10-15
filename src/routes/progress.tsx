@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Check, ChevronDown } from "lucide-react";
+import { Check, ChevronDown, FilePenLine } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CartesianGrid,
@@ -11,8 +11,9 @@ import {
   YAxis,
 } from "recharts";
 import { AppShell } from "@/components/layout/AppShell";
-import { loadTrackerData } from "@/lib/tracker-store";
+import { loadTrackerData, saveTrackerData } from "@/lib/tracker-store";
 import type { TestEntry, TrackerData } from "@/lib/tracker";
+import { MockTestLogDialog } from "../../tracker/src/components/tracker/MockTestLogDialog";
 
 type TestCategory = "Sectional" | "Pre" | "Mains";
 
@@ -224,6 +225,7 @@ function FilterMenu<T extends string>({
 
 function Progress() {
   const [tracker, setTracker] = useState<TrackerData>(() => loadTrackerData());
+  const [loggingMockTest, setLoggingMockTest] = useState(false);
   const [category, setCategory] = useState<TestCategory>("Sectional");
   const [subjectId, setSubjectId] = useState("all");
 
@@ -302,7 +304,10 @@ function Progress() {
               </p>
               <h1 className="mt-1 text-2xl font-semibold">Progress</h1>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
+              <button type="button" onClick={() => setLoggingMockTest(true)} className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-white/[.07] px-3 text-xs font-medium text-zinc-200 transition hover:bg-white/[.12] hover:text-white">
+                <FilePenLine className="h-3.5 w-3.5" /> Log mock test
+              </button>
               <FilterMenu
                 value={category}
                 options={[
@@ -404,6 +409,7 @@ function Progress() {
               No {category.toLowerCase()} mock tests match this selection yet.
             </div>
           )}
+          <MockTestLogDialog open={loggingMockTest} data={tracker} onClose={() => setLoggingMockTest(false)} onSave={(next) => setTracker(saveTrackerData(next))} />
         </main>
       </div>
     </AppShell>

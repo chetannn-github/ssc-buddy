@@ -6,6 +6,8 @@ export type PracticeProfile = {
   manifestation?: string;
   /** Kept with the profile so web and mobile render the same identity. */
   examName?: string;
+  practiceSessionEnabled?: boolean;
+  trackProgressEnabled?: boolean;
 };
 
 export const PROFILE_KEY = "cbt-practice-profile";
@@ -36,6 +38,8 @@ export function loadPracticeProfile(): PracticeProfile | null {
       ...(typeof profile.examName === "string" && profile.examName.trim()
         ? { examName: profile.examName.trim() }
         : {}),
+      ...(typeof profile.practiceSessionEnabled === "boolean" ? { practiceSessionEnabled: profile.practiceSessionEnabled } : {}),
+      ...(typeof profile.trackProgressEnabled === "boolean" ? { trackProgressEnabled: profile.trackProgressEnabled } : {}),
     };
   } catch {
     return null;
@@ -54,6 +58,8 @@ export function savePracticeProfile(profile: PracticeProfile) {
         ? { manifestation: profile.manifestation.trim().toUpperCase() }
         : {}),
       ...(profile.examName?.trim() ? { examName: profile.examName.trim() } : {}),
+      ...(profile.practiceSessionEnabled === false ? { practiceSessionEnabled: false } : {}),
+      ...(profile.trackProgressEnabled === false ? { trackProgressEnabled: false } : {}),
     }),
   );
   window.dispatchEvent(new Event("cbt-profile-updated"));

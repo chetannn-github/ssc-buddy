@@ -84,7 +84,15 @@ export async function publishLeaderboardEntry(user: User, profile: Record<string
   const overdue = scoped.filter((task) => task.completed !== true && typeof task.date === "string" && task.date < today).length;
   const studyMinutes = completed.reduce((sum, task) => sum + Math.max(0, Number(task.minutesSpent) || 0), 0);
   const points = completed.length * 10 - overdue * 5 + Math.min(210, Math.floor(studyMinutes / 10));
-  await setDoc(doc(getFirebaseFirestore(), "leaderboards", week, "entries", user.uid), { uid: user.uid, username, name: String(profile.name ?? "Student"), ...(typeof profile.avatar === "string" && profile.avatar ? { avatar: profile.avatar } : {}), week, completed: completed.length, completedTasks: completed.map((task) => ({ name: String(task.name ?? "Task"), subject: String(task.subject ?? "") })), overdue, studyMinutes, points, updatedAt: serverTimestamp() }, { merge: true });
+  let creditedMinutes = 0;
+  const leaderboardTasks = scoped.map((task) => {
+    const completedTask = task.completed === true, date = String(task.date ?? "");
+    if (!completedTask) return { name: String(task.name ?? "Task"), subject: String(task.subject ?? ""), completed: false, date, points: date < today ? -5 : 0 };
+    const before = Math.min(210, Math.floor(creditedMinutes / 10)); creditedMinutes += Math.max(0, Number(task.minutesSpent) || 0);
+    const timeBonus = Math.min(210, Math.floor(creditedMinutes / 10)) - before;
+    return { name: String(task.name ?? "Task"), subject: String(task.subject ?? ""), completed: true, date, points: 10 + timeBonus };
+  });
+  await setDoc(doc(getFirebaseFirestore(), "leaderboards", week, "entries", user.uid), { uid: user.uid, username, name: String(profile.name ?? "Student"), ...(typeof profile.avatar === "string" && profile.avatar ? { avatar: profile.avatar } : {}), week, completed: completed.length, leaderboardTasks, overdue, studyMinutes, points, updatedAt: serverTimestamp() }, { merge: true });
 }
 
 const cloudProfileDoc = (user: User) => doc(getFirebaseFirestore(), "users", user.uid, "profile", "current");
@@ -211,6 +219,13 @@ export async function toggleTaskFromWidget(user: User, taskId: string): Promise<
     transaction.update(reference, update);
     return { ...current, ...update };
   });
+}
+
+/** Rebuilds the weekly leaderboard snapshot after a background widget toggle. */
+export async function publishLeaderboardAfterWidgetTask(user: User) {
+  const [profile, taskSnapshot] = await Promise.all([readCloudProfile(user), getDocs(taskCollection(user))]);
+  if (!profile || typeof profile.username !== "string" || !profile.username.trim()) return;
+  await publishLeaderboardEntry(user, profile, taskSnapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
 }
 
 /** Document-level task sync: only created, changed, or removed tasks are written. */

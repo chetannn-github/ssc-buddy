@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { Sparkles } from "lucide-react";
 import { useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { SetupScreen, type TestConfig } from "@/components/exam/SetupScreen";
@@ -130,6 +131,12 @@ function TestPage() {
       >
         {phase === "setup" && (
           <div className="mx-auto mb-2 flex max-w-5xl justify-end gap-1">
+            <Link
+              to="/quick-recall"
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-zinc-400 transition-colors hover:bg-white/10 hover:text-zinc-100"
+            >
+              <Sparkles className="h-3.5 w-3.5" /> Quick recall
+            </Link>
             <Link
               to="/question-bank"
               className="rounded-md px-2 py-1.5 text-xs font-medium text-zinc-400 transition-colors hover:bg-white/10 hover:text-zinc-100"
