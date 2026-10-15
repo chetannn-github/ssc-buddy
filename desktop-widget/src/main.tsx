@@ -1,13 +1,25 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { ArrowLeft, ArrowRight, BrainCircuit, Check, ChevronDown, CloudOff, Eye, EyeOff, Flame, LoaderCircle, LogOut, Plus, Trash2, X } from "lucide-react";
+import NumberFlow from "@number-flow/react";
+import { ArrowLeft, ArrowRight, Check, ChevronDown, CloudOff, Eye, EyeOff, Flame, LoaderCircle, LogOut, Plus, Sparkles, Trash2, Trophy, X } from "lucide-react";
 import type { User } from "firebase/auth";
-import { TASK_TYPES, type DailyTask, type TaskType, type QuickRecallSeed, createAccount, firebaseConfigured, loadQuickRecallSeed, logout, makeTaskId, observeAuth, recordQuickRecallAnswer, recordQuickRecallPractice, removeTask, saveTask, signIn, signInGoogle, todayKey, watchStreakActivity, watchTasks } from "./lib/firebase";
+import { TASK_TYPES, type DailyTask, type TaskType, type QuickRecallSeed, createAccount, firebaseConfigured, loadQuickRecallSeed, logout, makeTaskId, observeAuth, recordQuickRecallAnswer, recordQuickRecallPractice, removeTask, saveTask, signIn, signInGoogle, todayKey, watchLeaderboardRank, watchStreakActivity, watchTasks, watchWeeklyLeaderboard } from "./lib/firebase";
 import { createQuickRecallSession, RANDOM_RECALL_SCOPE, type QuickRecallScope, type QuickRecallSession } from "./lib/quick-recall";
 import { QuickRecallPanel } from "./components/QuickRecallPanel";
 import authImage from "./assets/auth.jpg";
 import googleImage from "./assets/google.png";
+import goldMedal from "../../public/gold-medal.png";
+import silverMedal from "../../public/silver-medal.png";
+import bronzeMedal from "../../public/bronze-medal.png";
 import "./styles.css";
+
+const avatarModules = import.meta.glob("../../public/avatars/*", { eager: true, query: "?url", import: "default" }) as Record<string, string>;
+const avatarSource = (avatar: unknown) => {
+  const filename = typeof avatar === "string" ? avatar : "";
+  return Object.entries(avatarModules).find(([path]) => path.endsWith(`/${filename}`))?.[1] ?? "";
+};
+const medalImages = [goldMedal, silverMedal, bronzeMedal];
+function RankMark({ rank }: { rank: number }) { return rank <= 3 ? <img className="leaderboard-medal" src={medalImages[rank - 1]} alt={`Rank ${rank}`} /> : <span className="leaderboard-trophy"><Trophy size={13} /> #{rank}</span>; }
 
 type Draft = Pick<DailyTask, "name" | "subject" | "type" | "date">;
 type SavedQuickRecall = { session: QuickRecallSession; open: boolean };
@@ -37,30 +49,13 @@ const loadSavedQuickRecall = (): SavedQuickRecall | null => {
   } catch { return null; }
 };
 
-function useAnimatedNumber(value: number, duration = 420) {
-  const [displayed, setDisplayed] = useState(value);
-  const current = useRef(value);
-  const frame = useRef<number | null>(null);
-
-  useEffect(() => {
-    const start = current.current;
-    const difference = value - start;
-    if (!difference) return;
-    const startedAt = performance.now();
-    if (frame.current) cancelAnimationFrame(frame.current);
-    const tick = (now: number) => {
-      const progress = Math.min((now - startedAt) / duration, 1);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      const next = Math.round(start + difference * eased);
-      current.current = next;
-      setDisplayed(next);
-      if (progress < 1) frame.current = requestAnimationFrame(tick);
-    };
-    frame.current = requestAnimationFrame(tick);
-    return () => { if (frame.current) cancelAnimationFrame(frame.current); };
-  }, [duration, value]);
-
-  return displayed;
+function WidgetNumber({ value, prefix = "", suffix = "" }: { value: number; prefix?: string; suffix?: string }) {
+  return <NumberFlow value={value} prefix={prefix} suffix={suffix} willChange />;
+}
+function WidgetDuration({ minutes }: { minutes: number }) {
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  return <>{hours > 0 && <WidgetNumber value={hours} suffix="h" />}{(hours === 0 || remainder > 0) && <WidgetNumber value={remainder} suffix="m" />}</>;
 }
 
 function App() {
@@ -69,6 +64,9 @@ function App() {
   const [authReady, setAuthReady] = useState(!firebaseConfigured);
   const [tasks, setTasks] = useState<DailyTask[]>([]);
   const [activityDates, setActivityDates] = useState<string[]>([]);
+  const [leaderboardRankValue, setLeaderboardRank] = useState<number | null>(null);
+  const [leaderboardOpen, setLeaderboardOpen] = useState(false);
+  const [leaderboardRows, setLeaderboardRows] = useState<Record<string, unknown>[]>([]);
   const [busy, setBusy] = useState(false);
   const [editor, setEditor] = useState<DailyTask | null | "new">(null);
   const [draft, setDraft] = useState<Draft>(blankDraft());
@@ -102,32 +100,44 @@ function App() {
     if (!user) { setActivityDates([]); return; }
     return watchStreakActivity(user, setActivityDates);
   }, [user?.uid]);
+  useEffect(() => {
+    if (!user) { setLeaderboardRank(null); return; }
+    return watchLeaderboardRank(user, setLeaderboardRank);
+  }, [user?.uid]);
+  useEffect(() => {
+    if (!user || !leaderboardOpen) return;
+    return watchWeeklyLeaderboard(setLeaderboardRows);
+  }, [leaderboardOpen, user?.uid]);
 
   const today = todayKey();
   const tomorrow = tomorrowKey();
   const todayTasks = useMemo(() => tasks.filter((task) => task.date === (taskDay === "today" ? today : tomorrow)).sort((a, b) => Number(a.completed) - Number(b.completed)), [taskDay, tasks, today, tomorrow]);
   const taskPoints = useMemo(() => weeklyTaskPoints(tasks), [tasks]);
+  const displayedTaskPoints = useMemo(
+    () => todayTasks.reduce((total, task) => total + (taskPoints.get(task.id) ?? 0), 0),
+    [taskPoints, todayTasks],
+  );
   const tomorrowTaskCount = tasks.filter((task) => task.date === tomorrow).length;
   const done = todayTasks.filter((task) => task.completed);
   const minutesDone = done.reduce((total, task) => total + (task.minutesSpent ?? 0), 0);
-  const completionPercent = todayTasks.length ? Math.round((done.length / todayTasks.length) * 100) : 0;
-  const animatedDone = useAnimatedNumber(done.length);
-  const animatedTotal = useAnimatedNumber(todayTasks.length);
-  const animatedMinutes = useAnimatedNumber(minutesDone);
-  const streak = useMemo(() => {
+  const completionPercentTarget = todayTasks.length ? Math.round((done.length / todayTasks.length) * 100) : 0;
+  const streakValue = useMemo(() => {
     const toKey = (value: string | Date) => { const date = new Date(value); return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`; };
-    const activeDays = new Set(activityDates.map(toKey));
+    // Consistency is shared across practice, tracker and completed daily tasks.
+    const completedTaskDates = tasks.filter((task) => task.completed).map((task) => task.completedAt ?? task.date);
+    const activeDays = new Set([...activityDates, ...completedTaskDates].map(toKey));
     const cursor = new Date(); cursor.setHours(0, 0, 0, 0);
     if (!activeDays.has(toKey(cursor))) cursor.setDate(cursor.getDate() - 1);
     let days = 0;
     while (activeDays.has(toKey(cursor))) { days += 1; cursor.setDate(cursor.getDate() - 1); }
     return days;
-  }, [activityDates]);
+  }, [activityDates, tasks]);
+  const streak = streakValue;
 
   useEffect(() => {
-    const frame = requestAnimationFrame(() => setRingProgress(completionPercent));
+    const frame = requestAnimationFrame(() => setRingProgress(completionPercentTarget));
     return () => cancelAnimationFrame(frame);
-  }, [completionPercent]);
+  }, [completionPercentTarget]);
   useEffect(() => {
     if (quickRecallOpen && quickRecallSession) localStorage.setItem(QUICK_RECALL_SESSION_KEY, JSON.stringify({ open: true, session: quickRecallSession }));
     else localStorage.removeItem(QUICK_RECALL_SESSION_KEY);
@@ -178,9 +188,9 @@ function App() {
   if (!authReady) return <WidgetSplash />;
   if (!user) return <AuthPanel />;
 
-  return <main className="widget">
-    <header><div className="window-drag"><span className="brand">STUDY PLANNER</span><h1>{quickRecallOpen ? "Quick Recall" : "Daily Tasks"}</h1></div>{quickRecallOpen ? <button className="quick-recall-trigger" onClick={() => { setQuickRecallOpen(false); setQuickRecallSession(null); }}><ArrowLeft size={16} /><span>Tasks</span></button> : <div className="header-actions"><button className="quick-recall-trigger" onClick={() => void openQuickRecall()}><BrainCircuit size={16} /><span>Recall</span></button><div className={`streak-pill ${streak > 0 ? "active" : ""}`}><Flame size={16} /><span>{streak}</span></div><button className="logout" onClick={() => setLogoutConfirm(true)}><LogOut size={15} /></button></div>}</header>
-    {quickRecallOpen ? quickRecallSession ? <QuickRecallPanel session={quickRecallSession} loading={quickRecallLoading} onAnswered={(question, choice, index, correct) => { if (user) { void recordQuickRecallAnswer(user, question, correct).catch(() => undefined); void recordQuickRecallPractice(user, { runId: `${quickRecallSession?.runId ?? "quick-recall"}:${index}`, date: todayKey(), startedAt: quickRecallSession?.startedAt ?? new Date().toISOString(), questions: [question], answers: [choice] }).catch(() => undefined); } }} onBack={() => { localStorage.removeItem("ssc-buddy-desktop-quick-recall-progress"); setQuickRecallOpen(false); setQuickRecallSession(null); }} onRestart={() => { setQuickRecallSession(null); }} /> : <QuickRecallSetup seed={quickRecallSeed} loading={quickRecallLoading} scope={quickRecallScope} onScopeChange={setQuickRecallScope} onBack={() => setQuickRecallOpen(false)} onStart={() => quickRecallSeed && setQuickRecallSession(createQuickRecallSession(quickRecallSeed, quickRecallScope))} /> : <><section className="task-hero"><div className="hero-heading"><span>{taskDay === "today" ? "Today’s tasks" : "Tomorrow’s tasks"}</span><div className="hero-actions">{(tomorrowTaskCount > 0 || taskDay === "tomorrow") && <button className="day-toggle" onClick={() => setTaskDay((value) => value === "today" ? "tomorrow" : "today")}>{taskDay === "today" ? `Tomorrow (${tomorrowTaskCount})` : "Today"}<ChevronDown size={14} /></button>}<button className="icon-button" onClick={openNew}><Plus size={18} /></button></div></div><div className="progress-row"><div className="completion-ring"><svg viewBox="0 0 84 84" aria-hidden="true"><circle className="ring-track" cx="42" cy="42" r="35" /><circle className="ring-value" cx="42" cy="42" r="35" style={{ strokeDashoffset: 220 - (220 * ringProgress) / 100 }} /></svg><div><strong>{completionPercent}%</strong></div></div><div className="hero-stats"><div><span>TASKS</span><strong>{animatedDone} / {animatedTotal}</strong></div><div><span>COMPLETED TIME</span><strong>{formatMinutes(animatedMinutes)}</strong></div></div></div></section><div className="toolbar"><span>{taskDay === "today" ? "TODAY'S TASKS" : "TOMORROW'S TASKS"}</span></div><section className="task-list">{todayTasks.length ? todayTasks.map((task) => { const points = taskPoints.get(task.id) ?? 0; return <article className={`task ${task.completed ? "done" : ""}`} key={task.id}><button className="check" onClick={() => task.completed ? void reopen(task) : (setMinutes(String(task.minutesSpent ?? 30)), setComplete(task))}>{task.completed && <Check size={14} />}</button><button className="task-main" onClick={() => openEdit(task)}><span className="task-title"><b>{task.name}</b><em className={`task-points ${points > 0 ? "positive" : points < 0 ? "negative" : "neutral"}`}>{points > 0 ? `+${points}` : points} pts</em></span><small>{task.subject} · {task.type}{task.completed && task.minutesSpent ? ` · ${formatMinutes(task.minutesSpent)}` : ""}</small></button><button className="subtle delete-trigger" onClick={() => setDeletingTask(task)}><Trash2 size={15} /></button></article>; }) : <div className="empty"><p>No tasks for {taskDay}.</p><button className="primary" onClick={openNew}><Plus size={16} /> Add task</button></div>}</section></>}
+  return <main className={`widget ${leaderboardOpen ? "leaderboard-open" : ""} ${quickRecallOpen && quickRecallSession ? "recall-question-open" : ""}`}>
+    <header><div className={`window-drag ${leaderboardOpen ? "leaderboard-title" : ""}`}><span className="brand">STUDY PLANNER</span><div className="header-title-row">{leaderboardOpen && <button className="leaderboard-header-back" aria-label="Back to tasks" onClick={() => setLeaderboardOpen(false)}><ArrowLeft size={17} /></button>}<h1>{leaderboardOpen ? "Weekly leaderboard" : quickRecallOpen ? "Quick Recall" : "Daily Tasks"}</h1></div></div>{!leaderboardOpen && (quickRecallOpen ? <button className="quick-recall-trigger" onClick={() => { setQuickRecallOpen(false); setQuickRecallSession(null); }}><ArrowLeft size={16} /><span>Tasks</span></button> : <div className="header-actions"><button className="quick-recall-trigger" onClick={() => void openQuickRecall()}><Sparkles size={16} /><span>Recall</span></button>{leaderboardRankValue !== null && <button className={`rank-pill rank-${leaderboardRankValue}`} title={`Open weekly leaderboard · your rank #${leaderboardRankValue}`} onClick={() => setLeaderboardOpen(true)}>{leaderboardRankValue <= 3 ? <span>{["🥇", "🥈", "🥉"][leaderboardRankValue - 1]}</span> : <Trophy size={14} />}<span>#<WidgetNumber value={leaderboardRankValue} /></span></button>}<div className={`streak-pill ${streak > 0 ? "active" : ""}`}><Flame size={16} fill="currentColor" /><span><WidgetNumber value={streak} /></span></div><button className="logout" onClick={() => setLogoutConfirm(true)}><LogOut size={15} /></button></div>)}</header>
+    {leaderboardOpen ? <LeaderboardPanel rows={leaderboardRows} currentUserId={user.uid} /> : quickRecallOpen ? quickRecallSession ? <QuickRecallPanel session={quickRecallSession} loading={quickRecallLoading} onAnswered={(question, choice, index, correct) => { if (user) { void recordQuickRecallAnswer(user, question, correct).catch(() => undefined); void recordQuickRecallPractice(user, { runId: `${quickRecallSession?.runId ?? "quick-recall"}:${index}`, date: todayKey(), startedAt: quickRecallSession?.startedAt ?? new Date().toISOString(), questions: [question], answers: [choice] }).catch(() => undefined); } }} onBack={() => { localStorage.removeItem("ssc-buddy-desktop-quick-recall-progress"); setQuickRecallOpen(false); setQuickRecallSession(null); }} onRestart={() => { setQuickRecallSession(null); }} /> : <QuickRecallSetup seed={quickRecallSeed} loading={quickRecallLoading} scope={quickRecallScope} onScopeChange={setQuickRecallScope} onBack={() => setQuickRecallOpen(false)} onStart={() => quickRecallSeed && setQuickRecallSession(createQuickRecallSession(quickRecallSeed, quickRecallScope))} /> : <><section className="task-hero"><div className="hero-heading"><span>{taskDay === "today" ? "Today’s tasks" : "Tomorrow’s tasks"}</span><div className="hero-actions">{(tomorrowTaskCount > 0 || taskDay === "tomorrow") && <button className="day-toggle" onClick={() => setTaskDay((value) => value === "today" ? "tomorrow" : "today")}>{taskDay === "today" ? `Tomorrow (${tomorrowTaskCount})` : "Today"}<ChevronDown size={14} /></button>}<span className={`hero-points ${displayedTaskPoints > 0 ? "positive" : displayedTaskPoints < 0 ? "negative" : ""}`}>{displayedTaskPoints > 0 ? "+" : ""}<WidgetNumber value={displayedTaskPoints} /> pts</span><button className="icon-button" onClick={openNew}><Plus size={18} /></button></div></div><div className="progress-row"><div className="completion-ring"><svg viewBox="0 0 84 84" aria-hidden="true"><circle className="ring-track" cx="42" cy="42" r="35" /><circle className="ring-value" cx="42" cy="42" r="35" style={{ strokeDashoffset: 220 - (220 * ringProgress) / 100 }} /></svg><div><strong><WidgetNumber value={completionPercentTarget} suffix="%" /></strong></div></div><div className="hero-stats"><div><span>TASKS</span><strong><WidgetNumber value={done.length} /> / <WidgetNumber value={todayTasks.length} /></strong></div><div><span>COMPLETED TIME</span><strong><WidgetDuration minutes={minutesDone} /></strong></div></div></div></section><div className="toolbar"><span>{taskDay === "today" ? "TODAY'S TASKS" : "TOMORROW'S TASKS"}</span></div><section className="task-list">{todayTasks.length ? todayTasks.map((task) => { const points = taskPoints.get(task.id) ?? 0; return <article className={`task ${task.completed ? "done" : ""}`} key={task.id}><button className="check" onClick={() => task.completed ? void reopen(task) : (setMinutes(String(task.minutesSpent ?? 30)), setComplete(task))}>{task.completed && <Check size={14} />}</button><button className="task-main" onClick={() => openEdit(task)}><span className="task-title"><b>{task.name}</b><em className={`task-points ${points > 0 ? "positive" : points < 0 ? "negative" : "neutral"}`}>{points > 0 ? `+${points}` : points} pts</em></span><small>{task.subject} · {task.type}{task.completed && task.minutesSpent ? ` · ${formatMinutes(task.minutesSpent)}` : ""}</small></button><button className="subtle delete-trigger" onClick={() => setDeletingTask(task)}><Trash2 size={15} /></button></article>; }) : <div className="empty"><p>No tasks for {taskDay}.</p><button className="primary" onClick={openNew}><Plus size={16} /> Add task</button></div>}</section></>}
     {editor && <TaskEditor draft={draft} setDraft={setDraft} subjects={taskSubjects} schedule={schedule} setSchedule={setSchedule} busy={busy} editing={editor !== "new"} onClose={() => setEditor(null)} onSave={() => void submitTask()} />}
     {complete && <CompleteDialog task={complete} minutes={minutes} setMinutes={setMinutes} busy={busy} onClose={() => setComplete(null)} onSave={() => void completeTask()} />}
     {logoutConfirm && <LogoutDialog busy={loggingOut} onClose={() => setLogoutConfirm(false)} onConfirm={() => void confirmLogout()} />}
@@ -188,9 +198,29 @@ function App() {
   </main>;
 }
 
+function LeaderboardPanel({ rows, currentUserId }: { rows: Record<string, unknown>[]; currentUserId: string }) {
+  const [selected, setSelected] = useState<Record<string, unknown> | null>(null);
+  const [selectedDate, setSelectedDate] = useState("");
+  const position = selected ? rows.findIndex((row) => row.uid === selected.uid) + 1 : 0;
+  const displayName = (row: Record<string, unknown>) => String(row.uid ?? "") === currentUserId ? "You" : String(row.name ?? "Student");
+  if (selected) {
+    const tasks = Array.isArray(selected.leaderboardTasks) ? selected.leaderboardTasks as Record<string, unknown>[] : [];
+    const dates = [...new Set(tasks.map((task) => String(task.date ?? "")).filter(Boolean))].sort().reverse();
+    const activeDate = dates.includes(selectedDate) ? selectedDate : (dates.includes(todayKey()) ? todayKey() : dates[0] ?? "");
+    const visibleTasks = activeDate ? tasks.filter((task) => String(task.date ?? "") === activeDate) : tasks;
+    return <section className="leaderboard-panel leaderboard-detail">
+      <div className="leaderboard-detail-head"><span className="leaderboard-avatar">{avatarSource(selected.avatar) ? <img src={avatarSource(selected.avatar)} alt="" /> : displayName(selected).slice(0, 1).toUpperCase()}</span><b>{displayName(selected)}</b><span className="leaderboard-detail-rank"><RankMark rank={position} /> #{position}</span><div className="leaderboard-summary"><div><strong>{Number(selected.points) || 0}</strong><small>Points</small></div><div><strong>{Number(selected.completed) || 0}</strong><small>Completed</small></div><div><strong>{formatMinutes(Number(selected.studyMinutes) || 0)}</strong><small>Study time</small></div></div></div>
+      {dates.length > 0 && <div className="leaderboard-day-filter"><SelectMenu value={activeDate} options={dates} onChange={setSelectedDate} optionLabel={(date) => date === todayKey() ? "Today" : new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { day: "numeric", month: "short" })} /></div>}
+<div className="leaderboard-task-list">{visibleTasks.length ? visibleTasks.map((task, index) => <article className={`leaderboard-task ${task.completed ? "done" : "pending"} ${String(task.date ?? "") === todayKey() ? "current" : ""}`} key={`${String(task.name)}-${index}`}><span>{task.completed ? <Check size={14} /> : <X size={14} />}</span><div><b>{String(task.name ?? "Task")}</b><small>{String(task.subject ?? "Other")} · {String(task.type ?? "Other")}{Number(task.minutesSpent) > 0 ? ` · ${formatMinutes(Number(task.minutesSpent))}` : ""}</small></div><em className={Number(task.points) > 0 ? "positive" : Number(task.points) < 0 ? "negative" : "neutral"}>{Number(task.points) > 0 ? "+" : ""}{Number(task.points) || 0}</em></article>) : <div className="leaderboard-empty"><span>No tasks for this day.</span></div>}</div>
+    </section>;
+  }
+  return <section className="leaderboard-panel">{rows.length ? <div className="leaderboard-list">{rows.map((row, index) => { const rank = index + 1; const isYou = String(row.uid ?? "") === currentUserId; const name = displayName(row); const avatar = avatarSource(row.avatar); const completed = Math.max(0, Number(row.completed) || 0); const minutes = Math.max(0, Number(row.studyMinutes) || 0); return <button className={`leaderboard-row ${isYou ? "you" : ""}`} key={String(row.uid ?? index)} onClick={() => { setSelectedDate(""); setSelected(row); }}><span className={`leaderboard-rank top-${rank}`}><RankMark rank={rank} /></span><span className="leaderboard-avatar">{avatar ? <img src={avatar} alt="" /> : name.slice(0, 1).toUpperCase()}</span><span className="leaderboard-copy"><b>{name}</b><small>{completed} completed · {formatMinutes(minutes)} study</small></span><strong className="leaderboard-points">{Number(row.points) || 0}</strong></button>; })}</div> : <div className="leaderboard-empty"><Trophy size={20} /><span>Leaderboard is loading…</span></div>}</section>;
+}
+
 function QuickRecallSetup({ seed, loading, scope, onScopeChange, onStart, onBack }: { seed: QuickRecallSeed | null; loading: boolean; scope: QuickRecallScope; onScopeChange: (scope: QuickRecallScope) => void; onStart: () => void; onBack: () => void }) {
   const hasRecallQuestions = (chapter: any) => Array.isArray(chapter?.exercises) && chapter.exercises.some((exercise: any) => Array.isArray(exercise?.questions) && exercise.questions.some((question: any) => question?.id && question?.question && Array.isArray(question?.options) && question.options.length === 4 && ["A", "B", "C", "D"].includes(question?.correctAnswer)));
   const subjects = (seed?.subjects ?? []).map((item: any) => ({ id: String(item?.id ?? item?.name ?? ""), name: String(item?.name ?? "Subject"), chapters: (Array.isArray(item?.chapters) ? item.chapters : []).filter(hasRecallQuestions) })).filter((item) => item.id && item.chapters.length);
+  if (!loading && seed && !subjects.length) return <section className="quick-recall-panel quick-state"><Sparkles size={22} /><strong>No question-based exercise yet</strong><button className="secondary" onClick={onBack}>Back to tasks</button></section>;
   const selected = subjects.find((item) => item.id === scope.subjectId);
   const chapters: string[] = selected?.chapters.map((item: any) => String(item?.name ?? "")).filter(Boolean) ?? [];
   return <section className="quick-recall-panel quick-setup"><label>Subject<SelectMenu value={scope.subjectId === RANDOM_RECALL_SCOPE ? "Random" : (selected?.name ?? "Random")} options={["Random", ...subjects.map((item) => item.name)]} onChange={(name) => { const subject = subjects.find((item) => item.name === name); onScopeChange({ subjectId: subject?.id ?? RANDOM_RECALL_SCOPE, chapter: RANDOM_RECALL_SCOPE }); }} /></label><label>Chapter{selected ? <SelectMenu value={scope.chapter === RANDOM_RECALL_SCOPE ? "Random" : scope.chapter} options={["Random", ...chapters]} onChange={(chapter) => onScopeChange({ ...scope, chapter: chapter === "Random" ? RANDOM_RECALL_SCOPE : chapter })} /> : <div className="quick-setup-disabled">Random</div>}</label><button className="primary" disabled={loading || !seed} onClick={onStart}>{loading ? <LoaderCircle className="spin" /> : <>Start recall <ArrowRight size={14} /></>}</button></section>;
@@ -222,18 +252,25 @@ function AuthPanel() {
 function authMessage(error: unknown) { const code = typeof error === "object" && error && "code" in error ? String(error.code) : ""; return ({ "auth/invalid-credential": "Email or password is incorrect.", "auth/email-already-in-use": "An account already exists. Please sign in.", "auth/weak-password": "Password should be at least 6 characters.", "auth/invalid-email": "Enter a valid email address.", "auth/network-request-failed": "Network issue. Check your connection." } as Record<string, string>)[code] ?? "Could not continue. Please try again."; }
 
 function TaskEditor({ draft, setDraft, subjects, schedule, setSchedule, busy, editing, onClose, onSave }: { draft: Draft; setDraft: (draft: Draft) => void; subjects: string[]; schedule: "today" | "tomorrow"; setSchedule: (value: "today" | "tomorrow") => void; busy: boolean; editing: boolean; onClose: () => void; onSave: () => void }) {
+  const [subjectDialogOpen, setSubjectDialogOpen] = useState(false);
+  const [customSubject, setCustomSubject] = useState("");
   const chooseSubject = (subject: string) => {
     if (subject !== "__custom__") { setDraft({ ...draft, subject }); return; }
-    const custom = window.prompt("Subject name")?.trim();
-    if (custom) setDraft({ ...draft, subject: custom });
+    setCustomSubject(""); setSubjectDialogOpen(true);
   };
-  return <div className="modal" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><div className={`dialog task-dialog ${editing ? "editing" : ""}`}><button className="close" onClick={onClose}><X size={18} /></button><h2>{editing ? "Edit task" : "New task"}</h2><label>Task name<input autoFocus value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} onKeyDown={(event) => event.key === "Enter" && onSave()} placeholder="Lecture 5 of Polity" /></label><div className="form-grid"><label>Subject<SelectMenu value={draft.subject} options={[...subjects, "__custom__"]} onChange={chooseSubject} /></label><label>Task type<SelectMenu value={draft.type} options={[...TASK_TYPES]} onChange={(type) => setDraft({ ...draft, type: type as TaskType })} /></label></div>{!editing && <div className="schedule"><span>Schedule for</span><div><button type="button" className={schedule === "today" ? "active" : ""} onClick={() => setSchedule("today")}>Today</button><button type="button" className={schedule === "tomorrow" ? "active" : ""} onClick={() => setSchedule("tomorrow")}>Tomorrow</button></div></div>}<div className="dialog-actions"><button className="secondary" disabled={busy} onClick={onClose}>Cancel</button><button className="primary" disabled={busy || !draft.name.trim()} onClick={onSave}>{busy ? <LoaderCircle className="spin" /> : editing ? "Save changes" : "Add task"}</button></div></div></div>;
+  const addSubject = () => {
+    const value = customSubject.trim();
+    if (!value) return;
+    setDraft({ ...draft, subject: value });
+    setSubjectDialogOpen(false);
+  };
+  return <><div className="modal" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><div className={`dialog task-dialog ${editing ? "editing" : ""}`}><button className="close" onClick={onClose}><X size={18} /></button><h2>{editing ? "Edit task" : "New task"}</h2><label>Task name<input autoFocus value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} onKeyDown={(event) => event.key === "Enter" && onSave()} placeholder="Lecture 5 of Polity" /></label><div className="form-grid"><label>Subject<SelectMenu value={draft.subject} options={[...new Set([...subjects, draft.subject]), "__custom__"]} onChange={chooseSubject} /></label><label>Task type<SelectMenu value={draft.type} options={[...TASK_TYPES]} onChange={(type) => setDraft({ ...draft, type: type as TaskType })} /></label></div>{!editing && <div className="schedule"><span>Schedule for</span><div><button type="button" className={schedule === "today" ? "active" : ""} onClick={() => setSchedule("today")}>Today</button><button type="button" className={schedule === "tomorrow" ? "active" : ""} onClick={() => setSchedule("tomorrow")}>Tomorrow</button></div></div>}<div className="dialog-actions"><button className="secondary" disabled={busy} onClick={onClose}>Cancel</button><button className="primary" disabled={busy || !draft.name.trim()} onClick={onSave}>{busy ? <LoaderCircle className="spin" /> : editing ? "Save changes" : "Add task"}</button></div></div></div>{subjectDialogOpen && <div className="modal subject-modal" onMouseDown={(event) => { if (event.target === event.currentTarget) setSubjectDialogOpen(false); }}><div className="dialog subject-dialog"><button className="close" onClick={() => setSubjectDialogOpen(false)}><X size={17} /></button><span className="dialog-kicker">TASK SUBJECT</span><h2>Add subject</h2><p className="muted">Create a subject for your daily tasks.</p><label>Subject name<input autoFocus value={customSubject} placeholder="e.g. Polity" onChange={(event) => setCustomSubject(event.target.value)} onKeyDown={(event) => event.key === "Enter" && addSubject()} /></label><div className="dialog-actions"><button className="secondary" onClick={() => setSubjectDialogOpen(false)}>Cancel</button><button className="primary" disabled={!customSubject.trim()} onClick={addSubject}>Add subject</button></div></div></div>}</>;
 }
-function SelectMenu({ value, options, onChange }: { value: string; options: string[]; onChange: (value: string) => void }) {
+function SelectMenu({ value, options, onChange, optionLabel = (option: string) => option }: { value: string; options: string[]; onChange: (value: string) => void; optionLabel?: (option: string) => string }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   useEffect(() => { const close = (event: MouseEvent) => { if (!root.current?.contains(event.target as Node)) setOpen(false); }; document.addEventListener("mousedown", close); return () => document.removeEventListener("mousedown", close); }, []);
-  return <div className="select-menu" ref={root}><button type="button" className="select-trigger" aria-expanded={open} onClick={() => setOpen((value) => !value)}><span>{value}</span><ChevronDown size={15} /></button>{open && <div className="select-popover">{options.map((option) => <button type="button" key={option} className={option === value ? "selected" : ""} onClick={() => { onChange(option); setOpen(false); }}><span>{option === "__custom__" ? "+ Add subject" : option}</span>{option === value && <Check size={14} strokeWidth={2.5} />}</button>)}</div>}</div>;
+  return <div className="select-menu" ref={root}><button type="button" className="select-trigger" aria-expanded={open} onClick={() => setOpen((value) => !value)}><span>{optionLabel(value)}</span><ChevronDown size={15} /></button>{open && <div className="select-popover">{options.map((option) => <button type="button" key={option} className={option === value ? "selected" : ""} onClick={() => { onChange(option); setOpen(false); }}><span>{option === "__custom__" ? "+ Add subject" : optionLabel(option)}</span>{option === value && <Check size={14} strokeWidth={2.5} />}</button>)}</div>}</div>;
 }
 function CompleteDialog({ task, minutes, setMinutes, busy, onClose, onSave }: { task: DailyTask; minutes: string; setMinutes: (value: string) => void; busy: boolean; onClose: () => void; onSave: () => void }) {
   return <div className="modal" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><div className="dialog complete-dialog"><button className="close" onClick={onClose}><X size={18} /></button><h2>Complete task</h2><p className="muted complete-name">{task.name}</p><label>Actual study minutes<input autoFocus inputMode="numeric" value={minutes} onChange={(event) => setMinutes(event.target.value.replace(/\D/g, ""))} placeholder="30" /></label><div className="chips">{[30, 45, 60, 90, 120].map((value) => <button type="button" className={Number(minutes) === value ? "chip active" : "chip"} key={value} onClick={() => setMinutes(String(value))}>{formatMinutes(value)}</button>)}</div><div className="dialog-actions"><button className="secondary" disabled={busy} onClick={onClose}>Cancel</button><button className="primary" disabled={busy} onClick={onSave}>{busy ? <LoaderCircle className="spin" /> : "Mark complete"}</button></div></div></div>;

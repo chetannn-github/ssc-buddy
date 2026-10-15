@@ -140,6 +140,21 @@ export function watchTasks(user: User, onChange: (tasks: DailyTask[], source: "c
   });
 }
 
+/** Live weekly leaderboard rank for the desktop task widget header. */
+export function watchLeaderboardRank(user: User, callback: (rank: number | null) => void): Unsubscribe {
+  return onSnapshot(collection(db!, "leaderboards", currentWeekKey(), "entries"), (snapshot) => {
+    const entries = snapshot.docs.map((entry) => entry.data()).sort((left: any, right: any) => Number(right.points) - Number(left.points) || Number(right.studyMinutes) - Number(left.studyMinutes) || Number(right.completed) - Number(left.completed));
+    const index = entries.findIndex((entry: any) => entry.uid === user.uid);
+    callback(index < 0 ? null : index + 1);
+  }, () => callback(null));
+}
+
+export function watchWeeklyLeaderboard(callback: (entries: Record<string, unknown>[]) => void): Unsubscribe {
+  return onSnapshot(collection(db!, "leaderboards", currentWeekKey(), "entries"), (snapshot) => {
+    callback(snapshot.docs.map((entry) => entry.data()).sort((left: any, right: any) => Number(right.points) - Number(left.points) || Number(right.studyMinutes) - Number(left.studyMinutes) || Number(right.completed) - Number(left.completed)));
+  }, () => callback([]));
+}
+
 /** Reads users/{uid}/tracker/subjects.value — the existing web/mobile syllabus contract. */
 export function watchTrackerSubjects(user: User, callback: (subjects: string[]) => void): Unsubscribe {
   return onSnapshot(doc(db!, "users", user.uid, "tracker", "subjects"), (snapshot) => {

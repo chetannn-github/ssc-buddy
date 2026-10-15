@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Animated, Easing, Modal, Pressable, ScrollView as NativeScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Animated, Easing, Modal, Pressable, ScrollView as NativeScrollView, StyleSheet, Text, View } from "react-native";
 import Svg, { Circle, Line, Path } from "react-native-svg";
 import { MockTestLogDialog, type MockTestLog } from "./MockTestLogDialog";
 import { colors } from "../theme";
@@ -21,9 +21,11 @@ export function ProgressScreen({ user }: { user: User | null }) {
   const [menu, setMenu] = useState<"category" | "subject" | null>(null);
   const [showAll, setShowAll] = useState(false);
   const [loggingMockTest, setLoggingMockTest] = useState(false);
+  const [progressLoaded, setProgressLoaded] = useState(!user);
   useEffect(() => {
-    if (!user) { setTests([]); return; }
-    const stopTests = watchTrackerTests(user, (records) => setTests(records.map((test) => ({ ...test, type: test.type === "Mains" ? "Mains" : test.type === "Pre" ? "Pre" : "Sectional", subject: test.subjectId || "General", score: Number(test.score ?? 0), total: Number(test.total ?? 0), accuracy: Number(test.accuracy ?? 0) }))));
+    if (!user) { setTests([]); setProgressLoaded(true); return; }
+    setProgressLoaded(false);
+    const stopTests = watchTrackerTests(user, (records) => { setTests(records.map((test) => ({ ...test, type: test.type === "Mains" ? "Mains" : test.type === "Pre" ? "Pre" : "Sectional", subject: test.subjectId || "General", score: Number(test.score ?? 0), total: Number(test.total ?? 0), accuracy: Number(test.accuracy ?? 0) }))); setProgressLoaded(true); });
     const stopSubjects = watchTrackerSections(user, (sections) => setTrackerSubjects(
       Array.isArray(sections.subjects) ? sections.subjects.map((subject: any) => ({ id: String(subject.id ?? ""), name: String(subject.name ?? "") })) : [],
     ));
@@ -45,6 +47,7 @@ export function ProgressScreen({ user }: { user: User | null }) {
     if (!user) return;
     void appendTrackerTest(user, { id: entry.id, date: entry.date, createdAt: entry.createdAt, subjectId: "", type: entry.type, score: entry.score, total: entry.total, accuracy: entry.accuracy, notes: "" }, entry.subject);
   };
+  if (!progressLoaded) return <View style={s.page}><View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}><ActivityIndicator size="small" color="#60a5fa" /></View></View>;
   return <View style={s.page}>
     {menu && <Pressable accessibilityLabel="Close filters" style={s.dismissLayer} onPress={() => setMenu(null)} />}
     <View style={s.header}><Pressable accessibilityLabel="Close filters" style={s.headerDismiss} onPress={() => setMenu(null)} /><Text style={s.eyebrow}>MOCK TEST ANALYSIS</Text><View style={s.titleRow}><Text style={s.title}>Progress</Text><Pressable onPress={() => setLoggingMockTest(true)} style={s.logButton}><MaterialCommunityIcons name="file-edit-outline" size={15} color={colors.text} /><Text style={s.logButtonText}>Log mock test</Text></Pressable></View><View style={s.filters}>

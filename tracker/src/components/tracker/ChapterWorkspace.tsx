@@ -361,7 +361,7 @@ export function ChapterWorkspace({ mode }: { mode: Mode }) {
                     : "grid grid-rows-[0fr] transition-[grid-template-rows] duration-300"
                 }
               >
-                <div className="min-h-0 overflow-hidden divide-y divide-white/[0.06]">
+                <div className="max-h-[360px] min-h-0 overflow-y-auto divide-y divide-white/[0.06] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                   {subject.chapters.length ? (
                     <>
                       {subject.chapters.map((chapter, chapterIndex) => (

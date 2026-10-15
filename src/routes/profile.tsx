@@ -137,7 +137,7 @@ function DayActivityDetails({ date, items }: { date: string; items: DayActivityD
         </span>
       </div>
       {items.length ? (
-        <ul className="mt-2 space-y-1">
+        <ul className="mt-2 max-h-32 space-y-1 overflow-y-auto pr-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {items.map((item, index) => (
             <li
               key={`${item.label}-${item.detail}-${index}`}

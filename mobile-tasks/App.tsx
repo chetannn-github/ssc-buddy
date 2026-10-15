@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import * as ExpoSplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
@@ -9,6 +10,7 @@ import {
   Easing,
   Image,
   ImageBackground,
+  KeyboardAvoidingView,
   Linking,
   Modal,
   Platform,
@@ -20,6 +22,8 @@ import {
   View,
 } from "react-native";
 import Svg, { Circle } from "react-native-svg";
+import { NumberFlow } from "number-flow-react-native";
+import Reanimated, { Easing as ReanimatedEasing, useAnimatedProps, useSharedValue, withTiming } from "react-native-reanimated";
 import {
   createTaskId,
   dateKey,
@@ -38,7 +42,7 @@ import { BottomNavigation } from "./src/components/BottomNavigation";
 import { type TabKey, tabs } from "./src/navigation/tabs";
 import { ComingSoonScreen } from "./src/screens/ComingSoonScreen";
 import { AuthScreen } from "./src/screens/AuthScreen";
-import { isFirebaseConfigured, migrateTasksIfEmpty, observeSession, patchCloudProfile, publishLeaderboardEntry, readCloudProfile, saveProfileWithUsername, savePublicProfileActivity, syncTaskChanges, watchCloudProfile, watchPracticeEntities, watchTasks, watchTrackerSections, writeQuestionLearning } from "./src/lib/firebase";
+import { isFirebaseConfigured, migrateTasksIfEmpty, observeSession, patchCloudProfile, publishLeaderboardEntry, readCloudProfile, saveProfileWithUsername, savePublicProfileActivity, syncTaskChanges, watchCloudProfile, watchPracticeEntities, watchTasks, watchTrackerSections, watchTrackerTests, watchWeeklyLeaderboardRank, writeQuestionLearning } from "./src/lib/firebase";
 import { logout } from "./src/lib/firebase";
 import { defaultProfile, loadProfile, normalizeProfile, saveProfile, type PracticeProfile } from "./src/lib/profile-store";
 import { prepareMobileAccountCache } from "./src/lib/account-cache";
@@ -54,11 +58,19 @@ import type { User } from "firebase/auth";
 import { reportVerticalScroll, resetBottomNavigation } from "./src/navigation/bottomNavigationVisibility";
 import { getUnlockQuiz, loadUnlockQuiz } from "./src/domain/unlock-quiz";
 
-const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+// Keep the native layer visible until our branded React splash has mounted.
+// Without this, Android briefly flashes Expo's default splash between launch
+// and the custom SSC Buddy screen.
+void ExpoSplashScreen.preventAutoHideAsync().catch(() => undefined);
+
+const rankMedals = [require("./assets/gold-medal.png"), require("./assets/silver-medal.png"), require("./assets/bronze-medal.png")];
+
+const ReanimatedCircle = Reanimated.createAnimatedComponent(Circle);
 type TaskRange = "today" | "week" | "month" | "3months" | "year";
 const TASK_RANGE_LABELS: Record<TaskRange, string> = { today: "Today", week: "This week", month: "This month", "3months": "Last 3 months", year: "This year" };
 const TASK_TABS = ["Tasks", "Analytics", "History"] as const;
 const MANIFESTATION_COMPLETION_PREFIX = "ssc-buddy:manifestation-completion";
+const WIDGET_META_STORAGE_KEY = "ssc-buddy:widget-meta:v1";
 const localDateKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 const weeklyTaskPointMap = (tasks: Task[]) => {
   const now = new Date(), start = new Date(now); start.setHours(0, 0, 0, 0); start.setDate(start.getDate() - ((start.getDay() + 6) % 7)); const weekStart = localDateKey(start); const end = new Date(start); end.setDate(end.getDate() + 6); const weekEnd = localDateKey(end), today = localDateKey(now); let creditedMinutes = 0;
@@ -78,30 +90,27 @@ const ScrollView = (props: any) => <NativeScrollView {...props} scrollEventThrot
 
 function CompletionRing({ percent }: { percent: number }) {
   const value = Math.max(0, Math.min(100, percent));
-  const animated = useRef(new Animated.Value(0)).current;
-  const [displayValue, setDisplayValue] = useState(0);
+  const progress = useSharedValue(0);
   const size = 112;
   const stroke = 10;
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
+  const ringAnimatedProps = useAnimatedProps(() => ({
+    strokeDashoffset: circumference * (1 - progress.value / 100),
+  }));
 
   useEffect(() => {
-    animated.stopAnimation();
-    const listener = animated.addListener(({ value: next }) => setDisplayValue(Math.round(next)));
-    Animated.timing(animated, {
-      toValue: value,
+    progress.value = withTiming(value, {
       duration: 760,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: false,
-    }).start();
-    return () => animated.removeListener(listener);
-  }, [animated, value]);
+      easing: ReanimatedEasing.out(ReanimatedEasing.cubic),
+    });
+  }, [progress, value]);
 
   return (
     <View style={styles.ring}>
       <Svg width={size} height={size} style={styles.ringSvg}>
         <Circle cx={size / 2} cy={size / 2} r={radius} fill="transparent" stroke="#343434" strokeWidth={stroke} />
-        <AnimatedCircle
+        <ReanimatedCircle
           cx={size / 2}
           cy={size / 2}
           r={radius}
@@ -110,12 +119,12 @@ function CompletionRing({ percent }: { percent: number }) {
           strokeWidth={stroke}
           strokeLinecap="round"
           strokeDasharray={circumference}
-          strokeDashoffset={animated.interpolate({ inputRange: [0, 100], outputRange: [circumference, 0] })}
+          animatedProps={ringAnimatedProps}
           rotation="-90"
           origin={`${size / 2}, ${size / 2}`}
         />
       </Svg>
-      <Text style={styles.ringText}>{displayValue}%</Text>
+      <RollingMetric value={value} suffix="%" color="#fafafa" fontSize={25} />
     </View>
   );
 }
@@ -127,16 +136,35 @@ function AnimatedMetric({ value, format = (next: number) => String(next) }: { va
   useEffect(() => {
     animated.stopAnimation();
     const listener = animated.addListener(({ value: next }) => setDisplay(Math.round(next)));
-    Animated.timing(animated, { toValue: Math.max(0, value), duration: 520, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+    Animated.timing(animated, { toValue: value, duration: 520, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
     return () => animated.removeListener(listener);
   }, [animated, value]);
 
   return <>{format(display)}</>;
 }
 
+function RollingMetric({ value, prefix = "", suffix = "", color = "#86efac", fontSize = 11 }: { value: number; prefix?: string; suffix?: string; color?: string; fontSize?: number }) {
+  return <NumberFlow
+    value={value}
+    prefix={prefix}
+    suffix={suffix}
+    style={{ color, fontSize, fontWeight: "800", fontVariant: ["tabular-nums"] }}
+  />;
+}
+
+function RollingDuration({ minutes, color = "#fafafa", fontSize = 23 }: { minutes: number; color?: string; fontSize?: number }) {
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return <View style={{ flexDirection: "row", alignItems: "center", gap: hours > 0 && remainingMinutes > 0 ? 4 : 0 }}>
+    {hours > 0 && <RollingMetric value={hours} suffix="h" color={color} fontSize={fontSize} />}
+    {(hours === 0 || remainingMinutes > 0) && <RollingMetric value={remainingMinutes} suffix="m" color={color} fontSize={fontSize} />}
+  </View>;
+}
+
 export default function App() {
   const [authReady, setAuthReady] = useState(!isFirebaseConfigured);
   const [showSplash, setShowSplash] = useState(true);
+  const nativeSplashHidden = useRef(false);
   const [authenticated, setAuthenticated] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [mediaMode, setMediaMode] = useState<MediaMode>(null);
@@ -145,10 +173,13 @@ export default function App() {
   const [musicOpenRequest, setMusicOpenRequest] = useState(0);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [tasksLoaded, setTasksLoaded] = useState(false);
+  const [widgetRank, setWidgetRank] = useState<number | null>(null);
   const [practiceActivityDates, setPracticeActivityDates] = useState<string[]>([]);
   const [trackerActivityDates, setTrackerActivityDates] = useState<string[]>([]);
   const [publicPracticeRecords, setPublicPracticeRecords] = useState<Record<string, any>[]>([]);
   const [publicTracker, setPublicTracker] = useState<Record<string, any>>({ subjects: [], revision: {}, activity: [], tests: { log: [] } });
+  const [profileMockTests, setProfileMockTests] = useState<any[]>([]);
+  const [profileActivityReady, setProfileActivityReady] = useState(false);
   const [profileSettings, setProfileSettings] = useState<PracticeProfile | null>(null);
   const [appTab, setAppTab] = useState<TabKey>("tasks");
   const [trackTab, setTrackTab] = useState<"Syllabus" | "Revision" | "Mock Test">("Syllabus");
@@ -215,7 +246,7 @@ export default function App() {
       const { renderDailyTasksWidget } = require("./src/widgets/DailyTasksWidget");
       void requestWidgetUpdate({
         widgetName: "DailyTasksWidget",
-        renderWidget: async () => renderDailyTasksWidget(next),
+        renderWidget: async () => renderDailyTasksWidget(next, widgetRank),
       });
       const { renderQuickRecallWidget } = require("./src/widgets/QuickRecallWidget");
       void requestWidgetUpdate({
@@ -224,6 +255,14 @@ export default function App() {
       });
     } catch {}
   };
+  useEffect(() => {
+    if (!user) { setWidgetRank(null); return; }
+    return watchWeeklyLeaderboardRank(user, (rank) => setWidgetRank(rank));
+  }, [user?.uid]);
+  useEffect(() => {
+    void AsyncStorage.setItem(WIDGET_META_STORAGE_KEY, JSON.stringify({ rank: widgetRank }));
+    if (tasksLoaded) refreshDailyTasksWidget(tasks);
+  }, [widgetRank]);
   useEffect(() => {
     if (!isFirebaseConfigured) return;
     return observeSession((nextUser) => {
@@ -413,16 +452,32 @@ export default function App() {
   }, [authenticated, user?.uid, tasksLoaded]);
   // Matches the web consistency count: practice, tracker, and completed tasks.
   useEffect(() => {
-    if (!user) { setPracticeActivityDates([]); setTrackerActivityDates([]); return; }
+    if (!user) { setPracticeActivityDates([]); setTrackerActivityDates([]); setProfileActivityReady(false); return; }
+    let attemptsReady = false;
+    let trackerReady = false;
+    let testsReady = false;
+    const markReady = () => {
+      if (attemptsReady && trackerReady && testsReady) setProfileActivityReady(true);
+    };
+    setProfileActivityReady(false);
     const stopAttempts = watchPracticeEntities(user, "practiceAttempts", (items) => {
       setPracticeActivityDates(items.map((item) => typeof item.date === "string" ? item.date : "").filter(Boolean));
       setPublicPracticeRecords(items.map((item) => ({ ...item, answers: Array.isArray(item.answers) ? item.answers.map((answer) => answer ? "A" : null) : [] })));
+      attemptsReady = true;
+      markReady();
     });
     const stopTracker = watchTrackerSections(user, (sections) => {
       setTrackerActivityDates(Array.isArray(sections.activity) ? sections.activity.map((entry: any) => typeof entry?.date === "string" ? entry.date : "").filter(Boolean) : []);
       setPublicTracker(sections);
+      trackerReady = true;
+      markReady();
     });
-    return () => { stopAttempts?.(); stopTracker?.(); };
+    const stopTests = watchTrackerTests(user, (tests) => {
+      setProfileMockTests(tests);
+      testsReady = true;
+      markReady();
+    });
+    return () => { stopAttempts?.(); stopTracker?.(); stopTests?.(); };
   }, [user?.uid]);
   useEffect(() => {
     if (!user || !profileSettings?.username) return;
@@ -458,6 +513,7 @@ export default function App() {
     .sort((a, b) => Number(a.completed) - Number(b.completed));
   const todaySummary = summarizeTasks(todayTasks);
   const taskPoints = useMemo(() => weeklyTaskPointMap(tasks), [tasks]);
+  const weeklyPoints = useMemo(() => [...taskPoints.values()].reduce((total, points) => total + points, 0), [taskPoints]);
   const tomorrowTaskCount = tasks.filter((task) => task.date === tomorrow).length;
   const thirty = tasksInLastDays(tasks, 30);
   const thirtySummary = summarizeTasks(thirty.flat());
@@ -598,7 +654,13 @@ export default function App() {
 
   if (showSplash || !authReady) {
     return (
-      <SafeAreaProvider>
+      <SafeAreaProvider
+        onLayout={() => {
+          if (nativeSplashHidden.current) return;
+          nativeSplashHidden.current = true;
+          void ExpoSplashScreen.hideAsync().catch(() => undefined);
+        }}
+      >
         <StatusBar hidden />
         <SplashScreen />
       </SafeAreaProvider>
@@ -606,12 +668,21 @@ export default function App() {
   }
 
   if (!authenticated) {
+    if (!nativeSplashHidden.current) {
+      nativeSplashHidden.current = true;
+      void ExpoSplashScreen.hideAsync().catch(() => undefined);
+    }
     return (
       <SafeAreaProvider>
         <StatusBar hidden />
         <AuthScreen onAuthenticated={() => undefined} />
       </SafeAreaProvider>
     );
+  }
+
+  if (!nativeSplashHidden.current) {
+    nativeSplashHidden.current = true;
+    void ExpoSplashScreen.hideAsync().catch(() => undefined);
   }
 
   return (
@@ -632,6 +703,11 @@ export default function App() {
           }}
             onOpenLeaderboard={() => setLeaderboardOpen(true)}
           streak={streak}
+          sharedPracticeRecords={publicPracticeRecords}
+          sharedTracker={publicTracker}
+          sharedMockTests={profileMockTests}
+          sharedActivityReady={profileActivityReady}
+          sharedRank={widgetRank}
           onLogout={() => {
             void logout();
           }}
@@ -654,6 +730,7 @@ export default function App() {
           <Pressable style={styles.add} onPress={openNew}>
             <Text style={styles.addText}>＋ Add task</Text>
           </Pressable>
+          {widgetRank !== null && <Pressable accessibilityRole="button" accessibilityLabel="Open weekly leaderboard" onPress={() => setLeaderboardOpen(true)} style={styles.taskRank}>{widgetRank <= 3 ? <Image source={rankMedals[widgetRank - 1]} style={styles.taskRankMedal} /> : <MaterialCommunityIcons name="trophy" size={15} color="#fcd34d" />}<RollingMetric value={widgetRank} prefix="#" color="#e4e4e7" fontSize={12} /></Pressable>}
         </View>
       </View>
       <View style={styles.tabs} onLayout={(event) => setTaskTabsWidth(event.nativeEvent.layout.width - 8)}>
@@ -668,27 +745,27 @@ export default function App() {
           </Pressable>
         ))}
       </View>
-      <ScrollView contentContainerStyle={styles.content} onTouchStart={(event: any) => { taskSwipeStartX.current = event.nativeEvent.pageX; }} onTouchEnd={(event: any) => handleTaskSwipeEnd(event.nativeEvent.pageX)}>
-        {tab === "Tasks" && (
-          <>
+      <ScrollView stickyHeaderIndices={tab === "Tasks" ? [0] : undefined} contentContainerStyle={[styles.content, tab === "Tasks" && styles.tasksContent]} onTouchStart={(event: any) => { taskSwipeStartX.current = event.nativeEvent.pageX; }} onTouchEnd={(event: any) => handleTaskSwipeEnd(event.nativeEvent.pageX)}>
+        {tab === "Tasks" ? [
+            <View key="tasks-sticky" style={styles.tasksSticky}>
             <View style={styles.hero}>
               <View style={styles.heroHeading}>
                 <Text style={styles.date}>{taskDay === "today" ? "Today’s tasks" : "Tomorrow’s tasks"}</Text>
-                {(tomorrowTaskCount > 0 || taskDay === "tomorrow") && <Pressable style={styles.dayToggle} onPress={() => setTaskDay((current) => current === "today" ? "tomorrow" : "today")}><Text style={styles.dayToggleText}>{taskDay === "today" ? `Tomorrow (${tomorrowTaskCount})` : "Today"}</Text><MaterialCommunityIcons name="chevron-right" size={14} color="#b4b4b8" /></Pressable>}
+                <View style={styles.heroHeadingActions}><View style={styles.livePoints}><MaterialCommunityIcons name="lightning-bolt" size={13} color="#86efac" /><View style={styles.livePointsText}><RollingMetric value={weeklyPoints} prefix={weeklyPoints > 0 ? "+" : ""} suffix=" pts" /></View></View>{(tomorrowTaskCount > 0 || taskDay === "tomorrow") && <Pressable style={styles.dayToggle} onPress={() => setTaskDay((current) => current === "today" ? "tomorrow" : "today")}><Text style={styles.dayToggleText}>{taskDay === "today" ? `Tomorrow (${tomorrowTaskCount})` : "Today"}</Text><MaterialCommunityIcons name="chevron-right" size={14} color="#b4b4b8" /></Pressable>}</View>
               </View>
               <View style={styles.progressRow}>
                 <CompletionRing percent={todaySummary.percent} />
                 <View style={styles.statColumn}>
                   <Text style={styles.statLabel}>TASKS</Text>
-                  <Text style={styles.stat}>
-                    <AnimatedMetric value={todaySummary.done} /> / <AnimatedMetric value={todaySummary.total} />
-                  </Text>
+                  <View style={styles.statMetric}><RollingMetric value={todaySummary.done} color="#fafafa" fontSize={23} /><Text style={styles.statSlash}>/</Text><RollingMetric value={todaySummary.total} color="#fafafa" fontSize={23} /></View>
                   <Text style={styles.statLabel}>COMPLETED TIME</Text>
-                  <Text style={styles.stat}><AnimatedMetric value={todaySummary.minutes} format={formatMinutes} /></Text>
+                  <View style={styles.statMetric}><RollingDuration minutes={todaySummary.minutes} /></View>
                 </View>
               </View>
             </View>
             <Text style={styles.sectionTitle}>{taskDay === "today" ? "TODAY'S TASKS" : "TOMORROW'S TASKS"}</Text>
+            </View>,
+            <View key="tasks-list" style={styles.tasksList}>
             {todayTasks.length === 0 ? (
                 <Empty onPress={openNew} />
             ) : (
@@ -707,8 +784,8 @@ export default function App() {
                 />
               ))
             )}
-          </>
-        )}
+            </View>,
+        ] : null}
         {tab === "Analytics" && (
           <>
             {(analyticsRangeOpen || analyticsSubjectOpen) && <Pressable style={styles.dropdownDismiss} onPress={() => { setAnalyticsRangeOpen(false); setAnalyticsSubjectOpen(false); }} />}
@@ -788,8 +865,9 @@ export default function App() {
         </Pressable>
       </Modal>
       <Modal transparent visible={addSubjectDialog} animationType="fade" onRequestClose={() => setAddSubjectDialog(false)}>
-        <Pressable style={styles.backdrop} onPress={() => setAddSubjectDialog(false)}>
-          <Pressable style={styles.sheet} onPress={() => undefined}>
+        <KeyboardAvoidingView style={styles.backdrop} behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={Platform.OS === "ios" ? 18 : 0}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setAddSubjectDialog(false)} />
+          <View style={styles.sheet}>
             <Text style={styles.sheetTitle}>Add subject</Text>
             <Text style={styles.muted}>Create a subject just for your tasks.</Text>
             <Field label="SUBJECT NAME" value={customSubject} placeholder="e.g. Polity" onChangeText={setCustomSubject} />
@@ -797,11 +875,11 @@ export default function App() {
               <Pressable onPress={() => setAddSubjectDialog(false)}><Text style={styles.cancel}>Cancel</Text></Pressable>
               <Pressable disabled={!customSubject.trim()} onPress={() => { setSubject(customSubject.trim()); setAddSubjectDialog(false); }} style={[styles.primary, !customSubject.trim() && styles.actionDisabled]}><Text style={styles.primaryText}>Add subject</Text></Pressable>
             </View>
-          </Pressable>
-        </Pressable>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
-      <Modal transparent visible={completion !== null} animationType="fade">
-        <View style={styles.backdrop}>
+      <Modal transparent visible={completion !== null} animationType="fade" onRequestClose={() => setCompletion(null)}>
+        <KeyboardAvoidingView style={styles.backdrop} behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={Platform.OS === "ios" ? 18 : 0}>
           <View style={styles.sheet}>
             <Text style={styles.sheetTitle}>Complete task</Text>
             <Text style={styles.muted}>{completion?.name}</Text>
@@ -824,7 +902,7 @@ export default function App() {
               </Pressable>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
       <Modal transparent visible={deletingTask !== null} animationType="fade" onRequestClose={() => setDeletingTask(null)}>
         <Pressable style={styles.deleteBackdrop} onPress={() => setDeletingTask(null)}>
@@ -983,6 +1061,9 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   headerActions: { flexDirection: "row", alignItems: "center", gap: 9 },
+  taskRank: { height: 38, minWidth: 44, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 3, borderRadius: 12, paddingHorizontal: 8, backgroundColor: "#1b1b1b", borderWidth: 1, borderColor: "#343434" },
+  taskRankMedal: { width: 17, height: 17, resizeMode: "contain" },
+  taskRankText: { color: "#e4e4e7", fontSize: 12, fontWeight: "800" },
   streakPill: { minWidth: 42, height: 40, paddingHorizontal: 10, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, borderRadius: 20, backgroundColor: "#262626", borderWidth: 1, borderColor: "#333333" },
   streakPillActive: { backgroundColor: "rgba(251, 191, 36, .14)", borderColor: "rgba(251, 191, 36, .22)" },
   streakText: { color: "#d4d4d8", fontSize: 13, fontWeight: "800" },
@@ -1006,6 +1087,12 @@ const styles = StyleSheet.create({
   tabText: { color: "#71717a", fontSize: 13, fontWeight: "600" },
   tabTextActive: { color: "#fafafa" },
   content: { position: "relative", padding: 20, gap: 12, paddingBottom: 60 },
+  tasksContent: { paddingTop: 0 },
+  tasksSticky: { backgroundColor: "#101010", paddingTop: 20, paddingBottom: 12 },
+  tasksList: { gap: 12 },
+  heroHeadingActions: { flexDirection: "row", alignItems: "center", gap: 8 },
+  livePoints: { flexDirection: "row", alignItems: "center", gap: 3 },
+  livePointsText: { minWidth: 38 },
   hero: {
     borderRadius: 22,
     padding: 18,
@@ -1028,7 +1115,8 @@ const styles = StyleSheet.create({
   ringText: { color: "#fafafa", fontSize: 25, fontWeight: "800" },
   statColumn: { gap: 4 },
   statLabel: { color: "#a1a1aa", fontSize: 10, letterSpacing: 1.4 },
-  stat: { color: "#fafafa", fontSize: 23, fontWeight: "700", marginBottom: 6 },
+  statMetric: { height: 27, flexDirection: "row", alignItems: "center", marginBottom: 6 },
+  statSlash: { color: "#fafafa", fontSize: 23, fontWeight: "700", marginHorizontal: 6 },
   muted: { color: "#a1a1aa", fontSize: 13, marginTop: 9 },
   sectionTitle: {
     color: "#a1a1aa",

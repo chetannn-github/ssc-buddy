@@ -95,6 +95,19 @@ export async function publishLeaderboardEntry(user: User, profile: Record<string
   await setDoc(doc(getFirebaseFirestore(), "leaderboards", week, "entries", user.uid), { uid: user.uid, username, name: String(profile.name ?? "Student"), ...(typeof profile.avatar === "string" && profile.avatar ? { avatar: profile.avatar } : {}), week, completed: completed.length, leaderboardTasks, overdue, studyMinutes, points, updatedAt: serverTimestamp() }, { merge: true });
 }
 
+/** Live rank used by the app and its home-screen task widget. */
+export function watchWeeklyLeaderboardRank(user: User, callback: (rank: number | null) => void) {
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  now.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+  const week = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  return onSnapshot(collection(getFirebaseFirestore(), "leaderboards", week, "entries"), (snapshot) => {
+    const entries = snapshot.docs.map((item) => item.data()).sort((a: any, b: any) => Number(b.points) - Number(a.points) || Number(b.studyMinutes) - Number(a.studyMinutes) || Number(b.completed) - Number(a.completed));
+    const index = entries.findIndex((entry: any) => entry.uid === user.uid);
+    callback(index < 0 ? null : index + 1);
+  }, () => callback(null));
+}
+
 const cloudProfileDoc = (user: User) => doc(getFirebaseFirestore(), "users", user.uid, "profile", "current");
 
 export async function readCloudProfile(user: User) {

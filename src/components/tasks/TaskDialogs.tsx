@@ -42,6 +42,7 @@ export function TaskFormDialog({
   const [name, setName] = useState("");
   const [subject, setSubject] = useState("Other");
   const [customSubject, setCustomSubject] = useState("");
+  const [addedSubjects, setAddedSubjects] = useState<string[]>([]);
   const [addSubjectOpen, setAddSubjectOpen] = useState(false);
   const [type, setType] = useState<TaskType>("Lecture");
   const [schedule, setSchedule] = useState<"today" | "tomorrow">("today");
@@ -51,6 +52,7 @@ export function TaskFormDialog({
     setName(task?.name ?? "");
     setSubject(task?.subject ?? subjects[0] ?? "Other");
     setCustomSubject("");
+    setAddedSubjects([]);
     setAddSubjectOpen(false);
     setType(task?.type ?? "Lecture");
     const tomorrow = new Date();
@@ -69,7 +71,15 @@ export function TaskFormDialog({
       setIsSaving(false);
     }
   };
-  const subjectOptions = [...new Set([...subjects, "Other", ...(customSubject.trim() ? [customSubject.trim()] : [])])];
+  const subjectOptions = [...new Set([...subjects, ...addedSubjects, "Other"] )];
+  const addCustomSubject = () => {
+    const value = customSubject.trim();
+    if (!value) return;
+    setAddedSubjects((current) => current.some((item) => item.toLowerCase() === value.toLowerCase()) ? current : [...current, value]);
+    setSubject(value);
+    setCustomSubject("");
+    setAddSubjectOpen(false);
+  };
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="border-transparent bg-[#1b1b1b] text-zinc-100 shadow-2xl sm:max-w-md">
@@ -93,7 +103,7 @@ export function TaskFormDialog({
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label>Subject</Label>
-              <Select value={customSubject ? "__custom__" : subject} onValueChange={(value) => {
+              <Select value={subject} onValueChange={(value) => {
                 if (value === "__custom__") { setCustomSubject(""); setAddSubjectOpen(true); return; }
                 setSubject(value);
               }}>
@@ -165,8 +175,8 @@ export function TaskFormDialog({
       <Dialog open={addSubjectOpen} onOpenChange={setAddSubjectOpen}>
         <DialogContent className="border-transparent bg-[#1b1b1b] text-zinc-100 shadow-2xl sm:max-w-sm">
           <DialogHeader><DialogTitle>Add subject</DialogTitle><DialogDescription>Create a subject just for your tasks.</DialogDescription></DialogHeader>
-          <div className="space-y-2"><Label htmlFor="custom-task-subject">Subject name</Label><Input id="custom-task-subject" autoFocus value={customSubject} className="border-white/10 bg-[#181818] text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-blue-500/40" placeholder="e.g. Polity" onChange={(event) => setCustomSubject(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && customSubject.trim()) { setSubject(customSubject.trim()); setAddSubjectOpen(false); } }} /></div>
-          <DialogFooter><Button variant="ghost" onClick={() => setAddSubjectOpen(false)}>Cancel</Button><Button disabled={!customSubject.trim()} onClick={() => { setSubject(customSubject.trim()); setAddSubjectOpen(false); }}>Add subject</Button></DialogFooter>
+          <div className="space-y-2"><Label htmlFor="custom-task-subject">Subject name</Label><Input id="custom-task-subject" autoFocus value={customSubject} className="border-white/10 bg-[#181818] text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-blue-500/40" placeholder="e.g. Polity" onChange={(event) => setCustomSubject(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") addCustomSubject(); }} /></div>
+          <DialogFooter><Button variant="ghost" onClick={() => setAddSubjectOpen(false)}>Cancel</Button><Button disabled={!customSubject.trim()} onClick={addCustomSubject}>Add subject</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </Dialog>

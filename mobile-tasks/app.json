@@ -27,7 +27,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#000000",
+          "backgroundColor": "#101010",
           "image": "./assets/auth.jpg",
           "imageWidth": 200,
           "resizeMode": "contain"

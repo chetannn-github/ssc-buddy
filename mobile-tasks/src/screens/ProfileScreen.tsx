@@ -18,7 +18,6 @@ import {
   View,
 } from "react-native";
 import type { User } from "firebase/auth";
-import { collection, onSnapshot } from "firebase/firestore";
 
 import { dateKey, formatMinutes, summarizeTasks, type Task } from "../domain/tasks";
 import { colors } from "../theme";
@@ -33,7 +32,6 @@ import {
   watchPracticeEntities,
   watchTrackerSections,
   watchTrackerTests,
-  getFirebaseFirestore,
 } from "../lib/firebase";
 
 const ScrollView = (props: any) => (
@@ -47,23 +45,27 @@ const ScrollView = (props: any) => (
   />
 );
 
-type Range = "today" | "week" | "lastMonth" | "year" | "all";
+type Range = "today" | "week" | "month" | "lastMonth" | "year" | "all";
 const ranges: Array<{ key: Range; label: string }> = [
   { key: "today", label: "Today" },
   { key: "week", label: "This week" },
+  { key: "month", label: "This month" },
   { key: "lastMonth", label: "Last month" },
   { key: "year", label: "This year" },
   { key: "all", label: "All time" },
 ];
 const withinRange = (date: string, range: Range) => {
   if (range === "all") return true;
-  const now = new Date(),
-    start = new Date(now);
+  const now = new Date();
+  const from = (start: Date, end = now) => date >= dateKey(start) && date <= dateKey(end);
   if (range === "today") return date === dateKey(now);
-  if (range === "week") start.setDate(now.getDate() - 6);
-  if (range === "lastMonth") start.setMonth(now.getMonth() - 1);
-  if (range === "year") start.setFullYear(now.getFullYear() - 1);
-  return date >= dateKey(start) && date <= dateKey(now);
+  if (range === "week") {
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7));
+    return from(start);
+  }
+  if (range === "month") return from(new Date(now.getFullYear(), now.getMonth(), 1));
+  if (range === "lastMonth") return from(new Date(now.getFullYear(), now.getMonth() - 1, 1), new Date(now.getFullYear(), now.getMonth(), 0));
+  return from(new Date(now.getFullYear(), 0, 1));
 };
 const localDayKey = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -102,6 +104,11 @@ type Props = {
   onOpenTracker: (tab: "Syllabus" | "Revision" | "Mock Test") => void;
   onOpenLeaderboard: () => void;
   streak: number;
+  sharedPracticeRecords?: Record<string, any>[];
+  sharedTracker?: Record<string, any>;
+  sharedMockTests?: MockTestLog[];
+  sharedActivityReady?: boolean;
+  sharedRank?: number | null;
   /** Reuses this exact screen for another user's shared, read-only profile. */
   readOnly?: boolean;
   onBack?: () => void;
@@ -115,6 +122,18 @@ type ImportedSubject = {
   name: string;
   chapters: Array<{ id: string; name: string; total: number; completed: number }>;
 };
+
+const normalizePracticeRecords = (items: Record<string, any>[]) => items
+  .filter((item) => typeof item.date === "string")
+  .map((item) => ({
+    id: String(item.id),
+    date: String(item.date),
+    subject: typeof item.subject === "string" ? item.subject : "",
+    chapter: typeof item.chapter === "string" ? item.chapter : "",
+    questionCount: Array.isArray(item.answers) ? item.answers.length : Math.max(0, Number(item.questionCount) || 0),
+    correct: Math.max(0, Number(item.correct) || 0),
+    wrong: Math.max(0, Number(item.wrong) || 0),
+  }));
 
 function parseSubjectsFile(value: unknown): ImportedSubject[] {
   const source = value as { subjects?: unknown };
@@ -164,6 +183,11 @@ export function ProfileScreen({
   onOpenTracker,
   onOpenLeaderboard,
   streak,
+  sharedPracticeRecords = [],
+  sharedTracker,
+  sharedMockTests = [],
+  sharedActivityReady = true,
+  sharedRank = null,
   readOnly = false,
   onBack,
   publicDashboard,
@@ -202,12 +226,24 @@ export function ProfileScreen({
   );
   const [viewingAvatar, setViewingAvatar] = useState(false);
   const [spin] = useState(() => new Animated.Value(0));
-  const [mockTests, setMockTests] = useState<MockTestLog[]>([]);
-  const [syllabusSubjects, setSyllabusSubjects] = useState<string[]>([]);
-  const [trackerData, setTrackerData] = useState<Record<string, any>>({
-    subjects: [],
-    revision: {},
-  });
+  // A public profile arrives as one complete dashboard object. Seed every
+  // profile section from it on the very first render instead of filling each
+  // section in an effect after the screen has painted.
+  const initialPublicTracker = readOnly && publicDashboard?.tracker && typeof publicDashboard.tracker === "object"
+    ? publicDashboard.tracker
+    : undefined;
+  const initialTracker = initialPublicTracker ?? sharedTracker;
+  const [mockTests, setMockTests] = useState<MockTestLog[]>(() =>
+    readOnly
+      ? (Array.isArray(initialPublicTracker?.tests?.log) ? initialPublicTracker.tests.log : [])
+      : sharedMockTests,
+  );
+  const [syllabusSubjects, setSyllabusSubjects] = useState<string[]>(() =>
+    Array.isArray(initialTracker?.subjects)
+      ? initialTracker.subjects.map((subject: any) => String(subject.name ?? "")).filter(Boolean)
+      : [],
+  );
+  const [trackerData, setTrackerData] = useState<Record<string, any>>(() => initialTracker ?? { subjects: [], revision: {} });
   const [practiceRecords, setPracticeRecords] = useState<
     Array<{
       id: string;
@@ -218,7 +254,10 @@ export function ProfileScreen({
       correct: number;
       wrong: number;
     }>
-  >([]);
+  >(() => readOnly
+    ? normalizePracticeRecords(Array.isArray(publicDashboard?.records) ? publicDashboard.records as Record<string, any>[] : [])
+    : normalizePracticeRecords(sharedPracticeRecords));
+  const lastPublicDashboard = useRef(publicDashboard);
   const [range, setRange] = useState<Range>("today");
   const [rangeOpen, setRangeOpen] = useState(false);
   const [rangeMenuVisible, setRangeMenuVisible] = useState(false);
@@ -228,20 +267,11 @@ export function ProfileScreen({
   const [subjectFileName, setSubjectFileName] = useState("");
   const [subjectImportError, setSubjectImportError] = useState("");
   const rangeMenuProgress = useRef(new Animated.Value(0)).current;
-  const rangeContent = useRef(new Animated.Value(1)).current;
   const avatarImage = avatarAssets[avatarFile] ?? avatarAssets[avatarFiles[0]];
-  const [leaderboardRank, setLeaderboardRank] = useState<number | null>(null);
+  const [leaderboardRank, setLeaderboardRank] = useState<number | null>(() => readOnly ? publicRank ?? null : sharedRank);
   useEffect(() => {
-    if (readOnly) { setLeaderboardRank(publicRank ?? null); return; }
-    if (!user) { setLeaderboardRank(null); return; }
-    const start = new Date(); start.setHours(0, 0, 0, 0); start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
-    const week = localDayKey(start);
-    return onSnapshot(collection(getFirebaseFirestore(), "leaderboards", week, "entries"), (snapshot) => {
-      const entries = snapshot.docs.map((document) => document.data()).sort((a: any, b: any) => b.points - a.points || b.studyMinutes - a.studyMinutes || b.completed - a.completed);
-      const index = entries.findIndex((entry: any) => entry.uid === user.uid);
-      setLeaderboardRank(index >= 0 ? index + 1 : null);
-    }, () => setLeaderboardRank(null));
-  }, [user?.uid, readOnly, publicRank]);
+    setLeaderboardRank(readOnly ? publicRank ?? null : sharedRank);
+  }, [readOnly, publicRank, sharedRank]);
   const rotate = spin.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
   const changeAvatar = () => {
     spin.setValue(0);
@@ -279,65 +309,23 @@ export function ProfileScreen({
       );
     }
   };
+  // Data subscriptions live in App, so opening Profile reads a warm cache instead
+  // of starting three Firestore listeners and visibly reflowing the screen.
   useEffect(() => {
     if (readOnly) return;
     if (!profileSettings) setProfileReady(true);
-    if (!user) return;
-    return watchTrackerTests(user, (tests) =>
-      setMockTests(
-        tests.map((test) => ({
-          ...test,
-          type: test.type === "Mains" ? "Mains" : test.type === "Pre" ? "Pre" : "Sectional",
-          subject: test.subjectId || "General",
-          score: Number(test.score ?? 0),
-          total: Number(test.total ?? 0),
-          accuracy: Number(test.accuracy ?? 0),
-        })),
-      ),
-    );
-  }, [user?.uid, readOnly]);
-  useEffect(() => {
-    if (readOnly) return;
-    if (!user) {
-      setSyllabusSubjects([]);
-      setTrackerData({ subjects: [], revision: {} });
-      return;
-    }
-    return watchTrackerSections(user, (sections) => {
-      setTrackerData(sections);
-      setSyllabusSubjects(
-        Array.isArray(sections.subjects)
-          ? sections.subjects.map((subject: any) => String(subject.name ?? "")).filter(Boolean)
-          : [],
-      );
-    });
-  }, [user?.uid, readOnly]);
-  useEffect(() => {
-    if (readOnly) return;
-    if (!user) {
-      setPracticeRecords([]);
-      return;
-    }
-    return watchPracticeEntities(user, "practiceAttempts", (items) =>
-      setPracticeRecords(
-        items
-          .filter((item) => typeof item.date === "string")
-          .map((item) => ({
-            id: String(item.id),
-            date: String(item.date),
-            subject: typeof item.subject === "string" ? item.subject : "",
-            chapter: typeof item.chapter === "string" ? item.chapter : "",
-            questionCount: Array.isArray(item.answers)
-              ? item.answers.length
-              : Math.max(0, Number(item.questionCount) || 0),
-            correct: Math.max(0, Number(item.correct) || 0),
-            wrong: Math.max(0, Number(item.wrong) || 0),
-          })),
-      ),
-    );
-  }, [user?.uid, readOnly]);
+    setMockTests(sharedMockTests);
+    setTrackerData(sharedTracker ?? { subjects: [], revision: {} });
+    setSyllabusSubjects(Array.isArray(sharedTracker?.subjects) ? sharedTracker.subjects.map((subject: any) => String(subject.name ?? "")).filter(Boolean) : []);
+    setPracticeRecords(normalizePracticeRecords(sharedPracticeRecords));
+  }, [profileSettings, readOnly, sharedMockTests, sharedPracticeRecords, sharedTracker]);
   useEffect(() => {
     if (!readOnly) return;
+    // The mount already used this exact dashboard snapshot. Skipping this
+    // duplicate state write prevents stats from disappearing then replaying
+    // their number animation when opening a profile from the leaderboard.
+    if (lastPublicDashboard.current === publicDashboard) return;
+    lastPublicDashboard.current = publicDashboard;
     const records = Array.isArray(publicDashboard?.records) ? publicDashboard.records : [];
     setPracticeRecords(records.map((item: any, index) => ({
       id: String(item.id ?? index),
@@ -440,15 +428,6 @@ export function ProfileScreen({
     trackerTotalFor("mock-test") + mockTests.filter((test) => withinRange(test.date, range)).length;
   const activeRangeLabel = ranges.find((item) => item.key === range)?.label ?? "Today";
   const changeRange = (next: Range) => {
-    if (next !== range) {
-      rangeContent.setValue(0.55);
-      Animated.timing(rangeContent, {
-        toValue: 1,
-        duration: 300,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }).start();
-    }
     setRange(next);
     setRangeOpen(false);
   };
@@ -532,7 +511,6 @@ export function ProfileScreen({
       if (finished) setRangeMenuVisible(false);
     });
   }, [rangeOpen, rangeMenuProgress, rangeMenuVisible]);
-
   return (
     <View style={styles.page}>
       {readOnly && (
@@ -553,9 +531,7 @@ export function ProfileScreen({
               size={15}
               color={streak > 0 ? "#fcd34d" : "#a1a1aa"}
             />
-            <Text style={[styles.profileStreakText, streak > 0 && styles.profileStreakTextActive]}>
-              {streak}
-            </Text>
+            <ProfileNumberFlow value={streak} style={[styles.profileStreakText, streak > 0 && styles.profileStreakTextActive]} />
           </View>
           <View style={[styles.avatar, { width: 70, height: 70, borderRadius: 35 }]}>
             <Pressable onPress={() => setViewingAvatar(true)}>
@@ -577,7 +553,7 @@ export function ProfileScreen({
               <Text style={styles.name} numberOfLines={1}>
                 {name}
               </Text>
-              {leaderboardRank !== null && <View style={styles.weeklyRank}>{leaderboardRank <= 3 ? <Image source={rankMedals[leaderboardRank - 1]} style={styles.weeklyRankMedal} /> : <MaterialCommunityIcons name="trophy-outline" size={12} color="#fcd34d" />}<Text style={styles.weeklyRankText}>#{leaderboardRank}</Text></View>}
+              {leaderboardRank !== null && <View style={styles.weeklyRank}>{leaderboardRank <= 3 ? <Image source={rankMedals[leaderboardRank - 1]} style={styles.weeklyRankMedal} /> : <MaterialCommunityIcons name="trophy-outline" size={12} color="#fcd34d" />}<ProfileNumberFlow value={leaderboardRank} prefix="#" style={styles.weeklyRankText} /></View>}
               {!readOnly && <View style={styles.profileActions}>
                 <Pressable
                   accessibilityLabel="Edit profile"
@@ -685,16 +661,7 @@ export function ProfileScreen({
               )}
             </View>
           </View>
-          <Animated.View
-            style={{
-              opacity: rangeContent,
-              transform: [
-                {
-                  translateY: rangeContent.interpolate({ inputRange: [0, 1], outputRange: [5, 0] }),
-                },
-              ],
-            }}
-          >
+          <View>
             {practiceSessionEnabled && (
               <View style={styles.practiceGrid}>
                 <Stat columns={2} label="Question goal" value={goal || "0"} />
@@ -736,7 +703,7 @@ export function ProfileScreen({
                 </View>
               </>
             )}
-          </Animated.View>
+          </View>
         </View>
         <ActivityHeatmap
           user={user}
@@ -744,7 +711,11 @@ export function ProfileScreen({
           practiceRecords={practiceRecords}
           tasks={tasks}
           activityEnabled={practiceSessionEnabled || trackProgressEnabled}
-          sharedTracker={readOnly ? trackerData : undefined}
+          // App already keeps the tracker subscription warm. Passing that snapshot
+          // through for both profiles prevents the heatmap from briefly rendering
+          // an empty state while it starts a second subscription on screen open.
+          sharedTracker={trackerData}
+          dataReady={readOnly || sharedActivityReady}
           sharedActivity={readOnly ? publicActivity : undefined}
         />
         {trackProgressEnabled && <StudyTrackerOverview
@@ -1023,29 +994,42 @@ function AnimatedStatValue({ value }: { value: string }) {
     const minutes = /^(\d+)m$/.exec(value);
     return minutes ? Number(minutes[1]) : Number(value) || 0;
   }, [value]);
-  const progress = useRef(new Animated.Value(target)).current;
-  const [display, setDisplay] = useState(target);
+  if (!isDuration) return <ProfileNumberFlow value={target} />;
 
-  useEffect(() => {
-    const listener = progress.addListener(({ value: next }) =>
-      setDisplay(Math.max(0, Math.round(next))),
-    );
-    progress.stopAnimation((current) => {
-      progress.setValue(current);
-      Animated.timing(progress, {
-        toValue: target,
-        duration: 360,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: false,
-      }).start();
-    });
-    return () => progress.removeListener(listener);
-  }, [progress, target]);
-
-  return (
-    <Text style={styles.statValue}>{isDuration ? formatMinutes(display) : String(display)}</Text>
-  );
+  const hours = Math.floor(target / 60);
+  const minutes = target % 60;
+  return <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: hours > 0 && minutes > 0 ? 3 : 0 }}>
+    {hours > 0 && <ProfileNumberFlow value={hours} suffix="h" />}
+    {(hours === 0 || minutes > 0) && <ProfileNumberFlow value={minutes} suffix="m" />}
+  </View>;
 }
+
+function ProfileNumberFlow({ value, prefix = "", suffix = "", style = styles.statValue }: { value: number; prefix?: string; suffix?: string; style?: any }) {
+  return <Text style={style}>{`${prefix}${value}${suffix}`}</Text>;
+}
+
+type HeatmapTrackerActivity = {
+  id: string;
+  date: string;
+  count: number;
+  type?: string;
+  subjectId?: string;
+  chapterId?: string;
+  revisionTypeId?: string;
+};
+
+const heatmapActivityFromTracker = (tracker?: Record<string, any>): HeatmapTrackerActivity[] =>
+  (Array.isArray(tracker?.activity) ? tracker.activity : [])
+    .filter((entry: any) => entry && typeof entry.date === "string")
+    .map((entry: any, index: number) => ({
+      id: String(entry.id ?? `${entry.date}-${index}`),
+      date: entry.date,
+      count: Math.max(1, Math.abs(Number(entry.count) || 1)),
+      type: entry.type,
+      subjectId: entry.subjectId,
+      chapterId: entry.chapterId,
+      revisionTypeId: entry.revisionTypeId,
+    }));
 
 function ActivityHeatmap({
   user,
@@ -1054,6 +1038,7 @@ function ActivityHeatmap({
   tasks,
   activityEnabled = true,
   sharedTracker,
+  dataReady = true,
   sharedActivity,
 }: {
   user: User | null;
@@ -1070,6 +1055,7 @@ function ActivityHeatmap({
   tasks: Task[];
   activityEnabled?: boolean;
   sharedTracker?: Record<string, any>;
+  dataReady?: boolean;
   sharedActivity?: Record<string, number>;
 }) {
   const [mode, setMode] = useState<"activity" | "tasks">(() => activityEnabled ? "activity" : "tasks");
@@ -1086,23 +1072,15 @@ function ActivityHeatmap({
     }).start();
   }, [mode, toggleIndicator]);
   const [selectedDay, setSelectedDay] = useState<string>(() => localDayKey(new Date()));
-  const [trackerActivity, setTrackerActivity] = useState<
-    Array<{
-      id: string;
-      date: string;
-      count: number;
-      type?: string;
-      subjectId?: string;
-      chapterId?: string;
-      revisionTypeId?: string;
-    }>
-  >([]);
+  const [trackerActivity, setTrackerActivity] = useState<HeatmapTrackerActivity[]>(
+    () => heatmapActivityFromTracker(sharedTracker),
+  );
   const [trackerSubjects, setTrackerSubjects] = useState<
     Array<{ id: string; name: string; chapters?: Array<{ id: string; name: string }> }>
-  >([]);
+  >(() => Array.isArray(sharedTracker?.subjects) ? sharedTracker.subjects : []);
   const [trackerRevision, setTrackerRevision] = useState<
     Record<string, { types?: Array<{ id: string; name: string }> }>
-  >({});
+  >(() => sharedTracker?.revision && typeof sharedTracker.revision === "object" ? sharedTracker.revision : {});
   const [viewportWidth, setViewportWidth] = useState(0);
   const [contentWidth, setContentWidth] = useState(0);
   const [heatmapReady, setHeatmapReady] = useState(true);
@@ -1112,40 +1090,25 @@ function ActivityHeatmap({
   const scrollbarTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initiallyPositionedFor = useRef<string | null>(null);
   useEffect(() => {
-    if (!user) {
+    // The app-level snapshot is subscribed before this screen opens. Do not
+    // race it with another listener, which used to reset the heatmap/activity
+    // list to empty for one frame.
+    if (!user || sharedTracker) {
       return;
     }
     return watchTrackerSections(user, (sections) => {
-      const entries = Array.isArray(sections.activity) ? sections.activity : [];
       setTrackerSubjects(Array.isArray(sections.subjects) ? sections.subjects : []);
       setTrackerRevision(
         sections.revision && typeof sections.revision === "object" ? sections.revision : {},
       );
-      setTrackerActivity(
-        entries
-          .filter((entry: any) => entry && typeof entry.date === "string")
-          .map((entry: any, index: number) => ({
-            id: String(entry.id ?? `${entry.date}-${index}`),
-            date: entry.date,
-            count: Math.max(1, Math.abs(Number(entry.count) || 1)),
-            type: entry.type,
-            subjectId: entry.subjectId,
-            chapterId: entry.chapterId,
-            revisionTypeId: entry.revisionTypeId,
-          })),
-      );
+      setTrackerActivity(heatmapActivityFromTracker(sections));
     });
-  }, [user?.uid]);
+  }, [user, sharedTracker]);
   useEffect(() => {
     if (!sharedTracker) return;
-    const entries = Array.isArray(sharedTracker.activity) ? sharedTracker.activity : [];
     setTrackerSubjects(Array.isArray(sharedTracker.subjects) ? sharedTracker.subjects : []);
     setTrackerRevision(sharedTracker.revision && typeof sharedTracker.revision === "object" ? sharedTracker.revision : {});
-    setTrackerActivity(entries.filter((entry: any) => entry && typeof entry.date === "string").map((entry: any, index: number) => ({
-      id: String(entry.id ?? `${entry.date}-${index}`), date: entry.date,
-      count: Math.max(1, Math.abs(Number(entry.count) || 1)), type: entry.type,
-      subjectId: entry.subjectId, chapterId: entry.chapterId, revisionTypeId: entry.revisionTypeId,
-    })));
+    setTrackerActivity(heatmapActivityFromTracker(sharedTracker));
   }, [sharedTracker]);
   const { months, total, activeDays, streak, activity } = useMemo(() => {
     const today = new Date();
@@ -1317,22 +1280,26 @@ function ActivityHeatmap({
     <View style={styles.heatmapSection}>
       <View style={styles.heatmapHeading}>
         {activityEnabled ? <>
-          <Text style={styles.heatmapMuted}>
-            <Text style={styles.heatmapNumber}>{activeDays}</Text> active days
-            <Text> · </Text>
-            <Text style={styles.heatmapNumber}>{streak}</Text> max streak
-          </Text>
+          <View style={styles.heatmapFacts}>
+            <View style={styles.heatmapFact}><ProfileNumberFlow value={activeDays} style={styles.heatmapNumber} /><Text style={styles.heatmapMuted}> active days</Text></View>
+            <Text style={styles.heatmapMuted}>·</Text>
+            <View style={styles.heatmapFact}><ProfileNumberFlow value={streak} style={styles.heatmapNumber} /><Text style={styles.heatmapMuted}> max streak</Text></View>
+          </View>
           <View style={styles.heatmapToggle} onLayout={(event) => setToggleWidth(event.nativeEvent.layout.width - 4)}>
-            {toggleWidth > 0 && <Animated.View pointerEvents="none" style={[styles.heatmapToggleIndicator, { width: toggleWidth / 2, transform: [{ translateX: toggleIndicator.interpolate({ inputRange: [0, 1], outputRange: [0, toggleWidth / 2] }) }] }]} />}
+            {toggleWidth > 0 ? (
+              <Animated.View pointerEvents="none" style={[styles.heatmapToggleIndicator, { width: toggleWidth / 2, transform: [{ translateX: toggleIndicator.interpolate({ inputRange: [0, 1], outputRange: [0, toggleWidth / 2] }) }] }]} />
+            ) : (
+              <View pointerEvents="none" style={[styles.heatmapToggleIndicator, mode === "tasks" ? { left: "50%", right: 2 } : { left: 2, right: "50%" }]} />
+            )}
             {(["activity", "tasks"] as const).map((option) => <Pressable key={option} onPress={() => setMode(option)} style={styles.heatmapToggleOption}><Text style={[styles.heatmapToggleText, mode === option && styles.heatmapToggleTextActive]}>{option === "activity" ? "Activity" : "Tasks"}</Text></Pressable>)}
           </View>
         </> : <>
-          <Text style={styles.heatmapMuted}>{total} tasks completed</Text>
-          <Text style={styles.heatmapMuted}>
-            <Text style={styles.heatmapNumber}>{activeDays}</Text> active days
-            <Text> · </Text>
-            <Text style={styles.heatmapNumber}>{streak}</Text> max streak
-          </Text>
+          <View style={styles.heatmapFact}><ProfileNumberFlow value={total} style={styles.heatmapNumber} /><Text style={styles.heatmapMuted}> tasks completed</Text></View>
+          <View style={styles.heatmapFacts}>
+            <View style={styles.heatmapFact}><ProfileNumberFlow value={activeDays} style={styles.heatmapNumber} /><Text style={styles.heatmapMuted}> active days</Text></View>
+            <Text style={styles.heatmapMuted}>·</Text>
+            <View style={styles.heatmapFact}><ProfileNumberFlow value={streak} style={styles.heatmapNumber} /><Text style={styles.heatmapMuted}> max streak</Text></View>
+          </View>
         </>}
       </View>
       <Animated.ScrollView
@@ -1403,8 +1370,10 @@ function ActivityHeatmap({
           {selected} {mode === "tasks" ? `task${selected === 1 ? "" : "s"} completed` : `activit${selected === 1 ? "y" : "ies"}`}
         </Text>
       </View>
-      <View style={styles.activityList}>
-        {activityRows.length ? (
+      <NativeScrollView nestedScrollEnabled showsVerticalScrollIndicator={false} style={styles.activityList} contentContainerStyle={styles.activityListContent}>
+        {!dataReady && mode === "activity" ? (
+          <Text style={styles.noActivity}>Loading activity…</Text>
+        ) : activityRows.length ? (
           activityRows.map((row) => (
             <View key={row.id} style={styles.activityRow}>
               <View style={styles.activityDot} />
@@ -1417,7 +1386,7 @@ function ActivityHeatmap({
         ) : (
           <Text style={styles.noActivity}>No activity recorded on this day.</Text>
         )}
-      </View>
+      </NativeScrollView>
     </View>
   );
 }
@@ -1808,8 +1777,9 @@ const styles: Record<string, any> = StyleSheet.create({
   },
   heatmapSummaryRow: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", marginTop: 4 },
   heatmapFacts: { flexDirection: "row", gap: 12 },
+  heatmapFact: { flexDirection: "row", alignItems: "center" },
   heatmapMuted: { color: colors.muted, fontSize: 10 },
-  heatmapNumber: { color: colors.text, fontWeight: "800" },
+  heatmapNumber: { color: colors.text, fontSize: 10, fontWeight: "800" },
   heatmapToggle: { position: "relative", width: "40%", flexDirection: "row", padding: 2, borderRadius: 7, backgroundColor: "#282828" },
   heatmapToggleIndicator: { position: "absolute", top: 2, bottom: 2, left: 2, borderRadius: 5, backgroundColor: "#f4f4f5" },
   heatmapToggleOption: { zIndex: 1, flex: 1, paddingHorizontal: 6, paddingVertical: 3, alignItems: "center" },
@@ -1845,7 +1815,8 @@ const styles: Record<string, any> = StyleSheet.create({
     paddingHorizontal: 1,
   },
   heatDetailDate: { color: colors.text, fontSize: 11, fontWeight: "700" },
-  activityList: { marginTop: 2 },
+  activityList: { maxHeight: 132, marginTop: 2 },
+  activityListContent: { paddingRight: 2 },
   activityRow: {
     minHeight: 25,
     flexDirection: "row",

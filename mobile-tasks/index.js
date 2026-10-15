@@ -71,7 +71,13 @@ if (Platform.OS === "android") {
           } catch {}
         }
       }
-      renderWidget(renderDailyTasksWidget(tasks));
+      let widgetRank = null;
+      try {
+        const rawMeta = await AsyncStorage.getItem("ssc-buddy:widget-meta:v1");
+        const meta = rawMeta ? JSON.parse(rawMeta) : null;
+        widgetRank = Number.isFinite(Number(meta?.rank)) && Number(meta.rank) > 0 ? Number(meta.rank) : null;
+      } catch {}
+      renderWidget(renderDailyTasksWidget(tasks, widgetRank));
       return;
     }
     let quiz = await getUnlockQuiz();

@@ -201,16 +201,13 @@ export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { 
     const tasksForDay = tasks.filter((task: any) => task.date === selectedDate);
     const taskList = tasksForDay.length ? (
       tasksForDay.map((task: any, index: number) => {
+        const overdue = !task.completed && String(task.date ?? "") < dayKey();
         const meta = [task.subject, task.type, task.minutesSpent ? `${task.minutesSpent}m` : ""]
           .filter(Boolean)
           .join(" · ");
         return (
           <View key={`${task.name}-${index}`} style={s.task}>
-            <MaterialCommunityIcons
-              name={task.completed ? "check-circle" : "close-circle"}
-              size={16}
-              color={task.completed ? "#86efac" : "#fca5a5"}
-            />
+            {task.completed ? <MaterialCommunityIcons name="check-circle" size={16} color="#86efac" /> : overdue ? <MaterialCommunityIcons name="close-circle" size={16} color="#fca5a5" /> : <View style={{ width: 16, height: 16, borderWidth: 1, borderColor: "#a1a1aa", borderRadius: 8 }} />}
             <View style={{ flex: 1 }}>
               <Text style={s.name} numberOfLines={1}>
                 {task.name}
@@ -245,12 +242,7 @@ export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { 
           <Text style={s.title}>Profile</Text>
           <View style={{ width: 24 }} />
         </View>
-        <ScrollView
-          onTouchStart={() => {
-            if (dayFilterOpen) setDayFilterOpen(false);
-          }}
-          contentContainerStyle={s.profile}
-        >
+        <View style={s.detailSticky}>
           <View style={s.detailProfileHeader}>
             <View style={s.avatarRankLine}>
               <Pressable style={s.bigAvatar} onPress={() => setPublicEntry({ ...selected, leaderboardRank: rank })}>
@@ -282,18 +274,18 @@ export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { 
               <Text style={s.sub}>Study time</Text>
             </View>
           </View>
-          <View style={s.tasks}>
-            <View style={{ alignItems: "flex-end", marginBottom: 9 }}>
-              <DayFilter
-                dates={dates}
-                value={selectedDate}
-                onChange={setSelectedDate}
-                open={dayFilterOpen}
-                onOpenChange={setDayFilterOpen}
-              />
-            </View>
-            {taskList}
+          <View style={{ alignSelf: "stretch", alignItems: "flex-end", marginTop: 20 }}>
+            <DayFilter
+              dates={dates}
+              value={selectedDate}
+              onChange={setSelectedDate}
+              open={dayFilterOpen}
+              onOpenChange={setDayFilterOpen}
+            />
           </View>
+        </View>
+        <ScrollView onTouchStart={() => { if (dayFilterOpen) setDayFilterOpen(false); }} contentContainerStyle={s.tasksScroll}>
+          {taskList}
         </ScrollView>
       </View>
     );
@@ -387,6 +379,7 @@ const s = StyleSheet.create({
   points: { color: "#86efac", fontWeight: "800", fontSize: 16 },
   empty: { color: colors.subdued, textAlign: "center", marginTop: 45 },
   profile: { alignItems: "center", padding: 30 },
+  detailSticky: { alignItems: "center", paddingHorizontal: 30, paddingTop: 22, paddingBottom: 13, backgroundColor: colors.background, zIndex: 2 },
   detailProfileHeader: { alignSelf: "stretch", alignItems: "center" },
   avatarRankLine: { alignSelf: "stretch", alignItems: "center", justifyContent: "center", position: "relative" },
   detailIdentity: { alignItems: "center" },
@@ -425,6 +418,7 @@ const s = StyleSheet.create({
   profileStats: { marginTop: 28, flexDirection: "row", gap: 30 },
   profileValue: { color: colors.text, fontSize: 18, fontWeight: "800", textAlign: "center" },
   tasks: { alignSelf: "stretch", marginTop: 30, gap: 9 },
+  tasksScroll: { gap: 9, paddingHorizontal: 30, paddingTop: 8, paddingBottom: 36 },
   tasksTitle: { color: colors.subdued, fontSize: 10, fontWeight: "800", letterSpacing: 1.5 },
   task: {
     flexDirection: "row",

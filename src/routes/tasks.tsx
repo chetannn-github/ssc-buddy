@@ -333,7 +333,8 @@ function DailyTasks() {
               </div>
             )}
           </div>
-          <TabsContent value="tasks" className="mt-4 space-y-3">
+          <TabsContent value="tasks" className="mt-4 flex h-[calc(100dvh-15rem)] min-h-[22rem] flex-col overflow-hidden">
+            <div className="shrink-0 space-y-3 bg-[#121212] pb-3">
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {[
                 [
@@ -366,7 +367,8 @@ function DailyTasks() {
                 <AnimatedBar value={progress} tone="bg-blue-500" />
               </div>
             </div>
-            <div className="space-y-1.5">
+            </div>
+            <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {dayTasks.length ? (
                 dayTasks.map((task) => (
                   <TaskRow

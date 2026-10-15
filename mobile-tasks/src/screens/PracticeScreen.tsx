@@ -607,6 +607,7 @@ export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQ
     setDialog(null);
     if (openKeyEditor) setPhase("key");
   };
+  if (!practiceLoaded) return <View style={s.page}><View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}><ActivityIndicator size="small" color="#60a5fa" /></View></View>;
   if (phase === "history")
     return (
       <History
