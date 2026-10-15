@@ -32,7 +32,6 @@ import {
   type RangeKey,
   type TaskDraft,
 } from "@/lib/daily-tasks";
-import { loadTrackerData } from "@/lib/tracker-store";
 import { isFirebaseConfigured, observeFirebaseUser } from "@/lib/firebase-sync";
 import { publishLeaderboardEntry, weeklyTaskPoints } from "@/lib/leaderboard";
 import { loadPracticeProfile } from "@/lib/profile";
@@ -81,12 +80,6 @@ function DailyTasks() {
   const [historyRange, setHistoryRange] = useState<RangeKey>("week");
   const [range, setRange] = useState<RangeKey>("week");
   const [subject, setSubject] = useState("All subjects");
-  const [subjects, setSubjects] = useState(() => [...new Set(loadTrackerData().subjects.map((item) => item.name).filter(Boolean))]);
-  useEffect(() => {
-    const refreshSubjects = () => setSubjects([...new Set(loadTrackerData().subjects.map((item) => item.name).filter(Boolean))]);
-    window.addEventListener("cbt-tracker-updated", refreshSubjects);
-    return () => window.removeEventListener("cbt-tracker-updated", refreshSubjects);
-  }, []);
   useEffect(() => {
     const refreshTasks = () => setTasks(loadDailyTasks());
     window.addEventListener("ssc-daily-tasks-updated", refreshTasks);
@@ -206,7 +199,7 @@ function DailyTasks() {
           : task,
       ),
     );
-  const allSubjects = [...new Set([...subjects, ...tasks.map((task) => task.subject), "Other"])];
+  const allSubjects = [...new Set([...tasks.map((task) => task.subject).filter(Boolean), "Other"])];
 
   return (
     <AppShell title="Daily Tasks">
@@ -231,10 +224,11 @@ function DailyTasks() {
         </div>
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-7">
           <div className="flex flex-wrap items-center gap-3">
-            <TabsList className="bg-white/5">
-              <TabsTrigger value="tasks">Tasks</TabsTrigger>
-              <TabsTrigger value="analytics">Analytics</TabsTrigger>
-              <TabsTrigger value="history">History</TabsTrigger>
+            <TabsList className="relative grid h-auto grid-cols-3 bg-white/5 p-1">
+              <span aria-hidden="true" className={`pointer-events-none absolute inset-y-1 left-1 w-[calc(33.333%-0.25rem)] rounded-md bg-zinc-100 shadow-sm transition-transform duration-300 ease-out ${activeTab === "analytics" ? "translate-x-full" : activeTab === "history" ? "translate-x-[200%]" : ""}`} />
+              <TabsTrigger className="relative z-10 !bg-transparent !text-zinc-400 !shadow-none data-[state=active]:!bg-transparent data-[state=active]:!text-zinc-900 data-[state=active]:!shadow-none" value="tasks">Tasks</TabsTrigger>
+              <TabsTrigger className="relative z-10 !bg-transparent !text-zinc-400 !shadow-none data-[state=active]:!bg-transparent data-[state=active]:!text-zinc-900 data-[state=active]:!shadow-none" value="analytics">Analytics</TabsTrigger>
+              <TabsTrigger className="relative z-10 !bg-transparent !text-zinc-400 !shadow-none data-[state=active]:!bg-transparent data-[state=active]:!text-zinc-900 data-[state=active]:!shadow-none" value="history">History</TabsTrigger>
             </TabsList>
             {activeTab === "analytics" && (
               <div className="ml-auto flex flex-wrap items-center gap-2">
@@ -546,7 +540,7 @@ function DailyTasks() {
           open={formOpen}
           onOpenChange={setFormOpen}
           task={editing}
-          subjects={subjects.length ? subjects : ["Other"]}
+          subjects={allSubjects}
           onSubmit={createOrUpdate}
         />
         <CompleteTaskDialog

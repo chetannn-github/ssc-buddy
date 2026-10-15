@@ -4,7 +4,7 @@ import { getFirebaseFirestore } from "@/lib/firebase-sync";
 import type { DailyTask } from "@/lib/daily-tasks";
 import type { PracticeProfile } from "@/lib/profile";
 
-export type LeaderboardTask = { name: string; subject?: string; completed: boolean; date: string; points: number };
+export type LeaderboardTask = { name: string; subject?: string; type?: string; minutesSpent?: number; completed: boolean; date: string; points: number };
 export type LeaderboardEntry = { uid: string; username: string; name: string; avatar?: string; points: number; completed: number; overdue: number; studyMinutes: number; week: string; leaderboardTasks?: LeaderboardTask[]; completedTasks?: Array<{ name: string; subject?: string }> };
 const day = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 export function currentWeekKey(now = new Date()) { const start = new Date(now); start.setHours(0, 0, 0, 0); start.setDate(start.getDate() - ((start.getDay() + 6) % 7)); return day(start); }
@@ -31,7 +31,7 @@ export async function publishLeaderboardEntry(user: User, profile: PracticeProfi
   const taskPoints = weeklyTaskPoints(tasks, week);
   const leaderboardTasks = tasks
     .filter((task) => task.date >= week && task.date <= day(end))
-    .map((task) => ({ name: task.name, subject: task.subject, completed: task.completed, date: task.date, points: taskPoints.get(task.id) ?? 0 }));
+    .map((task) => ({ name: task.name, subject: task.subject, type: task.type, minutesSpent: task.minutesSpent, completed: task.completed, date: task.date, points: taskPoints.get(task.id) ?? 0 }));
   await setDoc(doc(getFirebaseFirestore(), "leaderboards", week, "entries", user.uid), { uid: user.uid, username: profile.username, name: profile.name, ...(profile.avatar ? { avatar: profile.avatar } : {}), week, ...score, leaderboardTasks, updatedAt: serverTimestamp() }, { merge: true });
 }
 export function watchLeaderboard(week: string, callback: (entries: LeaderboardEntry[]) => void): Unsubscribe {

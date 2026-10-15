@@ -24,6 +24,7 @@ import { Route as TestRouteImport } from './routes/test'
 import { Route as TrackRouteImport } from './routes/track'
 import { Route as HistoryIndexRouteImport } from './routes/history.index'
 import { Route as HistoryIdRouteImport } from './routes/history.$id'
+import { Route as WeeklyStatsUsernameRouteImport } from './routes/weekly-stats.$username'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -100,6 +101,11 @@ const HistoryIdRoute = HistoryIdRouteImport.update({
   path: '/history/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WeeklyStatsUsernameRoute = WeeklyStatsUsernameRouteImport.update({
+  id: '/weekly-stats/$username',
+  path: '/weekly-stats/$username',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -116,6 +122,7 @@ export interface FileRoutesByFullPath {
   '/test': typeof TestRoute
   '/track': typeof TrackRoute
   '/history/$id': typeof HistoryIdRoute
+  '/weekly-stats/$username': typeof WeeklyStatsUsernameRoute
   '/history/': typeof HistoryIndexRoute
 }
 export interface FileRoutesByTo {
@@ -133,6 +140,7 @@ export interface FileRoutesByTo {
   '/test': typeof TestRoute
   '/track': typeof TrackRoute
   '/history/$id': typeof HistoryIdRoute
+  '/weekly-stats/$username': typeof WeeklyStatsUsernameRoute
   '/history': typeof HistoryIndexRoute
 }
 export interface FileRoutesById {
@@ -151,6 +159,7 @@ export interface FileRoutesById {
   '/test': typeof TestRoute
   '/track': typeof TrackRoute
   '/history/$id': typeof HistoryIdRoute
+  '/weekly-stats/$username': typeof WeeklyStatsUsernameRoute
   '/history/': typeof HistoryIndexRoute
 }
 export interface FileRouteTypes {
@@ -170,6 +179,7 @@ export interface FileRouteTypes {
     | '/test'
     | '/track'
     | '/history/$id'
+    | '/weekly-stats/$username'
     | '/history/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -187,6 +197,7 @@ export interface FileRouteTypes {
     | '/test'
     | '/track'
     | '/history/$id'
+    | '/weekly-stats/$username'
     | '/history'
   id:
     | '__root__'
@@ -204,6 +215,7 @@ export interface FileRouteTypes {
     | '/test'
     | '/track'
     | '/history/$id'
+    | '/weekly-stats/$username'
     | '/history/'
   fileRoutesById: FileRoutesById
 }
@@ -222,6 +234,7 @@ export interface RootRouteChildren {
   TestRoute: typeof TestRoute
   TrackRoute: typeof TrackRoute
   HistoryIdRoute: typeof HistoryIdRoute
+  WeeklyStatsUsernameRoute: typeof WeeklyStatsUsernameRoute
   HistoryIndexRoute: typeof HistoryIndexRoute
 }
 
@@ -332,6 +345,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof HistoryIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/weekly-stats/$username': {
+      id: '/weekly-stats/$username'
+      path: '/weekly-stats/$username'
+      fullPath: '/weekly-stats/$username'
+      preLoaderRoute: typeof WeeklyStatsUsernameRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -350,6 +370,7 @@ const rootRouteChildren: RootRouteChildren = {
   TestRoute: TestRoute,
   TrackRoute: TrackRoute,
   HistoryIdRoute: HistoryIdRoute,
+  WeeklyStatsUsernameRoute: WeeklyStatsUsernameRoute,
   HistoryIndexRoute: HistoryIndexRoute,
 }
 export const routeTree = rootRouteImport

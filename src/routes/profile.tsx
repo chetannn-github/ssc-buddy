@@ -51,7 +51,7 @@ import { useAuthUser } from "@/lib/auth-context";
 import { checkUsernameAvailability, normalizeUsername, saveProfileWithUsername, usernameValidationMessage } from "@/lib/firebase-sync";
 import type { PublicProfile } from "@/lib/firebase-sync";
 import { formatDuration, loadDailyTasks, type DailyTask } from "@/lib/daily-tasks";
-import { weeklyScore } from "@/lib/leaderboard";
+import { currentWeekKey, watchLeaderboard } from "@/lib/leaderboard";
 
 const title = "Profile";
 const description = "Your yearly practice activity and progress.";
@@ -166,18 +166,24 @@ function DayActivityDetails({ date, items }: { date: string; items: DayActivityD
 function ActivityHeatmap({
   records,
   tracker,
+  tasks,
   range,
+  activityEnabled = true,
   publicActivity,
 }: {
   records: TestRecord[];
   tracker: TrackerData | null;
+  tasks: DailyTask[];
   range: ActivityRange;
+  activityEnabled?: boolean;
   publicActivity?: Record<string, number> | undefined;
 }) {
+  const [mode, setMode] = useState<"activity" | "tasks">(() => activityEnabled ? "activity" : "tasks");
+  useEffect(() => { if (!activityEnabled) setMode("tasks"); }, [activityEnabled]);
   const { days, months, totalActivity, activeDays, maxStreak } = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const datedActivity = [
+    const datedActivity = mode === "tasks" ? tasks.map((task) => task.date) : [
       ...records.map((record) => activityDay(record.date)),
       ...(tracker?.tests.log ?? []).map((test) => activityDay(test.date)),
       ...(tracker?.activity ?? []).map((entry) => activityDay(entry.date)),
@@ -209,14 +215,29 @@ function ActivityHeatmap({
     });
     const activity = new Map<string, number>();
     const details = new Map<string, DayActivityDetail[]>();
-    const addDetail = (date: string, detail: DayActivityDetail) => {
-      const dayDetails = details.get(date) ?? [];
+    const taskActivity = new Map<string, number>();
+    const taskDetails = new Map<string, DayActivityDetail[]>();
+    const addDetail = (target: Map<string, DayActivityDetail[]>, date: string, detail: DayActivityDetail) => {
+      const dayDetails = target.get(date) ?? [];
       const matching = dayDetails.find(
         (item) => item.label === detail.label && item.detail === detail.detail,
       );
       if (matching) matching.count += detail.count;
-      else details.set(date, [...dayDetails, detail]);
+      else target.set(date, [...dayDetails, detail]);
     };
+    tasks.forEach((task) => {
+      if (!task.completed) return;
+      const key = activityDay(task.date);
+      if (!key) return;
+      taskActivity.set(key, (taskActivity.get(key) ?? 0) + 1);
+      addDetail(taskDetails, key, {
+        label: task.type,
+        detail: [task.subject, task.name, task.minutesSpent ? formatDuration(task.minutesSpent) : ""]
+          .filter(Boolean)
+          .join(" · "),
+        count: 1,
+      });
+    });
     records.forEach((record) => {
       const key = activityDay(record.date);
       if (!key) return;
@@ -229,7 +250,7 @@ function ActivityHeatmap({
         record.questionNumbers?.length ??
         record.answers.length;
       activity.set(key, (activity.get(key) ?? 0) + count);
-      addDetail(key, {
+      addDetail(details, key, {
         label: isQuickRecall ? "Quick recall" : "Practice session",
         detail: isQuickRecall
           ? `${questionCount} question${questionCount === 1 ? "" : "s"}`
@@ -245,7 +266,7 @@ function ActivityHeatmap({
         test.subjectId === "__all__"
           ? test.type
           : (tracker.subjects.find((item) => item.id === test.subjectId)?.name ?? test.type);
-      addDetail(key, {
+      addDetail(details, key, {
         label: `${test.type} mock test`,
         detail:
           test.score !== null && test.total !== null
@@ -266,7 +287,7 @@ function ActivityHeatmap({
       const revisionType = tracker.revision[subject?.id ?? ""]?.types.find(
         (item) => item.id === entry.revisionTypeId,
       );
-      addDetail(key, {
+      addDetail(details, key, {
         label:
           entry.type === "lecture"
             ? "Lecture"
@@ -280,9 +301,11 @@ function ActivityHeatmap({
     Object.entries(publicActivity ?? {}).forEach(([key, rawCount]) => {
       const count = Math.max(1, Math.round(Number(rawCount) || 1));
       activity.set(key, (activity.get(key) ?? 0) + count);
-      addDetail(key, { label: "Study activity", detail: "Shared profile", count });
+      addDetail(details, key, { label: "Study activity", detail: "Shared profile", count });
     });
-    const values = entries.map((date) => Math.max(0, activity.get(localDay(date)) ?? 0));
+    const sourceActivity = mode === "tasks" ? taskActivity : activity;
+    const sourceDetails = mode === "tasks" ? taskDetails : details;
+    const values = entries.map((date) => Math.max(0, sourceActivity.get(localDay(date)) ?? 0));
     const maximum = Math.max(...values, 1);
     let longest = 0;
     let current = 0;
@@ -295,7 +318,7 @@ function ActivityHeatmap({
       date,
       value: values[index] ?? 0,
       maximum,
-      details: details.get(localDay(date)) ?? [],
+      details: sourceDetails.get(localDay(date)) ?? [],
     }));
     const monthGroups = mappedDays.reduce<
       { key: string; label: string; days: typeof mappedDays }[]
@@ -320,7 +343,7 @@ function ActivityHeatmap({
       activeDays: values.filter(Boolean).length,
       maxStreak: longest,
     };
-  }, [publicActivity, records, tracker, range]);
+  }, [mode, publicActivity, records, tasks, tracker, range]);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [hoveredTooltip, setHoveredTooltip] = useState<{
     text: string;
@@ -343,19 +366,25 @@ function ActivityHeatmap({
     <section className="overflow-visible py-3 text-zinc-100 sm:py-4">
       <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-2 text-sm">
         <p className="text-zinc-400">
-          {totalActivity} activities · {rangeLabels[range].toLowerCase()}
+          {totalActivity} {mode === "tasks" ? "tasks completed" : "activities"} · {rangeLabels[range].toLowerCase()}
         </p>
-        <p className="text-zinc-400">
-          <span className="inline-flex items-center gap-2">
-            <span className="font-semibold text-zinc-100">{activeDays}</span>
-            <span>active days</span>
-          </span>
-          <span className="mx-3 text-zinc-600 sm:mx-4">·</span>
-          <span className="inline-flex items-center gap-2">
-            <span className="font-semibold text-zinc-100">{maxStreak}</span>
-            <span>max streak</span>
-          </span>
-        </p>
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-x-5 gap-y-2">
+          <p className="text-zinc-400">
+            <span className="inline-flex items-center gap-2">
+              <span className="font-semibold text-zinc-100">{activeDays}</span>
+              <span>active days</span>
+            </span>
+            <span className="mx-3 text-zinc-600 sm:mx-4">·</span>
+            <span className="inline-flex items-center gap-2">
+              <span className="font-semibold text-zinc-100">{maxStreak}</span>
+              <span>max streak</span>
+            </span>
+          </p>
+          {activityEnabled && <div className="relative grid shrink-0 grid-cols-2 rounded-lg bg-white/[.04] p-1 text-xs">
+            <span aria-hidden="true" className={cn("pointer-events-none absolute inset-y-1 left-1 w-[calc(50%-0.25rem)] rounded-md bg-zinc-100 shadow-sm transition-transform duration-300 ease-out", mode === "tasks" && "translate-x-full")} />
+            {(["activity", "tasks"] as const).map((option) => <button key={option} type="button" onClick={() => setMode(option)} className={cn("relative z-10 rounded-md px-2.5 py-1 font-medium transition-colors duration-200", mode === option ? "text-zinc-900" : "text-zinc-400 hover:text-white")}>{option === "activity" ? "Activity" : "Tasks"}</button>)}
+          </div>}
+        </div>
       </div>
 
       <div className="mt-2">
@@ -382,7 +411,7 @@ function ActivityHeatmap({
                           onMouseEnter={(event) => {
                             const box = event.currentTarget.getBoundingClientRect();
                             setHoveredTooltip({
-                              text: `${value} activit${value === 1 ? "y" : "ies"} on ${formatHeatmapTooltipDate(date)}`,
+                              text: `${value} ${mode === "tasks" ? `task${value === 1 ? "" : "s"} completed` : `activit${value === 1 ? "y" : "ies"}`} on ${formatHeatmapTooltipDate(date)}`,
                               x: Math.max(10, Math.min(window.innerWidth - 10, box.left + box.width / 2)),
                               y: box.top - 8,
                             });
@@ -391,13 +420,13 @@ function ActivityHeatmap({
                           onFocus={(event) => {
                             const box = event.currentTarget.getBoundingClientRect();
                             setHoveredTooltip({
-                              text: `${value} activit${value === 1 ? "y" : "ies"} on ${formatHeatmapTooltipDate(date)}`,
+                              text: `${value} ${mode === "tasks" ? `task${value === 1 ? "" : "s"} completed` : `activit${value === 1 ? "y" : "ies"}`} on ${formatHeatmapTooltipDate(date)}`,
                               x: Math.max(10, Math.min(window.innerWidth - 10, box.left + box.width / 2)),
                               y: box.top - 8,
                             });
                           }}
                           onBlur={() => setHoveredTooltip(null)}
-                          aria-label={`${formatDate(localDay(date))}: ${value} activit${value === 1 ? "y" : "ies"}`}
+                          aria-label={`${formatDate(localDay(date))}: ${value} ${mode === "tasks" ? "tasks completed" : "activities"}`}
                           className={cn(
                             "group relative aspect-square w-full rounded-[3px] ring-1 ring-inset ring-white/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300",
                             intensity === 0 && "bg-zinc-700",
@@ -564,7 +593,7 @@ function TargetProgress({
     <section className="overflow-visible rounded-2xl border border-white/10 bg-[#1a1a1a]">
       <div className="flex items-center justify-between gap-3 px-4 pt-2 sm:px-5">
         <span className="text-[11px] font-semibold tracking-[0.16em] text-zinc-500 uppercase">
-          {showPractice ? "Practice" : "Study tracker"}
+          {showPractice ? "Practice" : showTracker ? "Study tracker" : "Tasks"}
         </span>
         <div ref={rangeMenuRef} className="relative">
           <button
@@ -631,17 +660,12 @@ function TargetProgress({
       {showPractice && showTracker && <div className="border-t border-white/10 px-4 pt-2 text-[11px] font-semibold tracking-[0.16em] text-zinc-500 uppercase sm:px-5">
         Study tracker
       </div>}
-      {showTracker && <div className="grid grid-cols-3 divide-x divide-y divide-white/10 px-2 py-1.5 sm:px-3">
+      {showTracker && <div className="grid grid-cols-3 divide-x divide-y divide-white/10 px-2 py-1.5 sm:grid-cols-6 sm:divide-y-0 sm:px-3">
         {trackerStats.map(({ label, value }) => (
           <StatCell key={label} label={label}>
             <AnimatedNumber value={value} />
           </StatCell>
         ))}
-      </div>}
-      {showTracker && <div className="border-t border-white/10 px-4 pt-2 text-[11px] font-semibold tracking-[0.16em] text-zinc-500 uppercase sm:px-5">
-        Tasks
-      </div>}
-      <div className="grid grid-cols-3 divide-x divide-y divide-white/10 px-2 py-1.5 sm:px-3">
         <StatCell label="Study time">{formatDuration(studyMinutes)}</StatCell>
         <StatCell label="Tasks completed">
           <AnimatedNumber value={completedTasks} />
@@ -649,7 +673,16 @@ function TargetProgress({
         <StatCell label="Incomplete tasks">
           <AnimatedNumber value={incompleteTasks} />
         </StatCell>
-      </div>
+      </div>}
+      {!showTracker && <div className="grid grid-cols-3 divide-x divide-y divide-white/10 px-2 py-1.5 sm:divide-y-0 sm:px-3">
+        <StatCell label="Study time">{formatDuration(studyMinutes)}</StatCell>
+        <StatCell label="Tasks completed">
+          <AnimatedNumber value={completedTasks} />
+        </StatCell>
+        <StatCell label="Incomplete tasks">
+          <AnimatedNumber value={incompleteTasks} />
+        </StatCell>
+      </div>}
     </section>
   );
 }
@@ -684,6 +717,22 @@ function TrackerRow({
 function StudyTrackerOverview({ tracker, readOnly = false }: { tracker: TrackerData | null; readOnly?: boolean }) {
   if (!tracker) return null;
   const syllabus = overallSyllabus(tracker);
+  const hasSubjects = tracker.subjects.length > 0;
+  const hasRevision = tracker.subjects.some(
+    (subject) => (tracker.revision[subject.id]?.types.length ?? 0) > 0,
+  );
+  const hasMockData =
+    tracker.tests.log.length > 0 ||
+    tracker.subjects.some((subject) => (tracker.tests.targets[subject.id] ?? 0) > 0) ||
+    tracker.tests.mocks.pre.done > 0 ||
+    tracker.tests.mocks.pre.target > 0 ||
+    tracker.tests.mocks.mains.done > 0 ||
+    tracker.tests.mocks.mains.target > 0;
+  const showSyllabus = hasSubjects;
+  const showRevision = hasSubjects && (!readOnly || hasRevision);
+  const showMocks = !readOnly || hasMockData;
+  const cardCount = Number(showSyllabus) + Number(showRevision) + Number(showMocks);
+  if (readOnly && cardCount === 0) return null;
 
   return (
     <section className="-mt-3 border-t border-white/10 pt-4 sm:pt-5">
@@ -694,12 +743,12 @@ function StudyTrackerOverview({ tracker, readOnly = false }: { tracker: TrackerD
           </p>
           <h2 className="mt-1 text-xl font-semibold text-zinc-50">{tracker.meta.examName}</h2>
         </div>
-        <span className="font-mono text-xs text-zinc-400">
+        {hasSubjects && <span className="font-mono text-xs text-zinc-400">
           {syllabus.done}/{syllabus.total} Lectures
-        </span>
+        </span>}
       </div>
-      <div className={`mt-3 grid gap-2 ${tracker.subjects.length ? "md:grid-cols-3" : "max-w-md"}`}>
-        {tracker.subjects.length > 0 && <Link
+      <div className={`mt-3 grid gap-2 ${cardCount > 1 ? cardCount === 3 ? "md:grid-cols-3" : "md:grid-cols-2" : "max-w-md"}`}>
+        {showSyllabus && <Link
           to="/track"
           search={{ tab: "Syllabus" }}
           className={cn("rounded-xl border border-white/10 bg-white/[0.025] p-3 transition-colors hover:bg-white/[0.06]", readOnly && "pointer-events-none")}
@@ -723,7 +772,7 @@ function StudyTrackerOverview({ tracker, readOnly = false }: { tracker: TrackerD
           </div>
         </Link>}
 
-        {tracker.subjects.length > 0 && <Link
+        {showRevision && <Link
           to="/track"
           search={{ tab: "Revision" }}
           className={cn("rounded-xl border border-white/10 bg-white/[0.025] p-3 transition-colors hover:bg-white/[0.06]", readOnly && "pointer-events-none")}
@@ -746,7 +795,7 @@ function StudyTrackerOverview({ tracker, readOnly = false }: { tracker: TrackerD
           </div>
         </Link>}
 
-        <Link
+        {showMocks && <Link
           to="/track"
           search={{ tab: "Mock Test" }}
           className={cn("rounded-xl border border-white/10 bg-white/[0.025] p-3 transition-colors hover:bg-white/[0.06]", readOnly && "pointer-events-none")}
@@ -776,7 +825,7 @@ function StudyTrackerOverview({ tracker, readOnly = false }: { tracker: TrackerD
               tone="bg-violet-500"
             />
           </div>
-        </Link>
+        </Link>}
       </div>
     </section>
   );
@@ -816,9 +865,19 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
   const [profileSettingsOpen, setProfileSettingsOpen] = useState(false);
   const [importMessage, setImportMessage] = useState("");
   const [promptCopied, setPromptCopied] = useState(false);
+  const [leaderboardRank, setLeaderboardRank] = useState<number | null>(null);
   const importFileRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const authUser = useAuthUser();
+
+  useEffect(() => {
+    const uid = readOnly ? publicProfile?.uid : authUser?.uid;
+    if (!uid) { setLeaderboardRank(null); return; }
+    return watchLeaderboard(currentWeekKey(), (entries) => {
+      const index = entries.findIndex((entry) => entry.uid === uid);
+      setLeaderboardRank(index >= 0 ? index + 1 : null);
+    });
+  }, [authUser?.uid, publicProfile?.uid, readOnly]);
 
   useEffect(() => {
     if (readOnly) {
@@ -829,6 +888,8 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
             questionGoal: publicProfile.questionGoal,
             ...(publicProfile.avatar ? { avatar: publicProfile.avatar } : {}),
             ...(publicProfile.examName ? { examName: publicProfile.examName } : {}),
+            practiceSessionEnabled: publicProfile.practiceSessionEnabled !== false,
+            trackProgressEnabled: publicProfile.trackProgressEnabled !== false,
           }
         : null;
       setRecords(publicProfile?.dashboard?.records ?? []);
@@ -941,7 +1002,6 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
       incomplete: tasks.length - completed.length,
     };
   }, [dailyTasks, range]);
-  const currentWeekPoints = useMemo(() => weeklyScore(dailyTasks).points, [dailyTasks]);
   const saveProfile = async () => {
     if (!nameDraft.trim() || Number(goalDraft) < 1 || isSavingProfile || (authUser && usernameStatus !== "available")) return;
     setIsSavingProfile(true);
@@ -1025,8 +1085,9 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
       ...records.map((record) => ({ date: record.date })),
       ...(tracker?.tests.log ?? []).map((test) => ({ date: test.date })),
       ...(tracker?.activity ?? []).map((entry) => ({ date: entry.date })),
+      ...dailyTasks.filter((task) => task.completed).map((task) => ({ date: task.completedAt ?? task.date })),
     ]).current,
-    [records, tracker],
+    [dailyTasks, records, tracker],
   );
   const updateAvatar = () => {
     const options = avatarFiles.filter((file) => file !== avatar);
@@ -1076,7 +1137,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
   };
 
   return (
-    <AppShell title="Your Profile">
+    <AppShell title={readOnly ? displayName : "Your Profile"}>
       <div className="profile-dark -mx-4 -my-6 min-h-[calc(100vh-4rem)] bg-[#121212] px-4 pt-5 pb-10 text-zinc-100 sm:-mx-6 sm:px-6 sm:pt-6 sm:pb-14">
         <div className="mx-auto max-w-4xl space-y-7">
           <section className="flex flex-col items-center gap-4 text-center sm:flex-row sm:items-center sm:text-left">
@@ -1117,7 +1178,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
                 </p>
               )}
               <div className="mt-0.5 flex items-center justify-center gap-1 sm:justify-start">
-                <h2 className="truncate text-xl font-semibold text-zinc-50">{displayName}</h2><span className={cn("shrink-0 rounded-full px-1.5 py-0.5 font-mono text-[10px] font-semibold", currentWeekPoints > 0 ? "bg-emerald-400/10 text-emerald-300" : currentWeekPoints < 0 ? "bg-red-400/10 text-red-300" : "bg-white/10 text-zinc-400")}>{currentWeekPoints} pts</span>
+                <h2 className="truncate text-xl font-semibold text-zinc-50">{displayName}</h2>{leaderboardRank !== null && <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-zinc-300">{leaderboardRank <= 3 ? <img src={["/gold-medal.png", "/silver-medal.png", "/bronze-medal.png"][leaderboardRank - 1]} alt="" className="h-3 w-3 object-contain" /> : <Trophy className="h-3 w-3 text-amber-300" />}#{leaderboardRank}</span>}
                 {readOnly && (
                   <span
                     title={`${consistencyStreak}-day consistency streak`}
@@ -1137,19 +1198,13 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
                 >
                   <Pencil className="h-3.5 w-3.5" />
                 </Button>}
-                {!readOnly && <Button
-                  type="button"
-                  size="icon"
-                  variant="ghost"
-                  className="h-7 w-7 shrink-0 text-zinc-500 hover:bg-rose-500/10 hover:text-rose-300"
-                  onClick={() => setLogoutConfirmOpen(true)}
-                  disabled={isLoggingOut}
-                  aria-label="Log out"
-                >
-                  <LogOut className="h-3.5 w-3.5" />
-                </Button>}
               </div>
-              {!readOnly && <div className="mt-3 flex flex-wrap items-center justify-center gap-1.5 sm:justify-start">
+              {readOnly && publicProfile?.username && <div className="mt-0 flex flex-wrap items-center justify-center gap-1.5 sm:justify-start">
+                <Button type="button" variant="ghost" className="h-9 gap-1.5 px-2.5 text-sm text-zinc-300 hover:bg-white/10 hover:text-white" onClick={() => void navigate({ to: "/weekly-stats/$username", params: { username: publicProfile.username } })}>
+                  <Trophy className="h-4 w-4" /> Weekly stats
+                </Button>
+              </div>}
+              {!readOnly && <div className="mt-0 flex flex-wrap items-center justify-center gap-1.5 sm:justify-start">
                 <Button type="button" variant="ghost" className="h-9 gap-1.5 px-2.5 text-sm text-zinc-300 hover:bg-white/10 hover:text-white" onClick={() => void navigate({ to: "/leaderboard" })}>
                   <Trophy className="h-4 w-4" /> Leaderboard
                 </Button>
@@ -1195,7 +1250,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
               showTracker={profile?.trackProgressEnabled !== false}
             />
 
-            {!(profile?.practiceSessionEnabled === false && profile?.trackProgressEnabled === false) && <ActivityHeatmap records={records} tracker={tracker} range="year" publicActivity={readOnly && !publicProfile?.dashboard ? publicProfile?.activity : undefined} />}
+            <ActivityHeatmap records={records} tracker={tracker} tasks={dailyTasks} range="year" activityEnabled={profile?.practiceSessionEnabled !== false || profile?.trackProgressEnabled !== false} publicActivity={readOnly && !publicProfile?.dashboard ? publicProfile?.activity : undefined} />
           </div>
 
           {profile?.trackProgressEnabled !== false && <StudyTrackerOverview tracker={tracker} readOnly={readOnly} />}
@@ -1241,9 +1296,9 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
         </DialogContent>
       </Dialog>
       {editingProfile && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-md">
-          <section className="relative w-full max-w-md rounded-2xl border border-white/10 bg-[#1e1e1e] p-4 text-zinc-100 shadow-2xl sm:p-5">
-            <div className="flex items-center justify-between gap-3"><h2 className="text-lg font-semibold tracking-tight text-zinc-50">Setup your profile</h2><button type="button" aria-label="Profile settings" onClick={() => setProfileSettingsOpen((open) => !open)} className="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 transition hover:bg-white/10 hover:text-zinc-100"><Settings className="h-4 w-4" /></button></div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-md" onMouseDown={(event) => { if (event.target === event.currentTarget) setEditingProfile(false); }}>
+          <section className="relative w-full max-w-md rounded-2xl border border-white/10 bg-[#1e1e1e] p-4 text-zinc-100 shadow-2xl sm:p-5" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="flex items-center justify-between gap-3"><h2 className="text-lg font-semibold tracking-tight text-zinc-50">{profile ? "Edit your profile" : "Setup your profile"}</h2><div className="flex items-center gap-1"><button type="button" aria-label="Profile settings" onClick={() => setProfileSettingsOpen((open) => !open)} className="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 transition hover:bg-white/10 hover:text-zinc-100"><Settings className="h-4 w-4" /></button><button type="button" aria-label="Log out" disabled={isLoggingOut} onClick={() => { setEditingProfile(false); setLogoutConfirmOpen(true); }} className="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 transition hover:bg-rose-500/10 hover:text-rose-300 disabled:opacity-50"><LogOut className="h-4 w-4" /></button></div></div>
             <div className="mt-4 space-y-3">
               <label className="block text-sm font-medium text-zinc-200">
                 Your name
@@ -1282,15 +1337,12 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
               </label>
               <label className="block text-sm font-medium text-zinc-200">
                 Daily manifestation <span className="font-normal text-zinc-500">(optional)</span>
-                <textarea
-                  className="mt-1.5 min-h-20 w-full rounded-md border border-white/10 bg-[#151515] px-3 py-2 text-sm text-zinc-100 uppercase placeholder:text-zinc-500 focus-visible:border-zinc-500 focus-visible:outline-none"
+                <Input
+                  className="mt-1.5 h-10 border-white/10 bg-[#151515] text-zinc-100 uppercase placeholder:text-zinc-500 focus-visible:border-sky-500"
                   value={manifestationDraft}
                   onChange={(event) => setManifestationDraft(event.target.value.toUpperCase())}
                   placeholder="Write the sentence you want to type daily"
                 />
-                <span className="mt-1 block text-xs font-normal text-zinc-500">
-                  Leave blank to keep the daily manifestation disabled.
-                </span>
               </label>
               <label className="block text-sm font-medium text-zinc-200">
                 Exam name
@@ -1303,10 +1355,10 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
               </label>
               {false && <button type="button" onClick={() => setPracticeSessionEnabledDraft((value) => !value)} className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-[#151515] px-3 py-3 text-left transition hover:bg-white/[.04]">
                 <span><span className="block text-sm font-medium text-zinc-200">Practice session</span><span className="mt-0.5 block text-xs font-normal text-zinc-500">Show the practice tab and practice statistics.</span></span>
-                <span className={cn("relative h-6 w-11 rounded-full transition-colors", practiceSessionEnabledDraft ? "bg-emerald-500" : "bg-zinc-700")}><span className={cn("absolute top-1 h-4 w-4 rounded-full bg-white transition-transform", practiceSessionEnabledDraft ? "translate-x-6" : "translate-x-1")} /></span>
+                <span className={cn("relative h-5 w-9 rounded-full border transition-colors", practiceSessionEnabledDraft ? "border-zinc-100 bg-zinc-100" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", practiceSessionEnabledDraft ? "translate-x-5 bg-zinc-900" : "translate-x-1 bg-zinc-400")} /></span>
               </button>}
             </div>
-            {profileSettingsOpen && <div className="absolute inset-0 z-10 rounded-2xl bg-[#1e1e1e] p-6 sm:p-8"><div className="flex items-center gap-2"><button type="button" aria-label="Back to profile form" onClick={() => setProfileSettingsOpen(false)} className="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 hover:bg-white/10 hover:text-white"><ArrowLeft className="h-4 w-4" /></button><h3 className="text-lg font-semibold">Settings</h3></div><div className="mt-6 space-y-3"><button type="button" disabled={savingFeature !== null} onClick={() => void saveFeature("practice")} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#151515] px-3 py-3 text-left disabled:cursor-wait disabled:opacity-70"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Practice session</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Take practice tests, review answers and track your results.</span></span>{savingFeature === "practice" ? <LoaderCircle className="h-5 w-5 shrink-0 animate-spin text-emerald-400" /> : <span className={cn("relative h-6 w-11 shrink-0 rounded-full transition-colors", practiceSessionEnabledDraft ? "bg-emerald-500" : "bg-zinc-700")}><span className={cn("absolute top-1 h-4 w-4 rounded-full bg-white transition-transform", practiceSessionEnabledDraft ? "translate-x-6" : "translate-x-1")} /></span>}</button><button type="button" disabled={savingFeature !== null} onClick={() => void saveFeature("track")} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#151515] px-3 py-3 text-left disabled:cursor-wait disabled:opacity-70"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Track</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Track syllabus, revision and mock test progress.</span></span>{savingFeature === "track" ? <LoaderCircle className="h-5 w-5 shrink-0 animate-spin text-emerald-400" /> : <span className={cn("relative h-6 w-11 shrink-0 rounded-full transition-colors", trackProgressEnabledDraft ? "bg-emerald-500" : "bg-zinc-700")}><span className={cn("absolute top-1 h-4 w-4 rounded-full bg-white transition-transform", trackProgressEnabledDraft ? "translate-x-6" : "translate-x-1")} /></span>}</button></div></div>}
+            {profileSettingsOpen && <div className="absolute inset-0 z-10 rounded-2xl bg-[#1e1e1e] p-6 sm:p-8"><div className="flex items-center gap-2"><button type="button" aria-label="Back to profile form" onClick={() => setProfileSettingsOpen(false)} className="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 hover:bg-white/10 hover:text-white"><ArrowLeft className="h-4 w-4" /></button><h3 className="text-lg font-semibold">Settings</h3></div><div className="mt-6 space-y-3"><button type="button" disabled={savingFeature !== null} onClick={() => void saveFeature("practice")} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#151515] px-3 py-3 text-left disabled:cursor-wait disabled:opacity-70"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Practice session</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Take practice tests, review answers and track your results.</span></span>{savingFeature === "practice" ? <LoaderCircle className="h-5 w-5 shrink-0 animate-spin text-sky-400" /> : <span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", practiceSessionEnabledDraft ? "border-zinc-100 bg-zinc-100" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", practiceSessionEnabledDraft ? "translate-x-5 bg-zinc-900" : "translate-x-1 bg-zinc-400")} /></span>}</button><button type="button" disabled={savingFeature !== null} onClick={() => void saveFeature("track")} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#151515] px-3 py-3 text-left disabled:cursor-wait disabled:opacity-70"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Track</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Track syllabus, revision and mock test progress.</span></span>{savingFeature === "track" ? <LoaderCircle className="h-5 w-5 shrink-0 animate-spin text-sky-400" /> : <span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", trackProgressEnabledDraft ? "border-zinc-100 bg-zinc-100" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", trackProgressEnabledDraft ? "translate-x-5 bg-zinc-900" : "translate-x-1 bg-zinc-400")} /></span>}</button></div></div>}
             <div className="mt-4 flex justify-end gap-2">
               <Button
                 variant="outline"
@@ -1315,7 +1367,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
               >
                 Cancel
               </Button>
-              <Button disabled={isSavingProfile || (Boolean(authUser) && usernameStatus !== "available")} className="bg-emerald-600 hover:bg-emerald-500" onClick={saveProfile}>
+              <Button disabled={isSavingProfile || (Boolean(authUser) && usernameStatus !== "available")} className="bg-sky-500 text-sky-950 hover:bg-sky-400" onClick={saveProfile}>
                 {isSavingProfile ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save profile
               </Button>
             </div>

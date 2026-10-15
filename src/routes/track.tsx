@@ -31,7 +31,8 @@ function TrackPage() {
     <AppShell title="Tracker">
       <div className="tracker-theme -mx-4 -my-6 min-h-[calc(100vh-4rem)] bg-[#121212] px-3 py-4 text-zinc-100 sm:-mx-6 sm:px-4 sm:py-5">
         <main className="mx-auto w-full max-w-4xl">
-          <nav className="grid grid-cols-3 gap-0.5 rounded-full bg-card p-0.5">
+          <nav className="relative grid grid-cols-3 gap-0.5 rounded-full bg-card p-0.5">
+            <span aria-hidden="true" className={`pointer-events-none absolute inset-y-0.5 left-0.5 w-[calc(33.333%-0.25rem)] rounded-full bg-accent-blue transition-transform duration-300 ease-out ${tab === "Revision" ? "translate-x-full" : tab === "Mock Test" ? "translate-x-[200%]" : ""}`} />
             {TABS.map((item) => (
               <button
                 key={item}
@@ -39,8 +40,8 @@ function TrackPage() {
                 onClick={() => setTab(item)}
                 className={
                   tab === item
-                    ? "rounded-full bg-accent-blue py-2 text-[13px] font-medium text-card transition-all duration-300"
-                    : "rounded-full py-2 text-[13px] text-muted-foreground transition-all duration-300 hover:text-foreground"
+                    ? "relative z-10 rounded-full py-2 text-[13px] font-medium text-card transition-colors duration-200"
+                    : "relative z-10 rounded-full py-2 text-[13px] text-muted-foreground transition-colors duration-200 hover:text-foreground"
                 }
               >
                 {item}

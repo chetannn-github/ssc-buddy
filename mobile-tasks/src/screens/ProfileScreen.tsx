@@ -18,6 +18,7 @@ import {
   View,
 } from "react-native";
 import type { User } from "firebase/auth";
+import { collection, onSnapshot } from "firebase/firestore";
 
 import { dateKey, formatMinutes, summarizeTasks, type Task } from "../domain/tasks";
 import { colors } from "../theme";
@@ -32,6 +33,7 @@ import {
   watchPracticeEntities,
   watchTrackerSections,
   watchTrackerTests,
+  getFirebaseFirestore,
 } from "../lib/firebase";
 
 const ScrollView = (props: any) => (
@@ -83,6 +85,7 @@ export const avatarAssets: Record<string, number> = {
   "💪🏻.jpg": require("../../assets/avatars/💪🏻.jpg"),
 };
 const avatarFiles = Object.keys(avatarAssets);
+const rankMedals = [require("../../assets/gold-medal.png"), require("../../assets/silver-medal.png"), require("../../assets/bronze-medal.png")];
 const defaultAvatarFor = (name: string) => {
   const hash = Array.from(name).reduce((total, character) => total + character.charCodeAt(0), 0);
   return avatarFiles[hash % avatarFiles.length] ?? avatarFiles[0];
@@ -99,6 +102,12 @@ type Props = {
   onOpenTracker: (tab: "Syllabus" | "Revision" | "Mock Test") => void;
   onOpenLeaderboard: () => void;
   streak: number;
+  /** Reuses this exact screen for another user's shared, read-only profile. */
+  readOnly?: boolean;
+  onBack?: () => void;
+  publicDashboard?: { records?: Record<string, unknown>[]; dailyTasks?: Record<string, unknown>[]; tracker?: Record<string, any> | null };
+  publicActivity?: Record<string, number>;
+  publicRank?: number;
 };
 
 type ImportedSubject = {
@@ -155,6 +164,11 @@ export function ProfileScreen({
   onOpenTracker,
   onOpenLeaderboard,
   streak,
+  readOnly = false,
+  onBack,
+  publicDashboard,
+  publicActivity,
+  publicRank,
 }: Props) {
   const [profileName, setProfileName] = useState(profileSettings?.name ?? "");
   const [username, setUsername] = useState(profileSettings?.username ?? "");
@@ -180,6 +194,7 @@ export function ProfileScreen({
   const name = profileReady
     ? profileName.trim() || user?.displayName?.trim() || user?.email?.split("@")[0] || "Student"
     : "";
+  const isInitialProfileSetup = !profileSettings?.username;
   const [avatarFile, setAvatarFile] = useState(() =>
     profileSettings?.avatar && avatarAssets[profileSettings.avatar]
       ? profileSettings.avatar
@@ -215,25 +230,18 @@ export function ProfileScreen({
   const rangeMenuProgress = useRef(new Animated.Value(0)).current;
   const rangeContent = useRef(new Animated.Value(1)).current;
   const avatarImage = avatarAssets[avatarFile] ?? avatarAssets[avatarFiles[0]];
-  const currentWeekPoints = useMemo(() => {
-    const now = new Date(),
-      start = new Date(now);
-    start.setHours(0, 0, 0, 0);
-    start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
-    const weekStart = localDayKey(start);
-    const end = new Date(start);
-    end.setDate(end.getDate() + 6);
-    const weekEnd = localDayKey(end),
-      today = localDayKey(now);
-    const scoped = tasks.filter((task) => task.date >= weekStart && task.date <= weekEnd),
-      completed = scoped.filter((task) => task.completed),
-      overdue = scoped.filter((task) => !task.completed && task.date < today).length,
-      minutes = completed.reduce(
-        (total, task) => total + Math.max(0, Number(task.minutesSpent) || 0),
-        0,
-      );
-    return completed.length * 10 - overdue * 5 + Math.min(210, Math.floor(minutes / 10));
-  }, [tasks]);
+  const [leaderboardRank, setLeaderboardRank] = useState<number | null>(null);
+  useEffect(() => {
+    if (readOnly) { setLeaderboardRank(publicRank ?? null); return; }
+    if (!user) { setLeaderboardRank(null); return; }
+    const start = new Date(); start.setHours(0, 0, 0, 0); start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+    const week = localDayKey(start);
+    return onSnapshot(collection(getFirebaseFirestore(), "leaderboards", week, "entries"), (snapshot) => {
+      const entries = snapshot.docs.map((document) => document.data()).sort((a: any, b: any) => b.points - a.points || b.studyMinutes - a.studyMinutes || b.completed - a.completed);
+      const index = entries.findIndex((entry: any) => entry.uid === user.uid);
+      setLeaderboardRank(index >= 0 ? index + 1 : null);
+    }, () => setLeaderboardRank(null));
+  }, [user?.uid, readOnly, publicRank]);
   const rotate = spin.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
   const changeAvatar = () => {
     spin.setValue(0);
@@ -272,6 +280,7 @@ export function ProfileScreen({
     }
   };
   useEffect(() => {
+    if (readOnly) return;
     if (!profileSettings) setProfileReady(true);
     if (!user) return;
     return watchTrackerTests(user, (tests) =>
@@ -286,8 +295,9 @@ export function ProfileScreen({
         })),
       ),
     );
-  }, [user?.uid]);
+  }, [user?.uid, readOnly]);
   useEffect(() => {
+    if (readOnly) return;
     if (!user) {
       setSyllabusSubjects([]);
       setTrackerData({ subjects: [], revision: {} });
@@ -301,8 +311,9 @@ export function ProfileScreen({
           : [],
       );
     });
-  }, [user?.uid]);
+  }, [user?.uid, readOnly]);
   useEffect(() => {
+    if (readOnly) return;
     if (!user) {
       setPracticeRecords([]);
       return;
@@ -324,7 +335,26 @@ export function ProfileScreen({
           })),
       ),
     );
-  }, [user?.uid]);
+  }, [user?.uid, readOnly]);
+  useEffect(() => {
+    if (!readOnly) return;
+    const records = Array.isArray(publicDashboard?.records) ? publicDashboard.records : [];
+    setPracticeRecords(records.map((item: any, index) => ({
+      id: String(item.id ?? index),
+      date: String(item.date ?? ""),
+      subject: typeof item.subject === "string" ? item.subject : "",
+      chapter: typeof item.chapter === "string" ? item.chapter : "",
+      questionCount: Array.isArray(item.answers) ? item.answers.length : Math.max(0, Number(item.questionCount) || 0),
+      correct: Math.max(0, Number(item.correct) || 0),
+      wrong: Math.max(0, Number(item.wrong) || 0),
+    })).filter((item) => item.date));
+    const tracker = publicDashboard?.tracker && typeof publicDashboard.tracker === "object"
+      ? publicDashboard.tracker : { subjects: [], revision: {} };
+    setTrackerData(tracker);
+    setSyllabusSubjects(Array.isArray(tracker.subjects) ? tracker.subjects.map((subject: any) => String(subject.name ?? "")).filter(Boolean) : []);
+    setMockTests(Array.isArray(tracker.tests?.log) ? tracker.tests.log : []);
+    setProfileReady(true);
+  }, [readOnly, publicDashboard]);
   useEffect(() => {
     const value = normalizeUsername(username);
     if (!usernameTouched) {
@@ -505,6 +535,13 @@ export function ProfileScreen({
 
   return (
     <View style={styles.page}>
+      {readOnly && (
+        <View style={styles.publicBackRow}>
+          <Pressable accessibilityLabel="Back" hitSlop={10} onPress={onBack}>
+            <MaterialCommunityIcons name="arrow-left" size={23} color={colors.text} />
+          </Pressable>
+        </View>
+      )}
       <View style={styles.profileTop}>
         <View style={styles.profileRow}>
           <View
@@ -524,7 +561,7 @@ export function ProfileScreen({
             <Pressable onPress={() => setViewingAvatar(true)}>
               <Image source={avatarImage} style={[styles.avatarImage, { borderRadius: 35 }]} />
             </Pressable>
-            <Pressable
+            {!readOnly && <Pressable
               style={[styles.avatarBadge, { width: 25, height: 25, borderRadius: 13 }]}
               accessibilityLabel="Change profile image"
               onPress={changeAvatar}
@@ -532,7 +569,7 @@ export function ProfileScreen({
               <Animated.View style={{ transform: [{ rotate }] }}>
                 <MaterialCommunityIcons name="sync" size={12} color={colors.muted} />
               </Animated.View>
-            </Pressable>
+            </Pressable>}
           </View>
           <View style={[styles.identity, { marginTop: 9 }]}>
             <Text style={styles.exam}>{examName}</Text>
@@ -540,30 +577,8 @@ export function ProfileScreen({
               <Text style={styles.name} numberOfLines={1}>
                 {name}
               </Text>
-              <View
-                style={[
-                  styles.weeklyScore,
-                  currentWeekPoints > 0
-                    ? styles.weeklyScorePositive
-                    : currentWeekPoints < 0
-                      ? styles.weeklyScoreNegative
-                      : styles.weeklyScoreNeutral,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.weeklyScoreText,
-                    currentWeekPoints > 0
-                      ? styles.weeklyScoreTextPositive
-                      : currentWeekPoints < 0
-                        ? styles.weeklyScoreTextNegative
-                        : styles.weeklyScoreTextNeutral,
-                  ]}
-                >
-                  {currentWeekPoints} pts
-                </Text>
-              </View>
-              <View style={styles.profileActions}>
+              {leaderboardRank !== null && <View style={styles.weeklyRank}>{leaderboardRank <= 3 ? <Image source={rankMedals[leaderboardRank - 1]} style={styles.weeklyRankMedal} /> : <MaterialCommunityIcons name="trophy-outline" size={12} color="#fcd34d" />}<Text style={styles.weeklyRankText}>#{leaderboardRank}</Text></View>}
+              {!readOnly && <View style={styles.profileActions}>
                 <Pressable
                   accessibilityLabel="Edit profile"
                   hitSlop={10}
@@ -576,14 +591,7 @@ export function ProfileScreen({
                 >
                   <MaterialCommunityIcons name="pencil-outline" size={17} color={colors.muted} />
                 </Pressable>
-                <Pressable
-                  accessibilityLabel="Log out"
-                  hitSlop={10}
-                  onPress={() => setConfirmLogout(true)}
-                >
-                  <MaterialCommunityIcons name="logout" size={17} color={colors.muted} />
-                </Pressable>
-              </View>
+              </View>}
             </View>
           </View>
         </View>
@@ -591,16 +599,16 @@ export function ProfileScreen({
         <View style={[styles.actionRow, { marginTop: 7 }]}>
           <Pressable style={styles.action} onPress={onOpenLeaderboard}>
             <MaterialCommunityIcons name="trophy-outline" size={18} color={colors.text} />
-            <Text style={styles.actionText}>Leaderboard</Text>
+            <Text style={styles.actionText}>{readOnly ? "Weekly stats" : "Leaderboard"}</Text>
           </Pressable>
-          <Pressable style={styles.action} onPress={onOpenVideo}>
+          {!readOnly && <Pressable style={styles.action} onPress={onOpenVideo}>
             <MaterialCommunityIcons name="play-outline" size={18} color={colors.text} />
             <Text style={styles.actionText}>Videos</Text>
-          </Pressable>
-          <Pressable style={styles.action} onPress={onOpenMusic}>
+          </Pressable>}
+          {!readOnly && <Pressable style={styles.action} onPress={onOpenMusic}>
             <MaterialCommunityIcons name="music-note" size={18} color={colors.text} />
             <Text style={styles.actionText}>Music</Text>
-          </Pressable>
+          </Pressable>}
         </View>
       </View>
 
@@ -704,33 +712,41 @@ export function ProfileScreen({
             {practiceSessionEnabled && trackProgressEnabled && (
               <Text style={[styles.cardEyebrow, styles.trackerEyebrow]}>STUDY TRACKER</Text>
             )}
-            {trackProgressEnabled && <View style={styles.trackerGrid}>
-              <Stat lastRow label="Lectures" value={String(trackerLectures)} />
-              <Stat lastRow label="Revisions" value={String(trackerRevisions)} />
-              <Stat lastColumn lastRow label="Mock tests" value={String(loggedMocks)} />
-            </View>}
-            {trackProgressEnabled && <Text style={[styles.cardEyebrow, styles.trackerEyebrow]}>TASKS</Text>}
-            <View style={styles.trackerGrid}>
-              <Stat lastRow label="Study time" value={formatMinutes(filteredSummary.minutes)} />
-              <Stat
-                lastRow
-                label="Tasks completed"
-                value={String(filteredSummary.done)}
-              />
-              <Stat
-                lastColumn
-                lastRow
-                label="Incomplete tasks"
-                value={String(filteredSummary.total - filteredSummary.done)}
-              />
-            </View>
+            {practiceSessionEnabled && trackProgressEnabled ? (
+              <View style={styles.trackerGrid}>
+                <Stat label="Lectures" value={String(trackerLectures)} />
+                <Stat label="Revisions" value={String(trackerRevisions)} />
+                <Stat lastColumn label="Mock tests" value={String(loggedMocks)} />
+                <Stat lastRow label="Study time" value={formatMinutes(filteredSummary.minutes)} />
+                <Stat lastRow label="Tasks completed" value={String(filteredSummary.done)} />
+                <Stat lastColumn lastRow label="Incomplete tasks" value={String(filteredSummary.total - filteredSummary.done)} />
+              </View>
+            ) : (
+              <>
+                {trackProgressEnabled && <View style={styles.trackerGrid}>
+                  <Stat lastRow label="Lectures" value={String(trackerLectures)} />
+                  <Stat lastRow label="Revisions" value={String(trackerRevisions)} />
+                  <Stat lastColumn lastRow label="Mock tests" value={String(loggedMocks)} />
+                </View>}
+                {trackProgressEnabled && <Text style={[styles.cardEyebrow, styles.trackerEyebrow]}>TASKS</Text>}
+                <View style={styles.trackerGrid}>
+                  <Stat lastRow label="Study time" value={formatMinutes(filteredSummary.minutes)} />
+                  <Stat lastRow label="Tasks completed" value={String(filteredSummary.done)} />
+                  <Stat lastColumn lastRow label="Incomplete tasks" value={String(filteredSummary.total - filteredSummary.done)} />
+                </View>
+              </>
+            )}
           </Animated.View>
         </View>
-        {(practiceSessionEnabled || trackProgressEnabled) && <ActivityHeatmap
+        <ActivityHeatmap
           user={user}
           mockTests={mockTests}
           practiceRecords={practiceRecords}
-        />}
+          tasks={tasks}
+          activityEnabled={practiceSessionEnabled || trackProgressEnabled}
+          sharedTracker={readOnly ? trackerData : undefined}
+          sharedActivity={readOnly ? publicActivity : undefined}
+        />
         {trackProgressEnabled && <StudyTrackerOverview
           tracker={trackerData}
           mockTests={mockTests}
@@ -803,7 +819,7 @@ export function ProfileScreen({
           transparent
           visible={editing}
           animationType="fade"
-          onRequestClose={() => !savingProfile && setEditing(false)}
+          onRequestClose={() => !savingProfile && !isInitialProfileSetup && setEditing(false)}
         >
           <KeyboardAvoidingView
             behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -811,18 +827,15 @@ export function ProfileScreen({
           >
             <Pressable
               style={StyleSheet.absoluteFill}
-              onPress={() => !savingProfile && setEditing(false)}
+              onPress={() => !savingProfile && !isInitialProfileSetup && setEditing(false)}
             />
             <View style={styles.editDialog}>
               <View style={styles.editHeading}>
-                <Text style={styles.editTitle}>Setup your profile</Text>
-                <Pressable
-                  hitSlop={9}
-                  onPress={() => setProfileSettingsOpen((open) => !open)}
-                  style={styles.settingsButton}
-                >
-                  <MaterialCommunityIcons name="cog-outline" size={19} color={colors.muted} />
-                </Pressable>
+                <Text style={styles.editTitle}>{isInitialProfileSetup ? "Setup your profile" : "Edit your profile"}</Text>
+                <View style={styles.editHeaderActions}>
+                  <Pressable hitSlop={9} onPress={() => setProfileSettingsOpen((open) => !open)} style={styles.settingsButton}><MaterialCommunityIcons name="cog-outline" size={19} color={colors.muted} /></Pressable>
+                  <Pressable accessibilityLabel="Log out" hitSlop={9} onPress={() => { setEditing(false); setConfirmLogout(true); }} style={styles.settingsButton}><MaterialCommunityIcons name="logout" size={18} color={colors.muted} /></Pressable>
+                </View>
               </View>
               {profileSettingsOpen && (
                 <View style={styles.settingsPanel}>
@@ -947,9 +960,9 @@ export function ProfileScreen({
                 />
               </View>
               <View style={styles.editActions}>
-                <Pressable disabled={savingProfile} onPress={() => setEditing(false)}>
+                {!isInitialProfileSetup && <Pressable disabled={savingProfile} onPress={() => setEditing(false)}>
                   <Text style={styles.cancel}>Cancel</Text>
-                </Pressable>
+                </Pressable>}
                 <Pressable
                   disabled={savingProfile || usernameStatus !== "available"}
                   style={[
@@ -1038,6 +1051,10 @@ function ActivityHeatmap({
   user,
   mockTests,
   practiceRecords,
+  tasks,
+  activityEnabled = true,
+  sharedTracker,
+  sharedActivity,
 }: {
   user: User | null;
   mockTests: MockTestLog[];
@@ -1050,7 +1067,24 @@ function ActivityHeatmap({
     correct: number;
     wrong: number;
   }>;
+  tasks: Task[];
+  activityEnabled?: boolean;
+  sharedTracker?: Record<string, any>;
+  sharedActivity?: Record<string, number>;
 }) {
+  const [mode, setMode] = useState<"activity" | "tasks">(() => activityEnabled ? "activity" : "tasks");
+  useEffect(() => { if (!activityEnabled) setMode("tasks"); }, [activityEnabled]);
+  const [toggleWidth, setToggleWidth] = useState(0);
+  const toggleIndicator = useRef(new Animated.Value(mode === "tasks" ? 1 : 0)).current;
+  useEffect(() => {
+    Animated.spring(toggleIndicator, {
+      toValue: mode === "tasks" ? 1 : 0,
+      damping: 18,
+      stiffness: 220,
+      mass: 0.65,
+      useNativeDriver: true,
+    }).start();
+  }, [mode, toggleIndicator]);
   const [selectedDay, setSelectedDay] = useState<string>(() => localDayKey(new Date()));
   const [trackerActivity, setTrackerActivity] = useState<
     Array<{
@@ -1079,8 +1113,6 @@ function ActivityHeatmap({
   const initiallyPositionedFor = useRef<string | null>(null);
   useEffect(() => {
     if (!user) {
-      setTrackerActivity([]);
-      setTrackerRevision({});
       return;
     }
     return watchTrackerSections(user, (sections) => {
@@ -1104,10 +1136,23 @@ function ActivityHeatmap({
       );
     });
   }, [user?.uid]);
+  useEffect(() => {
+    if (!sharedTracker) return;
+    const entries = Array.isArray(sharedTracker.activity) ? sharedTracker.activity : [];
+    setTrackerSubjects(Array.isArray(sharedTracker.subjects) ? sharedTracker.subjects : []);
+    setTrackerRevision(sharedTracker.revision && typeof sharedTracker.revision === "object" ? sharedTracker.revision : {});
+    setTrackerActivity(entries.filter((entry: any) => entry && typeof entry.date === "string").map((entry: any, index: number) => ({
+      id: String(entry.id ?? `${entry.date}-${index}`), date: entry.date,
+      count: Math.max(1, Math.abs(Number(entry.count) || 1)), type: entry.type,
+      subjectId: entry.subjectId, chapterId: entry.chapterId, revisionTypeId: entry.revisionTypeId,
+    })));
+  }, [sharedTracker]);
   const { months, total, activeDays, streak, activity } = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const counts = new Map<string, number>();
+    const taskCounts = new Map<string, number>();
+    tasks.filter((task) => task.completed).forEach((task) => taskCounts.set(task.date, (taskCounts.get(task.date) ?? 0) + 1));
     // Match web: Daily Tasks are intentionally not heatmap activities.
     practiceRecords.forEach((record) =>
       counts.set(record.date, (counts.get(record.date) ?? 0) + 1),
@@ -1116,11 +1161,16 @@ function ActivityHeatmap({
     trackerActivity.forEach((entry) =>
       counts.set(entry.date, (counts.get(entry.date) ?? 0) + entry.count),
     );
+    if (sharedActivity) {
+      Object.entries(sharedActivity).forEach(([date, value]) =>
+        counts.set(date, Math.max(0, Number(value) || 0)),
+      );
+    }
     const days = Array.from({ length: 365 }, (_, index) => {
       const date = new Date(today);
       date.setDate(today.getDate() - (364 - index));
       const key = localDayKey(date);
-      return { date, key, value: counts.get(key) ?? 0 };
+      return { date, key, value: (mode === "tasks" ? taskCounts : counts).get(key) ?? 0 };
     });
     let run = 0,
       longest = 0;
@@ -1146,16 +1196,17 @@ function ActivityHeatmap({
     );
     return {
       months: grouped,
-      total: [...counts.values()].reduce((sum, count) => sum + count, 0),
-      activeDays: [...counts.values()].filter(Boolean).length,
+      total: [...(mode === "tasks" ? taskCounts : counts).values()].reduce((sum, count) => sum + count, 0),
+      activeDays: [...(mode === "tasks" ? taskCounts : counts).values()].filter(Boolean).length,
       streak: longest,
-      activity: counts,
+      activity: mode === "tasks" ? taskCounts : counts,
       maximum,
     };
-  }, [mockTests, practiceRecords, trackerActivity]);
+  }, [mockTests, mode, practiceRecords, tasks, trackerActivity, sharedActivity]);
   const max = Math.max(1, ...[...activity.values()]);
   const selected = activity.get(selectedDay) ?? 0;
   const activityRows = useMemo(() => {
+    if (mode === "tasks") return tasks.filter((task) => task.completed && task.date === selectedDay).map((task) => ({ id: task.id, label: task.type, detail: [task.subject, task.name, task.minutesSpent ? `${task.minutesSpent}m` : ""].filter(Boolean).join(" · "), count: 1 }));
     const subjectName = (subjectId?: string) =>
       trackerSubjects.find((subject) => subject.id === subjectId)?.name;
     const chapterName = (subjectId?: string, chapterId?: string) =>
@@ -1209,7 +1260,7 @@ function ActivityHeatmap({
         );
       });
     return [...grouped.entries()].map(([id, row]) => ({ id, ...row }));
-  }, [mockTests, practiceRecords, selectedDay, trackerActivity, trackerRevision, trackerSubjects]);
+  }, [mockTests, mode, practiceRecords, selectedDay, tasks, trackerActivity, trackerRevision, trackerSubjects]);
   const thumbWidth =
     viewportWidth && contentWidth
       ? Math.max(34, (viewportWidth * viewportWidth) / contentWidth)
@@ -1265,15 +1316,24 @@ function ActivityHeatmap({
   return (
     <View style={styles.heatmapSection}>
       <View style={styles.heatmapHeading}>
-        <Text style={styles.heatmapMuted}>{total} activities · this year</Text>
-        <View style={styles.heatmapFacts}>
+        {activityEnabled ? <>
           <Text style={styles.heatmapMuted}>
             <Text style={styles.heatmapNumber}>{activeDays}</Text> active days
-          </Text>
-          <Text style={styles.heatmapMuted}>
+            <Text> · </Text>
             <Text style={styles.heatmapNumber}>{streak}</Text> max streak
           </Text>
-        </View>
+          <View style={styles.heatmapToggle} onLayout={(event) => setToggleWidth(event.nativeEvent.layout.width - 4)}>
+            {toggleWidth > 0 && <Animated.View pointerEvents="none" style={[styles.heatmapToggleIndicator, { width: toggleWidth / 2, transform: [{ translateX: toggleIndicator.interpolate({ inputRange: [0, 1], outputRange: [0, toggleWidth / 2] }) }] }]} />}
+            {(["activity", "tasks"] as const).map((option) => <Pressable key={option} onPress={() => setMode(option)} style={styles.heatmapToggleOption}><Text style={[styles.heatmapToggleText, mode === option && styles.heatmapToggleTextActive]}>{option === "activity" ? "Activity" : "Tasks"}</Text></Pressable>)}
+          </View>
+        </> : <>
+          <Text style={styles.heatmapMuted}>{total} tasks completed</Text>
+          <Text style={styles.heatmapMuted}>
+            <Text style={styles.heatmapNumber}>{activeDays}</Text> active days
+            <Text> · </Text>
+            <Text style={styles.heatmapNumber}>{streak}</Text> max streak
+          </Text>
+        </>}
       </View>
       <Animated.ScrollView
         ref={heatmapRef}
@@ -1300,7 +1360,7 @@ function ActivityHeatmap({
                 return (
                   <Pressable
                     key={day.key}
-                    accessibilityLabel={`${day.key}: ${day.value} activities`}
+                    accessibilityLabel={`${day.key}: ${day.value} ${mode === "tasks" ? "tasks completed" : "activities"}`}
                     onPress={() => setSelectedDay(day.key)}
                     style={[
                       styles.heatCell,
@@ -1340,7 +1400,7 @@ function ActivityHeatmap({
           })}
         </Text>
         <Text style={styles.heatmapMuted}>
-          {selected} activit{selected === 1 ? "y" : "ies"}
+          {selected} {mode === "tasks" ? `task${selected === 1 ? "" : "s"} completed` : `activit${selected === 1 ? "y" : "ies"}`}
         </Text>
       </View>
       <View style={styles.activityList}>
@@ -1587,6 +1647,7 @@ function EditField({
 
 const styles: Record<string, any> = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.background },
+  publicBackRow: { height: 38, paddingHorizontal: 15, justifyContent: "flex-end" },
   profileTop: {
     zIndex: 5,
     paddingHorizontal: 11,
@@ -1745,9 +1806,15 @@ const styles: Record<string, any> = StyleSheet.create({
     alignItems: "center",
     gap: 10,
   },
+  heatmapSummaryRow: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", marginTop: 4 },
   heatmapFacts: { flexDirection: "row", gap: 12 },
   heatmapMuted: { color: colors.muted, fontSize: 10 },
   heatmapNumber: { color: colors.text, fontWeight: "800" },
+  heatmapToggle: { position: "relative", width: "40%", flexDirection: "row", padding: 2, borderRadius: 7, backgroundColor: "#282828" },
+  heatmapToggleIndicator: { position: "absolute", top: 2, bottom: 2, left: 2, borderRadius: 5, backgroundColor: "#f4f4f5" },
+  heatmapToggleOption: { zIndex: 1, flex: 1, paddingHorizontal: 6, paddingVertical: 3, alignItems: "center" },
+  heatmapToggleText: { color: colors.muted, fontSize: 8, fontWeight: "700" },
+  heatmapToggleTextActive: { color: "#171717" },
   heatmapScroll: { marginTop: 9 },
   months: { gap: 10, paddingBottom: 4 },
   month: { width: 58 },
@@ -1852,6 +1919,7 @@ const styles: Record<string, any> = StyleSheet.create({
   },
   editTitle: { color: colors.text, fontSize: 19, fontWeight: "800", marginBottom: 1 },
   editHeading: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  editHeaderActions: { flexDirection: "row", alignItems: "center", gap: 5 },
   settingsButton: {
     width: 32,
     height: 32,
@@ -1964,16 +2032,18 @@ const styles: Record<string, any> = StyleSheet.create({
   featureToggleSpacing: { marginTop: 10 },
   featureToggleCopy: { flexShrink: 1, color: colors.subdued, fontSize: 10, lineHeight: 14, marginTop: 2 },
   featureSwitch: {
-    width: 40,
-    height: 23,
+    width: 32,
+    height: 18,
     justifyContent: "center",
-    borderRadius: 12,
-    padding: 3,
-    backgroundColor: "#3f3f46",
+    borderRadius: 9,
+    padding: 2,
+    borderWidth: 1,
+    borderColor: "#71717a",
+    backgroundColor: "transparent",
   },
-  featureSwitchOn: { backgroundColor: "#22c55e" },
-  featureKnob: { width: 17, height: 17, borderRadius: 9, backgroundColor: "#f4f4f5" },
-  featureKnobOn: { alignSelf: "flex-end" },
+  featureSwitchOn: { borderColor: "#f4f4f5", backgroundColor: "#f4f4f5" },
+  featureKnob: { width: 12, height: 12, borderRadius: 6, backgroundColor: "#a1a1aa" },
+  featureKnobOn: { alignSelf: "flex-end", backgroundColor: "#111111" },
   manifestationLabel: { marginBottom: 2 },
   manifestationInput: {
     minHeight: 48,
@@ -2010,6 +2080,9 @@ const styles: Record<string, any> = StyleSheet.create({
   weeklyScoreTextPositive: { color: "#86efac" },
   weeklyScoreTextNegative: { color: "#fca5a5" },
   weeklyScoreTextNeutral: { color: "#a1a1aa" },
+  weeklyRank: { flexDirection: "row", alignItems: "center", gap: 3, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 3, backgroundColor: "rgba(255,255,255,.10)" },
+  weeklyRankText: { color: "#d4d4d8", fontSize: 10, fontWeight: "800" },
+  weeklyRankMedal: { width: 12, height: 12, resizeMode: "contain" },
   confirmDialog: {
     borderRadius: 20,
     padding: 18,

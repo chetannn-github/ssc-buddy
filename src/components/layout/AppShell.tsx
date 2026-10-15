@@ -1,7 +1,8 @@
 import type { PointerEvent, ReactNode } from "react";
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   BarChart3,
+  ArrowLeft,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
@@ -17,6 +18,7 @@ import {
   Play,
   Repeat2,
   Route as RouteIcon,
+  Settings,
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -119,6 +121,9 @@ function ProfileOnboarding({ onComplete, user, existingProfile }: { onComplete: 
   const [goal, setGoal] = useState(String(existingProfile?.questionGoal ?? 100));
   const [examName, setExamName] = useState(existingProfile?.examName ?? "SSC CGL 2027");
   const [manifestation, setManifestation] = useState(existingProfile?.manifestation ?? "");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [practiceSessionEnabled, setPracticeSessionEnabled] = useState(existingProfile?.practiceSessionEnabled !== false);
+  const [trackProgressEnabled, setTrackProgressEnabled] = useState(existingProfile?.trackProgressEnabled !== false);
   const parsedGoal = Math.max(1, Math.min(100000, Number(goal) || 0));
   const canContinue = name.trim().length > 0 && Number(goal) >= 1 && usernameStatus === "available";
 
@@ -146,6 +151,8 @@ function ProfileOnboarding({ onComplete, user, existingProfile }: { onComplete: 
       ...(existingProfile?.avatar ? { avatar: existingProfile.avatar } : {}),
       ...(manifestation.trim() ? { manifestation: manifestation.trim().toUpperCase() } : {}),
       ...(examName.trim() ? { examName: examName.trim() } : {}),
+      practiceSessionEnabled,
+      trackProgressEnabled,
     };
     try {
       await saveProfileWithUsername(user, profile);
@@ -168,13 +175,13 @@ function ProfileOnboarding({ onComplete, user, existingProfile }: { onComplete: 
   };
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4 backdrop-blur-md">
-      <section className="w-full max-w-md rounded-2xl border border-white/10 bg-[#1e1e1e] p-6 text-zinc-100 shadow-2xl sm:p-8">
-        <h2 className="text-xl font-semibold tracking-tight text-zinc-50">Setup your profile</h2>
-          <div className="mt-6 space-y-4">
+      <section className="relative w-full max-w-md rounded-2xl border border-white/10 bg-[#1e1e1e] p-4 text-zinc-100 shadow-2xl sm:p-5">
+        <div className="flex items-center justify-between gap-3"><h2 className="text-lg font-semibold tracking-tight text-zinc-50">Setup your profile</h2><button type="button" aria-label="Profile settings" onClick={() => setSettingsOpen(true)} className="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 transition hover:bg-white/10 hover:text-zinc-100"><Settings className="h-4 w-4" /></button></div>
+          <div className="mt-4 space-y-3">
           <label className="block text-sm font-medium text-zinc-200">
             Your name
             <Input
-              className="mt-2 h-11 border-white/10 bg-zinc-900 text-zinc-100"
+              className="mt-1.5 h-10 border-white/10 bg-[#151515] text-zinc-100 placeholder:text-zinc-500 focus-visible:border-zinc-500"
               value={name}
               onChange={(event) => setName(event.target.value)}
               placeholder="Enter your name"
@@ -185,7 +192,7 @@ function ProfileOnboarding({ onComplete, user, existingProfile }: { onComplete: 
             Username
             <div className="relative mt-2">
               <Input
-                className="h-11 border-white/10 bg-zinc-900 pr-10 text-zinc-100 lowercase"
+                className="h-10 border-white/10 bg-[#151515] pr-10 text-zinc-100 lowercase placeholder:text-zinc-500 focus-visible:border-zinc-500"
                 value={username}
                 onChange={(event) => setUsername(event.target.value.toLowerCase())}
                 placeholder="e.g. ssc_aspirant"
@@ -199,9 +206,9 @@ function ProfileOnboarding({ onComplete, user, existingProfile }: { onComplete: 
             {usernameMessage && <span className={cn("mt-1 block text-xs font-normal", usernameStatus === "available" ? "text-emerald-400" : "text-red-300")}>{usernameMessage}</span>}
           </label>
           <label className="block text-sm font-medium text-zinc-200">
-            Questions you want to complete
+            Question goal
             <Input
-              className="mt-2 h-11 border-white/10 bg-zinc-900 text-zinc-100"
+              className="mt-1.5 h-10 border-white/10 bg-[#151515] text-zinc-100 placeholder:text-zinc-500 focus-visible:border-zinc-500"
               inputMode="numeric"
               value={goal}
               onChange={(event) => setGoal(event.target.value.replace(/\D/g, ""))}
@@ -209,33 +216,31 @@ function ProfileOnboarding({ onComplete, user, existingProfile }: { onComplete: 
             />
           </label>
           <label className="block text-sm font-medium text-zinc-200">
+            Daily manifestation <span className="font-normal text-zinc-500">(optional)</span>
+            <Input
+              className="mt-1.5 h-10 border-white/10 bg-[#151515] text-zinc-100 uppercase placeholder:text-zinc-500 focus-visible:border-zinc-500"
+              value={manifestation}
+              onChange={(event) => setManifestation(event.target.value.toUpperCase())}
+              placeholder="Write the sentence you want to type daily"
+            />
+          </label>
+          <label className="block text-sm font-medium text-zinc-200">
             Exam name
             <Input
-              className="mt-2 h-11 border-white/10 bg-zinc-900 text-zinc-100"
+              className="mt-1.5 h-10 border-white/10 bg-[#151515] text-zinc-100 placeholder:text-zinc-500 focus-visible:border-zinc-500"
               value={examName}
               onChange={(event) => setExamName(event.target.value)}
               placeholder="e.g. SSC CGL 2027"
             />
           </label>
-          <label className="block text-sm font-medium text-zinc-200">
-            Daily manifestation <span className="font-normal text-zinc-500">(optional)</span>
-            <textarea
-              className="mt-2 min-h-24 w-full rounded-md border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 uppercase placeholder:text-zinc-500 focus-visible:border-zinc-500 focus-visible:outline-none"
-              value={manifestation}
-              onChange={(event) => setManifestation(event.target.value.toUpperCase())}
-              placeholder="Write the sentence you want to type daily"
-            />
-            <span className="mt-1 block text-xs font-normal text-zinc-500">
-              Leave blank to keep the daily manifestation disabled.
-            </span>
-          </label>
         </div>
+        {settingsOpen && <div className="absolute inset-0 z-10 rounded-2xl bg-[#1e1e1e] p-6 sm:p-8"><div className="flex items-center gap-2"><button type="button" aria-label="Back to profile form" onClick={() => setSettingsOpen(false)} className="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 hover:bg-white/10 hover:text-white"><ArrowLeft className="h-4 w-4" /></button><h3 className="text-lg font-semibold">Settings</h3></div><div className="mt-6 space-y-3"><button type="button" onClick={() => setPracticeSessionEnabled((value) => !value)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#151515] px-3 py-3 text-left"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Practice session</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Take practice tests, review answers and track your results.</span></span><span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", practiceSessionEnabled ? "border-zinc-100 bg-zinc-100" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", practiceSessionEnabled ? "translate-x-5 bg-zinc-900" : "translate-x-1 bg-zinc-400")} /></span></button><button type="button" onClick={() => setTrackProgressEnabled((value) => !value)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#151515] px-3 py-3 text-left"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Track</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Track syllabus, revision and mock test progress.</span></span><span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", trackProgressEnabled ? "border-zinc-100 bg-zinc-100" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", trackProgressEnabled ? "translate-x-5 bg-zinc-900" : "translate-x-1 bg-zinc-400")} /></span></button></div></div>}
         <Button
-          className="mt-6 h-11 w-full bg-emerald-600 hover:bg-emerald-500"
+          className="mt-4 h-10 w-full bg-sky-500 text-sky-950 hover:bg-sky-400"
           disabled={!canContinue || isSaving}
           onClick={() => void submit()}
         >
-          {isSaving ? "Creating profile…" : "Create my profile"}
+          {isSaving ? "Creating profile…" : "Save profile"}
         </Button>
       </section>
     </div>
@@ -1127,8 +1132,10 @@ export function MotivationalMusic({ onClose }: { onClose: () => void }) {
 
 export function AppShell({ title, subtitle, actions, children }: Props) {
   const path = useRouterState({ select: (r) => r.location.pathname });
+  const navigate = useNavigate();
   const [records, setRecords] = useState<TestRecord[]>([]);
   const [trackerActivityDates, setTrackerActivityDates] = useState<string[]>([]);
+  const [taskActivityDates, setTaskActivityDates] = useState<string[]>([]);
   const [profile, setProfile] = useState<PracticeProfile | null | undefined>(undefined);
   const [profileHydrated, setProfileHydrated] = useState(false);
   const [celebratedStreak, setCelebratedStreak] = useState<number | null>(null);
@@ -1136,12 +1143,43 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
   const [manifestationOpen, setManifestationOpen] = useState(false);
   const authUser = useAuthUser();
   const previousStreak = useRef<number | null>(null);
+  const navLinks = useRef(new Map<string, HTMLAnchorElement>());
+  const navTimer = useRef<number | null>(null);
+  const [navTarget, setNavTarget] = useState<string | null>(null);
+  const [navIndicator, setNavIndicator] = useState({ left: 0, width: 0 });
+  const visibleNav = nav.filter(
+    (item) =>
+      (item.url !== "/test" || profile?.practiceSessionEnabled !== false) &&
+      (!(["/track", "/progress"] as string[]).includes(item.url) || profile?.trackProgressEnabled !== false),
+  );
+  const activeNavUrl = visibleNav.find((item) => path.startsWith(item.url))?.url;
+  const navIndicatorUrl = navTarget ?? activeNavUrl;
+
+  useEffect(() => {
+    const updateIndicator = () => {
+      const link = navIndicatorUrl ? navLinks.current.get(navIndicatorUrl) : undefined;
+      if (link) setNavIndicator({ left: link.offsetLeft, width: link.offsetWidth });
+    };
+    const frame = requestAnimationFrame(updateIndicator);
+    window.addEventListener("resize", updateIndicator);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("resize", updateIndicator);
+    };
+  }, [navIndicatorUrl, profile?.practiceSessionEnabled, profile?.trackProgressEnabled]);
+
+  useEffect(() => {
+    if (navTarget && navTarget === activeNavUrl) setNavTarget(null);
+  }, [activeNavUrl, navTarget]);
+
+  useEffect(() => () => { if (navTimer.current) window.clearTimeout(navTimer.current); }, []);
 
   useEffect(() => {
     const refresh = () => {
       setRecords(loadHistory());
       const tracker = loadTrackerData();
       setTrackerActivityDates(trackerActiveDates(tracker));
+      setTaskActivityDates(loadDailyTasks().filter((task) => task.completed).map((task) => (task.completedAt ?? task.date).slice(0, 10)));
       setStreakReady(true);
     };
     refresh();
@@ -1198,6 +1236,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
     const tracker = loadTrackerData();
     tracker.tests.log.forEach((test) => add(test.date));
     tracker.activity.forEach((entry) => add(entry.date, Math.abs(Number(entry.count) || 1)));
+    loadDailyTasks().filter((task) => task.completed).forEach((task) => add(task.completedAt ?? task.date));
     const publicRecords = records.map(({ questions: _questions, answerKey: _answerKey, questionIds: _questionIds, answers, ...record }) => ({
       ...record,
       // Retain only the number attempted for dashboard metrics, never selected answers.
@@ -1213,6 +1252,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
   const currentStreak = getStreaks([
     ...records,
     ...trackerActivityDates.map((date) => ({ date })),
+    ...taskActivityDates.map((date) => ({ date })),
   ]).current;
 
   useEffect(() => {
@@ -1245,18 +1285,29 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
             {subtitle && <p className="truncate text-xs opacity-75 sm:text-sm">{subtitle}</p>}
           </div>
           {actions}
-          <nav className="flex shrink-0 items-center gap-1">
-            {nav.filter((item) => (item.url !== "/test" || profile?.practiceSessionEnabled !== false) && (!(["/track", "/progress"] as string[]).includes(item.url) || profile?.trackProgressEnabled !== false)).map((item) => {
+          <nav className="relative flex shrink-0 items-center gap-1">
+            {navIndicator.width > 0 && <span aria-hidden="true" className="pointer-events-none absolute top-0 bottom-0 rounded-md bg-white/15 transition-[left,width] duration-300 ease-out" style={{ left: navIndicator.left, width: navIndicator.width }} />}
+            {visibleNav.map((item) => {
               const active = path.startsWith(item.url);
               return (
                 <Link
                   key={item.url}
                   to={item.url}
+                  ref={(node) => { if (node) navLinks.current.set(item.url, node); }}
+                  onClick={(event) => {
+                    if (path.startsWith(item.url)) return;
+                    event.preventDefault();
+                    if (navTimer.current) window.clearTimeout(navTimer.current);
+                    setNavTarget(item.url);
+                    navTimer.current = window.setTimeout(() => {
+                      void navigate({ to: item.url });
+                    }, 220);
+                  }}
                   className={cn(
-                    "app-nav-link flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors sm:text-sm",
+                    "app-nav-link relative z-10 flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors sm:text-sm",
                     active
-                      ? "is-active bg-white/15 text-white"
-                      : "text-white/70 hover:bg-white/10 hover:text-white",
+                      ? "is-active text-white"
+                      : "text-white/70 hover:text-white",
                   )}
                 >
                   <item.icon className="h-4 w-4" />

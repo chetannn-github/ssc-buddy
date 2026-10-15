@@ -41,6 +41,8 @@ export function TaskFormDialog({
 }) {
   const [name, setName] = useState("");
   const [subject, setSubject] = useState("Other");
+  const [customSubject, setCustomSubject] = useState("");
+  const [addSubjectOpen, setAddSubjectOpen] = useState(false);
   const [type, setType] = useState<TaskType>("Lecture");
   const [schedule, setSchedule] = useState<"today" | "tomorrow">("today");
   const [isSaving, setIsSaving] = useState(false);
@@ -48,6 +50,8 @@ export function TaskFormDialog({
     if (!open) return;
     setName(task?.name ?? "");
     setSubject(task?.subject ?? subjects[0] ?? "Other");
+    setCustomSubject("");
+    setAddSubjectOpen(false);
     setType(task?.type ?? "Lecture");
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -59,13 +63,13 @@ export function TaskFormDialog({
     if (schedule === "tomorrow") date.setDate(date.getDate() + 1);
     setIsSaving(true);
     try {
-      await onSubmit({ name: name.trim(), subject, type, date: task?.date ?? todayKey(date) });
+      await onSubmit({ name: name.trim(), subject: customSubject.trim() || subject, type, date: task?.date ?? todayKey(date) });
       onOpenChange(false);
     } finally {
       setIsSaving(false);
     }
   };
-  const subjectOptions = [...new Set([...subjects, "Other"])];
+  const subjectOptions = [...new Set([...subjects, "Other", ...(customSubject.trim() ? [customSubject.trim()] : [])])];
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="border-transparent bg-[#1b1b1b] text-zinc-100 shadow-2xl sm:max-w-md">
@@ -89,7 +93,10 @@ export function TaskFormDialog({
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label>Subject</Label>
-              <Select value={subject} onValueChange={setSubject}>
+              <Select value={customSubject ? "__custom__" : subject} onValueChange={(value) => {
+                if (value === "__custom__") { setCustomSubject(""); setAddSubjectOpen(true); return; }
+                setSubject(value);
+              }}>
                 <SelectTrigger className="border-white/10 bg-[#181818] text-zinc-100">
                   <SelectValue />
                 </SelectTrigger>
@@ -103,6 +110,7 @@ export function TaskFormDialog({
                       {item}
                     </SelectItem>
                   ))}
+                  <SelectItem value="__custom__" className="text-sky-300 focus:bg-white/10 focus:text-sky-200">+ Add subject</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -154,6 +162,13 @@ export function TaskFormDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
+      <Dialog open={addSubjectOpen} onOpenChange={setAddSubjectOpen}>
+        <DialogContent className="border-transparent bg-[#1b1b1b] text-zinc-100 shadow-2xl sm:max-w-sm">
+          <DialogHeader><DialogTitle>Add subject</DialogTitle><DialogDescription>Create a subject just for your tasks.</DialogDescription></DialogHeader>
+          <div className="space-y-2"><Label htmlFor="custom-task-subject">Subject name</Label><Input id="custom-task-subject" autoFocus value={customSubject} className="border-white/10 bg-[#181818] text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-blue-500/40" placeholder="e.g. Polity" onChange={(event) => setCustomSubject(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && customSubject.trim()) { setSubject(customSubject.trim()); setAddSubjectOpen(false); } }} /></div>
+          <DialogFooter><Button variant="ghost" onClick={() => setAddSubjectOpen(false)}>Cancel</Button><Button disabled={!customSubject.trim()} onClick={() => { setSubject(customSubject.trim()); setAddSubjectOpen(false); }}>Add subject</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }
@@ -174,7 +189,7 @@ export function CompleteTaskDialog({
       setMinutes("30");
     }
   }, [task]);
-  const total = Math.max(0, Math.min(1_440, Number(minutes) || 0));
+  const total = Math.max(0, Math.min(180, Number(minutes) || 0));
   return (
     <Dialog open={Boolean(task)} onOpenChange={onOpenChange}>
       <DialogContent className="border-transparent bg-[#1b1b1b] text-zinc-100 shadow-2xl sm:max-w-sm">
@@ -190,9 +205,12 @@ export function CompleteTaskDialog({
             className="border-white/10 bg-[#181818] text-zinc-100 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             type="number"
             min={1}
-            max={1440}
+            max={180}
             value={minutes}
-            onChange={(event) => setMinutes(String(Math.min(1_440, Math.max(0, Number(event.target.value) || 0))))}
+            onChange={(event) => {
+              const value = event.target.value;
+              setMinutes(value === "" ? "" : String(Math.min(180, Math.max(0, Number(value) || 0))));
+            }}
           />
         </div>
         <div className="flex flex-wrap gap-2">

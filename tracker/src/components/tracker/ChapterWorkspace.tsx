@@ -1,5 +1,5 @@
 import { ChevronRight, GripVertical, ListOrdered, Star, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTracker } from "@/lib/tracker-store";
 import { cn } from "@/lib/utils";
 import {
@@ -59,6 +59,8 @@ export function ChapterWorkspace({ mode }: { mode: Mode }) {
   const { data, update } = useTracker();
   const { openForm, confirm } = useTrackerDialog();
   const [subjectFilter, setSubjectFilter] = useState("all");
+  const subjectFilterButtons = useRef(new Map<string, HTMLButtonElement>());
+  const [subjectFilterIndicator, setSubjectFilterIndicator] = useState({ left: 0, width: 0 });
   // Keep both workspaces calm on entry; users can open the subject they need.
   const [openSubjectId, setOpenSubjectId] = useState("");
   const [reorderingSubjectId, setReorderingSubjectId] = useState("");
@@ -69,6 +71,10 @@ export function ChapterWorkspace({ mode }: { mode: Mode }) {
     subjectFilter === "all"
       ? data.subjects
       : data.subjects.filter((subject) => subject.id === subjectFilter);
+  useEffect(() => {
+    const button = subjectFilterButtons.current.get(subjectFilter);
+    if (button) setSubjectFilterIndicator({ left: button.offsetLeft, width: button.offsetWidth });
+  }, [data.subjects, subjectFilter]);
   const pinned = useMemo(() => {
     const chaptersById = new Map<string, { subject: Subject; chapter: Chapter }>();
     data.subjects.forEach((subject) =>
@@ -213,13 +219,15 @@ export function ChapterWorkspace({ mode }: { mode: Mode }) {
     <div className="space-y-3">
       <div className="sticky top-0 z-10 -mx-3 border-b border-white/10 bg-[#121212]/95 px-3 pt-1 pb-3 backdrop-blur sm:-mx-4 sm:px-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex min-w-0 gap-1 overflow-x-auto pb-0.5">
-            <FilterButton active={subjectFilter === "all"} onClick={() => setSubjectFilter("all")}>
+          <div className="relative flex min-w-0 gap-1 overflow-x-auto pb-0.5">
+            <span aria-hidden="true" className="pointer-events-none absolute top-0 bottom-0 rounded-full bg-accent-blue transition-[left,width] duration-300 ease-out" style={{ left: subjectFilterIndicator.left, width: subjectFilterIndicator.width }} />
+            <FilterButton buttonRef={(node) => { if (node) subjectFilterButtons.current.set("all", node); }} active={subjectFilter === "all"} onClick={() => setSubjectFilter("all")}>
               All
             </FilterButton>
             {data.subjects.map((subject) => (
               <FilterButton
                 key={subject.id}
+                buttonRef={(node) => { if (node) subjectFilterButtons.current.set(subject.id, node); }}
                 active={subjectFilter === subject.id}
                 onClick={() => setSubjectFilter(subject.id)}
               >
@@ -403,19 +411,22 @@ function FilterButton({
   active,
   onClick,
   children,
+  buttonRef,
 }: {
   active: boolean;
   onClick: () => void;
   children: React.ReactNode;
+  buttonRef?: (node: HTMLButtonElement | null) => void;
 }) {
   return (
     <button
       type="button"
+      ref={buttonRef}
       onClick={onClick}
       className={
         active
-          ? "shrink-0 rounded-full bg-accent-blue px-3 py-1.5 text-sm text-card"
-          : "shrink-0 rounded-full px-3 py-1.5 text-sm text-muted-foreground hover:bg-card hover:text-foreground"
+          ? "relative z-10 shrink-0 rounded-full px-3 py-1.5 text-sm text-card transition-colors duration-200"
+          : "relative z-10 shrink-0 rounded-full px-3 py-1.5 text-sm text-muted-foreground transition-colors duration-200 hover:text-foreground"
       }
     >
       {children}

@@ -1,4 +1,4 @@
-export const TASK_TYPES = ["Lecture", "Revision", "Mock", "Practice Session", "Other"] as const;
+export const TASK_TYPES = ["Lecture", "Revision", "Mock", "Practice Session", "Learn", "Other"] as const;
 export type TaskType = (typeof TASK_TYPES)[number];
 
 export type DailyTask = {

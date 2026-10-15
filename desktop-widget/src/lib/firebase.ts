@@ -24,7 +24,7 @@ import {
   type Unsubscribe,
 } from "firebase/firestore";
 
-export const TASK_TYPES = ["Lecture", "Revision", "Mock", "Practice Session", "Other"] as const;
+export const TASK_TYPES = ["Lecture", "Revision", "Mock", "Practice Session", "Learn", "Other"] as const;
 export type TaskType = (typeof TASK_TYPES)[number];
 /** Exact existing web/mobile task document contract. Do not add fields here. */
 export type DailyTask = {
@@ -88,10 +88,10 @@ async function publishLeaderboardAfterTaskChange(user: User) {
   const studyMinutes = completed.reduce((total, task) => total + Math.max(0, task.minutesSpent ?? 0), 0);
   let creditedMinutes = 0;
   const leaderboardTasks = scoped.map((task) => {
-    if (!task.completed) return { name: task.name, subject: task.subject, completed: false, date: task.date, points: task.date < today ? -5 : 0 };
+    if (!task.completed) return { name: task.name, subject: task.subject, type: task.type, minutesSpent: task.minutesSpent, completed: false, date: task.date, points: task.date < today ? -5 : 0 };
     const before = Math.min(210, Math.floor(creditedMinutes / 10));
     creditedMinutes += Math.max(0, task.minutesSpent ?? 0);
-    return { name: task.name, subject: task.subject, completed: true, date: task.date, points: 10 + Math.min(210, Math.floor(creditedMinutes / 10)) - before };
+    return { name: task.name, subject: task.subject, type: task.type, minutesSpent: task.minutesSpent, completed: true, date: task.date, points: 10 + Math.min(210, Math.floor(creditedMinutes / 10)) - before };
   });
 
   await setDoc(doc(db!, "leaderboards", week, "entries", user.uid), {

@@ -1,4 +1,4 @@
-export type TaskType = "Lecture" | "Revision" | "Mock" | "Practice Session" | "Other";
+export type TaskType = "Lecture" | "Revision" | "Mock" | "Practice Session" | "Learn" | "Other";
 
 export type Task = {
   id: string;
@@ -15,7 +15,7 @@ export type Task = {
 export const TASK_STORAGE_KEY = "ssc-buddy:tasks:v2";
 export const LEGACY_TASK_STORAGE_KEY = "ssc-buddy-mobile:tasks:v1";
 
-export const TASK_TYPES: TaskType[] = ["Lecture", "Revision", "Mock", "Practice Session", "Other"];
+export const TASK_TYPES: TaskType[] = ["Lecture", "Revision", "Mock", "Practice Session", "Learn", "Other"];
 
 /**
  * A scheduled task belongs to the calendar day the student sees on their

@@ -87,10 +87,10 @@ export async function publishLeaderboardEntry(user: User, profile: Record<string
   let creditedMinutes = 0;
   const leaderboardTasks = scoped.map((task) => {
     const completedTask = task.completed === true, date = String(task.date ?? "");
-    if (!completedTask) return { name: String(task.name ?? "Task"), subject: String(task.subject ?? ""), completed: false, date, points: date < today ? -5 : 0 };
+    if (!completedTask) return { name: String(task.name ?? "Task"), subject: String(task.subject ?? ""), type: String(task.type ?? ""), minutesSpent: Math.max(0, Number(task.minutesSpent) || 0), completed: false, date, points: date < today ? -5 : 0 };
     const before = Math.min(210, Math.floor(creditedMinutes / 10)); creditedMinutes += Math.max(0, Number(task.minutesSpent) || 0);
     const timeBonus = Math.min(210, Math.floor(creditedMinutes / 10)) - before;
-    return { name: String(task.name ?? "Task"), subject: String(task.subject ?? ""), completed: true, date, points: 10 + timeBonus };
+    return { name: String(task.name ?? "Task"), subject: String(task.subject ?? ""), type: String(task.type ?? ""), minutesSpent: Math.max(0, Number(task.minutesSpent) || 0), completed: true, date, points: 10 + timeBonus };
   });
   await setDoc(doc(getFirebaseFirestore(), "leaderboards", week, "entries", user.uid), { uid: user.uid, username, name: String(profile.name ?? "Student"), ...(typeof profile.avatar === "string" && profile.avatar ? { avatar: profile.avatar } : {}), week, completed: completed.length, leaderboardTasks, overdue, studyMinutes, points, updatedAt: serverTimestamp() }, { merge: true });
 }
@@ -126,6 +126,48 @@ export function usernameValidationMessage(value: string) {
 const usernameDoc = (username: string) => doc(getFirebaseFirestore(), "usernames", username);
 const publicProfileDoc = (username: string) => doc(getFirebaseFirestore(), "publicProfiles", username);
 
+export type PublicProfile = { uid: string; username: string; name: string; questionGoal: number; avatar?: string; examName?: string; practiceSessionEnabled?: boolean; trackProgressEnabled?: boolean; activity?: Record<string, number>; dashboard?: { records?: Record<string, unknown>[]; dailyTasks?: Record<string, unknown>[]; tracker?: Record<string, any> | null } };
+
+export async function readPublicProfile(value: string): Promise<PublicProfile | null> {
+  const username = normalizeUsername(value.replace(/^@/, ""));
+  if (usernameValidationMessage(username)) return null;
+  const data = (await getDoc(publicProfileDoc(username))).data();
+  if (!data || typeof data.uid !== "string" || typeof data.name !== "string") return null;
+  return {
+    uid: data.uid,
+    username,
+    name: data.name,
+    questionGoal: Math.max(1, Math.round(Number(data.questionGoal) || 100)),
+    ...(typeof data.avatar === "string" && data.avatar ? { avatar: data.avatar } : {}),
+    ...(typeof data.examName === "string" && data.examName.trim() ? { examName: data.examName.trim() } : {}),
+    ...(typeof data.practiceSessionEnabled === "boolean" ? { practiceSessionEnabled: data.practiceSessionEnabled } : {}),
+    ...(typeof data.trackProgressEnabled === "boolean" ? { trackProgressEnabled: data.trackProgressEnabled } : {}),
+    ...(data.activity && typeof data.activity === "object" ? { activity: data.activity as Record<string, number> } : {}),
+    ...(data.dashboard && typeof data.dashboard === "object" ? { dashboard: data.dashboard as PublicProfile["dashboard"] } : {}),
+  };
+}
+
+/** Publishes the read-only dashboard used by public profiles and streaks. */
+export async function savePublicProfileActivity(
+  user: User,
+  profile: Record<string, unknown>,
+  activity: Record<string, number>,
+  dashboard: NonNullable<PublicProfile["dashboard"]>,
+) {
+  const username = normalizeUsername(String(profile.username ?? ""));
+  if (usernameValidationMessage(username)) return;
+  const sanitizedActivity = Object.fromEntries(
+    Object.entries(activity)
+      .filter(([date, count]) => /^\d{4}-\d{2}-\d{2}$/.test(date) && Number(count) > 0)
+      .map(([date, count]) => [date, Math.max(1, Math.round(Number(count)))]),
+  );
+  await setDoc(
+    publicProfileDoc(username),
+    { ...publicProfileFields(user, username, profile), activity: sanitizedActivity, dashboard, updatedAt: serverTimestamp() },
+    { merge: true },
+  );
+}
+
 function publicProfileFields(user: User, username: string, fields: Record<string, unknown>) {
   const name = typeof fields.name === "string" ? fields.name.trim() : "Student";
   return {
@@ -133,6 +175,8 @@ function publicProfileFields(user: User, username: string, fields: Record<string
     questionGoal: Math.max(1, Math.round(Number(fields.questionGoal) || 100)),
     ...(typeof fields.avatar === "string" && fields.avatar ? { avatar: fields.avatar } : {}),
     ...(typeof fields.examName === "string" && fields.examName.trim() ? { examName: fields.examName.trim() } : {}),
+    ...(typeof fields.practiceSessionEnabled === "boolean" ? { practiceSessionEnabled: fields.practiceSessionEnabled } : {}),
+    ...(typeof fields.trackProgressEnabled === "boolean" ? { trackProgressEnabled: fields.trackProgressEnabled } : {}),
   };
 }
 

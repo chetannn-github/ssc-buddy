@@ -38,7 +38,7 @@ import { BottomNavigation } from "./src/components/BottomNavigation";
 import { type TabKey, tabs } from "./src/navigation/tabs";
 import { ComingSoonScreen } from "./src/screens/ComingSoonScreen";
 import { AuthScreen } from "./src/screens/AuthScreen";
-import { isFirebaseConfigured, migrateTasksIfEmpty, observeSession, patchCloudProfile, publishLeaderboardEntry, readCloudProfile, saveProfileWithUsername, syncTaskChanges, watchCloudProfile, watchPracticeEntities, watchTasks, watchTrackerSections, writeQuestionLearning } from "./src/lib/firebase";
+import { isFirebaseConfigured, migrateTasksIfEmpty, observeSession, patchCloudProfile, publishLeaderboardEntry, readCloudProfile, saveProfileWithUsername, savePublicProfileActivity, syncTaskChanges, watchCloudProfile, watchPracticeEntities, watchTasks, watchTrackerSections, writeQuestionLearning } from "./src/lib/firebase";
 import { logout } from "./src/lib/firebase";
 import { defaultProfile, loadProfile, normalizeProfile, saveProfile, type PracticeProfile } from "./src/lib/profile-store";
 import { prepareMobileAccountCache } from "./src/lib/account-cache";
@@ -145,9 +145,10 @@ export default function App() {
   const [musicOpenRequest, setMusicOpenRequest] = useState(0);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [tasksLoaded, setTasksLoaded] = useState(false);
-  const [syllabusSubjects, setSyllabusSubjects] = useState<string[]>([]);
   const [practiceActivityDates, setPracticeActivityDates] = useState<string[]>([]);
   const [trackerActivityDates, setTrackerActivityDates] = useState<string[]>([]);
+  const [publicPracticeRecords, setPublicPracticeRecords] = useState<Record<string, any>[]>([]);
+  const [publicTracker, setPublicTracker] = useState<Record<string, any>>({ subjects: [], revision: {}, activity: [], tests: { log: [] } });
   const [profileSettings, setProfileSettings] = useState<PracticeProfile | null>(null);
   const [appTab, setAppTab] = useState<TabKey>("tasks");
   const [trackTab, setTrackTab] = useState<"Syllabus" | "Revision" | "Mock Test">("Syllabus");
@@ -178,6 +179,8 @@ export default function App() {
   const [type, setType] = useState<TaskType>("Practice Session");
   const [schedule, setSchedule] = useState<"today" | "tomorrow">("today");
   const [subjectMenuOpen, setSubjectMenuOpen] = useState(false);
+  const [customSubject, setCustomSubject] = useState("");
+  const [addSubjectDialog, setAddSubjectDialog] = useState(false);
   const [completion, setCompletion] = useState<Task | null>(null);
   const [deletingTask, setDeletingTask] = useState<Task | null>(null);
   const [spent, setSpent] = useState("60");
@@ -192,9 +195,9 @@ export default function App() {
     const nextIndex = (activeTaskTabIndex + direction + TASK_TABS.length) % TASK_TABS.length;
     setTab(TASK_TABS[nextIndex]);
   };
-  // Task subjects follow the canonical tracker syllabus across app, web, and desktop.
-  // Other only keeps the task form usable before the first syllabus subject exists.
-  const subjectOptions = syllabusSubjects.length ? syllabusSubjects : ["Other"];
+  // Task-only users can build their own subject list without creating a syllabus.
+  const subjectOptions = [...new Set(tasks.map((task) => task.subject).filter(Boolean))];
+  if (!subjectOptions.length) subjectOptions.push("Other");
   useEffect(() => {
     if (!taskTabsWidth) return;
     Animated.spring(taskTabIndicator, {
@@ -408,17 +411,37 @@ export default function App() {
   // Initial migration must only run once per authenticated account.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authenticated, user?.uid, tasksLoaded]);
-  // Matches the web header streak exactly: practice attempts plus explicit
-  // tracker activity. Daily-task completion intentionally does not inflate it.
+  // Matches the web consistency count: practice, tracker, and completed tasks.
   useEffect(() => {
-    if (!user) { setPracticeActivityDates([]); setTrackerActivityDates([]); setSyllabusSubjects([]); return; }
-    const stopAttempts = watchPracticeEntities(user, "practiceAttempts", (items) => setPracticeActivityDates(items.map((item) => typeof item.date === "string" ? item.date : "").filter(Boolean)));
+    if (!user) { setPracticeActivityDates([]); setTrackerActivityDates([]); return; }
+    const stopAttempts = watchPracticeEntities(user, "practiceAttempts", (items) => {
+      setPracticeActivityDates(items.map((item) => typeof item.date === "string" ? item.date : "").filter(Boolean));
+      setPublicPracticeRecords(items.map((item) => ({ ...item, answers: Array.isArray(item.answers) ? item.answers.map((answer) => answer ? "A" : null) : [] })));
+    });
     const stopTracker = watchTrackerSections(user, (sections) => {
       setTrackerActivityDates(Array.isArray(sections.activity) ? sections.activity.map((entry: any) => typeof entry?.date === "string" ? entry.date : "").filter(Boolean) : []);
-      setSyllabusSubjects(Array.isArray(sections.subjects) ? [...new Set(sections.subjects.map((entry: any) => String(entry?.name ?? "").trim()).filter(Boolean))] : []);
+      setPublicTracker(sections);
     });
     return () => { stopAttempts?.(); stopTracker?.(); };
   }, [user?.uid]);
+  useEffect(() => {
+    if (!user || !profileSettings?.username) return;
+    const activity: Record<string, number> = {};
+    const add = (value: unknown, count = 1) => {
+      const date = typeof value === "string" ? value.slice(0, 10) : "";
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+      activity[date] = (activity[date] ?? 0) + Math.max(1, Math.round(count));
+    };
+    publicPracticeRecords.forEach((record) => add(record.date));
+    (Array.isArray(publicTracker.activity) ? publicTracker.activity : []).forEach((entry: any) => add(entry.date, Math.abs(Number(entry.count) || 1)));
+    (Array.isArray(publicTracker.tests?.log) ? publicTracker.tests.log : []).forEach((test: any) => add(test.date));
+    tasks.filter((task) => task.completed).forEach((task) => add(task.completedAt ?? task.date));
+    void savePublicProfileActivity(user, profileSettings as any, activity, {
+      records: publicPracticeRecords,
+      tracker: publicTracker,
+      dailyTasks: tasks as any,
+    }).catch(() => undefined);
+  }, [profileSettings, publicPracticeRecords, publicTracker, tasks, user]);
   const persist = (next: Task[]) => {
     const previous = tasks;
     setTasks(next);
@@ -460,14 +483,15 @@ export default function App() {
     return [...totals.entries()].sort((left, right) => right[1].minutes - left[1].minutes);
   }, [analyticsTasks]);
   const streak = useMemo(() => {
-    const activeDays = new Set([...practiceActivityDates, ...trackerActivityDates].map((value) => localDateKey(new Date(value))));
+    const completedTaskDays = tasks.filter((task) => task.completed).map((task) => task.completedAt ?? task.date);
+    const activeDays = new Set([...practiceActivityDates, ...trackerActivityDates, ...completedTaskDays].map((value) => localDateKey(new Date(value))));
     const cursor = new Date();
     cursor.setHours(0, 0, 0, 0);
     if (!activeDays.has(localDateKey(cursor))) cursor.setDate(cursor.getDate() - 1);
     let days = 0;
     while (activeDays.has(localDateKey(cursor))) { days += 1; cursor.setDate(cursor.getDate() - 1); }
     return days;
-  }, [practiceActivityDates, trackerActivityDates]);
+  }, [practiceActivityDates, tasks, trackerActivityDates]);
   const highest = useMemo(
     () =>
       tasksInLastDays(tasks, 365)
@@ -494,6 +518,8 @@ export default function App() {
   const openNew = () => {
     setName("");
     setSubject(subjectOptions[0] ?? "Other");
+    setCustomSubject("");
+    setAddSubjectDialog(false);
     setType("Practice Session");
     setSchedule("today");
     setEditor("new");
@@ -501,6 +527,8 @@ export default function App() {
   const openEdit = (task: Task) => {
     setName(task.name);
     setSubject(subjectOptions.includes(task.subject) ? task.subject : (subjectOptions[0] ?? "Other"));
+    setCustomSubject("");
+    setAddSubjectDialog(false);
     setType(task.type);
     setEditor(task);
   };
@@ -510,7 +538,7 @@ export default function App() {
     await new Promise((resolve) => setTimeout(resolve, 280));
     const draft = {
       name: name.trim(),
-      subject: subject.trim() || "Other",
+      subject: customSubject.trim() || subject.trim() || "Other",
       type,
       date:
         editor === "new"
@@ -544,7 +572,7 @@ export default function App() {
               ...task,
               completed: true,
               completedAt: new Date().toISOString(),
-              minutesSpent: Math.max(0, Number(spent) || 0),
+              minutesSpent: Math.min(180, Math.max(0, Number(spent) || 0)),
             }
           : task,
       ),
@@ -590,7 +618,7 @@ export default function App() {
     <SafeAreaProvider>
       <SafeAreaView style={styles.safe} edges={["top", "left", "right"]} onTouchStart={() => resetBottomNavigation()}>
       <StatusBar hidden />
-      {leaderboardOpen ? <LeaderboardScreen user={user} onClose={() => setLeaderboardOpen(false)} /> : quickRecallOpen ? <QuickRecallScreen user={user} onClose={() => setQuickRecallOpen(false)} onGoProfile={() => { setQuickRecallOpen(false); setAppTab("profile"); }} /> : appTab === "profile" ? (
+      {leaderboardOpen ? <LeaderboardScreen user={user} tasks={tasks} onClose={() => setLeaderboardOpen(false)} /> : quickRecallOpen ? <QuickRecallScreen user={user} onClose={() => setQuickRecallOpen(false)} onGoProfile={() => { setQuickRecallOpen(false); setAppTab("profile"); }} /> : appTab === "profile" ? (
         <ProfileScreen
           user={user}
           tasks={tasks}
@@ -716,7 +744,7 @@ export default function App() {
             />
             <View style={styles.selectWrap}>
               <Text style={styles.fieldLabel}>SUBJECT</Text>
-              <TaskDropdown label={subject} open={subjectMenuOpen} onToggle={() => setSubjectMenuOpen((open) => !open)} options={subjectOptions.map((value) => ({ value, label: value }))} onSelect={(value) => { setSubject(value); setSubjectMenuOpen(false); }} />
+              <TaskDropdown label={subject} open={subjectMenuOpen} onToggle={() => setSubjectMenuOpen((open) => !open)} options={[...subjectOptions, "__custom__"].map((value) => ({ value, label: value === "__custom__" ? "+ Add subject" : value }))} onSelect={(value) => { if (value === "__custom__") { setCustomSubject(""); setAddSubjectDialog(true); } else { setSubject(value); } setSubjectMenuOpen(false); }} />
             </View>
             <Text style={styles.fieldLabel}>TYPE</Text>
             <View style={styles.typeRow}>
@@ -759,6 +787,19 @@ export default function App() {
           </Pressable>
         </Pressable>
       </Modal>
+      <Modal transparent visible={addSubjectDialog} animationType="fade" onRequestClose={() => setAddSubjectDialog(false)}>
+        <Pressable style={styles.backdrop} onPress={() => setAddSubjectDialog(false)}>
+          <Pressable style={styles.sheet} onPress={() => undefined}>
+            <Text style={styles.sheetTitle}>Add subject</Text>
+            <Text style={styles.muted}>Create a subject just for your tasks.</Text>
+            <Field label="SUBJECT NAME" value={customSubject} placeholder="e.g. Polity" onChangeText={setCustomSubject} />
+            <View style={styles.sheetActions}>
+              <Pressable onPress={() => setAddSubjectDialog(false)}><Text style={styles.cancel}>Cancel</Text></Pressable>
+              <Pressable disabled={!customSubject.trim()} onPress={() => { setSubject(customSubject.trim()); setAddSubjectDialog(false); }} style={[styles.primary, !customSubject.trim() && styles.actionDisabled]}><Text style={styles.primaryText}>Add subject</Text></Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
       <Modal transparent visible={completion !== null} animationType="fade">
         <View style={styles.backdrop}>
           <View style={styles.sheet}>
@@ -767,7 +808,10 @@ export default function App() {
             <Field
               label="Actual study minutes"
               value={spent}
-              onChangeText={setSpent}
+              onChangeText={(value) => {
+                const digits = value.replace(/[^0-9]/g, "");
+                setSpent(digits === "" ? "" : String(Math.min(180, Number(digits))));
+              }}
               keyboardType="numeric"
             />
             <View style={styles.timeChips}>{[30, 45, 60, 90, 120].map((minutes) => <Pressable key={minutes} onPress={() => setSpent(String(minutes))} style={[styles.timeChip, Number(spent) === minutes && styles.timeChipActive]}><Text style={[styles.timeChipText, Number(spent) === minutes && styles.timeChipTextActive]}>{formatMinutes(minutes)}</Text></Pressable>)}</View>
@@ -799,7 +843,7 @@ export default function App() {
       ) : (
         <ComingSoonScreen title={activeAppTab.label} />
       )}
-      {!quickRecallOpen && <BottomNavigation activeTab={appTab} onChange={setAppTab} practiceSessionEnabled={profileSettings?.practiceSessionEnabled !== false} trackProgressEnabled={profileSettings?.trackProgressEnabled !== false} />}
+      {!quickRecallOpen && <BottomNavigation activeTab={appTab} onChange={(tab) => { setLeaderboardOpen(false); setAppTab(tab); }} practiceSessionEnabled={profileSettings?.practiceSessionEnabled !== false} trackProgressEnabled={profileSettings?.trackProgressEnabled !== false} />}
       <MediaOverlay user={user} mode={mediaMode} musicOpenRequest={musicOpenRequest} onClose={() => setMediaMode(null)} />
       <DailyManifestationDialog
         phrase={dailyManifestation}
