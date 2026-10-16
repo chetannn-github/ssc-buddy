@@ -4,7 +4,7 @@ import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from "expo-au
 import Constants, { AppOwnership } from "expo-constants";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Animated, AppState, Easing, FlatList, Image, Modal, PanResponder, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Animated, AppState, Easing, FlatList, Image, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 import { musicCover, musicSource, musicTracks, trackTitle, videoSource, videoTracks } from "../lib/media";
 import { colors } from "../theme";
@@ -237,7 +237,11 @@ function MusicPlayer({ user, onClose, openRequest }: { user: User | null; onClos
     return () => { active = false; };
   }, [supportsBackgroundControls]);
   useEffect(() => {
-    if (!supportsBackgroundControls || !audioModeReady) return;
+    // expo-audio currently creates duplicate AndroidX MediaSessions here on
+    // some Android builds ("Session ID must be unique"), which terminates
+    // the entire app when Music opens. Keep the iOS lock-screen metadata,
+    // but skip this unstable Android media-session path.
+    if (Platform.OS === "android" || !supportsBackgroundControls || !audioModeReady) return;
     try {
       player.setActiveForLockScreen(true, {
         title: trackTitle(activeTrack), artist: "SSC Buddy", albumTitle: "Motivation", artworkUrl: cover ? Image.resolveAssetSource(cover).uri : undefined,
