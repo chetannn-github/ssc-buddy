@@ -262,6 +262,7 @@ export default function App() {
   const [deletingTask, setDeletingTask] = useState<Task | null>(null);
   const [spent, setSpent] = useState("60");
   const [taskActionLoading, setTaskActionLoading] = useState(false);
+  const taskRowInteractionBlockedUntil = useRef(0);
   const activeAppTab = tabs.find((item) => item.key === appTab) ?? tabs[0];
   const activeTaskTabIndex = TASK_TABS.indexOf(tab);
   const handleTaskSwipeEnd = (endX: number) => {
@@ -683,7 +684,11 @@ export default function App() {
     setEditor(null); setTaskActionLoading(false);
   };
   const markDone = async () => {
-    if (!completion) return;
+    if (!completion || taskActionLoading) return;
+    // Android can pass the finishing modal's touch to the row now occupying
+    // that screen position after the completed task reorders. Briefly ignore
+    // row actions while the completion dialog disappears.
+    taskRowInteractionBlockedUntil.current = Date.now() + 800;
     setTaskActionLoading(true);
     await new Promise((resolve) => setTimeout(resolve, 280));
     persist(
@@ -700,7 +705,10 @@ export default function App() {
     );
     setCompletion(null); setTaskActionLoading(false);
   };
-  const reopen = (id: string) =>
+  const reopen = (id: string) => {
+    // Unmarking also updates/reorders the list and can otherwise send a
+    // delayed Android touch to its first visible row.
+    taskRowInteractionBlockedUntil.current = Date.now() + 800;
     persist(
       tasks.map((task) =>
         task.id === id
@@ -708,7 +716,9 @@ export default function App() {
           : task,
       ),
     );
+  };
   const remove = (id: string) => setDeletingTask(tasks.find((task) => task.id === id) ?? null);
+  const canUseTaskRow = () => Date.now() >= taskRowInteractionBlockedUntil.current;
   const confirmDelete = async () => {
     if (!deletingTask) return;
     setTaskActionLoading(true);
@@ -840,12 +850,13 @@ export default function App() {
                   task={task}
                   points={taskPoints.get(task.id) ?? 0}
                   onDone={() => {
+                    if (!canUseTaskRow()) return;
                     setSpent(String(task.minutesSpent ?? 30));
                     setCompletion(task);
                   }}
-                  onReopen={() => reopen(task.id)}
-                  onEdit={() => openEdit(task)}
-                  onDelete={() => remove(task.id)}
+                  onReopen={() => { if (canUseTaskRow()) reopen(task.id); }}
+                  onEdit={() => { if (canUseTaskRow()) openEdit(task); }}
+                  onDelete={() => { if (canUseTaskRow()) remove(task.id); }}
                 />
               ))
             )}
