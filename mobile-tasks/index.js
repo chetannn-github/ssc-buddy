@@ -1,6 +1,6 @@
 import { registerRootComponent } from "expo";
 import Constants from "expo-constants";
-import { NativeModules, Platform } from "react-native";
+import { Platform } from "react-native";
 
 import App from "./App";
 
@@ -9,21 +9,6 @@ import App from "./App";
 // lets the normal app continue to work there while preview/release builds
 // retain full widget support.
 const supportsAndroidWidgets = Platform.OS === "android" && Constants.appOwnership !== "expo";
-
-// Keep transport controls in the Android notification service, not the React
-// view. This means next/previous still work while the app is minimized.
-if (Platform.OS !== "web" && Constants.appOwnership !== "expo" && NativeModules.TrackPlayerModule) {
-  const TrackPlayer = require("react-native-track-player").default;
-  const { Event } = require("react-native-track-player");
-  TrackPlayer.registerPlaybackService(() => async () => {
-    TrackPlayer.addEventListener(Event.RemoteNext, () => {
-      void TrackPlayer.skipToNext().catch(() => undefined);
-    });
-    TrackPlayer.addEventListener(Event.RemotePrevious, () => {
-      void TrackPlayer.skipToPrevious().catch(() => undefined);
-    });
-  });
-}
 
 if (supportsAndroidWidgets) {
   const AsyncStorage = require("@react-native-async-storage/async-storage").default;
