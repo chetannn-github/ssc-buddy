@@ -105,7 +105,7 @@ function NavigationItem({ tab, active, onPress }: { tab: (typeof tabs)[number]; 
   return (
     <Pressable accessibilityRole="tab" accessibilityState={{ selected: active }} accessibilityLabel={tab.label} onPress={onPress} style={styles.item}>
       <Animated.View style={{ transform: [{ scale }] }}>
-        <MaterialCommunityIcons name={tab.icon as never} size={20} color={active ? "#dbeafe" : "rgba(228,228,231,.62)"} />
+        <MaterialCommunityIcons name={(active ? tab.activeIcon : tab.icon) as never} size={20} color={active ? "#dbeafe" : "rgba(228,228,231,.62)"} />
       </Animated.View>
       <Animated.Text style={[styles.label, active && styles.labelActive, { opacity: labelOpacity }]}>{tab.label}</Animated.Text>
     </Pressable>
