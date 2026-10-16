@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { Image as ExpoImage } from "expo-image";
 import * as ExpoSplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -184,7 +185,13 @@ function StreakCelebration({ streak, onClose }: { streak: number; onClose: () =>
             <MaterialCommunityIcons name="close" size={19} color="#a1a1aa" />
           </Pressable>
           <View style={styles.streakCelebrationIcon}>
-            <Image source={require("./assets/consistency-firework.webp")} style={styles.streakCelebrationFirework} resizeMode="contain" />
+            <ExpoImage
+              source={require("./assets/consistency-firework.webp")}
+              autoplay
+              contentFit="contain"
+              transition={0}
+              style={styles.streakCelebrationFirework}
+            />
           </View>
           <Text style={styles.streakCelebrationEyebrow}>STREAK INCREASED</Text>
           <Text style={styles.streakCelebrationTitle}>{streak}-day streak</Text>
