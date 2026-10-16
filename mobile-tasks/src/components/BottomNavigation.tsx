@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { useEffect, useRef, useState } from "react";
-import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
+import { Animated, Image, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { tabs, type TabKey } from "../navigation/tabs";
 import { resetBottomNavigation, subscribeBottomNavigation } from "../navigation/bottomNavigationVisibility";
@@ -88,6 +88,13 @@ function NavigationItem({ tab, active, onPress }: { tab: (typeof tabs)[number]; 
   const labelOpacity = useRef(new Animated.Value(active ? 1 : 0.6)).current;
   useEffect(() => {
     if (active) {
+      if (tab.key === "tasks") {
+        Animated.parallel([
+          Animated.timing(scale, { toValue: 1, duration: 1, useNativeDriver: true }),
+          Animated.timing(labelOpacity, { toValue: 1, duration: 180, useNativeDriver: true }),
+        ]).start();
+        return;
+      }
       Animated.parallel([
         Animated.sequence([
           Animated.timing(scale, { toValue: 1.12, duration: 120, useNativeDriver: true }),
@@ -101,11 +108,19 @@ function NavigationItem({ tab, active, onPress }: { tab: (typeof tabs)[number]; 
       Animated.timing(scale, { toValue: 1, duration: 120, useNativeDriver: true }),
       Animated.timing(labelOpacity, { toValue: 0.6, duration: 140, useNativeDriver: true }),
     ]).start();
-  }, [active, labelOpacity, scale]);
+  }, [active, labelOpacity, scale, tab.key]);
   return (
     <Pressable accessibilityRole="tab" accessibilityState={{ selected: active }} accessibilityLabel={tab.label} onPress={onPress} style={styles.item}>
       <Animated.View style={{ transform: [{ scale }] }}>
-        <MaterialCommunityIcons name={(active ? tab.activeIcon : tab.icon) as never} size={20} color={active ? "#dbeafe" : "rgba(228,228,231,.62)"} />
+        {active && tab.key === "tasks" ? (
+          <Image
+            source={require("../../assets/clipboard-text-pinch.webp")}
+            style={styles.animatedTaskIcon}
+            accessibilityLabel="Tasks"
+          />
+        ) : (
+          <MaterialCommunityIcons name={(active ? tab.activeIcon : tab.icon) as never} size={20} color={active ? "#dbeafe" : "rgba(228,228,231,.62)"} />
+        )}
       </Animated.View>
       <Animated.Text style={[styles.label, active && styles.labelActive, { opacity: labelOpacity }]}>{tab.label}</Animated.Text>
     </Pressable>
@@ -140,6 +155,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(59,130,246,.28)",
   },
   item: { zIndex: 1, flex: 1, alignItems: "center", justifyContent: "center", gap: 3 },
+  animatedTaskIcon: { width: 21, height: 21, tintColor: "#dbeafe" },
   label: { color: "rgba(228,228,231,.62)", fontSize: 9, fontWeight: "600", letterSpacing: 0.1 },
   labelActive: { color: "#dbeafe", fontWeight: "800" },
 });
