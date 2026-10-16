@@ -123,11 +123,15 @@ function NavigationItem({ tab, active, onPress }: { tab: (typeof tabs)[number]; 
   return (
     <Pressable accessibilityRole="tab" accessibilityState={{ selected: active }} accessibilityLabel={tab.label} onPress={onPress} style={styles.item}>
       <Animated.View style={{ transform: [{ scale }] }}>
-        {active && hasAnimatedIcon && playAnimatedIcon ? (
+        {hasAnimatedIcon ? (
           <Image
-            source={tab.key === "tasks"
-              ? require("../../assets/clipboard-text-pinch.webp")
-              : require("../../assets/chart-bar-grow-pinch.webp")}
+            source={playAnimatedIcon
+              ? tab.key === "tasks"
+                ? require("../../assets/clipboard-text-pinch.webp")
+                : require("../../assets/chart-bar-grow-pinch.webp")
+              : tab.key === "tasks"
+                ? require("../../assets/clipboard-text-pinch-final.png")
+                : require("../../assets/chart-bar-grow-pinch-final.png")}
             style={styles.animatedNavIcon}
             accessibilityLabel={tab.label}
           />
