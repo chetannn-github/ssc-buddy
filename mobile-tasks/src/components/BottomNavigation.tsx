@@ -5,6 +5,7 @@ import { Animated, Image, Pressable, StyleSheet, Text, View } from "react-native
 
 import { tabs, type TabKey } from "../navigation/tabs";
 import { resetBottomNavigation, subscribeBottomNavigation } from "../navigation/bottomNavigationVisibility";
+import { TRACK_TARGET_FRAME_DELAYS, trackTargetFrames } from "./trackTargetFrames";
 
 const PASTEL_TONES = [
   { icon: "#fbcfe8", halo: "rgba(251,207,232,.17)" },
@@ -17,6 +18,7 @@ const PASTEL_TONES = [
 
 const ANIMATED_ICON_DURATION: Partial<Record<TabKey, number>> = {
   tasks: 2050,
+  track: 2540,
   practice: 3150,
   progress: 2050,
 };
@@ -94,6 +96,7 @@ function NavigationItem({ tab, active, onPress }: { tab: (typeof tabs)[number]; 
   const hasAnimatedIcon = Boolean(animationDuration);
   const [playAnimatedIcon, setPlayAnimatedIcon] = useState(active && hasAnimatedIcon);
   const [pastelTone, setPastelTone] = useState(randomPastelTone);
+  const [trackFrameIndex, setTrackFrameIndex] = useState(trackTargetFrames.length - 1);
   useEffect(() => {
     if (!active || !hasAnimatedIcon) {
       setPlayAnimatedIcon(false);
@@ -104,6 +107,27 @@ function NavigationItem({ tab, active, onPress }: { tab: (typeof tabs)[number]; 
     const timeout = setTimeout(() => setPlayAnimatedIcon(false), animationDuration);
     return () => clearTimeout(timeout);
   }, [active, animationDuration, hasAnimatedIcon]);
+  useEffect(() => {
+    if (!active || tab.key !== "track") {
+      setTrackFrameIndex(trackTargetFrames.length - 1);
+      return;
+    }
+    let frame = 0;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    setTrackFrameIndex(frame);
+    const showNextFrame = () => {
+      timeout = setTimeout(() => {
+        frame += 1;
+        if (frame >= trackTargetFrames.length) return;
+        setTrackFrameIndex(frame);
+        showNextFrame();
+      }, TRACK_TARGET_FRAME_DELAYS[frame] ?? 30);
+    };
+    showNextFrame();
+    return () => {
+      if (timeout) clearTimeout(timeout);
+    };
+  }, [active, tab.key]);
   useEffect(() => {
     if (active) {
       if (hasAnimatedIcon) {
@@ -132,7 +156,9 @@ function NavigationItem({ tab, active, onPress }: { tab: (typeof tabs)[number]; 
       <Animated.View style={[styles.iconWrap, active && { backgroundColor: pastelTone.halo }, { transform: [{ scale }] }]}>
         {hasAnimatedIcon ? (
           <Image
-            source={animatedIconSource(tab.key, playAnimatedIcon)}
+            source={tab.key === "track"
+              ? trackTargetFrames[playAnimatedIcon ? trackFrameIndex : trackTargetFrames.length - 1]
+              : animatedIconSource(tab.key, playAnimatedIcon)}
             style={[styles.animatedNavIcon, { tintColor: active ? pastelTone.icon : "rgba(228,228,231,.72)" }, !active && styles.animatedNavIconInactive]}
             accessibilityLabel={tab.label}
           />
