@@ -190,7 +190,7 @@ const styles = StyleSheet.create({
     elevation: 9,
   },
   item: { zIndex: 1, flex: 1, alignItems: "center", justifyContent: "center", gap: 3 },
-  iconWrap: { width: 34, height: 30, alignItems: "center", justifyContent: "center", borderRadius: 10 },
+  iconWrap: { width: 27, height: 27, alignItems: "center", justifyContent: "center", borderRadius: 8 },
   animatedNavIcon: { width: 21, height: 21 },
   animatedNavIconInactive: { opacity: 0.46 },
   label: { color: "rgba(228,228,231,.62)", fontSize: 9, fontWeight: "600", letterSpacing: 0.1 },
