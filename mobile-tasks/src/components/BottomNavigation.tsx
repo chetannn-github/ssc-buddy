@@ -87,6 +87,16 @@ function NavigationItem({ tab, active, onPress }: { tab: (typeof tabs)[number]; 
   const scale = useRef(new Animated.Value(1)).current;
   const labelOpacity = useRef(new Animated.Value(active ? 1 : 0.6)).current;
   const hasAnimatedIcon = tab.key === "tasks" || tab.key === "progress";
+  const [playAnimatedIcon, setPlayAnimatedIcon] = useState(active && hasAnimatedIcon);
+  useEffect(() => {
+    if (!active || !hasAnimatedIcon) {
+      setPlayAnimatedIcon(false);
+      return;
+    }
+    setPlayAnimatedIcon(true);
+    const timeout = setTimeout(() => setPlayAnimatedIcon(false), 2050);
+    return () => clearTimeout(timeout);
+  }, [active, hasAnimatedIcon]);
   useEffect(() => {
     if (active) {
       if (hasAnimatedIcon) {
@@ -113,7 +123,7 @@ function NavigationItem({ tab, active, onPress }: { tab: (typeof tabs)[number]; 
   return (
     <Pressable accessibilityRole="tab" accessibilityState={{ selected: active }} accessibilityLabel={tab.label} onPress={onPress} style={styles.item}>
       <Animated.View style={{ transform: [{ scale }] }}>
-        {active && hasAnimatedIcon ? (
+        {active && hasAnimatedIcon && playAnimatedIcon ? (
           <Image
             source={tab.key === "tasks"
               ? require("../../assets/clipboard-text-pinch.webp")
