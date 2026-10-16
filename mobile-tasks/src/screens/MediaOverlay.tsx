@@ -1,10 +1,10 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { User } from "firebase/auth";
-import { requestNotificationPermissionsAsync, setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
+import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import Constants, { AppOwnership } from "expo-constants";
 import { useVideoPlayer, VideoView } from "expo-video";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Animated, DeviceEventEmitter, Easing, FlatList, Image, Modal, NativeModules, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Animated, AppState, Easing, FlatList, Image, Modal, PanResponder, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 import { musicCover, musicSource, musicTracks, trackTitle, videoSource, videoTracks } from "../lib/media";
 import { colors } from "../theme";
@@ -12,19 +12,6 @@ import { subscribeBottomNavigation } from "../navigation/bottomNavigationVisibil
 import { patchCloudPreferences, watchCloudPreferences } from "../lib/firebase";
 
 export type MediaMode = "video" | "music" | null;
-type NativeMusicPlayer = {
-  CAPABILITY_PLAY: number; CAPABILITY_PAUSE: number; CAPABILITY_SEEK_TO: number; CAPABILITY_SKIP_TO_NEXT: number; CAPABILITY_SKIP_TO_PREVIOUS: number;
-  REPEAT_TRACK: number; REPEAT_QUEUE: number; STATE_PLAYING: string;
-  setupPlayer: (options: Record<string, unknown>) => Promise<void>; updateOptions: (options: Record<string, unknown>) => Promise<void>;
-  reset: () => Promise<void>; add: (tracks: Record<string, unknown>[]) => Promise<void>; setRepeatMode: (mode: number) => Promise<void>;
-  play: () => Promise<void>; pause: () => Promise<void>; skip: (index: number) => Promise<void>; skipToNext: () => Promise<void>;
-  skipToPrevious: () => Promise<void>; seekTo: (position: number) => Promise<void>; getPlaybackState: () => Promise<{ state: string }>;
-  getProgress: () => Promise<{ position: number; duration: number; buffered: number }>;
-};
-// Avoid importing react-native-track-player in JS: Expo Go has no native
-// module for it and the package reads native constants during import.
-const nativeMusicPlayer = NativeModules.TrackPlayerModule as NativeMusicPlayer | undefined;
-const nativeMusicEvents = { playbackState: "playback-state", activeTrackChanged: "playback-active-track-changed" } as const;
 const playlistName = (track: string) => decodeURIComponent(track).split("/").slice(0, -1).join(" / ") || "Music";
 /** Keep liked media first, while preserving the source order inside each group. */
 const prioritizeLikes = (items: string[], likes: Set<string>) => {
@@ -188,11 +175,12 @@ function MusicPlayer({ user, onClose, openRequest }: { user: User | null; onClos
   const [minimized, setMinimized] = useState(false);
   const [bottomNavVisible, setBottomNavVisible] = useState(true);
   const [dragProgress, setDragProgress] = useState<number | null>(null);
-  const [playerReady, setPlayerReady] = useState(false);
-  const [playbackState, setPlaybackState] = useState<string>("");
-  const [playbackProgress, setPlaybackProgress] = useState({ position: 0, duration: 0, buffered: 0 });
-  const fallbackPlayer = useAudioPlayer(null, { updateInterval: 300 });
-  const fallbackStatus = useAudioPlayerStatus(fallbackPlayer);
+  const [audioModeReady, setAudioModeReady] = useState(false);
+  const source = musicSource(musicTracks[index] ?? musicTracks[0]);
+  const player = useAudioPlayer(null, { updateInterval: 500 });
+  const status = useAudioPlayerStatus(player);
+  const [isForeground, setIsForeground] = useState(AppState.currentState === "active");
+  const advancedTrackRef = useRef<string | null>(null);
   const artworkSpin = useRef(new Animated.Value(0)).current;
   const miniLift = useRef(new Animated.Value(0)).current;
   const artworkAnimation = useRef<Animated.CompositeAnimation | null>(null);
@@ -211,8 +199,6 @@ function MusicPlayer({ user, onClose, openRequest }: { user: User | null; onClos
   // Expo Go cannot include this project's custom foreground media service.
   // A development/standalone build receives the service from the expo-audio plugin.
   const supportsBackgroundControls = Constants.appOwnership !== AppOwnership.Expo;
-  const usingNativeQueue = Boolean(nativeMusicPlayer);
-  const isPlaying = usingNativeQueue ? playbackState === nativeMusicPlayer?.STATE_PLAYING : fallbackStatus.playing;
   useEffect(() => {
     if (!likesReady || likedOrderApplied.current) return;
     likedOrderApplied.current = true;
@@ -233,85 +219,35 @@ function MusicPlayer({ user, onClose, openRequest }: { user: User | null; onClos
   useEffect(() => { if (openRequest) setMinimized(false); }, [openRequest]);
   useEffect(() => subscribeBottomNavigation(setBottomNavVisible), []);
   useEffect(() => {
-    Animated.timing(miniLift, { toValue: bottomNavVisible ? -64 : 0, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
-  }, [bottomNavVisible, miniLift]);
-  const fallbackSource = musicSource(activeTrack);
-  useEffect(() => {
-    if (!nativeMusicPlayer) return;
-    const syncState = () => { void nativeMusicPlayer.getPlaybackState().then((value) => setPlaybackState(value.state)).catch(() => undefined); };
-    const syncProgress = () => { void nativeMusicPlayer.getProgress().then(setPlaybackProgress).catch(() => undefined); };
-    syncState();
-    syncProgress();
-    const playbackSubscription = DeviceEventEmitter.addListener(nativeMusicEvents.playbackState, (event: { state?: string }) => setPlaybackState(event?.state ?? ""));
-    const trackSubscription = DeviceEventEmitter.addListener(nativeMusicEvents.activeTrackChanged, (event: { track?: { id?: string } }) => {
-      const nextIndex = musicTracks.indexOf(event?.track?.id ?? "");
-      if (nextIndex >= 0) setIndex(nextIndex);
-      syncProgress();
-    });
-    const timer = setInterval(syncProgress, 300);
-    return () => { playbackSubscription.remove(); trackSubscription.remove(); clearInterval(timer); };
+    const subscription = AppState.addEventListener("change", (nextState) => setIsForeground(nextState === "active"));
+    return () => subscription.remove();
   }, []);
   useEffect(() => {
-    if (usingNativeQueue) return;
-    try { fallbackPlayer.replace(fallbackSource); fallbackPlayer.play(); } catch {}
-  }, [fallbackPlayer, fallbackSource, usingNativeQueue]);
+    Animated.timing(miniLift, { toValue: bottomNavVisible ? -64 : 0, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+  }, [bottomNavVisible, miniLift]);
   useEffect(() => {
-    if (usingNativeQueue) return;
-    fallbackPlayer.loop = repeat;
-  }, [fallbackPlayer, repeat, usingNativeQueue]);
+    try { player.replace(source); player.play(); } catch {}
+  }, [player, source]);
+  useEffect(() => { player.loop = repeat; }, [player, repeat]);
   useEffect(() => {
-    if (usingNativeQueue) return;
-    void setAudioModeAsync({ playsInSilentMode: true, interruptionMode: "doNotMix", shouldPlayInBackground: supportsBackgroundControls }).catch(() => undefined);
-  }, [supportsBackgroundControls, usingNativeQueue]);
+    let active = true;
+    void setAudioModeAsync({ playsInSilentMode: true, interruptionMode: "doNotMix", shouldPlayInBackground: supportsBackgroundControls })
+      .then(() => { if (active) setAudioModeReady(true); })
+      .catch(() => { if (active) setAudioModeReady(false); });
+    return () => { active = false; };
+  }, [supportsBackgroundControls]);
   useEffect(() => {
-    if (usingNativeQueue || !supportsBackgroundControls) return;
+    if (!supportsBackgroundControls || !audioModeReady) return;
     try {
-      fallbackPlayer.setActiveForLockScreen(true, {
-        title: trackTitle(activeTrack), artist: "SSC Buddy", albumTitle: playlistName(activeTrack), artworkUrl: cover ? Image.resolveAssetSource(cover).uri : undefined,
+      player.setActiveForLockScreen(true, {
+        title: trackTitle(activeTrack), artist: "SSC Buddy", albumTitle: "Motivation", artworkUrl: cover ? Image.resolveAssetSource(cover).uri : undefined,
       }, { showSeekBackward: true, showSeekForward: true });
     } catch {}
-  }, [activeTrack, cover, fallbackPlayer, supportsBackgroundControls, usingNativeQueue]);
+  }, [activeTrack, audioModeReady, cover, player, supportsBackgroundControls]);
   useEffect(() => {
-    if (!orderReady || !nativeMusicPlayer) return;
-    let cancelled = false;
-    const startNativeQueue = async () => {
-      try {
-        try { await nativeMusicPlayer.setupPlayer({ autoHandleInterruptions: true }); }
-        catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          if (!/already.*initial/i.test(message)) throw error;
-        }
-        await nativeMusicPlayer.updateOptions({
-          capabilities: [nativeMusicPlayer.CAPABILITY_PLAY, nativeMusicPlayer.CAPABILITY_PAUSE, nativeMusicPlayer.CAPABILITY_SKIP_TO_NEXT, nativeMusicPlayer.CAPABILITY_SKIP_TO_PREVIOUS, nativeMusicPlayer.CAPABILITY_SEEK_TO],
-          notificationCapabilities: [nativeMusicPlayer.CAPABILITY_PLAY, nativeMusicPlayer.CAPABILITY_PAUSE, nativeMusicPlayer.CAPABILITY_SKIP_TO_NEXT, nativeMusicPlayer.CAPABILITY_SKIP_TO_PREVIOUS],
-          compactCapabilities: [nativeMusicPlayer.CAPABILITY_SKIP_TO_PREVIOUS, nativeMusicPlayer.CAPABILITY_PLAY, nativeMusicPlayer.CAPABILITY_SKIP_TO_NEXT],
-          progressUpdateEventInterval: 0.3,
-        });
-        await nativeMusicPlayer.reset();
-        await nativeMusicPlayer.add(orderedTracks.map((track) => ({
-          id: track, url: musicSource(track), title: trackTitle(track), artist: "SSC Buddy", album: playlistName(track), artwork: musicCover(track)?.uri,
-        })));
-        await nativeMusicPlayer.setRepeatMode(repeat ? nativeMusicPlayer.REPEAT_TRACK : nativeMusicPlayer.REPEAT_QUEUE);
-        await nativeMusicPlayer.play();
-        if (!cancelled) setPlayerReady(true);
-      } catch { if (!cancelled) setPlayerReady(false); }
-    };
-    void startNativeQueue();
-    return () => { cancelled = true; };
-  }, [orderReady, orderedTracks]);
-  useEffect(() => {
-    if (!supportsBackgroundControls || Platform.OS !== "android") return;
-    void requestNotificationPermissionsAsync().catch(() => undefined);
-  }, [supportsBackgroundControls]);
-  useEffect(() => () => { void nativeMusicPlayer?.pause().then(() => nativeMusicPlayer?.reset()).catch(() => undefined); }, []);
-  useEffect(() => {
-    if (!playerReady || !nativeMusicPlayer) return;
-    void nativeMusicPlayer.setRepeatMode(repeat ? nativeMusicPlayer.REPEAT_TRACK : nativeMusicPlayer.REPEAT_QUEUE);
-  }, [playerReady, repeat]);
-  useEffect(() => {
-    shouldSpin.current = isPlaying;
+    shouldSpin.current = status.playing;
     artworkAnimation.current?.stop();
-    if (!isPlaying) return;
+    if (!status.playing) return;
     const spinOnce = () => {
       artworkAnimation.current = Animated.timing(artworkSpin, {
         toValue: 1,
@@ -328,40 +264,35 @@ function MusicPlayer({ user, onClose, openRequest }: { user: User | null; onClos
     };
     spinOnce();
     return () => { artworkAnimation.current?.stop(); };
-  }, [artworkSpin, isPlaying]);
-  const selectTrack = useCallback((nextIndex: number) => {
-    const nextTrack = musicTracks[nextIndex];
-    const queueIndex = orderedTracks.indexOf(nextTrack);
-    if (!nextTrack || queueIndex < 0) return;
-    setIndex(nextIndex);
-    if (playerReady) void nativeMusicPlayer?.skip(queueIndex).then(() => nativeMusicPlayer?.play()).catch(() => undefined);
-  }, [orderedTracks, playerReady]);
-  const shift = useCallback((amount: number) => {
+  }, [artworkSpin, status.playing]);
+  const shift = (amount: number) => {
     const currentTrackIndex = playingPlaylistTracks.indexOf(activeTrack);
     if (currentTrackIndex < 0 || !playingPlaylistTracks.length) return;
     const nextTrack = playingPlaylistTracks[(currentTrackIndex + amount + playingPlaylistTracks.length) % playingPlaylistTracks.length];
     const nextIndex = musicTracks.indexOf(nextTrack);
-    if (nextIndex >= 0) selectTrack(nextIndex);
-  }, [activeTrack, playingPlaylistTracks, selectTrack]);
+    if (nextIndex >= 0) setIndex(nextIndex);
+  };
+  // Keep this intentionally foreground-only. The Expo Audio fallback owns no
+  // Android media queue, so background progression belongs to a future native
+  // implementation rather than risking another app-start dependency crash.
   useEffect(() => {
-    if (usingNativeQueue || !fallbackStatus.didJustFinish || repeat) return;
+    if (!status.didJustFinish) { advancedTrackRef.current = null; return; }
+    if (!isForeground || repeat || advancedTrackRef.current === activeTrack) return;
+    advancedTrackRef.current = activeTrack;
     shift(1);
-  }, [fallbackStatus.didJustFinish, repeat, shift, usingNativeQueue]);
-  const playMusic = () => { if (nativeMusicPlayer) void nativeMusicPlayer.play(); else fallbackPlayer.play(); };
-  const pauseMusic = () => { if (nativeMusicPlayer) void nativeMusicPlayer.pause(); else fallbackPlayer.pause(); };
+  }, [activeTrack, isForeground, repeat, status.didJustFinish]);
   const rotation = artworkSpin.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
-  const activeDuration = usingNativeQueue ? playbackProgress.duration : fallbackStatus.duration;
-  const activeTime = usingNativeQueue ? playbackProgress.position : fallbackStatus.currentTime;
-  const progress = dragProgress ?? (activeDuration > 0 ? Math.max(0, Math.min(1, activeTime / activeDuration)) : 0);
+  const playbackProgress = status.duration > 0 ? Math.max(0, Math.min(1, status.currentTime / status.duration)) : 0;
+  const progress = dragProgress ?? playbackProgress;
   const progressFromPoint = (x: number, y: number, size: number) => {
     const angle = (Math.atan2(y - size / 2, x - size / 2) + Math.PI / 2 + Math.PI * 2) % (Math.PI * 2);
     return angle / (Math.PI * 2);
   };
   const seekFromPoint = (x: number, y: number, size: number) => {
-    if (!activeDuration) return;
+    if (!status.duration) return;
     const nextProgress = progressFromPoint(x, y, size);
     setDragProgress(nextProgress);
-    if (nativeMusicPlayer) void nativeMusicPlayer.seekTo(nextProgress * activeDuration); else void fallbackPlayer.seekTo(nextProgress * activeDuration);
+    void player.seekTo(nextProgress * status.duration);
   };
   const discPan = PanResponder.create({
     onStartShouldSetPanResponder: () => true,
@@ -374,7 +305,7 @@ function MusicPlayer({ user, onClose, openRequest }: { user: User | null; onClos
         if (distance > discSize / 2 - 13) {
           seekFromPoint(x, y, discSize);
         } else {
-          isPlaying ? pauseMusic() : playMusic();
+          status.playing ? player.pause() : player.play();
         }
       } else {
         seekFromPoint(event.nativeEvent.locationX, event.nativeEvent.locationY, discSize);
@@ -385,9 +316,9 @@ function MusicPlayer({ user, onClose, openRequest }: { user: User | null; onClos
   if (minimized) {
     return <Animated.View pointerEvents="box-none" style={[styles.miniLayer, { paddingBottom: 12, transform: [{ translateY: miniLift }] }]}>
       <View style={styles.miniPlayer}>
-        <Pressable style={styles.miniDisc} onPress={() => isPlaying ? pauseMusic() : playMusic()}><ProgressRing size={38} progress={progress} /><Animated.View style={[styles.miniArtwork, { transform: [{ rotate: rotation }] }]}>{cover ? <Image source={cover} style={styles.coverImage} /> : <MaterialCommunityIcons name="music" size={16} color={colors.accent} />}</Animated.View></Pressable>
-        <Pressable style={styles.miniText} onPress={() => setMinimized(false)}><Text numberOfLines={1} style={styles.miniTitle}>{trackTitle(musicTracks[index] ?? "")}</Text><Text style={styles.miniStatus}>{isPlaying ? "Playing" : "Paused"}</Text></Pressable>
-        <Pressable hitSlop={8} onPress={() => isPlaying ? pauseMusic() : playMusic()}><MaterialCommunityIcons name={isPlaying ? "pause" : "play"} size={22} color={colors.text} /></Pressable>
+        <Pressable style={styles.miniDisc} onPress={() => status.playing ? player.pause() : player.play()}><ProgressRing size={38} progress={progress} /><Animated.View style={[styles.miniArtwork, { transform: [{ rotate: rotation }] }]}>{cover ? <Image source={cover} style={styles.coverImage} /> : <MaterialCommunityIcons name="music" size={16} color={colors.accent} />}</Animated.View></Pressable>
+        <Pressable style={styles.miniText} onPress={() => setMinimized(false)}><Text numberOfLines={1} style={styles.miniTitle}>{trackTitle(musicTracks[index] ?? "")}</Text><Text style={styles.miniStatus}>{status.playing ? "Playing" : "Paused"}</Text></Pressable>
+        <Pressable hitSlop={8} onPress={() => status.playing ? player.pause() : player.play()}><MaterialCommunityIcons name={status.playing ? "pause" : "play"} size={22} color={colors.text} /></Pressable>
         <Pressable hitSlop={8} onPress={onClose}><MaterialCommunityIcons name="close" size={18} color={colors.muted} /></Pressable>
       </View>
     </Animated.View>;
@@ -397,7 +328,7 @@ function MusicPlayer({ user, onClose, openRequest }: { user: User | null; onClos
     <View style={[styles.disc, { width: discSize, height: discSize, marginTop: 3 }]} {...discPan.panHandlers}><Animated.View style={[styles.artwork, { width: 90, height: 90, borderRadius: 45, transform: [{ rotate: rotation }] }]}>{cover ? <Image source={cover} style={styles.coverImage} /> : <MaterialCommunityIcons name="music" size={34} color={colors.accent} />}</Animated.View><ProgressRing size={discSize} progress={progress} /></View>
     <Text style={styles.songTitle} numberOfLines={1}>{trackTitle(musicTracks[index] ?? "")}</Text>
     <View style={styles.controls}><Pressable style={styles.round} onPress={() => toggleLike(activeTrack)}><MaterialCommunityIcons name={liked ? "heart" : "heart-outline"} size={21} color={liked ? "#fb7185" : colors.text} /></Pressable><Pressable style={[styles.round, repeat && { backgroundColor: "#284d7f" }]} onPress={() => setRepeat((value) => !value)}><MaterialCommunityIcons name="repeat" size={20} color={colors.text} /></Pressable><Pressable style={styles.round} onPress={() => shift(-1)}><MaterialCommunityIcons name="chevron-left" size={28} color={colors.text} /></Pressable><Pressable style={styles.round} onPress={() => shift(1)}><MaterialCommunityIcons name="chevron-right" size={28} color={colors.text} /></Pressable></View>
-    <View style={styles.playlistHeader}><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.playlistChips}>{playlists.map((playlist) => <Pressable key={playlist} onPress={() => setSelectedPlaylist(playlist)} style={[styles.playlistChip, playlist === selectedPlaylist && styles.playlistChipActive]}><Text numberOfLines={1} style={[styles.playlistChipText, playlist === selectedPlaylist && styles.playlistChipTextActive]}>{playlist}</Text></Pressable>)}</ScrollView></View><ScrollView nestedScrollEnabled showsVerticalScrollIndicator style={[styles.playlist, { marginTop: 5 }]} contentContainerStyle={styles.playlistContent}>{visibleTracks.map((track) => { const trackIndex = musicTracks.indexOf(track); return <Pressable key={track} onPress={() => selectTrack(trackIndex)} style={[styles.track, { paddingVertical: 5 }, trackIndex === index && styles.trackActive]}><Text numberOfLines={1} style={[styles.trackText, trackIndex === index && styles.trackTextActive]}>{trackTitle(track)}</Text></Pressable>; })}</ScrollView>
+    <View style={styles.playlistHeader}><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.playlistChips}>{playlists.map((playlist) => <Pressable key={playlist} onPress={() => setSelectedPlaylist(playlist)} style={[styles.playlistChip, playlist === selectedPlaylist && styles.playlistChipActive]}><Text numberOfLines={1} style={[styles.playlistChipText, playlist === selectedPlaylist && styles.playlistChipTextActive]}>{playlist}</Text></Pressable>)}</ScrollView></View><ScrollView nestedScrollEnabled showsVerticalScrollIndicator style={[styles.playlist, { marginTop: 5 }]} contentContainerStyle={styles.playlistContent}>{visibleTracks.map((track) => { const trackIndex = musicTracks.indexOf(track); return <Pressable key={track} onPress={() => setIndex(trackIndex)} style={[styles.track, { paddingVertical: 5 }, trackIndex === index && styles.trackActive]}><Text numberOfLines={1} style={[styles.trackText, trackIndex === index && styles.trackTextActive]}>{trackTitle(track)}</Text></Pressable>; })}</ScrollView>
   </Pressable></Pressable></Modal>;
 }
 
