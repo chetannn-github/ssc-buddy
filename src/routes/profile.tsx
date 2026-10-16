@@ -170,6 +170,7 @@ function ActivityHeatmap({
   range,
   activityEnabled = true,
   publicActivity,
+  dataReady = true,
 }: {
   records: TestRecord[];
   tracker: TrackerData | null;
@@ -177,9 +178,27 @@ function ActivityHeatmap({
   range: ActivityRange;
   activityEnabled?: boolean;
   publicActivity?: Record<string, number> | undefined;
+  dataReady?: boolean;
 }) {
-  const [mode, setMode] = useState<"activity" | "tasks">(() => activityEnabled ? "activity" : "tasks");
-  useEffect(() => { if (!activityEnabled) setMode("tasks"); }, [activityEnabled]);
+  const todayKey = localDay(new Date());
+  const hasTodayTask = tasks.some((task) => task.completed && activityDay(task.date) === todayKey);
+  const hasTodayActivity = Boolean(
+    publicActivity?.[todayKey]
+    || records.some((record) => activityDay(record.date) === todayKey)
+    || (tracker?.tests.log ?? []).some((test) => activityDay(test.date) === todayKey)
+    || (tracker?.activity ?? []).some((entry) => activityDay(entry.date) === todayKey),
+  );
+  // Prefer the only heatmap that has something today. Activity remains the
+  // deterministic default when both (or neither) have an entry.
+  const defaultMode: "activity" | "tasks" = !activityEnabled ? "tasks" : (!hasTodayActivity && hasTodayTask ? "tasks" : "activity");
+  const [mode, setMode] = useState<"activity" | "tasks">(defaultMode);
+  const hasAppliedDefaultMode = useRef(false);
+  useEffect(() => {
+    if (!activityEnabled) { setMode("tasks"); return; }
+    if (!dataReady || hasAppliedDefaultMode.current) return;
+    hasAppliedDefaultMode.current = true;
+    setMode(defaultMode);
+  }, [activityEnabled, dataReady, defaultMode]);
   const { days, months, totalActivity, activeDays, maxStreak } = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -1250,7 +1269,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
               showTracker={profile?.trackProgressEnabled !== false}
             />
 
-            <ActivityHeatmap records={records} tracker={tracker} tasks={dailyTasks} range="year" activityEnabled={profile?.practiceSessionEnabled !== false || profile?.trackProgressEnabled !== false} publicActivity={readOnly && !publicProfile?.dashboard ? publicProfile?.activity : undefined} />
+            <ActivityHeatmap records={records} tracker={tracker} tasks={dailyTasks} range="year" activityEnabled={profile?.practiceSessionEnabled !== false || profile?.trackProgressEnabled !== false} publicActivity={readOnly && !publicProfile?.dashboard ? publicProfile?.activity : undefined} dataReady={readOnly || profile !== null} />
           </div>
 
           {profile?.trackProgressEnabled !== false && <StudyTrackerOverview tracker={tracker} readOnly={readOnly} />}

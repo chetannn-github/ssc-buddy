@@ -161,6 +161,43 @@ function RollingDuration({ minutes, color = "#fafafa", fontSize = 23 }: { minute
   </View>;
 }
 
+function PointsSpark({ points }: { points: number }) {
+  const [playing, setPlaying] = useState(true);
+  const [run, setRun] = useState(0);
+  useEffect(() => {
+    // Native GIFs loop forever. Remount for each Tasks visit/points change,
+    // then deliberately replace it with its exported final still frame.
+    setPlaying(true);
+    setRun((value) => value + 1);
+    const timeout = setTimeout(() => setPlaying(false), 6010);
+    return () => clearTimeout(timeout);
+  }, [points]);
+  return <Image key={`${playing ? "play" : "final"}-${run}`} source={playing ? require("./assets/points-spark.gif") : require("./assets/points-spark-final.png")} resizeMode="contain" style={styles.pointsSpark} />;
+}
+
+function StreakCelebration({ streak, onClose }: { streak: number; onClose: () => void }) {
+  return (
+    <Modal transparent visible animationType="fade" statusBarTranslucent onRequestClose={onClose}>
+      <Pressable style={styles.streakCelebrationBackdrop} onPress={onClose}>
+        <Pressable style={styles.streakCelebrationDialog} onPress={() => undefined}>
+          <Pressable accessibilityLabel="Close streak celebration" hitSlop={10} onPress={onClose} style={styles.streakCelebrationClose}>
+            <MaterialCommunityIcons name="close" size={19} color="#a1a1aa" />
+          </Pressable>
+          <View style={styles.streakCelebrationIcon}>
+            <Image source={require("./assets/consistency-firework.webp")} style={styles.streakCelebrationFirework} resizeMode="contain" />
+          </View>
+          <Text style={styles.streakCelebrationEyebrow}>STREAK INCREASED</Text>
+          <Text style={styles.streakCelebrationTitle}>{streak}-day streak</Text>
+          <Text style={styles.streakCelebrationCopy}>Keep showing up.</Text>
+          <Pressable style={styles.streakCelebrationButton} onPress={onClose}>
+            <Text style={styles.streakCelebrationButtonText}>Continue</Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 export default function App() {
   const [authReady, setAuthReady] = useState(!isFirebaseConfigured);
   const [showSplash, setShowSplash] = useState(true);
@@ -180,6 +217,7 @@ export default function App() {
   const [publicTracker, setPublicTracker] = useState<Record<string, any>>({ subjects: [], revision: {}, activity: [], tests: { log: [] } });
   const [profileMockTests, setProfileMockTests] = useState<any[]>([]);
   const [profileActivityReady, setProfileActivityReady] = useState(false);
+  const [celebratedStreak, setCelebratedStreak] = useState<number | null>(null);
   const [profileSettings, setProfileSettings] = useState<PracticeProfile | null>(null);
   const [appTab, setAppTab] = useState<TabKey>("tasks");
   const [trackTab, setTrackTab] = useState<"Syllabus" | "Revision" | "Mock Test">("Syllabus");
@@ -191,6 +229,7 @@ export default function App() {
   const authChangeVersion = useRef(0);
   const taskCacheVersion = useRef(0);
   const profileCacheVersion = useRef(0);
+  const previousStreak = useRef<number | null>(null);
   const [tab, setTab] = useState<"Tasks" | "Analytics" | "History">("Tasks");
   const [taskTabsWidth, setTaskTabsWidth] = useState(0);
   const taskTabIndicator = useRef(new Animated.Value(0)).current;
@@ -548,6 +587,25 @@ export default function App() {
     while (activeDays.has(localDateKey(cursor))) { days += 1; cursor.setDate(cursor.getDate() - 1); }
     return days;
   }, [practiceActivityDates, tasks, trackerActivityDates]);
+  useEffect(() => {
+    // Like the web shell, never celebrate the first hydrated value. Only a
+    // real, live increase after all three activity sources have loaded earns it.
+    if (!authenticated || !tasksLoaded || !profileActivityReady) return;
+    if (previousStreak.current === null) {
+      previousStreak.current = streak;
+      return;
+    }
+    if (streak <= previousStreak.current) {
+      previousStreak.current = streak;
+      return;
+    }
+    previousStreak.current = streak;
+    setCelebratedStreak(streak);
+  }, [authenticated, profileActivityReady, streak, tasksLoaded]);
+  useEffect(() => {
+    previousStreak.current = null;
+    setCelebratedStreak(null);
+  }, [user?.uid]);
   const highest = useMemo(
     () =>
       tasksInLastDays(tasks, 365)
@@ -751,7 +809,7 @@ export default function App() {
             <View style={styles.hero}>
               <View style={styles.heroHeading}>
                 <Text style={styles.date}>{taskDay === "today" ? "Today’s tasks" : "Tomorrow’s tasks"}</Text>
-                <View style={styles.heroHeadingActions}><View style={styles.livePoints}><MaterialCommunityIcons name="lightning-bolt" size={13} color="#86efac" /><View style={styles.livePointsText}><RollingMetric value={weeklyPoints} prefix={weeklyPoints > 0 ? "+" : ""} suffix=" pts" /></View></View>{(tomorrowTaskCount > 0 || taskDay === "tomorrow") && <Pressable style={styles.dayToggle} onPress={() => setTaskDay((current) => current === "today" ? "tomorrow" : "today")}><Text style={styles.dayToggleText}>{taskDay === "today" ? `Tomorrow (${tomorrowTaskCount})` : "Today"}</Text><MaterialCommunityIcons name="chevron-right" size={14} color="#b4b4b8" /></Pressable>}</View>
+                <View style={styles.heroHeadingActions}><View style={styles.livePoints}><PointsSpark points={weeklyPoints} /><View style={styles.livePointsText}><RollingMetric value={weeklyPoints} prefix={weeklyPoints > 0 ? "+" : ""} suffix=" pts" /></View></View>{(tomorrowTaskCount > 0 || taskDay === "tomorrow") && <Pressable style={styles.dayToggle} onPress={() => setTaskDay((current) => current === "today" ? "tomorrow" : "today")}><Text style={styles.dayToggleText}>{taskDay === "today" ? `Tomorrow (${tomorrowTaskCount})` : "Today"}</Text><MaterialCommunityIcons name="chevron-right" size={14} color="#b4b4b8" /></Pressable>}</View>
               </View>
               <View style={styles.progressRow}>
                 <CompletionRing percent={todaySummary.percent} />
@@ -923,6 +981,7 @@ export default function App() {
       )}
       {!quickRecallOpen && <BottomNavigation activeTab={appTab} onChange={(tab) => { setLeaderboardOpen(false); setAppTab(tab); }} practiceSessionEnabled={profileSettings?.practiceSessionEnabled !== false} trackProgressEnabled={profileSettings?.trackProgressEnabled !== false} profileAvatar={profileSettings?.avatar ? avatarAssets[profileSettings.avatar] : undefined} />}
       <MediaOverlay user={user} mode={mediaMode} musicOpenRequest={musicOpenRequest} onClose={() => setMediaMode(null)} />
+      {celebratedStreak !== null && <StreakCelebration streak={celebratedStreak} onClose={() => setCelebratedStreak(null)} />}
       <DailyManifestationDialog
         phrase={dailyManifestation}
         entry={manifestationEntry}
@@ -1054,6 +1113,16 @@ const styles = StyleSheet.create({
   splashMark: { width: 76, height: 76, borderRadius: 24, borderWidth: 1, borderColor: "rgba(255,255,255,.15)" },
   splashTitle: { color: "#fafafa", fontSize: 30, fontWeight: "800", marginTop: 14, letterSpacing: -0.6 },
   splashCopy: { color: "#a1a1aa", fontSize: 12, marginTop: 6 },
+  streakCelebrationBackdrop: { flex: 1, alignItems: "center", justifyContent: "center", padding: 22, backgroundColor: "rgba(0,0,0,.78)" },
+  streakCelebrationDialog: { width: "100%", maxWidth: 340, alignItems: "center", borderRadius: 20, borderWidth: 1, borderColor: "rgba(255,255,255,.10)", backgroundColor: "#171717", paddingHorizontal: 24, paddingTop: 27, paddingBottom: 22, shadowColor: "#000", shadowOpacity: .45, shadowRadius: 30, shadowOffset: { width: 0, height: 14 }, elevation: 18 },
+  streakCelebrationClose: { position: "absolute", top: 10, right: 10, width: 32, height: 32, alignItems: "center", justifyContent: "center", borderRadius: 9 },
+  streakCelebrationIcon: { width: 64, height: 64, alignItems: "center", justifyContent: "center", borderRadius: 16, borderWidth: 1, borderColor: "rgba(252,211,77,.18)", backgroundColor: "rgba(251,191,36,.10)" },
+  streakCelebrationFirework: { width: 47, height: 47, tintColor: "#fcd34d" },
+  streakCelebrationEyebrow: { marginTop: 16, color: "#a1a1aa", fontSize: 10, fontWeight: "700", letterSpacing: 1.8 },
+  streakCelebrationTitle: { marginTop: 6, color: "#fafafa", fontSize: 24, fontWeight: "700", letterSpacing: -.3 },
+  streakCelebrationCopy: { marginTop: 7, color: "#a1a1aa", fontSize: 14 },
+  streakCelebrationButton: { width: "100%", marginTop: 21, alignItems: "center", justifyContent: "center", borderRadius: 10, backgroundColor: "#f4f4f5", paddingVertical: 11 },
+  streakCelebrationButtonText: { color: "#18181b", fontSize: 14, fontWeight: "700" },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -1089,9 +1158,10 @@ const styles = StyleSheet.create({
   content: { position: "relative", padding: 20, gap: 12, paddingBottom: 60 },
   tasksContent: { paddingTop: 0 },
   tasksSticky: { backgroundColor: "#101010", paddingTop: 20, paddingBottom: 12 },
-  tasksList: { gap: 12 },
+  tasksList: { gap: 8 },
   heroHeadingActions: { flexDirection: "row", alignItems: "center", gap: 8 },
   livePoints: { flexDirection: "row", alignItems: "center", gap: 3 },
+  pointsSpark: { width: 16, height: 16 },
   livePointsText: { minWidth: 38 },
   hero: {
     borderRadius: 22,

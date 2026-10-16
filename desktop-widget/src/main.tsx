@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import NumberFlow from "@number-flow/react";
-import { ArrowLeft, ArrowRight, Check, ChevronDown, CloudOff, Eye, EyeOff, Flame, LoaderCircle, LogOut, Plus, Sparkles, Trash2, Trophy, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, ChevronDown, CloudOff, Eye, EyeOff, Flame, LoaderCircle, LogOut, Plus, Sparkles, Trophy, X } from "lucide-react";
 import type { User } from "firebase/auth";
 import { TASK_TYPES, type DailyTask, type TaskType, type QuickRecallSeed, createAccount, firebaseConfigured, loadQuickRecallSeed, logout, makeTaskId, observeAuth, recordQuickRecallAnswer, recordQuickRecallPractice, removeTask, saveTask, signIn, signInGoogle, todayKey, watchLeaderboardRank, watchStreakActivity, watchTasks, watchWeeklyLeaderboard } from "./lib/firebase";
 import { createQuickRecallSession, RANDOM_RECALL_SCOPE, type QuickRecallScope, type QuickRecallSession } from "./lib/quick-recall";
 import { QuickRecallPanel } from "./components/QuickRecallPanel";
+
+// Daily-task remove controls use the same minimal close mark as web and mobile.
+const Trash2 = X;
 import authImage from "./assets/auth.jpg";
 import googleImage from "./assets/google.png";
 import goldMedal from "../../public/gold-medal.png";

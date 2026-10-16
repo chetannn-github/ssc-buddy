@@ -44,7 +44,7 @@ export function TaskRow({ task, points, onDone, onReopen, onEdit, onDelete, comp
         </Pressable>
         {!compact ? (
           <View style={styles.actions}>
-            <Pressable accessibilityLabel="Delete task" onPress={onDelete} hitSlop={9} style={styles.iconAction}><MaterialCommunityIcons name="trash-can-outline" size={17} color={colors.muted} /></Pressable>
+            <Pressable accessibilityLabel="Delete task" onPress={onDelete} hitSlop={9} style={styles.iconAction}><MaterialCommunityIcons name="close" size={18} color={colors.muted} /></Pressable>
           </View>
         ) : null}
       </View>
@@ -61,7 +61,7 @@ const styles = StyleSheet.create({
     borderRadius: 13,
     paddingHorizontal: 10,
     paddingVertical: 8,
-    marginBottom: 6,
+    marginBottom: 0,
     backgroundColor: "#1a1a1a",
     borderWidth: 1,
     borderColor: colors.border,

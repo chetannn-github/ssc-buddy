@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Check, LoaderCircle, Plus, Trash2, X } from "lucide-react";
+import { Check, LoaderCircle, Plus, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { User } from "firebase/auth";
 import { Button } from "@/components/ui/button";
@@ -644,7 +644,7 @@ function TaskRow({
       {!readOnly && (
         <>
           <Button size="icon" variant="ghost" onClick={(event) => { event.stopPropagation(); onDelete(); }}>
-            <Trash2 />
+            <X className="h-4 w-4" />
           </Button>
         </>
       )}

@@ -45,6 +45,20 @@ const ScrollView = (props: any) => (
   />
 );
 
+function StreakFlame({ streak }: { streak: number }) {
+  const [playing, setPlaying] = useState(true);
+  const [run, setRun] = useState(0);
+  useEffect(() => {
+    // The GIF is intentionally a one-shot: profile entry or a live streak
+    // increase plays it once, then the supplied final flame frame remains.
+    setPlaying(true);
+    setRun((value) => value + 1);
+    const timeout = setTimeout(() => setPlaying(false), 3530);
+    return () => clearTimeout(timeout);
+  }, [streak]);
+  return <Image key={`${playing ? "play" : "final"}-${run}`} source={playing ? require("../../assets/streak-flame.gif") : require("../../assets/streak-flame-final.png")} resizeMode="contain" style={styles.profileStreakFlame} />;
+}
+
 type Range = "today" | "week" | "month" | "lastMonth" | "year" | "all";
 const ranges: Array<{ key: Range; label: string }> = [
   { key: "today", label: "Today" },
@@ -526,11 +540,7 @@ export function ProfileScreen({
             accessibilityLabel={`Practice streak: ${streak} days`}
             style={[styles.profileStreak, streak > 0 && styles.profileStreakActive]}
           >
-            <MaterialCommunityIcons
-              name="fire"
-              size={15}
-              color={streak > 0 ? "#fcd34d" : "#a1a1aa"}
-            />
+            {streak > 0 ? <StreakFlame streak={streak} /> : <MaterialCommunityIcons name="fire" size={15} color="#a1a1aa" />}
             <ProfileNumberFlow value={streak} style={[styles.profileStreakText, streak > 0 && styles.profileStreakTextActive]} />
           </View>
           <View style={[styles.avatar, { width: 70, height: 70, borderRadius: 35 }]}>
@@ -1058,8 +1068,25 @@ function ActivityHeatmap({
   dataReady?: boolean;
   sharedActivity?: Record<string, number>;
 }) {
-  const [mode, setMode] = useState<"activity" | "tasks">(() => activityEnabled ? "activity" : "tasks");
-  useEffect(() => { if (!activityEnabled) setMode("tasks"); }, [activityEnabled]);
+  const todayKey = localDayKey(new Date());
+  const hasTodayTask = tasks.some((task) => task.completed && task.date === todayKey);
+  const hasTodayActivity = Boolean(
+    sharedActivity?.[todayKey]
+    || practiceRecords.some((record) => record.date === todayKey)
+    || mockTests.some((test) => test.date === todayKey)
+    || heatmapActivityFromTracker(sharedTracker).some((entry) => entry.date === todayKey),
+  );
+  // If exactly one source has activity today, open that one. Activity is the
+  // stable fallback whenever both (or neither) have an entry.
+  const defaultMode: "activity" | "tasks" = !activityEnabled ? "tasks" : (!hasTodayActivity && hasTodayTask ? "tasks" : "activity");
+  const [mode, setMode] = useState<"activity" | "tasks">(defaultMode);
+  const hasAppliedDefaultMode = useRef(false);
+  useEffect(() => {
+    if (!activityEnabled) { setMode("tasks"); return; }
+    if (!dataReady || hasAppliedDefaultMode.current) return;
+    hasAppliedDefaultMode.current = true;
+    setMode(defaultMode);
+  }, [activityEnabled, dataReady, defaultMode]);
   const [toggleWidth, setToggleWidth] = useState(0);
   const toggleIndicator = useRef(new Animated.Value(mode === "tasks" ? 1 : 0)).current;
   useEffect(() => {
@@ -1649,6 +1676,8 @@ const styles: Record<string, any> = StyleSheet.create({
   },
   profileStreakText: { color: "#d4d4d8", fontSize: 12, fontWeight: "800" },
   profileStreakTextActive: { color: "#fef3c7" },
+  // The source artwork carries a little extra transparent space below the flame.
+  profileStreakFlame: { width: 18, height: 18, transform: [{ translateY: -3 }] },
   avatar: {
     position: "relative",
     width: 84,
