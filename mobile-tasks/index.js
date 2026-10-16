@@ -1,6 +1,6 @@
 import { registerRootComponent } from "expo";
 import Constants from "expo-constants";
-import { Platform } from "react-native";
+import { NativeModules, Platform } from "react-native";
 
 import App from "./App";
 
@@ -9,6 +9,22 @@ import App from "./App";
 // lets the normal app continue to work there while preview/release builds
 // retain full widget support.
 const supportsAndroidWidgets = Platform.OS === "android" && Constants.appOwnership !== "expo";
+
+// These handlers execute in TrackPlayer's Android media service, so the
+// notification's next/previous actions still work with the app minimized.
+// The guarded require keeps Expo Go on the expo-audio fallback path.
+if (Platform.OS !== "web" && Constants.appOwnership !== "expo" && NativeModules.TrackPlayerModule) {
+  const TrackPlayer = require("react-native-track-player").default;
+  const { Event } = require("react-native-track-player");
+  TrackPlayer.registerPlaybackService(() => async () => {
+    TrackPlayer.addEventListener(Event.RemoteNext, () => {
+      void TrackPlayer.skipToNext().catch(() => undefined);
+    });
+    TrackPlayer.addEventListener(Event.RemotePrevious, () => {
+      void TrackPlayer.skipToPrevious().catch(() => undefined);
+    });
+  });
+}
 
 if (supportsAndroidWidgets) {
   const AsyncStorage = require("@react-native-async-storage/async-storage").default;
