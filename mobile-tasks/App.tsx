@@ -46,7 +46,7 @@ import { isFirebaseConfigured, migrateTasksIfEmpty, observeSession, patchCloudPr
 import { logout } from "./src/lib/firebase";
 import { defaultProfile, loadProfile, normalizeProfile, saveProfile, type PracticeProfile } from "./src/lib/profile-store";
 import { prepareMobileAccountCache } from "./src/lib/account-cache";
-import { ProfileScreen } from "./src/screens/ProfileScreen";
+import { avatarAssets, ProfileScreen } from "./src/screens/ProfileScreen";
 import { LeaderboardScreen } from "./src/screens/LeaderboardScreen";
 import { MediaOverlay, type MediaMode } from "./src/screens/MediaOverlay";
 import { PracticeScreen } from "./src/screens/PracticeScreen";
@@ -921,7 +921,7 @@ export default function App() {
       ) : (
         <ComingSoonScreen title={activeAppTab.label} />
       )}
-      {!quickRecallOpen && <BottomNavigation activeTab={appTab} onChange={(tab) => { setLeaderboardOpen(false); setAppTab(tab); }} practiceSessionEnabled={profileSettings?.practiceSessionEnabled !== false} trackProgressEnabled={profileSettings?.trackProgressEnabled !== false} />}
+      {!quickRecallOpen && <BottomNavigation activeTab={appTab} onChange={(tab) => { setLeaderboardOpen(false); setAppTab(tab); }} practiceSessionEnabled={profileSettings?.practiceSessionEnabled !== false} trackProgressEnabled={profileSettings?.trackProgressEnabled !== false} profileAvatar={profileSettings?.avatar ? avatarAssets[profileSettings.avatar] : undefined} />}
       <MediaOverlay user={user} mode={mediaMode} musicOpenRequest={musicOpenRequest} onClose={() => setMediaMode(null)} />
       <DailyManifestationDialog
         phrase={dailyManifestation}

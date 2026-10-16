@@ -1,19 +1,19 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { useEffect, useRef, useState } from "react";
-import { Animated, Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { Animated, Image, type ImageSourcePropType, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { tabs, type TabKey } from "../navigation/tabs";
 import { resetBottomNavigation, subscribeBottomNavigation } from "../navigation/bottomNavigationVisibility";
 import { TRACK_TARGET_FRAME_DELAYS, trackTargetFrames } from "./trackTargetFrames";
 
 const PASTEL_TONES = [
-  { icon: "#fbcfe8", halo: "rgba(251,207,232,.17)" },
-  { icon: "#bfdbfe", halo: "rgba(191,219,254,.17)" },
-  { icon: "#bbf7d0", halo: "rgba(187,247,208,.17)" },
-  { icon: "#fde68a", halo: "rgba(253,230,138,.17)" },
-  { icon: "#ddd6fe", halo: "rgba(221,214,254,.17)" },
-  { icon: "#fecdd3", halo: "rgba(254,205,211,.17)" },
+  { icon: "#fbcfe8", halo: "rgba(251,207,232,.28)" },
+  { icon: "#bfdbfe", halo: "rgba(191,219,254,.28)" },
+  { icon: "#bbf7d0", halo: "rgba(187,247,208,.28)" },
+  { icon: "#fde68a", halo: "rgba(253,230,138,.28)" },
+  { icon: "#ddd6fe", halo: "rgba(221,214,254,.28)" },
+  { icon: "#fecdd3", halo: "rgba(254,205,211,.28)" },
 ] as const;
 
 const ANIMATED_ICON_DURATION: Partial<Record<TabKey, number>> = {
@@ -44,6 +44,7 @@ type Props = {
   onChange: (tab: TabKey) => void;
   practiceSessionEnabled?: boolean;
   trackProgressEnabled?: boolean;
+  profileAvatar?: ImageSourcePropType;
 };
 
 export function BottomNavigation({
@@ -51,6 +52,7 @@ export function BottomNavigation({
   onChange,
   practiceSessionEnabled = true,
   trackProgressEnabled = true,
+  profileAvatar,
 }: Props) {
   const [visible, setVisible] = useState(true);
   const height = useRef(new Animated.Value(84)).current;
@@ -77,6 +79,7 @@ export function BottomNavigation({
               key={tab.key}
               tab={tab}
               active={tab.key === activeTab}
+              profileAvatar={profileAvatar}
               onPress={() => {
                 resetBottomNavigation();
                 onChange(tab.key);
@@ -89,7 +92,7 @@ export function BottomNavigation({
   );
 }
 
-function NavigationItem({ tab, active, onPress }: { tab: (typeof tabs)[number]; active: boolean; onPress: () => void }) {
+function NavigationItem({ tab, active, onPress, profileAvatar }: { tab: (typeof tabs)[number]; active: boolean; onPress: () => void; profileAvatar?: ImageSourcePropType }) {
   const scale = useRef(new Animated.Value(1)).current;
   const labelOpacity = useRef(new Animated.Value(active ? 1 : 0.6)).current;
   const animationDuration = ANIMATED_ICON_DURATION[tab.key];
@@ -154,7 +157,9 @@ function NavigationItem({ tab, active, onPress }: { tab: (typeof tabs)[number]; 
   return (
     <Pressable accessibilityRole="tab" accessibilityState={{ selected: active }} accessibilityLabel={tab.label} onPress={onPress} style={styles.item}>
       <Animated.View style={[styles.iconWrap, active && { backgroundColor: pastelTone.halo }, { transform: [{ scale }] }]}>
-        {hasAnimatedIcon ? (
+        {tab.key === "profile" && profileAvatar ? (
+          <Image source={profileAvatar} style={[styles.profileAvatarIcon, !active && styles.profileAvatarIconInactive]} />
+        ) : hasAnimatedIcon ? (
           <Image
             source={tab.key === "track"
               ? trackTargetFrames[playAnimatedIcon ? trackFrameIndex : trackTargetFrames.length - 1]
@@ -193,6 +198,8 @@ const styles = StyleSheet.create({
   iconWrap: { width: 27, height: 27, alignItems: "center", justifyContent: "center", borderRadius: 8 },
   animatedNavIcon: { width: 21, height: 21 },
   animatedNavIconInactive: { opacity: 0.46 },
+  profileAvatarIcon: { width: 21, height: 21, borderRadius: 11 },
+  profileAvatarIconInactive: { opacity: 0.62 },
   label: { color: "rgba(228,228,231,.62)", fontSize: 9, fontWeight: "600", letterSpacing: 0.1 },
   labelActive: { color: "#f4f4f5", fontWeight: "800" },
 });
