@@ -156,7 +156,7 @@ function NavigationItem({ tab, active, onPress, profileAvatar }: { tab: (typeof 
   }, [active, hasAnimatedIcon, labelOpacity, scale]);
   return (
     <Pressable accessibilityRole="tab" accessibilityState={{ selected: active }} accessibilityLabel={tab.label} onPress={onPress} style={styles.item}>
-      <Animated.View style={[styles.iconWrap, active && { backgroundColor: pastelTone.halo }, { transform: [{ scale }] }]}>
+      <Animated.View style={[styles.iconWrap, active && tab.key !== "profile" && { backgroundColor: pastelTone.halo }, { transform: [{ scale }] }]}>
         {tab.key === "profile" && profileAvatar ? (
           <Image source={profileAvatar} style={[styles.profileAvatarIcon, !active && styles.profileAvatarIconInactive]} />
         ) : hasAnimatedIcon ? (
