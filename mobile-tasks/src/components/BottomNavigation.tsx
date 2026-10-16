@@ -8,12 +8,12 @@ import { resetBottomNavigation, subscribeBottomNavigation } from "../navigation/
 import { TRACK_TARGET_FRAME_DELAYS, trackTargetFrames } from "./trackTargetFrames";
 
 const PASTEL_TONES = [
-  { icon: "#fbcfe8", halo: "rgba(251,207,232,.28)" },
-  { icon: "#bfdbfe", halo: "rgba(191,219,254,.28)" },
-  { icon: "#bbf7d0", halo: "rgba(187,247,208,.28)" },
-  { icon: "#fde68a", halo: "rgba(253,230,138,.28)" },
-  { icon: "#ddd6fe", halo: "rgba(221,214,254,.28)" },
-  { icon: "#fecdd3", halo: "rgba(254,205,211,.28)" },
+  { icon: "#fbcfe8", halo: "rgba(251,207,232,.42)" },
+  { icon: "#bfdbfe", halo: "rgba(191,219,254,.42)" },
+  { icon: "#bbf7d0", halo: "rgba(187,247,208,.42)" },
+  { icon: "#fde68a", halo: "rgba(253,230,138,.42)" },
+  { icon: "#ddd6fe", halo: "rgba(221,214,254,.42)" },
+  { icon: "#fecdd3", halo: "rgba(254,205,211,.42)" },
 ] as const;
 
 const ANIMATED_ICON_DURATION: Partial<Record<TabKey, number>> = {
@@ -195,7 +195,7 @@ const styles = StyleSheet.create({
     elevation: 9,
   },
   item: { zIndex: 1, flex: 1, alignItems: "center", justifyContent: "center", gap: 3 },
-  iconWrap: { width: 27, height: 27, alignItems: "center", justifyContent: "center", borderRadius: 8 },
+  iconWrap: { width: 25, height: 25, alignItems: "center", justifyContent: "center", borderRadius: 7 },
   animatedNavIcon: { width: 21, height: 21 },
   animatedNavIconInactive: { opacity: 0.46 },
   profileAvatarIcon: { width: 21, height: 21, borderRadius: 11 },
