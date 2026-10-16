@@ -1348,16 +1348,16 @@ function ActivityHeatmap({
           </View>
         ))}
       </Animated.ScrollView>
-      {contentWidth > viewportWidth && (
-        <Animated.View style={[styles.heatScrollbar, { opacity: scrollbarOpacity }]}>
+      <Animated.View style={[styles.heatScrollbar, { opacity: contentWidth > viewportWidth ? scrollbarOpacity : 0 }]}>
+        {contentWidth > viewportWidth && (
           <Animated.View
             style={[
               styles.heatScrollbarThumb,
               { width: thumbWidth, transform: [{ translateX: thumbLeft }] },
             ]}
           />
-        </Animated.View>
-      )}
+        )}
+      </Animated.View>
       <View style={styles.heatDetail}>
         <Text style={styles.heatDetailDate}>
           {new Date(`${selectedDay}T00:00:00`).toLocaleDateString(undefined, {
@@ -1780,7 +1780,7 @@ const styles: Record<string, any> = StyleSheet.create({
   heatmapFact: { flexDirection: "row", alignItems: "center" },
   heatmapMuted: { color: colors.muted, fontSize: 10 },
   heatmapNumber: { color: colors.text, fontSize: 10, fontWeight: "800" },
-  heatmapToggle: { position: "relative", width: "40%", flexDirection: "row", padding: 2, borderRadius: 7, backgroundColor: "#282828" },
+  heatmapToggle: { position: "relative", width: 128, flexShrink: 0, flexDirection: "row", padding: 2, borderRadius: 7, backgroundColor: "#282828" },
   heatmapToggleIndicator: { position: "absolute", top: 2, bottom: 2, left: 2, borderRadius: 5, backgroundColor: "#f4f4f5" },
   heatmapToggleOption: { zIndex: 1, flex: 1, paddingHorizontal: 6, paddingVertical: 3, alignItems: "center" },
   heatmapToggleText: { color: colors.muted, fontSize: 8, fontWeight: "700" },

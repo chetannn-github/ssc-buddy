@@ -55,6 +55,7 @@ export function BottomNavigation({
   profileAvatar,
 }: Props) {
   const [visible, setVisible] = useState(true);
+  const [trackFramesReady, setTrackFramesReady] = useState(false);
   const height = useRef(new Animated.Value(84)).current;
   const visibleTabs = tabs.filter(
     (tab) =>
@@ -63,6 +64,18 @@ export function BottomNavigation({
   );
 
   useEffect(() => subscribeBottomNavigation(setVisible), []);
+  useEffect(() => {
+    // The target animation is rendered frame-by-frame. Warm every tiny local
+    // frame before its first selection so the first playback is as smooth as
+    // later visits instead of flashing while Android decodes assets.
+    let mounted = true;
+    void Promise.all(trackTargetFrames.map((frame) => Image.prefetch(Image.resolveAssetSource(frame).uri)))
+      .catch(() => undefined)
+      .finally(() => {
+        if (mounted) setTrackFramesReady(true);
+      });
+    return () => { mounted = false; };
+  }, []);
   useEffect(() => {
     Animated.timing(height, { toValue: visible ? 84 : 0, duration: 180, useNativeDriver: false }).start();
   }, [height, visible]);
@@ -80,6 +93,7 @@ export function BottomNavigation({
               tab={tab}
               active={tab.key === activeTab}
               profileAvatar={profileAvatar}
+              trackFramesReady={trackFramesReady}
               onPress={() => {
                 resetBottomNavigation();
                 onChange(tab.key);
@@ -92,16 +106,18 @@ export function BottomNavigation({
   );
 }
 
-function NavigationItem({ tab, active, onPress, profileAvatar }: { tab: (typeof tabs)[number]; active: boolean; onPress: () => void; profileAvatar?: ImageSourcePropType }) {
+function NavigationItem({ tab, active, onPress, profileAvatar, trackFramesReady }: { tab: (typeof tabs)[number]; active: boolean; onPress: () => void; profileAvatar?: ImageSourcePropType; trackFramesReady: boolean }) {
   const scale = useRef(new Animated.Value(1)).current;
   const labelOpacity = useRef(new Animated.Value(active ? 1 : 0.6)).current;
-  const animationDuration = ANIMATED_ICON_DURATION[tab.key];
-  const hasAnimatedIcon = Boolean(animationDuration);
-  const [playAnimatedIcon, setPlayAnimatedIcon] = useState(active && hasAnimatedIcon);
+  const baseAnimationDuration = ANIMATED_ICON_DURATION[tab.key];
+  const hasAnimatedIcon = Boolean(baseAnimationDuration);
+  const animationDuration = tab.key === "track" && !trackFramesReady ? undefined : baseAnimationDuration;
+  const canPlayAnimatedIcon = Boolean(animationDuration);
+  const [playAnimatedIcon, setPlayAnimatedIcon] = useState(active && canPlayAnimatedIcon);
   const [pastelTone, setPastelTone] = useState(randomPastelTone);
   const [trackFrameIndex, setTrackFrameIndex] = useState(trackTargetFrames.length - 1);
   useEffect(() => {
-    if (!active || !hasAnimatedIcon) {
+    if (!active || !canPlayAnimatedIcon) {
       setPlayAnimatedIcon(false);
       return;
     }
@@ -109,9 +125,9 @@ function NavigationItem({ tab, active, onPress, profileAvatar }: { tab: (typeof 
     setPlayAnimatedIcon(true);
     const timeout = setTimeout(() => setPlayAnimatedIcon(false), animationDuration);
     return () => clearTimeout(timeout);
-  }, [active, animationDuration, hasAnimatedIcon]);
+  }, [active, animationDuration, canPlayAnimatedIcon]);
   useEffect(() => {
-    if (!active || tab.key !== "track") {
+    if (!active || tab.key !== "track" || !trackFramesReady) {
       setTrackFrameIndex(trackTargetFrames.length - 1);
       return;
     }
@@ -130,7 +146,7 @@ function NavigationItem({ tab, active, onPress, profileAvatar }: { tab: (typeof 
     return () => {
       if (timeout) clearTimeout(timeout);
     };
-  }, [active, tab.key]);
+  }, [active, tab.key, trackFramesReady]);
   useEffect(() => {
     if (active) {
       if (hasAnimatedIcon) {
@@ -164,6 +180,9 @@ function NavigationItem({ tab, active, onPress, profileAvatar }: { tab: (typeof 
             source={tab.key === "track"
               ? trackTargetFrames[playAnimatedIcon ? trackFrameIndex : trackTargetFrames.length - 1]
               : animatedIconSource(tab.key, playAnimatedIcon)}
+            // Track changes source roughly every 30ms. On Android, the default
+            // Image fade can briefly expose an empty frame on the first visit.
+            fadeDuration={tab.key === "track" ? 0 : undefined}
             style={[styles.animatedNavIcon, { tintColor: active ? "#f4f4f5" : "rgba(228,228,231,.72)" }, !active && styles.animatedNavIconInactive]}
             accessibilityLabel={tab.label}
           />
