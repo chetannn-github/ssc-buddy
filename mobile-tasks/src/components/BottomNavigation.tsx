@@ -20,31 +20,17 @@ export function BottomNavigation({
   trackProgressEnabled = true,
 }: Props) {
   const [visible, setVisible] = useState(true);
-  const [navWidth, setNavWidth] = useState(0);
   const height = useRef(new Animated.Value(84)).current;
-  const indicatorX = useRef(new Animated.Value(0)).current;
   const visibleTabs = tabs.filter(
     (tab) =>
       (tab.key !== "practice" || practiceSessionEnabled) &&
       (!(["track", "progress"] as TabKey[]).includes(tab.key) || trackProgressEnabled),
   );
-  const activeIndex = Math.max(0, visibleTabs.findIndex((tab) => tab.key === activeTab));
 
   useEffect(() => subscribeBottomNavigation(setVisible), []);
   useEffect(() => {
     Animated.timing(height, { toValue: visible ? 84 : 0, duration: 180, useNativeDriver: false }).start();
   }, [height, visible]);
-  useEffect(() => {
-    if (!navWidth) return;
-    Animated.spring(indicatorX, {
-      toValue: activeIndex * (navWidth / visibleTabs.length),
-      damping: 17,
-      stiffness: 220,
-      mass: 0.72,
-      useNativeDriver: true,
-    }).start();
-  }, [activeIndex, indicatorX, navWidth, visibleTabs.length]);
-
   return (
     <Animated.View pointerEvents={visible ? "auto" : "none"} style={[styles.container, { height }]}>
       <View style={styles.wrap}>
@@ -52,20 +38,7 @@ export function BottomNavigation({
           intensity={36}
           tint="dark"
           style={styles.glass}
-          onLayout={(event) => setNavWidth(event.nativeEvent.layout.width)}
         >
-          {navWidth > 0 && (
-            <Animated.View
-              pointerEvents="none"
-              style={[
-                styles.activeGlass,
-                {
-                  width: navWidth / visibleTabs.length - 8,
-                  transform: [{ translateX: Animated.add(indicatorX, 4) }],
-                },
-              ]}
-            />
-          )}
           {visibleTabs.map((tab) => (
             <NavigationItem
               key={tab.key}
@@ -122,7 +95,7 @@ function NavigationItem({ tab, active, onPress }: { tab: (typeof tabs)[number]; 
   }, [active, hasAnimatedIcon, labelOpacity, scale]);
   return (
     <Pressable accessibilityRole="tab" accessibilityState={{ selected: active }} accessibilityLabel={tab.label} onPress={onPress} style={styles.item}>
-      <Animated.View style={{ transform: [{ scale }] }}>
+      <Animated.View style={[styles.iconWrap, active && styles.activeIconHalo, { transform: [{ scale }] }]}>
         {hasAnimatedIcon ? (
           <Image
             source={playAnimatedIcon
@@ -162,14 +135,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 7 },
     elevation: 9,
   },
-  activeGlass: {
-    position: "absolute",
-    top: 4,
-    bottom: 4,
-    borderRadius: 18,
-    backgroundColor: "rgba(221,214,254,.13)",
-  },
   item: { zIndex: 1, flex: 1, alignItems: "center", justifyContent: "center", gap: 3 },
+  iconWrap: { width: 30, height: 30, alignItems: "center", justifyContent: "center", borderRadius: 15 },
+  activeIconHalo: { backgroundColor: "rgba(221,214,254,.16)" },
   animatedNavIcon: { width: 21, height: 21, tintColor: "#dbeafe" },
   animatedNavIconInactive: { opacity: 0.46 },
   label: { color: "rgba(228,228,231,.62)", fontSize: 9, fontWeight: "600", letterSpacing: 0.1 },
