@@ -1,5 +1,6 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
+import { Image as ExpoImage } from "expo-image";
 import { useEffect, useRef, useState } from "react";
 import { Animated, Image, type ImageSourcePropType, Pressable, StyleSheet, Text, View } from "react-native";
 
@@ -172,17 +173,17 @@ function NavigationItem({ tab, active, onPress, profileAvatar, trackFramesReady 
   }, [active, hasAnimatedIcon, labelOpacity, scale]);
   return (
     <Pressable accessibilityRole="tab" accessibilityState={{ selected: active }} accessibilityLabel={tab.label} onPress={onPress} style={styles.item}>
-      <Animated.View style={[styles.iconWrap, active && tab.key !== "profile" && { backgroundColor: pastelTone.halo }, { transform: [{ scale }] }]}>
+      <Animated.View pointerEvents="none" style={[styles.iconWrap, active && tab.key !== "profile" && { backgroundColor: pastelTone.halo }, { transform: [{ scale }] }]}>
         {tab.key === "profile" && profileAvatar ? (
           <Image source={profileAvatar} style={[styles.profileAvatarIcon, !active && styles.profileAvatarIconInactive]} />
         ) : hasAnimatedIcon ? (
-          <Image
+          <ExpoImage
             source={tab.key === "track"
               ? trackTargetFrames[playAnimatedIcon ? trackFrameIndex : trackTargetFrames.length - 1]
               : animatedIconSource(tab.key, playAnimatedIcon)}
-            // Track changes source roughly every 30ms. On Android, the default
-            // Image fade can briefly expose an empty frame on the first visit.
-            fadeDuration={tab.key === "track" ? 0 : undefined}
+            autoplay
+            contentFit="contain"
+            transition={0}
             style={[styles.animatedNavIcon, { tintColor: active ? "#f4f4f5" : "rgba(228,228,231,.72)" }, !active && styles.animatedNavIconInactive]}
             accessibilityLabel={tab.label}
           />
@@ -190,7 +191,7 @@ function NavigationItem({ tab, active, onPress, profileAvatar, trackFramesReady 
           <MaterialCommunityIcons name={(active ? tab.activeIcon : tab.icon) as never} size={20} color={active ? "#f4f4f5" : "rgba(228,228,231,.62)"} />
         )}
       </Animated.View>
-      <Animated.Text style={[styles.label, active && styles.labelActive, { opacity: labelOpacity }]}>{tab.label}</Animated.Text>
+      <Animated.Text pointerEvents="none" style={[styles.label, active && styles.labelActive, { opacity: labelOpacity }]}>{tab.label}</Animated.Text>
     </Pressable>
   );
 }
