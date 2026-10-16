@@ -51,7 +51,6 @@ export function BottomNavigation({
         <BlurView
           intensity={36}
           tint="dark"
-          blurMethod="dimezisBlurView"
           style={styles.glass}
           onLayout={(event) => setNavWidth(event.nativeEvent.layout.width)}
         >
