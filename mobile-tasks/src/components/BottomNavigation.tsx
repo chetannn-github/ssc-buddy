@@ -86,9 +86,10 @@ export function BottomNavigation({
 function NavigationItem({ tab, active, onPress }: { tab: (typeof tabs)[number]; active: boolean; onPress: () => void }) {
   const scale = useRef(new Animated.Value(1)).current;
   const labelOpacity = useRef(new Animated.Value(active ? 1 : 0.6)).current;
+  const hasAnimatedIcon = tab.key === "tasks" || tab.key === "progress";
   useEffect(() => {
     if (active) {
-      if (tab.key === "tasks") {
+      if (hasAnimatedIcon) {
         Animated.parallel([
           Animated.timing(scale, { toValue: 1, duration: 1, useNativeDriver: true }),
           Animated.timing(labelOpacity, { toValue: 1, duration: 180, useNativeDriver: true }),
@@ -108,15 +109,17 @@ function NavigationItem({ tab, active, onPress }: { tab: (typeof tabs)[number]; 
       Animated.timing(scale, { toValue: 1, duration: 120, useNativeDriver: true }),
       Animated.timing(labelOpacity, { toValue: 0.6, duration: 140, useNativeDriver: true }),
     ]).start();
-  }, [active, labelOpacity, scale, tab.key]);
+  }, [active, hasAnimatedIcon, labelOpacity, scale]);
   return (
     <Pressable accessibilityRole="tab" accessibilityState={{ selected: active }} accessibilityLabel={tab.label} onPress={onPress} style={styles.item}>
       <Animated.View style={{ transform: [{ scale }] }}>
-        {active && tab.key === "tasks" ? (
+        {active && hasAnimatedIcon ? (
           <Image
-            source={require("../../assets/clipboard-text-pinch.webp")}
-            style={styles.animatedTaskIcon}
-            accessibilityLabel="Tasks"
+            source={tab.key === "tasks"
+              ? require("../../assets/clipboard-text-pinch.webp")
+              : require("../../assets/chart-bar-grow-pinch.webp")}
+            style={styles.animatedNavIcon}
+            accessibilityLabel={tab.label}
           />
         ) : (
           <MaterialCommunityIcons name={(active ? tab.activeIcon : tab.icon) as never} size={20} color={active ? "#dbeafe" : "rgba(228,228,231,.62)"} />
@@ -155,7 +158,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(59,130,246,.28)",
   },
   item: { zIndex: 1, flex: 1, alignItems: "center", justifyContent: "center", gap: 3 },
-  animatedTaskIcon: { width: 21, height: 21, tintColor: "#dbeafe" },
+  animatedNavIcon: { width: 21, height: 21, tintColor: "#dbeafe" },
   label: { color: "rgba(228,228,231,.62)", fontSize: 9, fontWeight: "600", letterSpacing: 0.1 },
   labelActive: { color: "#dbeafe", fontWeight: "800" },
 });
