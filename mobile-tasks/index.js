@@ -1,9 +1,16 @@
 import { registerRootComponent } from "expo";
+import Constants from "expo-constants";
 import { Platform } from "react-native";
 
 import App from "./App";
 
-if (Platform.OS === "android") {
+// Home-screen widgets contain Android native code and are deliberately not
+// available inside Expo Go. Keeping their registration out of that runtime
+// lets the normal app continue to work there while preview/release builds
+// retain full widget support.
+const supportsAndroidWidgets = Platform.OS === "android" && Constants.appOwnership !== "expo";
+
+if (supportsAndroidWidgets) {
   const AsyncStorage = require("@react-native-async-storage/async-storage").default;
   const { registerWidgetTaskHandler } = require("react-native-android-widget");
   const { renderDailyTasksWidget } = require("./src/widgets/DailyTasksWidget");
