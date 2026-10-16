@@ -133,7 +133,7 @@ function NavigationItem({ tab, active, onPress }: { tab: (typeof tabs)[number]; 
         {hasAnimatedIcon ? (
           <Image
             source={animatedIconSource(tab.key, playAnimatedIcon)}
-            style={[styles.animatedNavIcon, { tintColor: pastelTone.icon }, !active && styles.animatedNavIconInactive]}
+            style={[styles.animatedNavIcon, { tintColor: active ? pastelTone.icon : "rgba(228,228,231,.72)" }, !active && styles.animatedNavIconInactive]}
             accessibilityLabel={tab.label}
           />
         ) : (
