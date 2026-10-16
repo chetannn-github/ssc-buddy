@@ -6,6 +6,37 @@ import { Animated, Image, Pressable, StyleSheet, Text, View } from "react-native
 import { tabs, type TabKey } from "../navigation/tabs";
 import { resetBottomNavigation, subscribeBottomNavigation } from "../navigation/bottomNavigationVisibility";
 
+const PASTEL_TONES = [
+  { icon: "#fbcfe8", halo: "rgba(251,207,232,.17)" },
+  { icon: "#bfdbfe", halo: "rgba(191,219,254,.17)" },
+  { icon: "#bbf7d0", halo: "rgba(187,247,208,.17)" },
+  { icon: "#fde68a", halo: "rgba(253,230,138,.17)" },
+  { icon: "#ddd6fe", halo: "rgba(221,214,254,.17)" },
+  { icon: "#fecdd3", halo: "rgba(254,205,211,.17)" },
+] as const;
+
+const ANIMATED_ICON_DURATION: Partial<Record<TabKey, number>> = {
+  tasks: 2050,
+  practice: 3150,
+  progress: 2050,
+};
+
+function randomPastelTone() {
+  return PASTEL_TONES[Math.floor(Math.random() * PASTEL_TONES.length)];
+}
+
+function animatedIconSource(tab: TabKey, isPlaying: boolean) {
+  if (tab === "tasks") return isPlaying
+    ? require("../../assets/clipboard-text-pinch.webp")
+    : require("../../assets/clipboard-text-pinch-final.png");
+  if (tab === "practice") return isPlaying
+    ? require("../../assets/file-pencil-pinch.webp")
+    : require("../../assets/file-pencil-pinch-final.png");
+  return isPlaying
+    ? require("../../assets/chart-bar-grow-pinch.webp")
+    : require("../../assets/chart-bar-grow-pinch-final.png");
+}
+
 type Props = {
   activeTab: TabKey;
   onChange: (tab: TabKey) => void;
@@ -59,17 +90,20 @@ export function BottomNavigation({
 function NavigationItem({ tab, active, onPress }: { tab: (typeof tabs)[number]; active: boolean; onPress: () => void }) {
   const scale = useRef(new Animated.Value(1)).current;
   const labelOpacity = useRef(new Animated.Value(active ? 1 : 0.6)).current;
-  const hasAnimatedIcon = tab.key === "tasks" || tab.key === "progress";
+  const animationDuration = ANIMATED_ICON_DURATION[tab.key];
+  const hasAnimatedIcon = Boolean(animationDuration);
   const [playAnimatedIcon, setPlayAnimatedIcon] = useState(active && hasAnimatedIcon);
+  const [pastelTone, setPastelTone] = useState(randomPastelTone);
   useEffect(() => {
     if (!active || !hasAnimatedIcon) {
       setPlayAnimatedIcon(false);
       return;
     }
+    setPastelTone(randomPastelTone());
     setPlayAnimatedIcon(true);
-    const timeout = setTimeout(() => setPlayAnimatedIcon(false), 2050);
+    const timeout = setTimeout(() => setPlayAnimatedIcon(false), animationDuration);
     return () => clearTimeout(timeout);
-  }, [active, hasAnimatedIcon]);
+  }, [active, animationDuration, hasAnimatedIcon]);
   useEffect(() => {
     if (active) {
       if (hasAnimatedIcon) {
@@ -95,24 +129,18 @@ function NavigationItem({ tab, active, onPress }: { tab: (typeof tabs)[number]; 
   }, [active, hasAnimatedIcon, labelOpacity, scale]);
   return (
     <Pressable accessibilityRole="tab" accessibilityState={{ selected: active }} accessibilityLabel={tab.label} onPress={onPress} style={styles.item}>
-      <Animated.View style={[styles.iconWrap, active && styles.activeIconHalo, { transform: [{ scale }] }]}>
+      <Animated.View style={[styles.iconWrap, active && { backgroundColor: pastelTone.halo }, { transform: [{ scale }] }]}>
         {hasAnimatedIcon ? (
           <Image
-            source={playAnimatedIcon
-              ? tab.key === "tasks"
-                ? require("../../assets/clipboard-text-pinch.webp")
-                : require("../../assets/chart-bar-grow-pinch.webp")
-              : tab.key === "tasks"
-                ? require("../../assets/clipboard-text-pinch-final.png")
-                : require("../../assets/chart-bar-grow-pinch-final.png")}
-            style={[styles.animatedNavIcon, !active && styles.animatedNavIconInactive]}
+            source={animatedIconSource(tab.key, playAnimatedIcon)}
+            style={[styles.animatedNavIcon, { tintColor: pastelTone.icon }, !active && styles.animatedNavIconInactive]}
             accessibilityLabel={tab.label}
           />
         ) : (
-          <MaterialCommunityIcons name={(active ? tab.activeIcon : tab.icon) as never} size={20} color={active ? "#dbeafe" : "rgba(228,228,231,.62)"} />
+          <MaterialCommunityIcons name={(active ? tab.activeIcon : tab.icon) as never} size={20} color={active ? pastelTone.icon : "rgba(228,228,231,.62)"} />
         )}
       </Animated.View>
-      <Animated.Text style={[styles.label, active && styles.labelActive, { opacity: labelOpacity }]}>{tab.label}</Animated.Text>
+      <Animated.Text style={[styles.label, active && styles.labelActive, active && { color: pastelTone.icon }, { opacity: labelOpacity }]}>{tab.label}</Animated.Text>
     </Pressable>
   );
 }
@@ -137,8 +165,7 @@ const styles = StyleSheet.create({
   },
   item: { zIndex: 1, flex: 1, alignItems: "center", justifyContent: "center", gap: 3 },
   iconWrap: { width: 30, height: 30, alignItems: "center", justifyContent: "center", borderRadius: 15 },
-  activeIconHalo: { backgroundColor: "rgba(221,214,254,.16)" },
-  animatedNavIcon: { width: 21, height: 21, tintColor: "#dbeafe" },
+  animatedNavIcon: { width: 21, height: 21 },
   animatedNavIconInactive: { opacity: 0.46 },
   label: { color: "rgba(228,228,231,.62)", fontSize: 9, fontWeight: "600", letterSpacing: 0.1 },
   labelActive: { color: "#dbeafe", fontWeight: "800" },
