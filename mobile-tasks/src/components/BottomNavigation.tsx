@@ -132,7 +132,7 @@ function NavigationItem({ tab, active, onPress }: { tab: (typeof tabs)[number]; 
               : tab.key === "tasks"
                 ? require("../../assets/clipboard-text-pinch-final.png")
                 : require("../../assets/chart-bar-grow-pinch-final.png")}
-            style={styles.animatedNavIcon}
+            style={[styles.animatedNavIcon, !active && styles.animatedNavIconInactive]}
             accessibilityLabel={tab.label}
           />
         ) : (
@@ -173,6 +173,7 @@ const styles = StyleSheet.create({
   },
   item: { zIndex: 1, flex: 1, alignItems: "center", justifyContent: "center", gap: 3 },
   animatedNavIcon: { width: 21, height: 21, tintColor: "#dbeafe" },
+  animatedNavIconInactive: { opacity: 0.46 },
   label: { color: "rgba(228,228,231,.62)", fontSize: 9, fontWeight: "600", letterSpacing: 0.1 },
   labelActive: { color: "#dbeafe", fontWeight: "800" },
 });
