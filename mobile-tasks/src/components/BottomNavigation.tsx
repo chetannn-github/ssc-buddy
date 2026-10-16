@@ -159,14 +159,14 @@ function NavigationItem({ tab, active, onPress }: { tab: (typeof tabs)[number]; 
             source={tab.key === "track"
               ? trackTargetFrames[playAnimatedIcon ? trackFrameIndex : trackTargetFrames.length - 1]
               : animatedIconSource(tab.key, playAnimatedIcon)}
-            style={[styles.animatedNavIcon, { tintColor: active ? pastelTone.icon : "rgba(228,228,231,.72)" }, !active && styles.animatedNavIconInactive]}
+            style={[styles.animatedNavIcon, { tintColor: active ? "#f4f4f5" : "rgba(228,228,231,.72)" }, !active && styles.animatedNavIconInactive]}
             accessibilityLabel={tab.label}
           />
         ) : (
-          <MaterialCommunityIcons name={(active ? tab.activeIcon : tab.icon) as never} size={20} color={active ? pastelTone.icon : "rgba(228,228,231,.62)"} />
+          <MaterialCommunityIcons name={(active ? tab.activeIcon : tab.icon) as never} size={20} color={active ? "#f4f4f5" : "rgba(228,228,231,.62)"} />
         )}
       </Animated.View>
-      <Animated.Text style={[styles.label, active && styles.labelActive, active && { color: pastelTone.icon }, { opacity: labelOpacity }]}>{tab.label}</Animated.Text>
+      <Animated.Text style={[styles.label, active && styles.labelActive, { opacity: labelOpacity }]}>{tab.label}</Animated.Text>
     </Pressable>
   );
 }
@@ -190,9 +190,9 @@ const styles = StyleSheet.create({
     elevation: 9,
   },
   item: { zIndex: 1, flex: 1, alignItems: "center", justifyContent: "center", gap: 3 },
-  iconWrap: { width: 30, height: 30, alignItems: "center", justifyContent: "center", borderRadius: 15 },
+  iconWrap: { width: 34, height: 30, alignItems: "center", justifyContent: "center", borderRadius: 10 },
   animatedNavIcon: { width: 21, height: 21 },
   animatedNavIconInactive: { opacity: 0.46 },
   label: { color: "rgba(228,228,231,.62)", fontSize: 9, fontWeight: "600", letterSpacing: 0.1 },
-  labelActive: { color: "#dbeafe", fontWeight: "800" },
+  labelActive: { color: "#f4f4f5", fontWeight: "800" },
 });
