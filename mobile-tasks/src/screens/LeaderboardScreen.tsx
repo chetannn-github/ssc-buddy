@@ -38,6 +38,18 @@ const dateLabel = (date: string) =>
         day: "numeric",
         month: "short",
       });
+const formatPoints = (value: unknown) => {
+  const points = Number(value) || 0;
+  return `${points > 0 ? "+" : points < 0 ? "-" : ""}${Math.abs(points)} pts`;
+};
+const formatPointValue = (value: unknown) => {
+  const points = Number(value) || 0;
+  return `${points > 0 ? "+" : points < 0 ? "-" : ""}${Math.abs(points)}`;
+};
+const xpMeta = (entry: { xp?: unknown; level?: unknown }) => {
+  const xp = Number(entry.xp) || 0;
+  return { xp, level: Number.isFinite(Number(entry.level)) ? Number(entry.level) : xp < 0 ? 0 : 1 };
+};
 
 function DayFilter({
   dates,
@@ -184,12 +196,13 @@ export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { 
       })),
     [selected],
   );
+  const inactiveDates = useMemo(() => Array.isArray(selected?.inactiveDates) ? selected.inactiveDates : [], [selected]);
   const dates = useMemo(
     () =>
-      Array.from(new Set([dayKey(), ...tasks.map((task: any) => task.date).filter(Boolean)]))
+      Array.from(new Set([dayKey(), ...inactiveDates, ...tasks.map((task: any) => task.date).filter(Boolean)]))
         .sort()
         .reverse(),
-    [tasks],
+    [inactiveDates, tasks],
   );
   if (publicEntry) return <PublicProfileView entry={publicEntry} viewerUser={user} viewerTasks={viewerTasks} onBack={() => setPublicEntry(null)} onOpenWeeklyStats={() => { setSelected(publicEntry); setSelectedDate(dayKey()); setPublicEntry(null); }} />;
   if (selected) {
@@ -198,7 +211,10 @@ export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { 
     const studyTimeLabel = hours ? `${hours}h${mins ? ` ${mins}m` : ""}` : `${mins}m`;
     const rank = rows.findIndex((row) => row.uid === selected.uid) + 1;
     const medal = medalAssets[rank - 1];
-    const tasksForDay = tasks.filter((task: any) => task.date === selectedDate);
+    const tasksForDay = [
+      ...(inactiveDates.includes(selectedDate) ? [{ name: "No task completed", completed: false, date: selectedDate, points: -50 }] : []),
+      ...tasks.filter((task: any) => task.date === selectedDate),
+    ];
     const taskList = tasksForDay.length ? (
       tasksForDay.map((task: any, index: number) => {
         const overdue = !task.completed && String(task.date ?? "") < dayKey();
@@ -258,11 +274,11 @@ export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { 
               </Pressable>
               <View style={[s.profileRank, s.detailRank]}>{medal ? <Image source={medal} style={s.profileMedal} /> : null}<Text style={s.profileRankText}>#{rank}</Text></View>
             </View>
-            <Pressable style={s.detailIdentity} onPress={() => setPublicEntry({ ...selected, leaderboardRank: rank })}><Text style={s.profileName}>{selected.name}</Text><Text style={[s.sub, s.centeredUsername]}>@{selected.username}</Text></Pressable>
+            <Pressable style={s.detailIdentity} onPress={() => setPublicEntry({ ...selected, leaderboardRank: rank })}><Text style={s.profileName}>{selected.name}</Text><Text style={[s.sub, s.centeredUsername]}>@{selected.username}</Text><Text style={s.xpMeta}>Lv. {xpMeta(selected).level} · {xpMeta(selected).xp > 0 ? "+" : ""}{xpMeta(selected).xp} XP</Text></Pressable>
           </View>
           <View style={s.profileStats}>
             <View>
-              <Text style={s.profileValue}>{selected.points}</Text>
+              <Text style={[s.profileValue, Number(selected.points) < 0 ? s.negativePoints : Number(selected.points) === 0 ? s.neutralPoints : s.positivePoints]}>{formatPointValue(selected.points)}</Text>
               <Text style={s.sub}>Points</Text>
             </View>
             <View>
@@ -274,7 +290,8 @@ export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { 
               <Text style={s.sub}>Study time</Text>
             </View>
           </View>
-          <View style={{ alignSelf: "stretch", alignItems: "flex-end", marginTop: 20 }}>
+          <View style={{ alignSelf: "stretch", flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 20 }}>
+            <Text style={s.inactivePenalty}>{inactiveDates.includes(selectedDate) ? "−50 pts · Inactive day" : ""}</Text>
             <DayFilter
               dates={dates}
               value={selectedDate}
@@ -321,11 +338,12 @@ export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { 
                 )}
               </View><View style={{ flex: 1 }}>
                 <Text style={s.name}>{row.uid === user?.uid ? "You" : row.name}</Text>
-                <Text style={s.sub}>
+                {false && <Text style={s.sub}>
                   {row.completed} completed · {row.studyMinutes} min study
-                </Text>
+                </Text>}
+                <Text style={s.xpMeta} numberOfLines={1}>Lv. {xpMeta(row).level} · {xpMeta(row).xp > 0 ? "+" : ""}{xpMeta(row).xp} XP</Text>
               </View></Pressable>
-              <Pressable onPress={() => setSelected(row)}><Text style={s.points}>{row.points}</Text></Pressable>
+              <Pressable onPress={() => setSelected(row)}><Text style={[s.points, Number(row.points) < 0 ? s.negativePoints : Number(row.points) === 0 ? s.neutralPoints : s.positivePoints]}>{formatPoints(row.points)}</Text></Pressable>
             </View>
           ))}
           {!rows.length && <Text style={s.empty}>No activity this week yet.</Text>}
@@ -376,7 +394,7 @@ const s = StyleSheet.create({
   avatarImage: { width: "100%", height: "100%" },
   avatarText: { color: colors.text, fontWeight: "800" },
   name: { color: colors.text, fontWeight: "700" },
-  points: { color: "#86efac", fontWeight: "800", fontSize: 16 },
+  points: { fontWeight: "800", fontSize: 16 },
   empty: { color: colors.subdued, textAlign: "center", marginTop: 45 },
   profile: { alignItems: "center", padding: 30 },
   detailSticky: { alignItems: "center", paddingHorizontal: 30, paddingTop: 22, paddingBottom: 13, backgroundColor: colors.background, zIndex: 2 },
@@ -384,6 +402,8 @@ const s = StyleSheet.create({
   avatarRankLine: { alignSelf: "stretch", alignItems: "center", justifyContent: "center", position: "relative" },
   detailIdentity: { alignItems: "center" },
   centeredUsername: { textAlign: "center" },
+  xpMeta: { color: "#c4b5fd", fontSize: 12, fontWeight: "700", marginTop: 3 },
+  inactivePenalty: { color: "#fca5a5", fontSize: 12, fontWeight: "800" },
   publicProfile: { alignItems: "center", padding: 24, paddingBottom: 42 },
   bigAvatar: {
     width: 94,
@@ -417,6 +437,9 @@ const s = StyleSheet.create({
   profileRankText: { color: colors.text, fontSize: 12, fontWeight: "800" },
   profileStats: { marginTop: 28, flexDirection: "row", gap: 30 },
   profileValue: { color: colors.text, fontSize: 18, fontWeight: "800", textAlign: "center" },
+  positivePoints: { color: "#86efac" },
+  negativePoints: { color: "#fca5a5" },
+  neutralPoints: { color: colors.subdued },
   tasks: { alignSelf: "stretch", marginTop: 30, gap: 9 },
   tasksScroll: { gap: 9, paddingHorizontal: 30, paddingTop: 8, paddingBottom: 36 },
   tasksTitle: { color: colors.subdued, fontSize: 10, fontWeight: "800", letterSpacing: 1.5 },

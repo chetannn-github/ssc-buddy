@@ -15,6 +15,7 @@ import {
   type User,
 } from "firebase/auth";
 import { Platform } from "react-native";
+import { getXpSummary } from "../domain/xp";
 
 const config = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
@@ -81,9 +82,17 @@ export async function publishLeaderboardEntry(user: User, profile: Record<string
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   const scoped = tasks.filter((task) => typeof task.date === "string" && task.date >= week && task.date <= endKey);
   const completed = scoped.filter((task) => task.completed === true);
+  const { xp, level } = getXpSummary(tasks as any);
   const overdue = scoped.filter((task) => task.completed !== true && typeof task.date === "string" && task.date < today).length;
+  const firstTrackedDay = scoped.filter((task) => typeof task.date === "string" && task.date < today).map((task) => String(task.date)).sort()[0];
+  const inactiveDates: string[] = [];
+  for (const cursor = new Date(`${firstTrackedDay ?? today}T00:00:00`); `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}-${String(cursor.getDate()).padStart(2, "0")}` < today; cursor.setDate(cursor.getDate() + 1)) {
+    const date = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}-${String(cursor.getDate()).padStart(2, "0")}`;
+    if (!scoped.some((task) => String(task.date) === date && task.completed === true)) inactiveDates.push(date);
+  }
+  const inactiveDays = inactiveDates.length;
   const studyMinutes = completed.reduce((sum, task) => sum + Math.max(0, Number(task.minutesSpent) || 0), 0);
-  const points = completed.length * 10 - overdue * 5 + Math.min(210, Math.floor(studyMinutes / 10));
+  const points = completed.length * 10 - overdue * 5 - inactiveDays * 50 + Math.min(210, Math.floor(studyMinutes / 10));
   let creditedMinutes = 0;
   const leaderboardTasks = scoped.map((task) => {
     const completedTask = task.completed === true, date = String(task.date ?? "");
@@ -92,7 +101,7 @@ export async function publishLeaderboardEntry(user: User, profile: Record<string
     const timeBonus = Math.min(210, Math.floor(creditedMinutes / 10)) - before;
     return { name: String(task.name ?? "Task"), subject: String(task.subject ?? ""), type: String(task.type ?? ""), minutesSpent: Math.max(0, Number(task.minutesSpent) || 0), completed: true, date, points: 10 + timeBonus };
   });
-  await setDoc(doc(getFirebaseFirestore(), "leaderboards", week, "entries", user.uid), { uid: user.uid, username, name: String(profile.name ?? "Student"), ...(typeof profile.avatar === "string" && profile.avatar ? { avatar: profile.avatar } : {}), week, completed: completed.length, leaderboardTasks, overdue, studyMinutes, points, updatedAt: serverTimestamp() }, { merge: true });
+  await setDoc(doc(getFirebaseFirestore(), "leaderboards", week, "entries", user.uid), { uid: user.uid, username, name: String(profile.name ?? "Student"), ...(typeof profile.avatar === "string" && profile.avatar ? { avatar: profile.avatar } : {}), week, xp, level, completed: completed.length, leaderboardTasks, overdue, inactiveDays, inactiveDates, studyMinutes, points, updatedAt: serverTimestamp() }, { merge: true });
 }
 
 /** Live rank used by the app and its home-screen task widget. */

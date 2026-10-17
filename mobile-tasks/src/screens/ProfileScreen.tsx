@@ -21,6 +21,7 @@ import type { User } from "firebase/auth";
 
 import { dateKey, formatMinutes, summarizeTasks, type Task } from "../domain/tasks";
 import { colors } from "../theme";
+import { getXpSummary, levelName, xpForLevel } from "../domain/xp";
 import { reportVerticalScroll } from "../navigation/bottomNavigationVisibility";
 import type { PracticeProfile } from "../lib/profile-store";
 import type { MockTestLog } from "./MockTestLogDialog";
@@ -232,6 +233,10 @@ export function ProfileScreen({
   const name = profileReady
     ? profileName.trim() || user?.displayName?.trim() || user?.email?.split("@")[0] || "Student"
     : "";
+  const xpSummary = useMemo(() => getXpSummary(tasks), [tasks]);
+  const xpTimelineStart = Math.max(0, xpSummary.level - 3);
+  const xpTimelineLevels = Array.from({ length: 6 }, (_, index) => xpTimelineStart + index);
+  const xpTimelineFillHeight = ((xpSummary.level - xpTimelineStart + xpSummary.progress) / 5) * 260;
   const isInitialProfileSetup = !profileSettings?.username;
   const [avatarFile, setAvatarFile] = useState(() =>
     profileSettings?.avatar && avatarAssets[profileSettings.avatar]
@@ -239,6 +244,13 @@ export function ProfileScreen({
       : defaultAvatarFor(profileSettings?.name || user?.displayName || user?.email || "Student"),
   );
   const [viewingAvatar, setViewingAvatar] = useState(false);
+  const [xpTimelineOpen, setXpTimelineOpen] = useState(false);
+  const xpTimelineProgress = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!xpTimelineOpen) return;
+    xpTimelineProgress.setValue(0);
+    Animated.timing(xpTimelineProgress, { toValue: 1, duration: 650, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+  }, [xpTimelineOpen, xpTimelineProgress]);
   const [spin] = useState(() => new Animated.Value(0));
   // A public profile arrives as one complete dashboard object. Seed every
   // profile section from it on the very first render instead of filling each
@@ -579,6 +591,10 @@ export function ProfileScreen({
                 </Pressable>
               </View>}
             </View>
+            <Pressable accessibilityRole="button" accessibilityLabel="View XP level roadmap" style={styles.xpBlock} onPress={() => setXpTimelineOpen(true)}>
+              <Text style={[styles.xpText, xpSummary.xp < 0 && styles.xpNegative]}>Lv. {xpSummary.level} · {levelName(xpSummary.level)} · {xpSummary.xp > 0 ? "+" : ""}{xpSummary.xp} XP</Text>
+              {xpSummary.level > 0 && <View style={styles.xpTrack}><View style={[styles.xpFill, { width: `${xpSummary.progress * 100}%` }]} /></View>}
+            </Pressable>
           </View>
         </View>
 
@@ -963,6 +979,14 @@ export function ProfileScreen({
           </KeyboardAvoidingView>
         </Modal>
       </ScrollView>
+      <Modal transparent visible={xpTimelineOpen} animationType="fade" statusBarTranslucent onRequestClose={() => setXpTimelineOpen(false)}>
+        <Pressable style={styles.xpDialogBackdrop} onPress={() => setXpTimelineOpen(false)}>
+          <Pressable style={styles.xpDialog} onPress={() => undefined}>
+            <View style={styles.xpDialogHeader}><View><Text style={styles.xpDialogEyebrow}>YOUR XP PATH</Text><Text style={styles.xpDialogTitle}>Level {xpSummary.level} · {levelName(xpSummary.level)}</Text></View><Pressable hitSlop={10} onPress={() => setXpTimelineOpen(false)}><MaterialCommunityIcons name="close" size={20} color={colors.muted} /></Pressable></View>
+            <View style={styles.xpTimeline}><View style={styles.xpTimelineRail} /><Animated.View style={[styles.xpTimelineFill, { height: xpTimelineProgress.interpolate({ inputRange: [0, 1], outputRange: [0, xpTimelineFillHeight] }) }]} />{xpTimelineLevels.map((level) => { const reached = xpSummary.level >= level; const current = xpSummary.level === level; const required = current ? `${xpSummary.xp > 0 ? "+" : ""}${xpSummary.xp} XP · ${Math.max(0, xpSummary.nextLevelXp - xpSummary.xp)} XP to Level ${xpSummary.level + 1}` : level === 0 ? "Below 0 XP" : `${xpForLevel(level)} XP`; return <View key={level} style={styles.xpTimelineRow}><View style={[styles.xpTimelineDot, reached && styles.xpTimelineDotReached, current && styles.xpTimelineDotCurrent]} /><View style={[styles.xpTimelineCopy, current && styles.xpTimelineCopyCurrent]}><Text style={[styles.xpTimelineName, current && styles.xpTimelineNameCurrent]}>Lv. {level} · {levelName(level)}</Text><Text style={styles.xpTimelineRequirement}>{required}</Text></View></View>; })}</View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -2083,6 +2107,33 @@ const styles: Record<string, any> = StyleSheet.create({
   weeklyRank: { flexDirection: "row", alignItems: "center", gap: 3, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 3, backgroundColor: "rgba(255,255,255,.10)" },
   weeklyRankText: { color: "#d4d4d8", fontSize: 10, fontWeight: "800" },
   weeklyRankMedal: { width: 12, height: 12, resizeMode: "contain" },
+  xpBlock: { marginTop: 4, gap: 4, maxWidth: 190 },
+  xpText: { color: "#a1a1aa", fontSize: 10, fontWeight: "700" },
+  xpNegative: { color: "#fca5a5" },
+  xpTrack: { height: 4, overflow: "hidden", borderRadius: 4, backgroundColor: "#303030" },
+  xpFill: { height: "100%", borderRadius: 4, backgroundColor: "#a78bfa" },
+  xpDialogBackdrop: { flex: 1, justifyContent: "center", padding: 22, backgroundColor: "rgba(0,0,0,.76)" },
+  xpDialog: { borderRadius: 20, borderWidth: 1, borderColor: "#343434", backgroundColor: "#1a1a1a", padding: 20 },
+  xpDialogHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },
+  xpDialogEyebrow: { color: colors.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.6 },
+  xpDialogTitle: { marginTop: 5, color: colors.text, fontSize: 19, fontWeight: "800" },
+  xpDialogHero: { marginTop: 16, borderWidth: 1, borderColor: "rgba(167,139,250,.20)", borderRadius: 14, backgroundColor: "rgba(139,92,246,.08)", padding: 13 },
+  xpDialogPoints: { color: "#86efac", fontSize: 18, fontWeight: "900" },
+  xpDialogHint: { marginTop: 3, color: "#a1a1aa", fontSize: 11 },
+  xpDialogTrack: { height: 5, overflow: "hidden", borderRadius: 5, backgroundColor: "#303030", marginTop: 10 },
+  xpTimeline: { position: "relative", marginTop: 20, gap: 10 },
+  xpTimelineRail: { position: "absolute", top: 12, bottom: 28, left: 5, width: 1, backgroundColor: "#373737" },
+  xpTimelineFill: { position: "absolute", top: 12, left: 5, width: 2, borderRadius: 2, backgroundColor: "#a78bfa" },
+  xpTimelineRow: { minHeight: 42, flexDirection: "row", alignItems: "flex-start", gap: 10 },
+  xpTimelineDot: { zIndex: 1, width: 11, height: 11, marginTop: 8, borderRadius: 6, borderWidth: 2, borderColor: "#1a1a1a", backgroundColor: "#454545" },
+  xpTimelineDotReached: { backgroundColor: "#a78bfa" },
+  xpTimelineDotCurrent: { width: 12, height: 12, borderRadius: 6, backgroundColor: "#c4b5fd" },
+  xpTimelineCopy: { flex: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 7, backgroundColor: "rgba(255,255,255,.025)" },
+  xpTimelineCopyCurrent: { borderWidth: 1, borderColor: "rgba(167,139,250,.25)", backgroundColor: "rgba(139,92,246,.10)" },
+  xpTimelineName: { color: "#d4d4d8", fontSize: 13, fontWeight: "700" },
+  xpTimelineNameCurrent: { color: "#f5f3ff" },
+  xpTimelineRequirement: { marginTop: 1, color: colors.muted, fontSize: 10 },
+  xpTimelineCurrent: { marginLeft: -4, borderRadius: 8, backgroundColor: "rgba(139,92,246,.14)", paddingHorizontal: 7, paddingVertical: 4, color: "#c4b5fd", fontSize: 9, fontWeight: "900" },
   confirmDialog: {
     borderRadius: 20,
     padding: 18,

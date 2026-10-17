@@ -69,6 +69,24 @@ const currentWeekKey = () => {
   return dayKey(start);
 };
 
+const overallXpSummary = (tasks: DailyTask[]) => {
+  const today = dayKey(new Date());
+  const completed = tasks.filter((task) => task.completed);
+  const studyMinutes = completed.reduce((total, task) => total + Math.max(0, task.minutesSpent ?? 0), 0);
+  const overdue = tasks.filter((task) => !task.completed && task.date < today).length;
+  const firstTaskDay = tasks.filter((task) => task.date < today).map((task) => task.date).sort()[0];
+  let inactiveDays = 0;
+  for (const cursor = new Date(`${firstTaskDay ?? today}T00:00:00`); dayKey(cursor) < today; cursor.setDate(cursor.getDate() + 1)) {
+    if (!tasks.some((task) => task.date === dayKey(cursor) && task.completed)) inactiveDays += 1;
+  }
+  const xp = completed.length * 10 + Math.floor(studyMinutes / 10) - overdue * 5 - inactiveDays * 50;
+  if (xp < 0) return { xp, level: 0 };
+  let level = 1;
+  const xpForLevel = (value: number) => value <= 1 ? 0 : 500 * 2 ** (value - 2);
+  while (xp >= xpForLevel(level + 1)) level += 1;
+  return { xp, level };
+};
+
 /** Rebuilds the same weekly leaderboard entry used by the web and mobile apps. */
 async function publishLeaderboardAfterTaskChange(user: User) {
   const [profileSnapshot, taskSnapshot] = await Promise.all([getDoc(profileRef(user)), getDocs(tasksFor(user))]);
@@ -82,9 +100,16 @@ async function publishLeaderboardAfterTaskChange(user: User) {
   const endKey = dayKey(end);
   const today = dayKey(new Date());
   const tasks = taskSnapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() } as DailyTask));
+  const { xp, level } = overallXpSummary(tasks);
   const scoped = tasks.filter((task) => task.date >= week && task.date <= endKey);
   const completed = scoped.filter((task) => task.completed);
   const overdue = scoped.filter((task) => !task.completed && task.date < today).length;
+  const firstTrackedDay = scoped.filter((task) => task.date < today).map((task) => task.date).sort()[0];
+  const inactiveDates: string[] = [];
+  for (const cursor = new Date(`${firstTrackedDay ?? today}T00:00:00`); dayKey(cursor) < today; cursor.setDate(cursor.getDate() + 1)) {
+    if (!scoped.some((task) => task.date === dayKey(cursor) && task.completed)) inactiveDates.push(dayKey(cursor));
+  }
+  const inactiveDays = inactiveDates.length;
   const studyMinutes = completed.reduce((total, task) => total + Math.max(0, task.minutesSpent ?? 0), 0);
   let creditedMinutes = 0;
   const leaderboardTasks = scoped.map((task) => {
@@ -100,10 +125,14 @@ async function publishLeaderboardAfterTaskChange(user: User) {
     name: typeof profile.name === "string" && profile.name.trim() ? profile.name.trim() : "Student",
     ...(typeof profile.avatar === "string" && profile.avatar ? { avatar: profile.avatar } : {}),
     week,
+    xp,
+    level,
     completed: completed.length,
     overdue,
+    inactiveDays,
+    inactiveDates,
     studyMinutes,
-    points: completed.length * 10 - overdue * 5 + Math.min(210, Math.floor(studyMinutes / 10)),
+    points: completed.length * 10 - overdue * 5 - inactiveDays * 50 + Math.min(210, Math.floor(studyMinutes / 10)),
     leaderboardTasks,
     updatedAt: serverTimestamp(),
   }, { merge: true });

@@ -19,6 +19,7 @@ import {
   Repeat2,
   Route as RouteIcon,
   Settings,
+  Trophy,
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -29,6 +30,7 @@ import { loadHistory, onPracticePersist, type TestRecord } from "@/lib/exam";
 import { trackerActiveDates } from "@/lib/tracker";
 import { loadTrackerData, saveTrackerData } from "@/lib/tracker-store";
 import { loadDailyTasks } from "@/lib/daily-tasks";
+import { getXpSummary } from "@/lib/xp";
 import { loadPracticeProfile, savePracticeProfile, type PracticeProfile } from "@/lib/profile";
 import { checkUsernameAvailability, normalizeUsername, readCloudProfile, saveProfileWithUsername, savePublicProfileActivity, usernameValidationMessage, watchCloudProfile } from "@/lib/firebase-sync";
 import type { User } from "firebase/auth";
@@ -279,6 +281,10 @@ function StreakCelebration({ streak, onClose }: { streak: number; onClose: () =>
       </section>
     </div>
   );
+}
+
+function LevelCelebration({ level, onClose }: { level: number; onClose: () => void }) {
+  return <div className="fixed inset-0 z-[80] grid place-items-center bg-black/80 p-4 backdrop-blur-sm"><section className="relative w-full max-w-sm rounded-2xl border border-white/10 bg-[#171717] p-6 text-center text-zinc-100 shadow-[0_24px_80px_-24px_black] sm:p-7"><button type="button" aria-label="Close level celebration" onClick={onClose} className="absolute top-3 right-3 grid h-8 w-8 place-items-center rounded-md text-zinc-500 transition-colors hover:bg-white/10 hover:text-zinc-100"><X className="h-4 w-4" /></button><div className="mx-auto grid h-12 w-12 place-items-center rounded-xl border border-violet-300/15 bg-violet-400/10 text-violet-300"><Trophy className="h-6 w-6" /></div><p className="mt-4 text-[10px] font-semibold tracking-[0.18em] text-zinc-500 uppercase">Level up</p><p className="mt-1.5 text-2xl font-semibold tracking-tight text-zinc-50">Level {level}</p><p className="mt-2 text-sm text-zinc-400">Your effort is paying off.</p><button type="button" onClick={onClose} className="mt-5 w-full rounded-lg bg-zinc-100 px-4 py-2.5 text-sm font-semibold text-zinc-900 transition-colors hover:bg-white">Continue</button></section></div>;
 }
 
 function DailyManifestation({
@@ -1136,13 +1142,16 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
   const [records, setRecords] = useState<TestRecord[]>([]);
   const [trackerActivityDates, setTrackerActivityDates] = useState<string[]>([]);
   const [taskActivityDates, setTaskActivityDates] = useState<string[]>([]);
+  const [xpLevel, setXpLevel] = useState<number | null>(null);
   const [profile, setProfile] = useState<PracticeProfile | null | undefined>(undefined);
   const [profileHydrated, setProfileHydrated] = useState(false);
   const [celebratedStreak, setCelebratedStreak] = useState<number | null>(null);
+  const [celebratedLevel, setCelebratedLevel] = useState<number | null>(null);
   const [streakReady, setStreakReady] = useState(false);
   const [manifestationOpen, setManifestationOpen] = useState(false);
   const authUser = useAuthUser();
   const previousStreak = useRef<number | null>(null);
+  const previousXpLevel = useRef<number | null>(null);
   const navLinks = useRef(new Map<string, HTMLAnchorElement>());
   const navTimer = useRef<number | null>(null);
   const [navTarget, setNavTarget] = useState<string | null>(null);
@@ -1179,7 +1188,9 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
       setRecords(loadHistory());
       const tracker = loadTrackerData();
       setTrackerActivityDates(trackerActiveDates(tracker));
-      setTaskActivityDates(loadDailyTasks().filter((task) => task.completed).map((task) => (task.completedAt ?? task.date).slice(0, 10)));
+      const tasks = loadDailyTasks();
+      setTaskActivityDates(tasks.filter((task) => task.completed).map((task) => (task.completedAt ?? task.date).slice(0, 10)));
+      setXpLevel(getXpSummary(tasks).level);
       setStreakReady(true);
     };
     refresh();
@@ -1268,6 +1279,13 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
     previousStreak.current = currentStreak;
     setCelebratedStreak(currentStreak);
   }, [currentStreak, streakReady]);
+
+  useEffect(() => {
+    if (xpLevel === null) return;
+    if (previousXpLevel.current === null) { previousXpLevel.current = xpLevel; return; }
+    if (xpLevel > previousXpLevel.current) setCelebratedLevel(xpLevel);
+    previousXpLevel.current = xpLevel;
+  }, [xpLevel]);
 
   return (
     <div className="flex min-h-screen w-full flex-col bg-[#121212] text-zinc-100">
@@ -1360,6 +1378,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
       {celebratedStreak !== null && (
         <StreakCelebration streak={celebratedStreak} onClose={() => setCelebratedStreak(null)} />
       )}
+      {celebratedLevel !== null && <LevelCelebration level={celebratedLevel} onClose={() => setCelebratedLevel(null)} />}
     </div>
   );
 }

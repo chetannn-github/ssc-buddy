@@ -85,6 +85,12 @@ if (supportsAndroidWidgets) {
         widgetRank = Number.isFinite(Number(meta?.rank)) && Number(meta.rank) > 0 ? Number(meta.rank) : null;
       } catch {}
       renderWidget(renderDailyTasksWidget(tasks, widgetRank));
+      // Android may deliver the scheduled widget refresh after midnight while
+      // the app UI is closed. Rebuild the cloud score from the same task data
+      // so overdue-task penalties are not delayed until a manual task action.
+      void getWidgetUser()
+        .then((user) => user ? publishLeaderboardAfterWidgetTask(user) : undefined)
+        .catch(() => undefined);
       return;
     }
     let quiz = await getUnlockQuiz();

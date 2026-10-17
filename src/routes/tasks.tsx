@@ -68,6 +68,7 @@ function AnimatedBar({ value, tone }: { value: number; tone: string }) {
 
 function DailyTasks() {
   const [tasks, setTasks] = useState<DailyTask[]>(() => loadDailyTasks());
+  const [calendarDay, setCalendarDay] = useState(() => todayKey());
   const [syncUser, setSyncUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState("tasks");
   const [taskDay, setTaskDay] = useState<"today" | "tomorrow">("today");
@@ -89,6 +90,28 @@ function DailyTasks() {
     if (!isFirebaseConfigured) return;
     return observeFirebaseUser(setSyncUser);
   }, []);
+  useEffect(() => {
+    let midnightTimer: number | undefined;
+    const refreshCalendarDay = () => setCalendarDay((previous) => {
+      const next = todayKey();
+      return previous === next ? previous : next;
+    });
+    const scheduleMidnightRefresh = () => {
+      const now = new Date();
+      const nextMidnight = new Date(now);
+      nextMidnight.setHours(24, 0, 1, 0);
+      midnightTimer = window.setTimeout(() => {
+        refreshCalendarDay();
+        scheduleMidnightRefresh();
+      }, Math.max(1_000, nextMidnight.getTime() - now.getTime()));
+    };
+    scheduleMidnightRefresh();
+    window.addEventListener("focus", refreshCalendarDay);
+    return () => {
+      if (midnightTimer) window.clearTimeout(midnightTimer);
+      window.removeEventListener("focus", refreshCalendarDay);
+    };
+  }, []);
   const persist = async (next: DailyTask[]) => {
     const previous = tasks;
     setTasks(next);
@@ -102,19 +125,24 @@ function DailyTasks() {
       new Promise<void>((resolve) => window.setTimeout(resolve, 160)),
     ]);
   };
-  const today = todayKey();
+  useEffect(() => {
+    if (!syncUser) return;
+    const profile = loadPracticeProfile();
+    if (profile?.username) void publishLeaderboardEntry(syncUser, profile, tasks).catch(() => undefined);
+  }, [calendarDay, syncUser?.uid]);
+  const today = calendarDay;
   const tomorrowDate = useMemo(() => {
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     return todayKey(tomorrow);
-  }, []);
+  }, [calendarDay]);
   const tomorrowTaskCount = tasks.filter((task) => task.date === tomorrowDate).length;
   const activeTaskDate = taskDay === "today" ? today : tomorrowDate;
   const dayTasks = tasks
     .filter((task) => task.date === activeTaskDate)
     .sort((a, b) => Number(a.completed) - Number(b.completed));
   const daySummary = summarizeTasks(dayTasks);
-  const taskPoints = useMemo(() => weeklyTaskPoints(tasks), [tasks]);
+  const taskPoints = useMemo(() => weeklyTaskPoints(tasks), [calendarDay, tasks]);
   const scopedTasks = useMemo(() => {
     const bounds = rangeBounds(range);
     return tasks.filter(
@@ -157,6 +185,11 @@ function DailyTasks() {
     tasks
       .filter((task) => task.date < today && task.date >= bounds.from && task.date <= bounds.to)
       .forEach((task) => grouped.set(task.date, [...(grouped.get(task.date) ?? []), task]));
+    const firstTaskDay = tasks.filter((task) => task.date < today).map((task) => task.date).sort()[0];
+    for (const cursor = new Date(`${firstTaskDay ?? today}T00:00:00`); todayKey(cursor) < today; cursor.setDate(cursor.getDate() + 1)) {
+      const date = todayKey(cursor);
+      if (date >= bounds.from && date <= bounds.to && !tasks.some((task) => task.date === date && task.completed)) grouped.set(date, grouped.get(date) ?? []);
+    }
     return [...grouped.entries()].sort(([left], [right]) => right.localeCompare(left));
   }, [historyRange, tasks, today]);
   const activeHistoryDay =
@@ -509,6 +542,7 @@ function DailyTasks() {
                         {formatDuration(summarizeTasks(activeHistoryDay[1]).minutes)} study time
                       </p>
                     </div>
+                    {!activeHistoryDay[1].some((task) => task.completed) && <strong className="font-mono text-sm text-red-300">Inactive day · −50 pts</strong>}
                   </div>
                   <div className="mt-5 space-y-2">
                     {[...activeHistoryDay[1]]

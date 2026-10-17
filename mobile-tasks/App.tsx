@@ -8,6 +8,7 @@ import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import {
   Animated,
   ActivityIndicator,
+  AppState,
   Easing,
   Image,
   ImageBackground,
@@ -58,6 +59,7 @@ import { reportVerticalTouch } from "./src/navigation/bottomNavigationVisibility
 import type { User } from "firebase/auth";
 import { reportVerticalScroll, resetBottomNavigation } from "./src/navigation/bottomNavigationVisibility";
 import { getUnlockQuiz, loadUnlockQuiz } from "./src/domain/unlock-quiz";
+import { getXpSummary } from "./src/domain/xp";
 
 // Keep the native layer visible until our branded React splash has mounted.
 // Without this, Android briefly flashes Expo's default splash between launch
@@ -76,6 +78,21 @@ const localDateKey = (date: Date) => `${date.getFullYear()}-${String(date.getMon
 const weeklyTaskPointMap = (tasks: Task[]) => {
   const now = new Date(), start = new Date(now); start.setHours(0, 0, 0, 0); start.setDate(start.getDate() - ((start.getDay() + 6) % 7)); const weekStart = localDateKey(start); const end = new Date(start); end.setDate(end.getDate() + 6); const weekEnd = localDateKey(end), today = localDateKey(now); let creditedMinutes = 0;
   return new Map(tasks.filter((task) => task.date >= weekStart && task.date <= weekEnd).map((task) => { if (!task.completed) return [task.id, task.date < today ? -5 : 0] as const; const before = Math.min(210, Math.floor(creditedMinutes / 10)); creditedMinutes += Math.max(0, Number(task.minutesSpent) || 0); return [task.id, 10 + Math.min(210, Math.floor(creditedMinutes / 10)) - before] as const; }));
+};
+const weeklyInactivityPenalty = (tasks: Task[]) => {
+  const now = new Date(), start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+  const weekStart = localDateKey(start), end = new Date(start);
+  end.setDate(end.getDate() + 6);
+  const weekEnd = localDateKey(end), today = localDateKey(now);
+  const weekTasks = tasks.filter((task) => task.date >= weekStart && task.date <= weekEnd);
+  const firstTrackedDay = weekTasks.filter((task) => task.date < today).map((task) => task.date).sort()[0];
+  let inactiveDays = 0;
+  for (const cursor = new Date(`${firstTrackedDay ?? today}T00:00:00`); localDateKey(cursor) < today; cursor.setDate(cursor.getDate() + 1)) {
+    if (!weekTasks.some((task) => task.date === localDateKey(cursor) && task.completed)) inactiveDays += 1;
+  }
+  return inactiveDays * 50;
 };
 
 function manifestationDayKey() {
@@ -205,6 +222,23 @@ function StreakCelebration({ streak, onClose }: { streak: number; onClose: () =>
   );
 }
 
+function LevelCelebration({ level, onClose }: { level: number; onClose: () => void }) {
+  return (
+    <Modal transparent visible animationType="fade" statusBarTranslucent onRequestClose={onClose}>
+      <Pressable style={styles.streakCelebrationBackdrop} onPress={onClose}>
+        <Pressable style={styles.streakCelebrationDialog} onPress={() => undefined}>
+          <Pressable accessibilityLabel="Close level celebration" hitSlop={10} onPress={onClose} style={styles.streakCelebrationClose}><MaterialCommunityIcons name="close" size={19} color="#a1a1aa" /></Pressable>
+          <View style={styles.streakCelebrationIcon}><ExpoImage source={require("./assets/consistency-firework.webp")} autoplay contentFit="contain" transition={0} style={styles.streakCelebrationFirework} /></View>
+          <Text style={styles.streakCelebrationEyebrow}>LEVEL UP</Text>
+          <Text style={styles.streakCelebrationTitle}>Level {level}</Text>
+          <Text style={styles.streakCelebrationCopy}>Your effort is paying off.</Text>
+          <Pressable style={styles.streakCelebrationButton} onPress={onClose}><Text style={styles.streakCelebrationButtonText}>Continue</Text></Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 export default function App() {
   const [authReady, setAuthReady] = useState(!isFirebaseConfigured);
   const [showSplash, setShowSplash] = useState(true);
@@ -217,6 +251,7 @@ export default function App() {
   const [musicOpenRequest, setMusicOpenRequest] = useState(0);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [tasksLoaded, setTasksLoaded] = useState(false);
+  const [calendarDay, setCalendarDay] = useState(() => dateKey());
   const [widgetRank, setWidgetRank] = useState<number | null>(null);
   const [practiceActivityDates, setPracticeActivityDates] = useState<string[]>([]);
   const [trackerActivityDates, setTrackerActivityDates] = useState<string[]>([]);
@@ -225,6 +260,7 @@ export default function App() {
   const [profileMockTests, setProfileMockTests] = useState<any[]>([]);
   const [profileActivityReady, setProfileActivityReady] = useState(false);
   const [celebratedStreak, setCelebratedStreak] = useState<number | null>(null);
+  const [celebratedLevel, setCelebratedLevel] = useState<number | null>(null);
   const [profileSettings, setProfileSettings] = useState<PracticeProfile | null>(null);
   const [appTab, setAppTab] = useState<TabKey>("tasks");
   const [trackTab, setTrackTab] = useState<"Syllabus" | "Revision" | "Mock Test">("Syllabus");
@@ -237,6 +273,7 @@ export default function App() {
   const taskCacheVersion = useRef(0);
   const profileCacheVersion = useRef(0);
   const previousStreak = useRef<number | null>(null);
+  const previousXpLevel = useRef<number | null>(null);
   const [tab, setTab] = useState<"Tasks" | "Analytics" | "History">("Tasks");
   const [taskTabsWidth, setTaskTabsWidth] = useState(0);
   const taskTabIndicator = useRef(new Animated.Value(0)).current;
@@ -263,6 +300,27 @@ export default function App() {
   const [spent, setSpent] = useState("60");
   const [taskActionLoading, setTaskActionLoading] = useState(false);
   const taskRowInteractionBlockedUntil = useRef(0);
+  useEffect(() => {
+    let midnightTimer: ReturnType<typeof setTimeout> | undefined;
+    const refreshCalendarDay = () => setCalendarDay((previous) => {
+      const next = dateKey();
+      return previous === next ? previous : next;
+    });
+    const scheduleMidnightRefresh = () => {
+      const now = new Date();
+      const nextMidnight = new Date(now);
+      nextMidnight.setHours(24, 0, 1, 0);
+      midnightTimer = setTimeout(() => {
+        refreshCalendarDay();
+        scheduleMidnightRefresh();
+      }, Math.max(1_000, nextMidnight.getTime() - now.getTime()));
+    };
+    scheduleMidnightRefresh();
+    const appStateSubscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") refreshCalendarDay();
+    });
+    return () => { if (midnightTimer) clearTimeout(midnightTimer); appStateSubscription.remove(); };
+  }, []);
   const activeAppTab = tabs.find((item) => item.key === appTab) ?? tabs[0];
   const activeTaskTabIndex = TASK_TABS.indexOf(tab);
   const handleTaskSwipeEnd = (endX: number) => {
@@ -305,7 +363,7 @@ export default function App() {
   useEffect(() => {
     if (!user) { setWidgetRank(null); return; }
     return watchWeeklyLeaderboardRank(user, (rank) => setWidgetRank(rank));
-  }, [user?.uid]);
+  }, [calendarDay, user?.uid]);
   useEffect(() => {
     void AsyncStorage.setItem(WIDGET_META_STORAGE_KEY, JSON.stringify({ rank: widgetRank }));
     if (tasksLoaded) refreshDailyTasksWidget(tasks);
@@ -552,23 +610,42 @@ export default function App() {
     if (user) void syncTaskChanges(user, previous, next);
     if (user && profileSettings?.username) void publishLeaderboardEntry(user, profileSettings, next).catch(() => undefined);
   };
-  const today = dateKey();
+  useEffect(() => {
+    if (!tasksLoaded) return;
+    // A task that crossed into yesterday now carries its overdue penalty even
+    // if the user has not tapped a task yet. Refresh the widget and its cloud
+    // leaderboard snapshot on both the midnight timer and app resume.
+    refreshDailyTasksWidget(tasks);
+    if (user && profileSettings?.username) {
+      void publishLeaderboardEntry(user, profileSettings, tasks).catch(() => undefined);
+    }
+  }, [calendarDay, profileSettings?.username, tasksLoaded, user?.uid]);
+  const today = calendarDay;
   const tomorrow = dateKeyFromOffset(1);
   const inRange = (value: string, range: TaskRange) => { const days = range === "today" ? 1 : range === "week" ? 7 : range === "month" ? 31 : range === "3months" ? 92 : 366; const from = dateKeyFromOffset(-(days - 1)); return value >= from && value <= today; };
   const todayTasks = tasks
     .filter((task) => task.date === (taskDay === "today" ? today : tomorrow))
     .sort((a, b) => Number(a.completed) - Number(b.completed));
   const todaySummary = summarizeTasks(todayTasks);
-  const taskPoints = useMemo(() => weeklyTaskPointMap(tasks), [tasks]);
-  const weeklyPoints = useMemo(() => [...taskPoints.values()].reduce((total, points) => total + points, 0), [taskPoints]);
+  const taskPoints = useMemo(() => weeklyTaskPointMap(tasks), [tasks, calendarDay]);
+  const weeklyPoints = useMemo(() => [...taskPoints.values()].reduce((total, points) => total + points, 0) - weeklyInactivityPenalty(tasks), [taskPoints, tasks]);
   const tomorrowTaskCount = tasks.filter((task) => task.date === tomorrow).length;
   const thirty = tasksInLastDays(tasks, 30);
   const thirtySummary = summarizeTasks(thirty.flat());
   const analyticsTasks = tasks.filter((task) => inRange(task.date, analyticsRange) && (analyticsSubject === "All subjects" || task.subject === analyticsSubject));
   const analyticsSummary = summarizeTasks(analyticsTasks);
-  const historyDays = useMemo(() => [...new Set(tasks.filter((task) => task.date < today && inRange(task.date, historyRange)).map((task) => task.date))].sort().reverse(), [historyRange, tasks, today]);
+  const historyDays = useMemo(() => {
+    const dates = new Set(tasks.filter((task) => task.date < today && inRange(task.date, historyRange)).map((task) => task.date));
+    const firstTaskDay = tasks.filter((task) => task.date < today).map((task) => task.date).sort()[0];
+    for (const cursor = new Date(`${firstTaskDay ?? today}T00:00:00`); localDateKey(cursor) < today; cursor.setDate(cursor.getDate() + 1)) {
+      const date = localDateKey(cursor);
+      if (inRange(date, historyRange) && !tasks.some((task) => task.date === date && task.completed)) dates.add(date);
+    }
+    return [...dates].sort().reverse();
+  }, [historyRange, tasks, today]);
   const activeHistoryDate = historyDays.includes(selectedHistoryDate ?? "") ? selectedHistoryDate! : historyDays[0];
   const historyTasks = activeHistoryDate ? tasks.filter((task) => task.date === activeHistoryDate).sort((a, b) => Number(a.completed) - Number(b.completed)) : [];
+  const historyInactive = Boolean(activeHistoryDate && !historyTasks.some((task) => task.completed));
   const subjectBreakdown = useMemo(() => {
     const totals = new Map<string, { count: number; minutes: number }>();
     analyticsTasks.filter((task) => task.completed).forEach((task) => {
@@ -595,6 +672,7 @@ export default function App() {
     while (activeDays.has(localDateKey(cursor))) { days += 1; cursor.setDate(cursor.getDate() - 1); }
     return days;
   }, [practiceActivityDates, tasks, trackerActivityDates]);
+  const xpSummary = useMemo(() => getXpSummary(tasks), [calendarDay, tasks]);
   useEffect(() => {
     // Like the web shell, never celebrate the first hydrated value. Only a
     // real, live increase after all three activity sources have loaded earns it.
@@ -611,8 +689,16 @@ export default function App() {
     setCelebratedStreak(streak);
   }, [authenticated, profileActivityReady, streak, tasksLoaded]);
   useEffect(() => {
+    if (!authenticated || !tasksLoaded) return;
+    if (previousXpLevel.current === null) { previousXpLevel.current = xpSummary.level; return; }
+    if (xpSummary.level > previousXpLevel.current) setCelebratedLevel(xpSummary.level);
+    previousXpLevel.current = xpSummary.level;
+  }, [authenticated, tasksLoaded, xpSummary.level]);
+  useEffect(() => {
     previousStreak.current = null;
+    previousXpLevel.current = null;
     setCelebratedStreak(null);
+    setCelebratedLevel(null);
   }, [user?.uid]);
   const highest = useMemo(
     () =>
@@ -826,7 +912,7 @@ export default function App() {
             <View style={styles.hero}>
               <View style={styles.heroHeading}>
                 <Text style={styles.date}>{taskDay === "today" ? "Today’s tasks" : "Tomorrow’s tasks"}</Text>
-                <View style={styles.heroHeadingActions}><View style={styles.livePoints}><PointsSpark points={weeklyPoints} /><View style={styles.livePointsText}><RollingMetric value={weeklyPoints} prefix={weeklyPoints > 0 ? "+" : ""} suffix=" pts" /></View></View>{(tomorrowTaskCount > 0 || taskDay === "tomorrow") && <Pressable style={styles.dayToggle} onPress={() => setTaskDay((current) => current === "today" ? "tomorrow" : "today")}><Text style={styles.dayToggleText}>{taskDay === "today" ? `Tomorrow (${tomorrowTaskCount})` : "Today"}</Text><MaterialCommunityIcons name="chevron-right" size={14} color="#b4b4b8" /></Pressable>}</View>
+                <View style={styles.heroHeadingActions}><View style={styles.livePoints}><PointsSpark points={weeklyPoints} /><View style={styles.livePointsText}><RollingMetric value={weeklyPoints} prefix={weeklyPoints > 0 ? "+" : ""} suffix=" pts" color={weeklyPoints > 0 ? "#86efac" : weeklyPoints < 0 ? "#fca5a5" : "#a1a1aa"} /></View></View>{(tomorrowTaskCount > 0 || taskDay === "tomorrow") && <Pressable style={styles.dayToggle} onPress={() => setTaskDay((current) => current === "today" ? "tomorrow" : "today")}><Text style={styles.dayToggleText}>{taskDay === "today" ? `Tomorrow (${tomorrowTaskCount})` : "Today"}</Text><MaterialCommunityIcons name="chevron-right" size={14} color="#b4b4b8" /></Pressable>}</View>
               </View>
               <View style={styles.progressRow}>
                 <CompletionRing percent={todaySummary.percent} />
@@ -881,7 +967,14 @@ export default function App() {
           <>
             {(historyRangeOpen || historyDateOpen) && <Pressable style={styles.dropdownDismiss} onPress={() => { setHistoryRangeOpen(false); setHistoryDateOpen(false); }} />}
             <TaskDropdown label={TASK_RANGE_LABELS[historyRange]} open={historyRangeOpen} onToggle={() => { setHistoryRangeOpen((value) => !value); setHistoryDateOpen(false); setAnalyticsRangeOpen(false); setAnalyticsSubjectOpen(false); }} options={(["week", "month", "3months", "year"] as TaskRange[]).map((value) => ({ value, label: TASK_RANGE_LABELS[value] }))} onSelect={(value) => { setHistoryRange(value as TaskRange); setSelectedHistoryDate(null); setHistoryRangeOpen(false); }} />
-            {historyDays.length ? <>{!historyRangeOpen && <TaskDropdown label={new Date(`${activeHistoryDate}T00:00:00`).toLocaleDateString(undefined, { day: "numeric", month: "short" })} open={historyDateOpen} onToggle={() => { setHistoryDateOpen((value) => !value); setHistoryRangeOpen(false); setAnalyticsRangeOpen(false); setAnalyticsSubjectOpen(false); }} options={historyDays.map((value) => ({ value, label: new Date(`${value}T00:00:00`).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" }) }))} onSelect={(value) => { setSelectedHistoryDate(value); setHistoryDateOpen(false); }} />}<View style={styles.history}><Text style={styles.historyDate}>{new Date(`${activeHistoryDate}T00:00:00`).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })}</Text><Text style={styles.muted}>{formatMinutes(summarizeTasks(historyTasks).minutes)} study time</Text><View style={styles.historyTaskList}>{historyTasks.map((task, index) => <TaskRow key={task.id} task={task} points={taskPoints.get(task.id) ?? 0} compact grouped last={index === historyTasks.length - 1} onDone={() => { setSpent(String(task.minutesSpent ?? 30)); setCompletion(task); }} onReopen={() => reopen(task.id)} onEdit={() => openEdit(task)} onDelete={() => remove(task.id)} />)}</View></View></> : <View style={styles.empty}><Text style={styles.muted}>No task history yet.</Text></View>}
+            {historyDays.length ? <>
+              {!historyRangeOpen && <TaskDropdown label={new Date(`${activeHistoryDate}T00:00:00`).toLocaleDateString(undefined, { day: "numeric", month: "short" })} open={historyDateOpen} onToggle={() => { setHistoryDateOpen((value) => !value); setHistoryRangeOpen(false); setAnalyticsRangeOpen(false); setAnalyticsSubjectOpen(false); }} options={historyDays.map((value) => ({ value, label: new Date(`${value}T00:00:00`).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" }) }))} onSelect={(value) => { setSelectedHistoryDate(value); setHistoryDateOpen(false); }} />}
+              <View style={styles.history}>
+                <View style={styles.historyHeader}><Text style={styles.historyDate}>{new Date(`${activeHistoryDate}T00:00:00`).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })}</Text>{historyInactive && <Text style={styles.inactiveHistoryPoints}>Inactive day · −50 pts</Text>}</View>
+                <Text style={styles.muted}>{formatMinutes(summarizeTasks(historyTasks).minutes)} study time</Text>
+                <View style={styles.historyTaskList}>{historyTasks.map((task, index) => <TaskRow key={task.id} task={task} points={taskPoints.get(task.id) ?? 0} compact grouped last={index === historyTasks.length - 1} onDone={() => { setSpent(String(task.minutesSpent ?? 30)); setCompletion(task); }} onReopen={() => reopen(task.id)} onEdit={() => openEdit(task)} onDelete={() => remove(task.id)} />)}</View>
+              </View>
+            </> : <View style={styles.empty}><Text style={styles.muted}>No task history yet.</Text></View>}
           </>
         )}
       </ScrollView>
@@ -1000,6 +1093,7 @@ export default function App() {
       {!quickRecallOpen && <BottomNavigation activeTab={appTab} onChange={(tab) => { setLeaderboardOpen(false); setAppTab(tab); }} practiceSessionEnabled={profileSettings?.practiceSessionEnabled !== false} trackProgressEnabled={profileSettings?.trackProgressEnabled !== false} profileAvatar={profileSettings?.avatar ? avatarAssets[profileSettings.avatar] : undefined} />}
       <MediaOverlay user={user} mode={mediaMode} musicOpenRequest={musicOpenRequest} onClose={() => setMediaMode(null)} />
       {celebratedStreak !== null && <StreakCelebration streak={celebratedStreak} onClose={() => setCelebratedStreak(null)} />}
+      {celebratedLevel !== null && <LevelCelebration level={celebratedLevel} onClose={() => setCelebratedLevel(null)} />}
       <DailyManifestationDialog
         phrase={dailyManifestation}
         entry={manifestationEntry}
@@ -1320,6 +1414,8 @@ const styles = StyleSheet.create({
     borderColor: "#303030",
   },
   historyDate: { color: "#fafafa", fontWeight: "700" },
+  historyHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  inactiveHistoryPoints: { color: "#fca5a5", fontSize: 12, fontWeight: "800" },
   historyTaskList: { marginTop: 8, borderTopWidth: 1, borderTopColor: "#303030" },
   backdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,.72)" },
   sheet: {

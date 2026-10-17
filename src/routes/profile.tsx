@@ -52,6 +52,7 @@ import { checkUsernameAvailability, normalizeUsername, saveProfileWithUsername, 
 import type { PublicProfile } from "@/lib/firebase-sync";
 import { formatDuration, loadDailyTasks, type DailyTask } from "@/lib/daily-tasks";
 import { currentWeekKey, watchLeaderboard } from "@/lib/leaderboard";
+import { getXpSummary, levelName, xpForLevel } from "@/lib/xp";
 
 const title = "Profile";
 const description = "Your yearly practice activity and progress.";
@@ -885,6 +886,8 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
   const [importMessage, setImportMessage] = useState("");
   const [promptCopied, setPromptCopied] = useState(false);
   const [leaderboardRank, setLeaderboardRank] = useState<number | null>(null);
+  const [xpTimelineOpen, setXpTimelineOpen] = useState(false);
+  const [xpTimelineAnimated, setXpTimelineAnimated] = useState(false);
   const importFileRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const authUser = useAuthUser();
@@ -1021,6 +1024,12 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
       incomplete: tasks.length - completed.length,
     };
   }, [dailyTasks, range]);
+  const xpSummary = useMemo(() => getXpSummary(dailyTasks), [dailyTasks]);
+  const xpNextLabel = xpSummary.level === 0 ? "Reach 0 XP to begin" : `${Math.max(0, xpSummary.nextLevelXp - xpSummary.xp)} XP to Level ${xpSummary.level + 1}`;
+  const xpTimelineStart = Math.max(0, xpSummary.level - 3);
+  const xpTimelineLevels = Array.from({ length: 6 }, (_, index) => xpTimelineStart + index);
+  const xpTimelineFill = ((xpSummary.level - xpTimelineStart + xpSummary.progress) / 5) * 100;
+  useEffect(() => { if (!xpTimelineOpen) { setXpTimelineAnimated(false); return; } const frame = requestAnimationFrame(() => setXpTimelineAnimated(true)); return () => cancelAnimationFrame(frame); }, [xpTimelineOpen]);
   const saveProfile = async () => {
     if (!nameDraft.trim() || Number(goalDraft) < 1 || isSavingProfile || (authUser && usernameStatus !== "available")) return;
     setIsSavingProfile(true);
@@ -1218,6 +1227,10 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
                   <Pencil className="h-3.5 w-3.5" />
                 </Button>}
               </div>
+              <button type="button" onClick={() => setXpTimelineOpen(true)} className="mt-1 w-full max-w-52 text-center outline-none sm:text-left">
+                <span className={`text-xs font-semibold ${xpSummary.xp > 0 ? "text-emerald-300" : xpSummary.xp < 0 ? "text-red-300" : "text-zinc-400"}`}>Lv. {xpSummary.level} · {levelName(xpSummary.level)} · {xpSummary.xp > 0 ? "+" : ""}{xpSummary.xp} XP</span>
+                {xpSummary.level > 0 && <div className="mt-1 h-1 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-violet-400 transition-[width] duration-500" style={{ width: `${xpSummary.progress * 100}%` }} /></div>}
+              </button>
               {readOnly && publicProfile?.username && <div className="mt-0 flex flex-wrap items-center justify-center gap-1.5 sm:justify-start">
                 <Button type="button" variant="ghost" className="h-9 gap-1.5 px-2.5 text-sm text-zinc-300 hover:bg-white/10 hover:text-white" onClick={() => void navigate({ to: "/weekly-stats/$username", params: { username: publicProfile.username } })}>
                   <Trophy className="h-4 w-4" /> Weekly stats
@@ -1290,7 +1303,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
         </button>
       )}
       <Dialog open={logoutConfirmOpen} onOpenChange={setLogoutConfirmOpen}>
-        <DialogContent className="border-white/10 bg-[#1b1b1b] p-5 text-zinc-100 sm:max-w-sm">
+        <DialogContent onOpenAutoFocus={(event) => event.preventDefault()} className="border-white/10 bg-[#1b1b1b] p-5 text-zinc-100 sm:max-w-sm">
           <DialogHeader className="space-y-1">
             <DialogTitle className="text-base">Sign out?</DialogTitle>
             <DialogDescription className="text-sm text-zinc-400">
@@ -1473,6 +1486,12 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
           </div>
         </div>
       )}
+      <Dialog open={xpTimelineOpen} onOpenChange={setXpTimelineOpen}>
+        <DialogContent className="border-white/10 bg-[#1b1b1b] p-5 text-zinc-100 sm:max-w-sm">
+          <DialogHeader><DialogTitle>Level {xpSummary.level} · {levelName(xpSummary.level)}</DialogTitle><DialogDescription className="text-zinc-400">Your all-time XP path</DialogDescription></DialogHeader>
+          <div className="relative space-y-2 pt-2 before:absolute before:top-4 before:bottom-9 before:left-[5px] before:w-px before:bg-zinc-700"><span className="absolute top-4 left-[5px] z-[1] w-px origin-top bg-violet-400 transition-[height] duration-700 ease-out" style={{ height: xpTimelineAnimated ? `${xpTimelineFill}%` : "0%" }} />{xpTimelineLevels.map((level) => { const current = level === xpSummary.level; const reached = level <= xpSummary.level; const detail = current ? `${xpSummary.xp > 0 ? "+" : ""}${xpSummary.xp} XP · ${Math.max(0, xpSummary.nextLevelXp - xpSummary.xp)} XP to Level ${xpSummary.level + 1}` : level === 0 ? "Below 0 XP" : `${xpForLevel(level)} XP`; return <div key={level} className="relative flex items-start gap-3"><span className={`z-10 mt-2 h-2.5 w-2.5 shrink-0 rounded-full border-2 border-[#1b1b1b] ${current ? "bg-violet-300 ring-4 ring-violet-400/15" : reached ? "bg-violet-400" : "bg-zinc-700"}`} /><div className={`min-w-0 flex-1 rounded-lg px-3 py-2 ${current ? "border border-violet-300/20 bg-violet-400/[0.09]" : "bg-white/[0.025]"}`}><p className={`text-sm font-semibold ${current ? "text-white" : "text-zinc-300"}`}>Lv. {level} · {levelName(level)}</p><p className="text-xs text-zinc-500">{detail}</p></div></div>; })}</div>
+        </DialogContent>
+      </Dialog>
     </AppShell>
   );
 }

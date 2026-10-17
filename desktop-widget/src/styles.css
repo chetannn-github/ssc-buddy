@@ -231,7 +231,7 @@ header, .toolbar, footer, .task { display: flex; align-items: center; } header {
 .leaderboard-copy { display: grid; min-width: 0; gap: 2px; }
 .leaderboard-copy b, .leaderboard-task b { overflow: hidden; color: #f4f4f5; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .leaderboard-copy small, .leaderboard-task small { overflow: hidden; color: #92929b; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
-.leaderboard-points { margin-left: auto; color: #93c5fd; font-size: 13px; }
+.leaderboard-points { margin-left: auto; color: #a1a1aa; font-size: 13px; }.leaderboard-points.positive, .leaderboard-summary strong.positive { color: #86efac; }.leaderboard-points.negative, .leaderboard-summary strong.negative { color: #fca5a5; }.leaderboard-points.neutral, .leaderboard-summary strong.neutral { color: #a1a1aa; }
 .leaderboard-empty { display: grid; min-height: 140px; place-content: center; justify-items: center; gap: 8px; color: #8b8b94; font-size: 11px; }
 .leaderboard-back { display: inline-flex; width: fit-content; align-items: center; gap: 4px; padding: 0; border: 0; color: #93c5fd; background: transparent; font-size: 11px; }
 .leaderboard-detail-head { display: flex; align-items: center; gap: 8px; padding: 4px 0 7px; }
