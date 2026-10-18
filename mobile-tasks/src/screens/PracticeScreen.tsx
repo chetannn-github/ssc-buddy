@@ -24,7 +24,6 @@ import {
   Pressable,
   ScrollView as NativeScrollView,
   StyleSheet as NativeStyleSheet,
-  Switch,
   Text,
   TextInput,
   useWindowDimensions,
@@ -2155,9 +2154,27 @@ function QuestionBank({
               Question {currentQuestion + 1} of {viewing.questions.length}
             </Text>
           </View>
-          <Pressable onPress={() => onView(null)}>
-            <Text style={s.back}>Back</Text>
-          </Pressable>
+          <View style={s.bankViewerActions}>
+            <Pressable
+              accessibilityRole="switch"
+              accessibilityLabel="Reattempt mode"
+              accessibilityState={{ checked: attemptMode }}
+              onPress={() => setAttemptMode((active) => !active)}
+              style={[s.solutionMode, attemptMode && s.solutionModeActive]}
+            >
+              <MaterialCommunityIcons
+                name={attemptMode ? "check-circle" : "reload"}
+                size={15}
+                color={attemptMode ? examAccentDeep : colors.muted}
+              />
+              <Text style={[s.solutionModeText, attemptMode && s.solutionModeTextActive]}>
+                Reattempt mode
+              </Text>
+            </Pressable>
+            <Pressable onPress={() => onView(null)}>
+              <Text style={s.back}>Back</Text>
+            </Pressable>
+          </View>
         </View>
         <ScrollView contentContainerStyle={s.content}>
           {(() => {
@@ -2186,16 +2203,6 @@ function QuestionBank({
                       />
                     </Pressable>
                     </View>
-                  </View>
-                  <View style={s.bankAttemptMode}>
-                    <Text style={s.sessionTitle}>Attempt Mode</Text>
-                    <Switch
-                      accessibilityLabel="Attempt Mode"
-                      value={attemptMode}
-                      onValueChange={setAttemptMode}
-                      trackColor={{ false: "#454545", true: "#258b64" }}
-                      thumbColor={attemptMode ? "#6ee7b7" : "#d4d4d4"}
-                    />
                   </View>
                   <Text style={s.bankQuestion}>{question.question}</Text>
                   {question.options.map((option, optionIndex) => {
@@ -3089,7 +3096,7 @@ const s = StyleSheet.create({
     borderColor: "#353535",
   },
   bankOptionCorrect: { borderColor: "#258b64", backgroundColor: "#153c35" },
-  bankAttemptMode: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 8 },
+  bankViewerActions: { alignItems: "flex-end", gap: 8, marginLeft: 8 },
   bankIncorrectPill: { borderRadius: 7, paddingHorizontal: 7, paddingVertical: 3, color: "#fca5a5", fontSize: 10, fontWeight: "800", backgroundColor: "#4c2027" },
   bankOptionLetter: {
     width: 25,
