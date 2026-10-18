@@ -2036,6 +2036,7 @@ function QuestionBank({
   const swipeHandlers = useQuestionSwipe(currentQuestion, viewing?.questions?.length ?? 0, setCurrentQuestion);
   const [subjectFilterOpen, setSubjectFilterOpen] = useState(false);
   const [chapterFilterOpen, setChapterFilterOpen] = useState(false);
+  const closeFilters = () => { setSubjectFilterOpen(false); setChapterFilterOpen(false); };
   const visibleSubjects = subjects.filter((subject) => filter === "all" || subject.id === filter);
   const chapters = visibleSubjects.flatMap((subject) =>
     subject.chapters.map((chapter) => ({
@@ -2087,7 +2088,8 @@ function QuestionBank({
                 <View style={s.bankViewerCard} {...swipeHandlers}>
                   <View style={s.bankQuestionHeader}>
                     <Text style={s.bankQuestionNumber}>QUESTION {currentQuestion + 1}</Text>
-                    <Pressable accessibilityLabel="Delete question" onPress={() => setDeleting({ exerciseId: viewing.id, questionId: question.id })} hitSlop={8}><MaterialCommunityIcons name="trash-can-outline" size={21} color="#fca5a5" /></Pressable>
+                    <View style={s.bankQuestionActions}>
+                    <Pressable accessibilityLabel="Delete question" style={s.favouriteButton} onPress={() => setDeleting({ exerciseId: viewing.id, questionId: question.id })}><MaterialCommunityIcons name="trash-can-outline" size={21} color="#fca5a5" /></Pressable>
                     <Pressable
                       onPress={() => onToggleFavourite(question.id)}
                       style={[
@@ -2101,6 +2103,7 @@ function QuestionBank({
                         color="#fbbf24"
                       />
                     </Pressable>
+                    </View>
                   </View>
                   <Text style={s.bankQuestion}>{question.question}</Text>
                   {question.options.map((option, optionIndex) => {
@@ -2180,7 +2183,7 @@ function QuestionBank({
       </View>
     );
   return (
-    <View style={s.page}>
+    <View style={s.page} onTouchStart={closeFilters}>
       <View style={s.header}>
         <View>
           <Text style={s.eyebrow}>PRACTICE SESSION</Text>
@@ -2190,8 +2193,8 @@ function QuestionBank({
           <Text style={s.back}>Back</Text>
         </Pressable>
       </View>
-      <ScrollView contentContainerStyle={s.content}>
-        <View style={s.bankFilters}>
+      <ScrollView contentContainerStyle={s.content} onScrollBeginDrag={closeFilters} keyboardShouldPersistTaps="handled">
+        <View style={s.bankFilters} onTouchStart={(event) => event.stopPropagation()}>
           <BankDropdown
             title="Subject"
             label={
@@ -2948,6 +2951,7 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
+  bankQuestionActions: { flexDirection: "row", alignItems: "center", gap: 8 },
   bankQuestionNumber: {
     color: colors.subdued,
     fontSize: 11,

@@ -284,9 +284,9 @@ export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { 
                   </Text>
                 )}
               </Pressable>
+              <View style={[s.profileRank, s.detailRank]}>{medal ? <Image source={medal} style={s.profileMedal} /> : null}<Text style={s.profileRankText}>#{rank}</Text></View>
             </View>
             <Pressable style={s.detailIdentity} onPress={() => setPublicEntry({ ...selected, leaderboardRank: rank })}><Text numberOfLines={1} style={s.profileName}>{selected.name}</Text><Text numberOfLines={1} style={s.sub}>@{selected.username}</Text><Text numberOfLines={1} style={s.xpMeta}>Lv. {xpMeta(selected).level} · {xpMeta(selected).xp > 0 ? "+" : ""}{xpMeta(selected).xp} XP</Text></Pressable>
-            <View style={[s.profileRank, s.detailRank]}>{medal ? <Image source={medal} style={s.profileMedal} /> : null}<Text style={s.profileRankText}>#{rank}</Text></View>
           </View>
           <View style={s.profileStats}>
             <View style={s.profileStat}>
@@ -414,9 +414,9 @@ const s = StyleSheet.create({
   empty: { color: colors.subdued, textAlign: "center", marginTop: 45 },
   profile: { alignItems: "center", padding: 30 },
   detailSticky: { alignItems: "center", paddingHorizontal: 16, paddingTop: 8, paddingBottom: 10, backgroundColor: colors.background, zIndex: 2 },
-  detailProfileHeader: { alignSelf: "stretch", flexDirection: "row", alignItems: "center", gap: 12 },
-  avatarRankLine: { flexShrink: 0 },
-  detailIdentity: { flex: 1, minWidth: 0, alignItems: "flex-start" },
+  detailProfileHeader: { alignSelf: "stretch", alignItems: "center" },
+  avatarRankLine: { alignSelf: "stretch", alignItems: "center", justifyContent: "center", position: "relative" },
+  detailIdentity: { maxWidth: "100%", alignItems: "center", marginTop: 7 },
   centeredUsername: { textAlign: "center" },
   xpMeta: { color: "#c4b5fd", fontSize: 12, fontWeight: "700", marginTop: 3 },
   inactivePenalty: { color: "#fca5a5", fontSize: 12, fontWeight: "800" },
@@ -448,7 +448,7 @@ const s = StyleSheet.create({
   publicHeatmap: { flexDirection: "row", flexWrap: "wrap", gap: 5, padding: 14, paddingTop: 12 },
   publicHeatCell: { width: 15, height: 15, borderRadius: 4 },
   profileRank: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 7, borderWidth: 1, borderColor: colors.border, borderRadius: 14, backgroundColor: "rgba(0,0,0,.16)", paddingHorizontal: 9, paddingVertical: 4 },
-  detailRank: { marginTop: 0, alignSelf: "flex-start" },
+  detailRank: { position: "absolute", right: 0, top: 2, marginTop: 0 },
   profileMedal: { width: 16, height: 16, resizeMode: "contain" },
   profileRankText: { color: colors.text, fontSize: 12, fontWeight: "800" },
   profileStats: { marginTop: 16, flexDirection: "row", width: "100%", gap: 4 },
