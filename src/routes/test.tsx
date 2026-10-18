@@ -1,18 +1,20 @@
+import { snapshotQuestionPaper } from "../../mobile-tasks/src/domain/question-deletion";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Sparkles } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { SetupScreen, type TestConfig } from "@/components/exam/SetupScreen";
 import { InstructionsScreen } from "@/components/exam/InstructionsScreen";
 import { TestScreen } from "@/components/exam/TestScreen";
 import { AnswerKeyScreen } from "@/components/exam/AnswerKeyScreen";
-import { computeScore, newDocumentId, saveRecord, type Option, type TestRecord } from "@/lib/exam";
+import { computeScore, getRecord, newDocumentId, saveRecord, type Option, type TestRecord } from "@/lib/exam";
 
 const title = "New practice session";
 const description =
   "Create an offline OMR-style CBT test, mark A/B/C/D answers and track your score.";
 
 type TestSearch = {
+  attempt?: string | undefined;
   subject?: string | undefined;
   chapter?: string | undefined;
   exercise?: string | undefined;
@@ -28,6 +30,7 @@ const numOrUndefined = (value: unknown) => {
 
 export const Route = createFileRoute("/test")({
   validateSearch: (search: Record<string, unknown>): TestSearch => ({
+    attempt: typeof search["attempt"] === "string" ? search["attempt"] : undefined,
     subject: typeof search["subject"] === "string" ? search["subject"] : undefined,
     chapter: typeof search["chapter"] === "string" ? search["chapter"] : undefined,
     exercise: typeof search["exercise"] === "string" ? search["exercise"] : undefined,
@@ -51,13 +54,34 @@ type Phase = "setup" | "key" | "instructions" | "test";
 function TestPage() {
   const search = Route.useSearch();
   const navigate = useNavigate();
+  const [replay, setReplay] = useState<TestRecord | null>(null);
+  const [replayLoaded, setReplayLoaded] = useState(!search.attempt);
   const [phase, setPhase] = useState<Phase>("setup");
   const [config, setConfig] = useState<TestConfig | null>(null);
   const [answerKey, setAnswerKey] = useState<(Option | null)[] | null>(null);
+  useEffect(() => {
+    const record = search.attempt ? getRecord(search.attempt) : null;
+    const replayConfig: TestConfig | null = record?.questions?.length && record.questions.length === record.answers.length && record.answerKey?.length === record.answers.length ? {
+      subjectId: record.subjectId ?? null, subject: record.subject, chapterId: record.chapterId ?? null, chapter: record.chapter,
+      exerciseId: record.exerciseId ?? null, exercise: record.exercise ?? "", startNumber: record.startNumber,
+      minutes: record.durationMinutes ?? 30, testMode: record.testMode === "random" ? "random" : "standard",
+      marking: { ...record.marking }, questionCount: record.answers.length, maxQuestions: record.answers.length,
+      questions: record.questions, questionIds: record.questionIds ?? record.questions.map((question) => question.id),
+      questionNumbers: record.questionNumbers ?? record.questions.map((question, index) => question.number ?? record.startNumber + index),
+      answerKey: record.answerKey, darkMode: false,
+    } : null;
+    setReplay(record);
+    setConfig(replayConfig);
+    setAnswerKey(replayConfig?.answerKey ?? null);
+    setPhase(replayConfig ? "instructions" : "setup");
+    setReplayLoaded(true);
+  }, [search.attempt]);
+  if (search.attempt && !replayLoaded) return <AppShell title="Loading saved paper"><p>Loading saved paper…</p></AppShell>;
+  if (search.attempt && (!replay || !config)) return <AppShell title="Saved paper unavailable"><p>This attempt has no complete saved question paper.</p><Link to="/history">Back to history</Link></AppShell>;
 
   const handleSubmit = (answers: (Option | null)[], timeTakenSeconds: number) => {
     if (!config) return;
-    const key = answerKey;
+    const key = answerKey?.slice(0, answers.length) ?? null;
     const evaluations = key
       ? answers.map((answer, index) =>
           !answer || !key[index] ? null : answer === key[index] ? "correct" : "incorrect",
@@ -73,7 +97,7 @@ function TestPage() {
       id: newDocumentId("test"),
       date: new Date().toISOString(),
       testMode: config.testMode,
-      ...(config.testMode === "random" ? { attemptGroupId: newDocumentId("attempt-group") } : {}),
+      ...(config.testMode === "random" ? { attemptGroupId: replay?.attemptGroupId ?? replay?.id ?? newDocumentId("attempt-group") } : {}),
       ...(config.subjectId ? { subjectId: config.subjectId } : {}),
       subject: config.subject,
       ...(config.chapterId ? { chapterId: config.chapterId } : {}),
@@ -84,10 +108,10 @@ function TestPage() {
       durationMinutes: config.minutes,
       timeTakenSeconds,
       answers,
-      ...(config.questionNumbers ? { questionNumbers: config.questionNumbers } : {}),
-      ...(config.questionIds ? { questionIds: config.questionIds } : {}),
+      ...(config.questionNumbers ? { questionNumbers: config.questionNumbers.slice(0, answers.length) } : {}),
+      ...(config.questionIds ? { questionIds: config.questionIds.slice(0, answers.length) } : {}),
       ...(key ? { answerKey: key } : {}),
-      ...(config.questions ? { questions: config.questions } : {}),
+      ...(config.questions ? { questions: snapshotQuestionPaper(config.questions, answers.length) } : {}),
       ...(evaluations ? { evaluations } : {}),
       correct,
       wrong,
@@ -171,9 +195,7 @@ function TestPage() {
             minutes={config.minutes}
             questionCount={config.questionCount}
             marking={config.marking}
-            onBack={() =>
-              setPhase(config.answerKey ? "setup" : config.questionCount ? "key" : "setup")
-            }
+            onBack={() => replay ? void navigate({ to: "/history/$id", params: { id: replay.id } }) : setPhase(config.answerKey ? "setup" : config.questionCount ? "key" : "setup")}
             onStart={(darkMode) => {
               setConfig((current) => (current ? { ...current, darkMode } : current));
               setPhase("test");

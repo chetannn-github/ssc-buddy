@@ -61,9 +61,9 @@ function RollingLeaderboardNumber({ value, prefix = "", suffix = "", color = col
 function RollingLeaderboardDuration({ minutes }: { minutes: number }) {
   const hours = Math.floor(minutes / 60);
   const remainder = minutes % 60;
-  return <View style={{ flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 4 }}>
-    {hours > 0 && <RollingLeaderboardNumber key="hours" value={hours} suffix="h" />}
-    {(hours === 0 || remainder > 0) && <RollingLeaderboardNumber key="minutes" value={remainder} suffix="m" />}
+  return <View style={{ flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 2 }}>
+    {hours > 0 && <RollingLeaderboardNumber key="hours" value={hours} suffix="h" fontSize={16} />}
+    {(hours === 0 || remainder > 0) && <RollingLeaderboardNumber key="minutes" value={remainder} suffix="m" fontSize={16} />}
   </View>;
 }
 
@@ -284,29 +284,29 @@ export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { 
                   </Text>
                 )}
               </Pressable>
-              <View style={[s.profileRank, s.detailRank]}>{medal ? <Image source={medal} style={s.profileMedal} /> : null}<Text style={s.profileRankText}>#{rank}</Text></View>
             </View>
-            <Pressable style={s.detailIdentity} onPress={() => setPublicEntry({ ...selected, leaderboardRank: rank })}><Text style={s.profileName}>{selected.name}</Text><Text style={[s.sub, s.centeredUsername]}>@{selected.username}</Text><Text style={s.xpMeta}>Lv. {xpMeta(selected).level} · {xpMeta(selected).xp > 0 ? "+" : ""}{xpMeta(selected).xp} XP</Text></Pressable>
+            <Pressable style={s.detailIdentity} onPress={() => setPublicEntry({ ...selected, leaderboardRank: rank })}><Text numberOfLines={1} style={s.profileName}>{selected.name}</Text><Text numberOfLines={1} style={s.sub}>@{selected.username}</Text><Text numberOfLines={1} style={s.xpMeta}>Lv. {xpMeta(selected).level} · {xpMeta(selected).xp > 0 ? "+" : ""}{xpMeta(selected).xp} XP</Text></Pressable>
+            <View style={[s.profileRank, s.detailRank]}>{medal ? <Image source={medal} style={s.profileMedal} /> : null}<Text style={s.profileRankText}>#{rank}</Text></View>
           </View>
           <View style={s.profileStats}>
             <View style={s.profileStat}>
               <View style={{ alignItems: "center" }}><RollingLeaderboardNumber value={stats.points} prefix={stats.points > 0 ? "+" : ""} color={pointsColor(stats.points)} /></View>
-              <Text style={s.sub}>Points</Text>
+              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={s.profileStatLabel}>Points</Text>
             </View>
             <View style={s.profileStat}>
               <View style={{ alignItems: "center" }}><RollingLeaderboardNumber value={stats.completed} /></View>
-              <Text style={s.sub}>Completed</Text>
+              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={s.profileStatLabel}>Completed</Text>
             </View>
             <View style={s.profileStat}>
               <View style={{ alignItems: "center" }}><RollingLeaderboardNumber value={stats.notCompleted} /></View>
-              <Text style={s.sub}>Not completed</Text>
+              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={s.profileStatLabel}>Not completed</Text>
             </View>
             <View style={s.profileStat}>
               <RollingLeaderboardDuration minutes={stats.studyMinutes} />
-              <Text style={s.sub}>Study time</Text>
+              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={s.profileStatLabel}>Study time</Text>
             </View>
           </View>
-          <View style={{ alignSelf: "stretch", flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 20 }}>
+          <View style={{ alignSelf: "stretch", flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 14 }}>
             <Text style={s.inactivePenalty}>{inactiveDates.includes(selectedDate) ? "−50 pts · Inactive day" : ""}</Text>
             <DayFilter
               dates={dates}
@@ -413,26 +413,26 @@ const s = StyleSheet.create({
   points: { fontWeight: "800", fontSize: 16 },
   empty: { color: colors.subdued, textAlign: "center", marginTop: 45 },
   profile: { alignItems: "center", padding: 30 },
-  detailSticky: { alignItems: "center", paddingHorizontal: 30, paddingTop: 22, paddingBottom: 13, backgroundColor: colors.background, zIndex: 2 },
-  detailProfileHeader: { alignSelf: "stretch", alignItems: "center" },
-  avatarRankLine: { alignSelf: "stretch", alignItems: "center", justifyContent: "center", position: "relative" },
-  detailIdentity: { alignItems: "center" },
+  detailSticky: { alignItems: "center", paddingHorizontal: 16, paddingTop: 8, paddingBottom: 10, backgroundColor: colors.background, zIndex: 2 },
+  detailProfileHeader: { alignSelf: "stretch", flexDirection: "row", alignItems: "center", gap: 12 },
+  avatarRankLine: { flexShrink: 0 },
+  detailIdentity: { flex: 1, minWidth: 0, alignItems: "flex-start" },
   centeredUsername: { textAlign: "center" },
   xpMeta: { color: "#c4b5fd", fontSize: 12, fontWeight: "700", marginTop: 3 },
   inactivePenalty: { color: "#fca5a5", fontSize: 12, fontWeight: "800" },
   publicProfile: { alignItems: "center", padding: 24, paddingBottom: 42 },
   bigAvatar: {
-    width: 94,
-    height: 94,
-    borderRadius: 47,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: "#303030",
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
   },
   bigImage: { width: "100%", height: "100%" },
-  bigAvatarText: { color: colors.text, fontSize: 32, fontWeight: "800" },
-  profileName: { color: colors.text, fontSize: 23, fontWeight: "800", marginTop: 15 },
+  bigAvatarText: { color: colors.text, fontSize: 23, fontWeight: "800" },
+  profileName: { color: colors.text, fontSize: 18, fontWeight: "800" },
   publicExam: { color: colors.muted, fontSize: 11, letterSpacing: 1.4, textTransform: "uppercase", marginTop: 14 },
   weeklyStatsAction: { marginTop: 24, flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, paddingHorizontal: 15, paddingVertical: 11 },
   weeklyStatsActionText: { color: colors.text, fontWeight: "800", fontSize: 13 },
@@ -448,17 +448,18 @@ const s = StyleSheet.create({
   publicHeatmap: { flexDirection: "row", flexWrap: "wrap", gap: 5, padding: 14, paddingTop: 12 },
   publicHeatCell: { width: 15, height: 15, borderRadius: 4 },
   profileRank: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 7, borderWidth: 1, borderColor: colors.border, borderRadius: 14, backgroundColor: "rgba(0,0,0,.16)", paddingHorizontal: 9, paddingVertical: 4 },
-  detailRank: { position: "absolute", right: 0, top: 2, marginTop: 0 },
+  detailRank: { marginTop: 0, alignSelf: "flex-start" },
   profileMedal: { width: 16, height: 16, resizeMode: "contain" },
   profileRankText: { color: colors.text, fontSize: 12, fontWeight: "800" },
-  profileStats: { marginTop: 28, flexDirection: "row", flexWrap: "wrap", justifyContent: "center", rowGap: 16, width: "100%" },
-  profileStat: { width: "50%", alignItems: "center" },
+  profileStats: { marginTop: 16, flexDirection: "row", width: "100%", gap: 4 },
+  profileStat: { flex: 1, minWidth: 0, alignItems: "center" },
+  profileStatLabel: { color: colors.subdued, fontSize: 10, marginTop: 3, textAlign: "center", alignSelf: "stretch" },
   profileValue: { color: colors.text, fontSize: 18, fontWeight: "800", textAlign: "center" },
   positivePoints: { color: "#86efac" },
   negativePoints: { color: "#fca5a5" },
   neutralPoints: { color: colors.subdued },
   tasks: { alignSelf: "stretch", marginTop: 30, gap: 9 },
-  tasksScroll: { paddingHorizontal: 30, paddingTop: 8, paddingBottom: 36 },
+  tasksScroll: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 36 },
   tasksTitle: { color: colors.subdued, fontSize: 10, fontWeight: "800", letterSpacing: 1.5 },
   taskGroup: { borderRadius: 12, backgroundColor: colors.surface, paddingHorizontal: 12, overflow: "hidden" },
   taskLast: { borderBottomWidth: 0 },

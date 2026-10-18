@@ -1,3 +1,4 @@
+import { applyQuestionDeletions, removeBankQuestion } from "../../mobile-tasks/src/domain/question-deletion";
 export type Option = "A" | "B" | "C" | "D";
 
 export type Verdict = "correct" | "incorrect" | null;
@@ -64,7 +65,7 @@ export type Chapter = {
   exercises: Exercise[];
 };
 
-export type Subject = { id: string; name: string; chapters: Chapter[] };
+export type Subject = { deletedQuestionIds?: string[]; id: string; name: string; chapters: Chapter[] };
 
 /** Stable links used by CBT attempts; display labels remain on records for fast, offline rendering. */
 export type CbtSourceRef = {
@@ -172,7 +173,7 @@ type RawChapter = {
   answerKey?: (Option | null)[] | null;
   exercises?: RawExercise[];
 };
-type RawSubject = { id?: string; name: string; chapters: (string | RawChapter)[] };
+type RawSubject = { deletedQuestionIds?: string[]; id?: string; name: string; chapters: (string | RawChapter)[] };
 
 function normalizeQuestion(question: RawQuestion, index: number): McqQuestion {
   return { ...question, id: question.id || newDocumentId(`question_${index + 1}`) };
@@ -223,7 +224,8 @@ function normalizeChapter(c: string | RawChapter): Chapter {
 
 export function loadSubjects(): Subject[] {
   const raw = read<RawSubject[]>(SUBJECTS_KEY, []);
-  const subjects = raw.map((s) => ({
+  const subjects = raw.map((s) => applyQuestionDeletions({
+    ...s,
     id: s.id || newDocumentId("subject"),
     name: s.name,
     chapters: (s.chapters ?? []).map(normalizeChapter),
@@ -247,7 +249,7 @@ export function loadSubjects(): Subject[] {
 }
 
 export function saveSubjects(subjects: Subject[], options?: { notify?: boolean }) {
-  write(SUBJECTS_KEY, subjects, options?.notify !== false);
+  write(SUBJECTS_KEY, subjects.map(applyQuestionDeletions), options?.notify !== false);
 }
 
 export function addSubject(name: string): Subject[] {
@@ -304,6 +306,15 @@ export function upsertExercise(
 
   saveSubjects(subjects);
   return loadSubjects();
+}
+
+/** Removes only the bank question; saved attempt snapshots are immutable. */
+export function deleteBankQuestion(subjectId: string, exerciseId: string, questionId: string): Subject[] {
+  const subjects = loadSubjects().map((subject) => subject.id === subjectId ? removeBankQuestion(subject, exerciseId, questionId) : subject);
+  saveSubjects(subjects);
+  const stillUsed = subjects.some((subject) => subject.chapters.some((chapter) => chapter.exercises.some((exercise) => exercise.questions?.some((question) => question.id === questionId))));
+  if (!stillUsed) saveFavoriteQuestionIds(loadFavoriteQuestionIds().filter((id) => id !== questionId));
+  return subjects;
 }
 
 export function deleteExercise(
@@ -456,7 +467,7 @@ export function getRecord(id: string): TestRecord | null {
 
 export function attemptKey(r: TestRecord) {
   if (r.testMode === "random") return r.attemptGroupId ?? r.id;
-  return `${r.subjectId ?? r.subject}||${r.chapterId ?? r.chapter}||${r.exerciseId ?? r.exercise ?? ""}||${r.startNumber}||${r.answers.length}`;
+  return `${r.subjectId ?? r.subject}||${r.chapterId ?? r.chapter}||${r.exerciseId ?? r.exercise ?? ""}||${r.startNumber}||${r.answers.length}${r.questionIds?.length ? `||q:${JSON.stringify(r.questionIds)}` : ""}`;
 }
 
 /** Re-evaluates from the immutable answer-key snapshot stored with the attempt. */

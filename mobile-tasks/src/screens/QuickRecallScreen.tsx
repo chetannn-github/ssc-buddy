@@ -3,8 +3,8 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { User } from "firebase/auth";
-import { advanceUnlockQuiz, answerUnlockQuiz, releaseUnlockQuizReview, startUnlockQuiz, RANDOM_RECALL_SCOPE, type QuickRecallScope, type UnlockQuizState } from "../domain/unlock-quiz";
-import { loadQuickRecallSeed, recordQuickRecallPractice, writeQuestionLearning } from "../lib/firebase";
+import { pruneUnlockQuiz, advanceUnlockQuiz, answerUnlockQuiz, releaseUnlockQuizReview, startUnlockQuiz, RANDOM_RECALL_SCOPE, type QuickRecallScope, type UnlockQuizState } from "../domain/unlock-quiz";
+import { watchPracticeEntities, loadQuickRecallSeed, recordQuickRecallPractice, writeQuestionLearning } from "../lib/firebase";
 import { colors } from "../theme";
 import { RecallScopeDropdown } from "./RecallScopeDropdown";
 
@@ -36,13 +36,22 @@ export function QuickRecallScreen({ user, onClose, onGoProfile }: { user: User |
     const timer = setInterval(tick, 250);
     return () => clearInterval(timer);
   }, [quiz?.status, quiz?.lockedUntil]);
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    const stop = watchPracticeEntities(user, "practiceSubjects", (subjects) => {
+      setSeed((current) => current ? { ...current, subjects } : current);
+      void pruneUnlockQuiz(subjects as any).then((next) => { if (active && next) setQuiz(next); });
+    });
+    return () => { active = false; stop(); };
+  }, [user?.uid]);
   const answer = async (choice: "A" | "B" | "C" | "D") => {
     if (!quiz || quiz.status !== "active") return;
     const question = quiz.questions[quiz.index];
     const correct = choice === question.correctAnswer;
-    const next = await answerUnlockQuiz(choice);
+    const next = await answerUnlockQuiz(choice, question.id);
     setQuiz(next);
-    if (!user || !next) return;
+    if (!user || !next || next.selected !== choice || next.questions[next.index]?.id !== question.id) return;
     void writeQuestionLearning(user, { stats: next.stats });
     void recordQuickRecallPractice(user, { runId: `${next.runId}:${next.index}`, date: new Date().toISOString().slice(0, 10), startedAt: next.startedAt, questions: [question], answers: [choice] });
   };

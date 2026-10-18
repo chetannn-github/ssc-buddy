@@ -276,7 +276,7 @@ function ActivityHeatmap({
         label: isQuickRecall ? "Quick recall" : "Practice session",
         detail: isQuickRecall
           ? `${questionCount} question${questionCount === 1 ? "" : "s"}`
-          : `${record.subject} · ${record.chapter}`,
+          : [record.subject, record.chapter, `${questionCount} question${questionCount === 1 ? "" : "s"}`].filter(Boolean).join(" · "),
         count,
       });
     });

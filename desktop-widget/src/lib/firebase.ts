@@ -291,3 +291,8 @@ export const todayKey = () => {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 };
+
+export function watchRecallBank(user: User, callback: (subjects: Array<Record<string, unknown>>) => void): Unsubscribe {
+  if (!db) return () => undefined;
+  return onSnapshot(collection(db, "users", user.uid, "practiceSubjects"), (snapshot) => callback(snapshot.docs.map((item) => ({ ...item.data(), id: item.id }))));
+}

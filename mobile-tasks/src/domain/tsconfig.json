@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noEmit": true
+  },
+  "include": [
+    "recall-selection.ts",
+    "practice-exercises.ts",
+    "question-navigation.ts",
+    "leaderboard-period.ts",
+    "question-deletion.ts",
+    "xp-levels.ts"
+  ]
+}

@@ -196,7 +196,7 @@ export function SetupScreen({
   const combinedExercise = combineQuestionExercises(exercises);
   const activeExercise = isAllExercises ? combinedExercise : (chapter ? getExercise(subject, chapter, exercise || null) : null);
   const activeExerciseName = activeExercise?.name ?? exercise;
-  const isJsonExercise = Boolean(activeExercise?.questions?.length);
+  const isJsonExercise = Array.isArray(activeExercise?.questions);
   const parsedStart = isAllExercises ? 1 : Math.max(1, Number(startNumber) || 1);
   const jsonQuestions = activeExercise?.questions ?? null;
   const orderedJsonQuestions = jsonQuestions;
@@ -224,6 +224,7 @@ export function SetupScreen({
   const countTooHigh =
     countMode === "fixed" && available !== null && Number(questionCount) > available;
   const valid =
+    (!isJsonExercise || Boolean(activeExercise?.questions?.length)) &&
     Number(minutes) >= 1 &&
     Number(minutes) <= MAX_DURATION_MINUTES &&
     subject !== "" &&
@@ -245,8 +246,8 @@ export function SetupScreen({
     return [...favouriteQuestions, ...ordinaryQuestions].slice(0, target);
   };
 
-  const answerKeyExercises = exercises.filter((item) => !item.questions?.length);
-  const questionExercises = exercises.filter((item) => item.questions?.length);
+  const answerKeyExercises = exercises.filter((item) => !Array.isArray(item.questions));
+  const questionExercises = exercises.filter((item) => Array.isArray(item.questions));
 
   const createSubject = () => {
     const name = newSubject.trim();
@@ -270,7 +271,7 @@ export function SetupScreen({
     }
     const ex = getExercise(subject, name, exerciseName ?? null);
     setExercise(ex?.name ?? "");
-    if (ex?.questions?.length) {
+    if (Array.isArray(ex?.questions)) {
       setCountMode("fixed");
       setQuestionCount(String(ex.questions.length));
       setStartNumber("1");
@@ -287,7 +288,7 @@ export function SetupScreen({
     setChapter(firstChapter?.name ?? "");
     const firstExercise = firstChapter?.exercises[0];
     setExercise(firstExercise?.name ?? "");
-    if (firstExercise?.questions?.length) {
+    if (Array.isArray(firstExercise?.questions)) {
       setCountMode("fixed");
       setQuestionCount(String(firstExercise.questions.length));
       setStartNumber("1");
@@ -320,7 +321,7 @@ export function SetupScreen({
   const editChapter = () => {
     if (!subject || !chapter) return;
     const stored = getExercise(subject, chapter, exercise || null);
-    if (stored?.questions?.length) {
+    if (Array.isArray(stored?.questions)) {
       setJsonExerciseName(stored.name);
       setJsonText(
         JSON.stringify(
@@ -526,7 +527,7 @@ export function SetupScreen({
                 Question-based exercises
               </p>
               <div className="flex flex-wrap gap-1.5">
-                {questionExercises.length > 0 && <Button type="button" size="sm" variant={isAllExercises ? "default" : "outline"} onClick={() => selectChapter(chapter, ALL_PRACTICE_EXERCISES)}>All exercises · {combinedExercise?.questionCount}Q</Button>}
+                {combinedExercise && <Button type="button" size="sm" variant={isAllExercises ? "default" : "outline"} onClick={() => selectChapter(chapter, ALL_PRACTICE_EXERCISES)}>All exercises · {combinedExercise?.questionCount}Q</Button>}
                 {questionExercises.map((ex) => (
                   <Button
                     key={ex.name}
@@ -771,6 +772,7 @@ export function SetupScreen({
         )}
       </section>
 
+      {isJsonExercise && !jsonQuestions?.length && <p className="text-sm text-muted-foreground">No questions left in this exercise. Add questions or select another exercise.</p>}
       <Button
         className="h-10 w-full sm:w-auto"
         disabled={!valid}

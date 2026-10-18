@@ -1,3 +1,4 @@
+import { applyQuestionDeletions, pruneDeletedRecall } from "./question-deletion";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getFirebaseAuth, loadQuickRecallSeed } from "../lib/firebase";
 import { mergeRecallLearning, filterRecallScope, selectRecallQuestions } from "./recall-selection";
@@ -34,6 +35,13 @@ export type UnlockQuizState = {
   lockedUntil?: number;
   stats: Record<string, LearningStat>;
 };
+
+let stateWrites: Promise<unknown> = Promise.resolve();
+function serializeQuizState<T>(work: () => Promise<T>): Promise<T> {
+  const job = stateWrites.catch(() => undefined).then(work);
+  stateWrites = job;
+  return job;
+}
 
 const STORE = "ssc-buddy:unlock-quiz:v1";
 const SUBJECTS = "cbt-subjects";
@@ -76,7 +84,7 @@ function asQuestions() {
     try { history = JSON.parse(rawHistory ?? "[]"); } catch {}
     try { favourites = JSON.parse(rawFavourites ?? "[]"); } catch {}
     const questions: UnlockQuestion[] = [];
-    subjects.forEach((subject) => subject?.chapters?.forEach((chapter: any) => chapter?.exercises?.forEach((exercise: any) => exercise?.questions?.forEach((item: any, index: number) => {
+    subjects.map(applyQuestionDeletions).forEach((subject) => subject?.chapters?.forEach((chapter: any) => chapter?.exercises?.forEach((exercise: any) => exercise?.questions?.forEach((item: any, index: number) => {
       const answer = item?.correctAnswer;
       if (!item?.id || !item?.question || !Array.isArray(item?.options) || item.options.length !== 4 || !isChoice(answer)) return;
       questions.push({
@@ -96,23 +104,25 @@ async function save(state: UnlockQuizState) { await AsyncStorage.setItem(STORE, 
 
 /** Builds a balanced same-subject session, cooling down recent answers. */
 export async function startUnlockQuiz(scope: QuickRecallScope = { subjectId: RANDOM_RECALL_SCOPE, chapter: RANDOM_RECALL_SCOPE }): Promise<UnlockQuizState | null> {
-  const local = await asQuestions();
-  const user = getFirebaseAuth().currentUser;
-  const remote = user ? await loadQuickRecallSeed(user).catch(() => null) : null;
-  const source = remote ? toQuestionSource(remote) : local;
-  const { questions, favourites, practice } = source;
-  if (!questions.length) return null;
-  const old = await loadUnlockQuiz();
-  const stats = mergeRecallLearning((remote?.stats ?? {}) as Record<string, LearningStat>, old?.stats ?? {});
-  const scopedQuestions = filterRecallScope(questions, scope);
-  if (!scopedQuestions.length) return null;
-  const selected = selectRecallQuestions(scopedQuestions, favourites, stats, practice);
-  return save({ runId: makeRunId(), startedAt: new Date().toISOString(), status: "active", subject: selected[0]?.subject ?? "General", questions: selected, index: 0, correct: 0, answers: [], stats });
+  return serializeQuizState(async () => {
+    const local = await asQuestions();
+    const user = getFirebaseAuth().currentUser;
+    const remote = user ? await loadQuickRecallSeed(user).catch(() => null) : null;
+    const source = remote ? toQuestionSource(remote) : local;
+    const { questions, favourites, practice } = source;
+    if (!questions.length) return null;
+    const old = await loadUnlockQuiz();
+    const stats = mergeRecallLearning((remote?.stats ?? {}) as Record<string, LearningStat>, old?.stats ?? {});
+    const scopedQuestions = filterRecallScope(questions, scope);
+    if (!scopedQuestions.length) return null;
+    const selected = selectRecallQuestions(scopedQuestions, favourites, stats, practice);
+    return save({ runId: makeRunId(), startedAt: new Date().toISOString(), status: "active", subject: selected[0]?.subject ?? "General", questions: selected, index: 0, correct: 0, answers: [], stats });
+  });
 }
 
 function toQuestionSource(seed: Awaited<ReturnType<typeof loadQuickRecallSeed>>) {
   const questions: UnlockQuestion[] = [];
-  seed.subjects.forEach((subject: any) => subject?.chapters?.forEach((chapter: any) => chapter?.exercises?.forEach((exercise: any) => exercise?.questions?.forEach((item: any) => {
+  seed.subjects.map((subject: any) => applyQuestionDeletions(subject)).forEach((subject: any) => subject?.chapters?.forEach((chapter: any) => chapter?.exercises?.forEach((exercise: any) => exercise?.questions?.forEach((item: any) => {
     if (!item?.id || !item?.question || !Array.isArray(item?.options) || item.options.length !== 4 || !isChoice(item?.correctAnswer)) return;
     questions.push({ id: String(item.id), subjectId: String(subject.id ?? subject.name ?? "general"), subject: String(subject.name ?? "General"), chapter: String(chapter?.name ?? "Practice"), exerciseId: String(exercise.id ?? exercise.name ?? "Exercise 1"), exercise: String(exercise.name ?? "Exercise 1"), question: String(item.question), options: item.options as [string, string, string, string], correctAnswer: item.correctAnswer, explanation: typeof item.explanation === "string" ? item.explanation : "" });
   }))));
@@ -129,46 +139,72 @@ export async function getUnlockQuiz(): Promise<UnlockQuizState | null> {
     current.answers ||= [];
     await save(current);
   }
-  return current;
+  const user = getFirebaseAuth().currentUser;
+  const remote = user ? await loadQuickRecallSeed(user).catch(() => null) : null;
+  let local = [];
+  try { local = JSON.parse((await AsyncStorage.getItem(SUBJECTS)) ?? "[]"); } catch { /* optional cache */ }
+  return pruneUnlockQuiz((remote?.subjects ?? local) as Array<{ id: string; deletedQuestionIds?: string[] }>);
 }
 
-export async function answerUnlockQuiz(choice: QuizChoice): Promise<UnlockQuizState | null> {
-  const state = await loadUnlockQuiz();
-  if (!state || state.status !== "active") return state;
-  const question = state.questions[state.index];
-  if (!question) return state;
-  const key = questionKey(question);
-  const stat = state.stats[key] ?? { askedCount: 0, correctCount: 0, wrongCount: 0, lastAskedAt: "", lastOutcome: "correct" as const };
-  stat.askedCount += 1;
-  stat.lastAskedAt = new Date().toISOString();
-  state.stats[key] = stat;
-  state.selected = choice;
-  state.answers = [...(state.answers ?? []), choice];
-  if (choice === question.correctAnswer) {
-    stat.correctCount += 1; stat.lastOutcome = "correct"; state.correct += 1;
-    state.status = "review";
-    state.lockedUntil = undefined;
-  } else {
-    // Keep the correction visible, but do not make the unlock interaction feel
-    // punitive. Every surface counts this down live for ten seconds.
-    stat.wrongCount += 1; stat.lastOutcome = "wrong"; state.status = "correction"; state.lockedUntil = Date.now() + QUICK_RECALL_CORRECTION_MS;
-  }
-  return save(state);
+export async function answerUnlockQuiz(choice: QuizChoice, expectedQuestionId?: string): Promise<UnlockQuizState | null> {
+  return serializeQuizState(async () => {
+    const state = await loadUnlockQuiz();
+    if (!state || state.status !== "active") return state;
+    const question = state.questions[state.index];
+    if (!question || (expectedQuestionId && question.id !== expectedQuestionId)) return state;
+    const key = questionKey(question);
+    const stat = state.stats[key] ?? { askedCount: 0, correctCount: 0, wrongCount: 0, lastAskedAt: "", lastOutcome: "correct" as const };
+    stat.askedCount += 1;
+    stat.lastAskedAt = new Date().toISOString();
+    state.stats[key] = stat;
+    state.selected = choice;
+    state.answers = [...(state.answers ?? []), choice];
+    if (choice === question.correctAnswer) {
+      stat.correctCount += 1; stat.lastOutcome = "correct"; state.correct += 1;
+      state.status = "review";
+      state.lockedUntil = undefined;
+    } else {
+      // Keep the correction visible, but do not make the unlock interaction feel
+      // punitive. Every surface counts this down live for ten seconds.
+      stat.wrongCount += 1; stat.lastOutcome = "wrong"; state.status = "correction"; state.lockedUntil = Date.now() + QUICK_RECALL_CORRECTION_MS;
+    }
+    return save(state);
+  });
 }
 
 export async function advanceUnlockQuiz(): Promise<UnlockQuizState | null> {
-  const state = await loadUnlockQuiz();
-  if (!state || state.status !== "review") return state;
-  if (state.index + 1 >= state.questions.length) state.status = "complete";
-  else { state.status = "active"; state.index += 1; state.selected = undefined; state.lockedUntil = undefined; }
-  return save(state);
+  return serializeQuizState(async () => {
+    const state = await loadUnlockQuiz();
+    if (!state || state.status !== "review") return state;
+    if (state.index + 1 >= state.questions.length) state.status = "complete";
+    else { state.status = "active"; state.index += 1; state.selected = undefined; state.lockedUntil = undefined; }
+    return save(state);
+  });
 }
 
 /** Makes a wrong-answer review actionable after its visible countdown ends. */
 export async function releaseUnlockQuizReview(): Promise<UnlockQuizState | null> {
-  const state = await loadUnlockQuiz();
-  if (!state || state.status !== "correction" || (state.lockedUntil ?? 0) > Date.now()) return state;
-  state.status = "review";
-  state.lockedUntil = undefined;
-  return save(state);
+  return serializeQuizState(async () => {
+    const state = await loadUnlockQuiz();
+    if (!state || state.status !== "correction" || (state.lockedUntil ?? 0) > Date.now()) return state;
+    state.status = "review";
+    state.lockedUntil = undefined;
+    return save(state);
+  });
+}
+
+/** Reconcile a resumed/live recall without deleting any answered history. */
+export async function pruneUnlockQuiz(subjects: Array<{ id: string; deletedQuestionIds?: string[] }>): Promise<UnlockQuizState | null> {
+  return serializeQuizState(async () => {
+    const state = await loadUnlockQuiz();
+    if (!state || state.status === "complete") return state;
+    let local: Array<{ id: string; deletedQuestionIds?: string[] }> = [];
+    try { local = JSON.parse((await AsyncStorage.getItem(SUBJECTS)) ?? "[]"); } catch { /* optional cache */ }
+    const combined = [...subjects, ...local].map((subject) => ({ ...subject, deletedQuestionIds: [...new Set([...subjects, ...local].filter((item) => item.id === subject.id).flatMap((item) => item.deletedQuestionIds ?? []))] }));
+    const questions = pruneDeletedRecall(state.questions, state.index + (state.selected ? 1 : 0), combined);
+    if (questions.length === state.questions.length) return state;
+    state.questions = questions;
+    if (state.index >= questions.length) state.status = "complete";
+    return save(state);
+  });
 }

@@ -1,9 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Star } from "lucide-react";
+import { Star, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
 import {
+  deleteBankQuestion,
   loadFavoriteQuestionIds,
   loadSubjects,
   onPracticePersist,
@@ -26,19 +27,21 @@ export const Route = createFileRoute("/question-view")({
 
 function QuestionViewer() {
   const { subject: subjectName, chapter: chapterName, exercise: exerciseName } = Route.useSearch();
-  const [current, setCurrent] = useState(0);
+  const [currentIndex, setCurrent] = useState(0);
   const [favoriteIds, setFavoriteIds] = useState(() => new Set(loadFavoriteQuestionIds()));
   const [subjects, setSubjects] = useState(() => loadSubjects());
   useEffect(() => onPracticePersist((key) => {
     if (key === "cbt-subjects") setSubjects(loadSubjects());
     if (key === "cbt-favorite-questions") setFavoriteIds(new Set(loadFavoriteQuestionIds()));
   }), []);
+  const subjectId = subjects.find((item) => item.name === subjectName)?.id;
   const exercise = useMemo(() => {
     const subject = subjects.find((item) => item.name === subjectName);
     const chapter = subject?.chapters.find((item) => item.name === chapterName);
     return chapter?.exercises.find((item) => item.name === exerciseName && item.questions?.length);
   }, [chapterName, exerciseName, subjectName, subjects]);
   const questions = exercise?.questions ?? [];
+  const current = Math.max(0, Math.min(currentIndex, questions.length - 1));
   const question = questions[current];
   const favoriteId = question
     ? questionFavoriteId(subjectName, chapterName, exerciseName, question, current)
@@ -61,6 +64,10 @@ function QuestionViewer() {
                   </h2>
                 </div>
                 <div className="flex items-center gap-2">
+                  <Button size="sm" variant="ghost" className="h-8 text-red-300 hover:bg-red-400/10 hover:text-red-200" onClick={() => {
+                    if (!subjectId || !exercise || !question || !window.confirm("Delete this question from the bank? It will no longer appear in new practice tests or Quick Recall. Saved attempts and scores will stay unchanged.")) return;
+                    setSubjects(deleteBankQuestion(subjectId, exercise.id, question.id));
+                  }}><Trash2 className="h-3.5 w-3.5" /> Delete</Button>
                   <Button
                     size="sm"
                     variant="outline"
@@ -98,13 +105,13 @@ function QuestionViewer() {
                 <Button
                   variant="outline"
                   className="border-white/15 bg-white/5 text-zinc-200 hover:bg-white/10 hover:text-white"
-                  onClick={() => setCurrent((value) => Math.max(0, value - 1))}
+                  onClick={() => setCurrent(Math.max(0, current - 1))}
                   disabled={current === 0}
                 >
                   Previous
                 </Button>
                 <Button
-                  onClick={() => setCurrent((value) => Math.min(questions.length - 1, value + 1))}
+                  onClick={() => setCurrent(Math.min(questions.length - 1, current + 1))}
                   disabled={current === questions.length - 1}
                 >
                   Next

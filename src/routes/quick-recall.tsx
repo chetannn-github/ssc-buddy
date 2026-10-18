@@ -1,3 +1,4 @@
+import { applyQuestionDeletions, pruneDeletedRecall } from "../../mobile-tasks/src/domain/question-deletion";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowRight, Check, ChevronDown, RefreshCw, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -45,7 +46,7 @@ function statKey(question: Pick<RecallQuestion, "subjectId" | "id">) {
 }
 
 function questionPool(subjects = loadSubjects()): RecallQuestion[] {
-  return subjects.flatMap((subject) =>
+  return subjects.map(applyQuestionDeletions).flatMap((subject) =>
     subject.chapters.flatMap((chapter) =>
       chapter.exercises.flatMap((exercise) =>
         (exercise.questions ?? []).map((question) => ({ ...question, subject: subject.name, subjectId: subject.id, chapter: chapter.name, exerciseId: String(exercise.id ?? exercise.name ?? "Exercise 1"), exercise: exercise.name || "Exercise 1" })),
@@ -139,6 +140,13 @@ function QuickRecall() {
     const timer = window.setInterval(tick, 250);
     return () => window.clearInterval(timer);
   }, [correctionUntil]);
+  useEffect(() => {
+    if (!seed || setup || complete) return;
+    const kept = pruneDeletedRecall(questions, index + (selected ? 1 : 0), seed.subjects as ReturnType<typeof loadSubjects>);
+    if (kept.length === questions.length) return;
+    setQuestions(kept);
+    if (index >= kept.length) setComplete(true);
+  }, [seed?.subjects, setup, complete, questions, index, selected]);
   const restart = () => {
     setQuestions(buildRecall(seed ?? undefined, scope));
     setIndex(0);

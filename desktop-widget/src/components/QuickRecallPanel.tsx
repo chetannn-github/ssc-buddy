@@ -1,3 +1,4 @@
+import { pruneDeletedRecall } from "../../../mobile-tasks/src/domain/question-deletion";
 import { useEffect, useState } from "react";
 import { ArrowLeft, LoaderCircle, RotateCcw, Sparkles } from "lucide-react";
 import type { QuickRecallSession, QuizChoice } from "../lib/quick-recall";
@@ -14,7 +15,7 @@ function loadProgress(session: QuickRecallSession | null): SavedProgress | null 
   } catch { return null; }
 }
 
-export function QuickRecallPanel({ session, loading, onBack, onRestart, onAnswered }: { session: QuickRecallSession | null; loading: boolean; onBack: () => void; onRestart: () => void; onAnswered: (question: QuickRecallSession["questions"][number], choice: QuizChoice, index: number, correct: boolean) => void }) {
+export function QuickRecallPanel({ subjects = [], onPruned, session, loading, onBack, onRestart, onAnswered }: { subjects?: Array<{ id: string; deletedQuestionIds?: string[] }> | undefined; onPruned: (questions: QuickRecallSession["questions"]) => void; session: QuickRecallSession | null; loading: boolean; onBack: () => void; onRestart: () => void; onAnswered: (question: QuickRecallSession["questions"][number], choice: QuizChoice, index: number, correct: boolean) => void }) {
   const [index, setIndex] = useState(() => loadProgress(session)?.index ?? 0);
   const [correct, setCorrect] = useState(() => loadProgress(session)?.correct ?? 0);
   const [selected, setSelected] = useState<QuizChoice | null>(() => loadProgress(session)?.selected ?? null);
@@ -35,11 +36,11 @@ export function QuickRecallPanel({ session, loading, onBack, onRestart, onAnswer
   useEffect(() => {
     const saved = loadProgress(session);
     setIndex(saved?.index ?? 0); setCorrect(saved?.correct ?? 0); setSelected(saved?.selected ?? null); setAnswers(saved?.answers ?? []); setFinished(false); setCorrectionUntil(saved?.correctionUntil ?? null); setSecondsLeft(0);
-  }, [session]);
+  }, [session?.runId]);
 
   useEffect(() => {
     if (!session) return;
-    if (finished) { localStorage.removeItem(QUICK_RECALL_PROGRESS_KEY); return; }
+    if (finished || index >= session.questions.length) { localStorage.removeItem(QUICK_RECALL_PROGRESS_KEY); return; }
     localStorage.setItem(QUICK_RECALL_PROGRESS_KEY, JSON.stringify({ sessionId: sessionId(session), index, correct, selected, answers, correctionUntil } satisfies SavedProgress));
   }, [session, index, correct, selected, answers, correctionUntil, finished]);
 
@@ -55,6 +56,11 @@ export function QuickRecallPanel({ session, loading, onBack, onRestart, onAnswer
     return () => window.clearInterval(interval);
   }, [correctionUntil, index, session]);
 
+  useEffect(() => {
+    if (!session || finished) return;
+    const questions = pruneDeletedRecall(session.questions, index + (selected ? 1 : 0), subjects);
+    if (questions.length !== session.questions.length) onPruned(questions);
+  }, [session, subjects, index, selected, finished, onPruned]);
   const answer = (choice: QuizChoice) => {
     if (!question || selected) return;
     const right = choice === question.correctAnswer;
@@ -70,7 +76,7 @@ export function QuickRecallPanel({ session, loading, onBack, onRestart, onAnswer
 
   if (loading) return <section className="quick-recall-panel quick-state quick-loading"><LoaderCircle className="spin" /><span>Preparing quick recall…</span></section>;
   if (!session) return <section className="quick-recall-panel quick-state"><Sparkles size={20} /><strong>No question-based exercises yet.</strong><span>Add question-based exercises in Practice Session to begin.</span><button className="secondary" onClick={onBack}>Back to tasks</button></section>;
-  if (finished) {
+  if (finished || index >= session.questions.length) {
     const total = session.questions.length;
     return <section className="quick-recall-panel quick-state quick-complete">
       <div className="quick-complete-icon"><Sparkles size={18} /></div>

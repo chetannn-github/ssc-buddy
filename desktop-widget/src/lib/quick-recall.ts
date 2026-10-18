@@ -1,3 +1,4 @@
+import { applyQuestionDeletions } from "../../../mobile-tasks/src/domain/question-deletion";
 import type { QuickRecallSeed } from "./firebase";
 import { filterRecallScope, selectRecallQuestions } from "../../../mobile-tasks/src/domain/recall-selection";
 
@@ -26,7 +27,7 @@ type PracticePerformance = { askedCount: number; correctCount: number; wrongCoun
 /** Same balanced three-question selection used by web and Android. */
 export function createQuickRecallSession(seed: QuickRecallSeed, scope: QuickRecallScope = { subjectId: RANDOM_RECALL_SCOPE, chapter: RANDOM_RECALL_SCOPE }): QuickRecallSession | null {
   const questions: QuickRecallQuestion[] = [];
-  (seed.subjects as Array<Record<string, unknown>>).forEach((subject) => {
+  (seed.subjects as Array<Record<string, unknown>>).map((subject) => applyQuestionDeletions(subject as any) as Record<string, unknown>).forEach((subject) => {
     const chapters = Array.isArray(subject.chapters) ? subject.chapters : [];
     chapters.forEach((chapter) => {
       const exercises = chapter && typeof chapter === "object" && Array.isArray((chapter as Record<string, unknown>).exercises) ? (chapter as Record<string, unknown>).exercises as Array<Record<string, unknown>> : [];

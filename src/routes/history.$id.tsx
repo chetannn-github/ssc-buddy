@@ -1,3 +1,4 @@
+import { isQuestionAttempt } from "../../mobile-tasks/src/domain/question-deletion";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, BookOpenCheck, RefreshCw, RotateCcw } from "lucide-react";
@@ -8,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
   getAttemptGroup,
-  getExercise,
+  loadSubjects,
   getRecord,
   saveRecord,
   reevaluateRecord,
@@ -56,25 +57,19 @@ function ResultDetail() {
   );
 
   const reevaluate = () => {
-    if (!record || reevaluating) return;
+    if (!record || reevaluating || isQuestionAttempt(record)) return;
 
     setReevaluating(true);
     reevaluationTimer.current = setTimeout(() => setReevaluating(false), 2000);
 
-    const exercise = getExercise(record.subject, record.chapter, record.exercise);
-    // JSON attempts keep their key with the history record, so a deleted source
-    // exercise can still be evaluated accurately instead of using another set.
-    const fullAnswerKey = record.questions?.length || record.questionIds?.length
-      ? record.answerKey
-      : exercise?.answerKey ?? record.answerKey;
-    if (!fullAnswerKey) return;
-
-    const answerKey = record.questions?.length || record.questionIds?.length
-      ? fullAnswerKey
-      : fullAnswerKey.slice(
-          record.startNumber - 1,
-          record.startNumber - 1 + record.answers.length,
-        );
+    const subject = loadSubjects().find((item) => record.subjectId ? item.id === record.subjectId : item.name === record.subject);
+    const chapter = subject?.chapters.find((item) => record.chapterId ? item.id === record.chapterId : item.name === record.chapter);
+    const exercise = chapter?.exercises.find((item) => record.exerciseId ? item.id === record.exerciseId : item.name === record.exercise);
+    if (Array.isArray(exercise?.questions)) { window.alert("The original exercise is no longer book-based."); return; }
+    const fullAnswerKey = exercise?.answerKey;
+    if (!fullAnswerKey) { window.alert("The original book exercise has no answer key available."); return; }
+    const answerKey = fullAnswerKey.slice(record.startNumber - 1, record.startNumber - 1 + record.answers.length);
+    if (answerKey.length !== record.answers.length || answerKey.some((answer) => !answer)) { window.alert("Complete the answer key for the attempted range first."); return; }
     const updatedRecord = reevaluateRecord({
       ...record,
       answerKey,
@@ -110,7 +105,7 @@ function ResultDetail() {
           </Button>
           {record ? (
             <div className="flex items-center gap-2">
-              <Button
+              {!isQuestionAttempt(record) && <Button
                 variant="outline"
                 size="sm"
                 className="h-8 gap-1.5 px-3 text-xs"
@@ -119,7 +114,7 @@ function ResultDetail() {
               >
                 <RefreshCw className={cn("h-4 w-4", reevaluating && "animate-spin")} />
                 Reevaluate
-              </Button>
+              </Button>}
               <Button
                 variant="outline"
                 size="sm"
@@ -133,6 +128,7 @@ function ResultDetail() {
                 <Link
                   to="/test"
                   search={{
+                    attempt: isQuestionAttempt(record) ? record.id : undefined,
                     subject: record.subject,
                     chapter: record.chapter,
                     exercise: record.exercise,

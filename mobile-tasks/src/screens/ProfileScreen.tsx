@@ -1222,7 +1222,7 @@ function ActivityHeatmap({
           record.subject === "Quick Recall" ? "Quick recall" : "Practice session",
           record.subject === "Quick Recall"
             ? `${record.questionCount} questions`
-            : [record.subject, record.chapter].filter(Boolean).join(" · ") || "Practice session",
+            : [record.subject, record.chapter, `${record.questionCount} question${record.questionCount === 1 ? "" : "s"}`].filter(Boolean).join(" · "),
         ),
       );
     mockTests

@@ -1,4 +1,5 @@
-import { collection, deleteDoc, doc, getDocs, onSnapshot, setDoc, type Unsubscribe, writeBatch } from "firebase/firestore";
+import { mergeQuestionDeletions } from "../../mobile-tasks/src/domain/question-deletion";
+import { collection, deleteDoc, doc, getDocs, onSnapshot, runTransaction, setDoc, type Unsubscribe, writeBatch } from "firebase/firestore";
 import type { User } from "firebase/auth";
 import { getFirebaseFirestore } from "@/lib/firebase-sync";
 import { loadFavoriteQuestionIds, loadHistory, loadMarking, loadSubjects, onPracticePersist, saveFavoriteQuestionIds, saveHistory, saveMarking, saveSubjects, type MarkingScheme, type Subject, type TestRecord } from "@/lib/exam";
@@ -23,7 +24,13 @@ async function syncCollection<T extends Item>(user: User, name: string, before: 
   const previous = new Map(before.map((item) => [item.id, item]));
   const next = new Map(after.map((item) => [item.id, item]));
   await Promise.all([
-    ...after.filter((item) => !previous.has(item.id) || !equal(previous.get(item.id), item)).map((item) => setDoc(doc(docsFor(user, name), item.id), item)),
+    ...after.filter((item) => !previous.has(item.id) || !equal(previous.get(item.id), item)).map((item) => {
+      const ref = doc(docsFor(user, name), item.id);
+      return name === "practiceSubjects" ? runTransaction(getFirebaseFirestore(), async (transaction) => {
+        const remote = await transaction.get(ref);
+        transaction.set(ref, mergeQuestionDeletions(item as unknown as Subject, remote.data() as Subject | undefined));
+      }) : setDoc(ref, item);
+    }),
     ...before.filter((item) => !next.has(item.id)).map((item) => deleteDoc(doc(docsFor(user, name), item.id))),
   ]);
 }
@@ -45,9 +52,9 @@ export async function hydratePracticeSubjects(user: User) {
   await migrateCollection(user, "practiceSubjects", localSubjects);
   const remoteSubjects = await getDocs(docsFor(user, "practiceSubjects"));
   if (!remoteSubjects.size) return localSubjects;
-  const subjects = remoteSubjects.docs.map(
-    (item) => ({ id: item.id, ...item.data() }) as Subject,
-  );
+  const remote = remoteSubjects.docs.map((item) => ({ ...item.data(), id: item.id }) as Subject);
+  const subjects = remote.map((subject) => mergeQuestionDeletions(subject, localSubjects.find((local) => local.id === subject.id)));
+  if (!equal(remote, subjects)) void syncCollection(user, "practiceSubjects", remote, subjects).catch(() => undefined);
   subjectBaselines.set(user.uid, subjects);
   saveSubjects(subjects, { notify: false });
   return subjects;
@@ -79,7 +86,7 @@ export async function startPracticeSync(
     getDocs(collection(getFirebaseFirestore(), "users", user.uid, "practiceSettings")),
   ]);
   let subjects = remoteSubjects?.size
-    ? remoteSubjects.docs.map((item) => ({ id: item.id, ...item.data() }) as Subject)
+    ? remoteSubjects.docs.map((item) => mergeQuestionDeletions({ ...item.data(), id: item.id } as Subject, localSubjects.find((local) => local.id === item.id)))
     : localSubjects;
   let attempts = remoteAttempts.size
     ? remoteAttempts.docs.map((item) => ({ id: item.id, ...item.data() }) as TestRecord)
@@ -108,7 +115,7 @@ export async function startPracticeSync(
       if (!includeSubjects && !baseline) return;
       const next = loadSubjects();
       const previous = baseline ?? subjects;
-      void syncCollection(user, "practiceSubjects", previous, next);
+      void syncCollection(user, "practiceSubjects", previous, next).catch(() => undefined);
       subjectBaselines.set(user.uid, next);
       subjects = next;
       return;
@@ -146,8 +153,13 @@ export async function startPracticeSync(
     }
   };
   if (includeSubjects) {
-    stopLiveListeners.push(onSnapshot(docsFor(user, "practiceSubjects"), (snapshot) => {
-      const next = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as Subject);
+    stopLiveListeners.push(onSnapshot(docsFor(user, "practiceSubjects"), { includeMetadataChanges: true }, (snapshot) => {
+      const local = loadSubjects();
+      const next = snapshot.docs.map((item) => mergeQuestionDeletions({ ...item.data(), id: item.id } as Subject, local.find((subject) => subject.id === item.id)));
+      const remote = snapshot.docs.map((item) => ({ ...item.data(), id: item.id }) as Subject);
+      if (next.some((subject) => subject.deletedQuestionIds?.some((id) => !remote.find((item) => item.id === subject.id)?.deletedQuestionIds?.includes(id)))) {
+        void syncCollection(user, "practiceSubjects", remote, next).catch(() => undefined);
+      }
       if (equal(subjects, next)) return;
       applyRemote(() => {
         subjects = next;

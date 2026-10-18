@@ -1,3 +1,4 @@
+import { mergeQuestionDeletions } from "../domain/question-deletion";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getApp, getApps, initializeApp } from "firebase/app";
 import { collection, deleteDoc, doc, getDoc, getDocs, getFirestore, onSnapshot, runTransaction, serverTimestamp, setDoc, writeBatch, type Firestore } from "firebase/firestore";
@@ -337,7 +338,13 @@ export async function syncPracticeEntities(user: User, name: string, before: Pra
     const previous = new Map(cleanBefore.map((entity) => [entity.id, entity]));
     const after = new Map(cleanNext.map((entity) => [entity.id, entity]));
     await Promise.all([
-      ...cleanNext.filter((entity) => !previous.has(entity.id) || !same(previous.get(entity.id)!, entity)).map((entity) => setDoc(doc(practiceCollection(user, name), entity.id), entity)),
+      ...cleanNext.filter((entity) => !previous.has(entity.id) || !same(previous.get(entity.id)!, entity)).map((entity) => {
+        const ref = doc(practiceCollection(user, name), entity.id);
+        return name === "practiceSubjects" ? runTransaction(getFirebaseFirestore(), async (transaction) => {
+          const remote = await transaction.get(ref);
+          transaction.set(ref, mergeQuestionDeletions(entity as any, remote.data()));
+        }) : setDoc(ref, entity);
+      }),
       ...cleanBefore.filter((entity) => !after.has(entity.id)).map((entity) => deleteDoc(doc(practiceCollection(user, name), entity.id))),
     ]);
   });
@@ -365,7 +372,7 @@ export async function deletePracticeEntity(user: User, name: string, id: string)
 }
 
 export function watchPracticeEntities(user: User, name: string, callback: (entities: PracticeEntity[]) => void) {
-  return onSnapshot(practiceCollection(user, name), (snapshot) => callback(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as PracticeEntity))));
+  return onSnapshot(practiceCollection(user, name), { includeMetadataChanges: name === "practiceSubjects" }, (snapshot) => callback(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as PracticeEntity))));
 }
 
 export async function readPracticeSettings(user: User) {

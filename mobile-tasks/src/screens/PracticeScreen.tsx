@@ -28,6 +28,7 @@ import {
   View,
 } from "react-native";
 
+import { snapshotQuestionPaper, applyQuestionDeletions, mergeQuestionDeletions, removeBankQuestion, isQuestionAttempt } from "../domain/question-deletion";
 import { ALL_PRACTICE_EXERCISES, ALL_PRACTICE_EXERCISES_LABEL, combineQuestionExercises, samplePracticeQuestions } from "../domain/practice-exercises";
 import { QuestionPalette } from "../components/QuestionNavigation";
 import { useQuestionSwipe } from "../hooks/use-question-swipe";
@@ -77,7 +78,7 @@ type Exercise = {
   attemptOf?: string;
 };
 type Chapter = { id: string; name: string; exercises: Exercise[] };
-type Subject = { id: string; name: string; chapters: Chapter[] };
+type Subject = { deletedQuestionIds?: string[]; id: string; name: string; chapters: Chapter[] };
 type Record = {
   id: string;
   createdAt: string;
@@ -121,6 +122,7 @@ const LEGACY_FAVOURITES = "ssc-buddy-mobile:favourite-questions:v1";
 const toCloudSubjects = (subjects: Subject[]) => subjects.map((subject) => ({
   id: subject.id,
   name: subject.name,
+  ...(subject.deletedQuestionIds ? { deletedQuestionIds: subject.deletedQuestionIds } : {}),
   chapters: subject.chapters.map((chapter) => ({
     id: chapter.id,
     name: chapter.name,
@@ -216,6 +218,7 @@ export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQ
   const [random, setRandom] = useState(false);
   const [randomSeed, setRandomSeed] = useState(0);
   const [mixedPaper, setMixedPaper] = useState<Question[] | null>(null);
+  const [activeTest, setActiveTest] = useState<Partial<Record> | null>(null);
   const [answerKey, setAnswerKey] = useState<Array<Option | null>>([]);
   const [savingNewKey, setSavingNewKey] = useState(false);
   const [savingAnswerKey, setSavingAnswerKey] = useState(false);
@@ -262,7 +265,7 @@ export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQ
   }, []);
   const saveBank = (next: Bank) => {
     const previous = bankRef.current;
-    next = { ...next, marking: normaliseMarking(next.marking) };
+    next = { ...next, subjects: next.subjects.map(applyQuestionDeletions), marking: normaliseMarking(next.marking) };
     bankRef.current = next;
     setBank(next);
     void AsyncStorage.setItem(STORE, JSON.stringify(next.subjects));
@@ -300,7 +303,12 @@ export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQ
         await patchPracticeSettings(user, { marking: bankRef.current.marking });
       }
       stops.push(
-        watchPracticeEntities(user, "practiceSubjects", (items) => { const next = { ...bankRef.current, subjects: items as any }; bankRef.current = next; setBank(next); void AsyncStorage.setItem(STORE, JSON.stringify(next.subjects)); }),
+        watchPracticeEntities(user, "practiceSubjects", (items) => {
+          const subjects = items.map((item) => mergeQuestionDeletions(item as any, bankRef.current.subjects.find((local) => local.id === item.id)));
+          const next = { ...bankRef.current, subjects }; bankRef.current = next; setBank(next);
+          void AsyncStorage.setItem(STORE, JSON.stringify(subjects));
+          if (subjects.some((subject) => (subject.deletedQuestionIds ?? []).some((id) => !((items.find((item) => item.id === subject.id) as any)?.deletedQuestionIds ?? []).includes(id)))) void syncPracticeEntities(user, "practiceSubjects", items, toCloudSubjects(subjects) as any).catch(() => undefined);
+        }),
         watchPracticeEntities(user, "practiceAttempts", (items) => { const next = items.map((item) => ({ ...item, minutes: Number(item.minutes ?? item.durationMinutes ?? Math.round(Number(item.timeTakenSeconds ?? 0) / 60)), key: item.key ?? item.answerKey ?? [], correct: Number(item.correct ?? 0), wrong: Number(item.wrong ?? 0), score: Number(item.score ?? 0), subject: String(item.subject ?? ""), chapter: String(item.chapter ?? ""), exercise: String(item.exercise ?? "") })) as Record[]; historyRef.current = next; setHistory(next); void AsyncStorage.setItem(HISTORY, JSON.stringify(next)); }),
         watchPracticeEntities(user, "practiceFavourites", (items) => { const next = items.map((item) => item.id); favouritesRef.current = next; setFavourites(next); void AsyncStorage.setItem(FAVOURITES, JSON.stringify(next)); }),
         watchPracticeSettings(user, (settings) => { const marking = normaliseMarking(settings?.marking); const next = { ...bankRef.current, marking }; bankRef.current = next; setBank(next); void AsyncStorage.setItem(MARKING, JSON.stringify(marking)); }),
@@ -332,7 +340,7 @@ export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQ
     if (active) setStart("1");
   }, [chapterId, chapter, exerciseId]);
   const exerciseQuestionTotal = exercise?.questions?.length ?? exercise?.questionCount ?? 1;
-  const isQuestionExercise = Boolean(exercise?.questions?.length);
+  const isQuestionExercise = Array.isArray(exercise?.questions);
   const startNumber = isAllExercises || random ? 1 : Math.max(1, Math.min(exerciseQuestionTotal, Number(start) || 1));
   const availableQuestions = isAllExercises || random
     ? exerciseQuestionTotal
@@ -341,7 +349,7 @@ export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQ
     ? Math.max(1, Math.min(isAllExercises ? 500 : availableQuestions, availableQuestions, Number(count) || 1))
     : availableQuestions;
   const duration = Math.max(1, Math.min(180, Number(minutes) || 1));
-  const canContinue = Boolean(subject && chapter && exercise && minutes.trim() && (!(isAllExercises || fixed) || count.trim()) && (isQuestionExercise ? (isAllExercises || random || start.trim()) : start.trim()));
+  const canContinue = Boolean(subject && chapter && exercise && (!isQuestionExercise || exercise.questions.length > 0) && minutes.trim() && (!(isAllExercises || fixed) || count.trim()) && (isQuestionExercise ? (isAllExercises || random || start.trim()) : start.trim()));
   const setupQuestions = useMemo(() => {
     const questions = exercise?.questions ?? [];
     if (isAllExercises) return samplePracticeQuestions(questions, questionCount);
@@ -375,7 +383,7 @@ export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQ
     setEditingExerciseId(exercise.id);
     setDraft(exercise.name);
     setCount(String(exercise.questionCount));
-    setExerciseKind(exercise.questions?.length ? "questions" : "key");
+    setExerciseKind(Array.isArray(exercise.questions) ? "questions" : "key");
     setAnswerKey(exercise.answerKey);
     setJson(
       exercise.questions
@@ -418,13 +426,25 @@ export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQ
         exercise.answerKey[startNumber - 1 + index] ??
         null,
     );
+    setActiveTest({
+      subjectId: subject.id, subject: subject.name, chapterId: chapter.id, chapter: chapter.name,
+      exerciseId: exercise.id, exercise: exercise.name, startNumber,
+      duration, durationMinutes: duration, marking: { ...bank.marking },
+      testMode: isAllExercises || random ? "random" : "standard",
+      ...(isQuestionExercise ? {
+        questions: snapshotQuestionPaper(paper),
+        questionIds: paper.map((question) => question.id),
+        questionNumbers: paper.map((question, index) => isAllExercises ? index + 1 : question.number ?? startNumber + index),
+      } : {}),
+      answerKey: key, key,
+    });
     setAnswerKey(key);
     setPhase("instructions");
   };
   const startTest = () => {
-    setAnswers(Array(questionCount).fill(null));
+    setAnswers(Array(activeTest?.answerKey?.length ?? questionCount).fill(null));
     setCurrent(0);
-    setRemaining(duration * 60);
+    setRemaining((activeTest?.duration ?? duration) * 60);
     setPhase("test");
     if (timer.current) clearInterval(timer.current);
     timer.current = setInterval(
@@ -440,6 +460,7 @@ export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQ
     );
   };
   const submit = () => {
+    if (!activeTest) return;
     if (timer.current) clearInterval(timer.current);
     const correct = answers.filter(
       (answer, index) => answer && answerKey[index] && answer === answerKey[index],
@@ -448,31 +469,31 @@ export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQ
       (answer, index) => answer && answerKey[index] && answer !== answerKey[index],
     ).length;
     const saved: Record = {
+      ...activeTest,
       id: makeId(),
       createdAt: new Date().toISOString(),
       date: dateKey(),
-      testMode: isAllExercises || random ? "random" : "standard",
-      ...(isAllExercises || random ? { attemptGroupId: reattemptOf ?? makeId() } : {}),
-      subjectId: subject?.id ?? "",
-      subject: subject?.name ?? "",
-      chapterId: chapter?.id ?? "",
-      chapter: chapter?.name ?? "",
-      exerciseId: exercise?.id ?? "",
-      exercise: exercise?.name ?? "",
-      startNumber,
-      durationMinutes: duration,
-      timeTakenSeconds: Math.max(0, duration * 60 - remaining),
-      minutes: duration - Math.floor(remaining / 60),
+      testMode: activeTest.testMode,
+      ...(activeTest.testMode === "random" ? { attemptGroupId: reattemptOf ?? makeId() } : {}),
+      subjectId: activeTest.subjectId,
+      subject: activeTest.subject,
+      chapterId: activeTest.chapterId,
+      chapter: activeTest.chapter,
+      exerciseId: activeTest.exerciseId,
+      exercise: activeTest.exercise,
+      startNumber: activeTest.startNumber,
+      durationMinutes: activeTest.duration,
+      timeTakenSeconds: Math.max(0, activeTest.duration * 60 - remaining),
+      minutes: activeTest.duration - Math.floor(remaining / 60),
       answers,
       answerKey,
-      ...(selectedQuestions ? { questionIds: selectedQuestions.map((question) => question.id), questionNumbers: selectedQuestions.map((question, index) => isAllExercises ? index + 1 : question.number ?? (random ? index + 1 : startNumber + index)) } : {}),
       key: answerKey,
       correct,
       wrong,
-      score: correct * bank.marking.positive - wrong * bank.marking.negative,
-      duration,
-      marking: bank.marking,
-      questions: isAllExercises ? selectedQuestions : exercise?.questions,
+      score: correct * activeTest.marking.positive - wrong * activeTest.marking.negative,
+      duration: activeTest.duration,
+      marking: activeTest.marking,
+      questions: activeTest.questions,
       attemptOf: reattemptOf ?? undefined,
     };
     const next = [saved, ...history];
@@ -512,6 +533,11 @@ export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQ
     try {
       await saveBank(next);
       setSavingNewKey(false);
+      if (nextPhase === "instructions") {
+        const key = answerKey.slice(startNumber - 1, startNumber - 1 + questionCount);
+        setActiveTest({ subjectId: subject.id, subject: subject.name, chapterId: chapter.id, chapter: chapter.name, exerciseId: exercise.id, exercise: exercise.name, startNumber, duration, durationMinutes: duration, marking: { ...bank.marking }, testMode: "standard", answerKey: key, key });
+        setAnswerKey(key);
+      }
       setPhase(nextPhase);
     } finally {
       setSavingAnswerKey(false);
@@ -626,6 +652,7 @@ export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQ
     return (
       <History
         records={history}
+        subjects={bank.subjects}
         onBack={() => {
           setReattemptOf(null);
           setPhase("setup");
@@ -642,6 +669,14 @@ export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQ
           saveHistory(next);
         }}
         onReattempt={(record) => {
+          if (isQuestionAttempt(record)) {
+            if (!record.questions?.length || record.questions.length !== record.answers.length) return Alert.alert("Paper unavailable", "This attempt does not contain a complete saved paper.");
+            setActiveTest({ ...record, duration: record.durationMinutes ?? record.duration ?? 30, answerKey: record.answerKey ?? record.key, key: record.answerKey ?? record.key, marking: record.marking ?? bank.marking });
+            setAnswerKey(record.answerKey ?? record.key);
+            setReattemptOf(record.attemptGroupId ?? record.id);
+            setPhase("instructions");
+            return;
+          }
           setReattemptOf(
             record.testMode === "random" ? (record.attemptGroupId ?? record.id) : record.id,
           );
@@ -674,6 +709,17 @@ export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQ
             : [...favourites, questionId];
           saveFavourites(next);
         }}
+        onDeleteQuestion={(exerciseId, questionId) => {
+          Alert.alert("Delete question?", "It will be removed from new practice tests and Quick Recall. Saved attempts and scores stay unchanged.", [
+            { text: "Cancel", style: "cancel" },
+            { text: "Delete", style: "destructive", onPress: () => {
+              const next = { ...bankRef.current, subjects: bankRef.current.subjects.map((item) => removeBankQuestion(item, exerciseId, questionId)) };
+              void saveBank(next).catch(() => Alert.alert("Sync pending", "The question is removed on this device. Connect and retry syncing before using another device."));
+              const stillUsed = next.subjects.some((item) => item.chapters.some((chapter) => chapter.exercises.some((exercise) => exercise.questions?.some((question) => question.id === questionId))));
+              if (!stillUsed) saveFavourites(favouritesRef.current.filter((id) => id !== questionId));
+            } },
+          ]);
+        }}
         viewing={viewingQuestions}
         onView={setViewingQuestions}
         onBack={() => {
@@ -699,10 +745,10 @@ export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQ
   if (phase === "instructions")
     return (
       <Instructions
-        title={title}
-        duration={duration}
-        count={questionCount}
-        marking={bank.marking}
+        title={[activeTest?.subject, activeTest?.chapter, activeTest?.exercise].filter(Boolean).join(" · ")}
+        duration={activeTest?.duration ?? duration}
+        count={activeTest?.answerKey?.length ?? questionCount}
+        marking={activeTest?.marking ?? bank.marking}
         onBack={() => setPhase("setup")}
         onStart={startTest}
       />
@@ -710,11 +756,11 @@ export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQ
   if (phase === "test")
     return (
       <TestScreen
-        title={title}
+        title={[activeTest?.subject, activeTest?.chapter, activeTest?.exercise].filter(Boolean).join(" · ")}
         seconds={remaining}
         current={current}
-        count={questionCount}
-        questions={selectedQuestions}
+        count={activeTest?.answerKey?.length ?? questionCount}
+        questions={activeTest?.questions}
         answers={answers}
         onPick={(choice) =>
           setAnswers((value) =>
@@ -795,6 +841,7 @@ export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQ
             </Text>
           </Pressable>
         ) : null}
+        {isQuestionExercise && !exercise.questions.length && <Text style={s.bankSubhead}>No questions left in this exercise. Add questions or select another exercise.</Text>}
         <View style={s.practiceSetupCard}>
           <Text style={s.label}>TIMING</Text>
           <TextInput
@@ -1274,12 +1321,14 @@ function TestScreen({
 }
 function History({
   records,
+  subjects: bankSubjects,
   onBack,
   onDelete,
   onUpdate,
   onReattempt,
 }: {
   records: Record[];
+  subjects: Subject[];
   onBack: () => void;
   onDelete: (id: string) => void;
   onUpdate: (record: Record) => void;
@@ -1316,7 +1365,7 @@ function History({
       // their exact exercise/config; random tests use their persisted group ID.
       const key = record.testMode === "random"
         ? (record.attemptGroupId ?? record.id)
-        : `${record.subjectId || record.subject}||${record.chapterId || record.chapter}||${record.exerciseId || record.exercise}||${record.startNumber}||${record.answers.length}`;
+        : `${record.subjectId || record.subject}||${record.chapterId || record.chapter}||${record.exerciseId || record.exercise}||${record.startNumber}||${record.answers.length}${record.questionIds?.length ? `||q:${JSON.stringify(record.questionIds)}` : ""}`;
       groups.set(key, [...(groups.get(key) ?? []), record]);
       return groups;
     }, new Map<string, Record[]>()),
@@ -1333,6 +1382,14 @@ function History({
         new Date(a.attempts[a.attempts.length - 1].createdAt).getTime(),
     );
   const reevaluate = (record: Record) => {
+    if (isQuestionAttempt(record)) return;
+    const sourceSubject = bankSubjects.find((item) => item.id === record.subjectId);
+    const sourceExercise = sourceSubject?.chapters.find((item) => item.id === record.chapterId)?.exercises.find((item) => item.id === record.exerciseId);
+    if (Array.isArray(sourceExercise?.questions)) return Alert.alert("Exercise changed", "The original exercise is no longer book-based.");
+    if (!sourceExercise?.answerKey?.length) return Alert.alert("Answer key unavailable", "The original book exercise no longer has an answer key.");
+    const latestKey = sourceExercise.answerKey.slice((record.startNumber ?? 1) - 1, (record.startNumber ?? 1) - 1 + record.answers.length);
+    if (latestKey.length !== record.answers.length || latestKey.some((answer) => !answer)) return Alert.alert("Incomplete answer key", "Add answers for the full attempted range before rechecking.");
+    record = { ...record, key: latestKey, answerKey: latestKey };
     const correct = record.answers.filter(
       (answer, index) => answer && record.key[index] && answer === record.key[index],
     ).length;
@@ -1560,10 +1617,10 @@ function HistoryDetail({
             />
             <Text style={s.detailActionText}>Solution</Text>
           </Pressable>
-          <Pressable onPress={onReevaluate} style={s.detailAction}>
+          {!isQuestionAttempt(record) && <Pressable onPress={onReevaluate} style={s.detailAction}>
             <MaterialCommunityIcons name="refresh" size={15} color={colors.text} />
             <Text style={s.detailActionText}>Recheck</Text>
-          </Pressable>
+          </Pressable>}
           <Pressable onPress={onReattempt} style={s.detailPrimaryAction}>
             <MaterialCommunityIcons name="reload" size={15} color={examAccentDeep} />
             <Text style={s.detailPrimaryText}>Reattempt</Text>
@@ -1961,7 +2018,8 @@ function QuestionBank({
   onFilter,
   favourites,
   onToggleFavourite,
-  viewing,
+  viewing: selectedViewing,
+  onDeleteQuestion,
   onView,
   onBack,
 }: {
@@ -1971,11 +2029,14 @@ function QuestionBank({
   favourites: string[];
   onToggleFavourite: (id: string) => void;
   viewing: Exercise | null;
+  onDeleteQuestion: (exerciseId: string, questionId: string) => void;
   onView: (exercise: Exercise | null) => void;
   onBack: () => void;
 }) {
+  const viewing = subjects.flatMap((subject) => subject.chapters.flatMap((chapter) => chapter.exercises)).find((exercise) => exercise.id === selectedViewing?.id) ?? null;
   const [chapterFilter, setChapterFilter] = useState("all");
-  const [currentQuestion, setCurrentQuestion] = useState(0);
+  const [questionIndex, setCurrentQuestion] = useState(0);
+  const currentQuestion = Math.max(0, Math.min(questionIndex, (viewing?.questions?.length ?? 1) - 1));
   const swipeHandlers = useQuestionSwipe(currentQuestion, viewing?.questions?.length ?? 0, setCurrentQuestion);
   const [subjectFilterOpen, setSubjectFilterOpen] = useState(false);
   const [chapterFilterOpen, setChapterFilterOpen] = useState(false);
@@ -2005,7 +2066,7 @@ function QuestionBank({
   useEffect(() => {
     setCurrentQuestion(0);
   }, [viewing?.id]);
-  if (viewing?.questions)
+  if (viewing?.questions?.length)
     return (
       <View style={s.page}>
         <View style={s.header}>
@@ -2030,6 +2091,7 @@ function QuestionBank({
                 <View style={s.bankViewerCard} {...swipeHandlers}>
                   <View style={s.bankQuestionHeader}>
                     <Text style={s.bankQuestionNumber}>QUESTION {currentQuestion + 1}</Text>
+                    <Pressable accessibilityLabel="Delete question" onPress={() => onDeleteQuestion(viewing.id, question.id)} hitSlop={8}><MaterialCommunityIcons name="trash-can-outline" size={21} color="#fca5a5" /></Pressable>
                     <Pressable
                       onPress={() => onToggleFavourite(question.id)}
                       style={[
@@ -2066,7 +2128,7 @@ function QuestionBank({
                   <View style={s.viewerNav}>
                     <Pressable
                       disabled={currentQuestion === 0}
-                      onPress={() => setCurrentQuestion((value) => Math.max(0, value - 1))}
+                      onPress={() => setCurrentQuestion(Math.max(0, currentQuestion - 1))}
                       style={[s.outline, currentQuestion === 0 && s.disabled]}
                     >
                       <Text style={s.outlineText}>Previous</Text>
@@ -2074,9 +2136,7 @@ function QuestionBank({
                     <Pressable
                       disabled={currentQuestion === viewing.questions.length - 1}
                       onPress={() =>
-                        setCurrentQuestion((value) =>
-                          Math.min(viewing.questions.length - 1, value + 1),
-                        )
+                        setCurrentQuestion(Math.min(viewing.questions.length - 1, currentQuestion + 1))
                       }
                       style={[
                         s.primarySmall,
