@@ -35,6 +35,7 @@ import { ALL_PRACTICE_EXERCISES, ALL_PRACTICE_EXERCISES_LABEL, combineQuestionEx
 import { QuestionPalette } from "../components/QuestionNavigation";
 import { useQuestionSwipe } from "../hooks/use-question-swipe";
 import { colors } from "../theme";
+import { QUESTION_JSON_PROMPT } from "../domain/question-json-prompt";
 import { isQuickRecallRecord, quickRecallHistoryKey } from "../domain/quick-recall-history";
 import { resolveRecallQuestions, type RecallQuestionSnapshot } from "../domain/quick-recall-solutions";
 import { clearActiveTest, loadActiveTest, saveActiveTest } from "../lib/active-test";
@@ -172,20 +173,7 @@ const toCloudRecord = (record: Record) => ({
 const choices: Option[] = ["A", "B", "C", "D"];
 const examAccent = "#60a5fa";
 const examAccentSurface = "#162c45";
-const QUESTION_JSON_PROMPT = `Create an SSC Buddy question-bank JSON file. Return ONLY valid JSON, with no markdown or explanation.
 
-Use this exact shape:
-[
-  {
-    "id": "unique-question-id",
-    "question": "Question text",
-    "options": ["Option A", "Option B", "Option C", "Option D"],
-    "correctAnswer": "A",
-    "explanation": "Short explanation"
-  }
-]
-
-Rules: every question needs exactly four options; correctAnswer must be A, B, C, or D; each id must be unique.`;
 const examAccentDeep = "#081a31";
 const makeId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 const defaultMarking = { positive: 4, negative: 1 };

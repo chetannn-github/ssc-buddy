@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Upload } from "lucide-react";
+import { Check, Copy, Upload } from "lucide-react";
+import { QUESTION_JSON_PROMPT } from "../../../mobile-tasks/src/domain/question-json-prompt";
 import { parseQuestionsJson as parseQuestionExerciseJson } from "../../../mobile-tasks/src/domain/question-import";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -111,6 +112,24 @@ export function SetupScreen({
   const [jsonError, setJsonError] = useState("");
   const [jsonFileName, setJsonFileName] = useState("");
   const questionFileInput = useRef<HTMLInputElement>(null);
+  const [promptCopied, setPromptCopied] = useState(false);
+  const promptCopyTimer = useRef<number | null>(null);
+  useEffect(() => {
+    if (!jsonDialogOpen) setPromptCopied(false);
+    return () => {
+      if (promptCopyTimer.current !== null) window.clearTimeout(promptCopyTimer.current);
+    };
+  }, [jsonDialogOpen]);
+  const copyQuestionPrompt = async () => {
+    try {
+      await navigator.clipboard.writeText(QUESTION_JSON_PROMPT);
+      setPromptCopied(true);
+      if (promptCopyTimer.current !== null) window.clearTimeout(promptCopyTimer.current);
+      promptCopyTimer.current = window.setTimeout(() => setPromptCopied(false), 1800);
+    } catch {
+      setJsonError("Could not copy the prompt. Allow clipboard access and try again.");
+    }
+  };
 
   const [minutes, setMinutes] = useState(
     String(Math.min(MAX_DURATION_MINUTES, prefill?.minutes ?? 30)),
@@ -895,11 +914,25 @@ export function SetupScreen({
 
       <Dialog open={jsonDialogOpen} onOpenChange={setJsonDialogOpen}>
         <DialogContent className="exam-dialog-content max-w-3xl">
-          <DialogHeader className="flex-row items-center justify-between gap-3 space-y-0 pr-8">
-            <DialogTitle>
+          <DialogHeader className="flex-row flex-wrap items-center justify-between gap-3 space-y-0 pr-8">
+            <DialogTitle className="min-w-0 flex-1">
               {jsonEditingExerciseId ? "Update" : "Add"} question exercise{" "}
               {jsonEditingExerciseId ? "in" : "to"} {chapter}
             </DialogTitle>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => void copyQuestionPrompt()}
+              className="h-8 shrink-0 gap-1.5 px-2 text-xs text-sky-300 hover:bg-sky-400/10 hover:text-sky-200"
+            >
+              {promptCopied ? (
+                <Check className="h-3.5 w-3.5 text-emerald-300" />
+              ) : (
+                <Copy className="h-3.5 w-3.5" />
+              )}
+              <span aria-live="polite">{promptCopied ? "Copied" : "Copy prompt"}</span>
+            </Button>
           </DialogHeader>
           <div className="space-y-3">
             <Input
