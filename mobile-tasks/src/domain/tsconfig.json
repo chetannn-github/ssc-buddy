@@ -7,11 +7,18 @@
     "noEmit": true
   },
   "include": [
+    "active-test-session.ts",
+    "floating-player.ts",
+    "heatmap-colors.ts",
     "recall-selection.ts",
     "practice-exercises.ts",
     "question-navigation.ts",
     "leaderboard-period.ts",
     "question-deletion.ts",
+    "question-import.ts",
+    "question-json-prompt.ts",
+    "quick-recall-history.ts",
+    "quick-recall-solutions.ts",
     "xp-levels.ts"
   ]
 }
