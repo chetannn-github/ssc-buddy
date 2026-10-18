@@ -1,3 +1,4 @@
+import { NumberFlow } from "number-flow-react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -17,6 +18,8 @@ import { getFirebaseFirestore, readPublicProfile, type PublicProfile } from "../
 import { colors } from "../theme";
 import { avatarAssets, ProfileScreen } from "./ProfileScreen";
 
+import { ALL_LEADERBOARD_DAYS, leaderboardPeriodStats, leaderboardPeriodTasks } from "../domain/leaderboard-period";
+
 const dayKey = (date = new Date()) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 const week = () => {
@@ -31,7 +34,7 @@ const medalAssets = [
   require("../../assets/bronze-medal.png"),
 ];
 const dateLabel = (date: string) =>
-  date === dayKey()
+  date === ALL_LEADERBOARD_DAYS ? "This week" : date === dayKey()
     ? "Today"
     : new Date(`${date}T00:00:00`).toLocaleDateString(undefined, {
         weekday: "short",
@@ -50,6 +53,19 @@ const xpMeta = (entry: { xp?: unknown; level?: unknown }) => {
   const xp = Number(entry.xp) || 0;
   return { xp, level: Number.isFinite(Number(entry.level)) ? Number(entry.level) : xp < 0 ? 0 : 1 };
 };
+
+const pointsColor = (points: number) => points > 0 ? "#86efac" : points < 0 ? "#fca5a5" : colors.subdued;
+function RollingLeaderboardNumber({ value, prefix = "", suffix = "", color = colors.text, fontSize = 18 }: { value: number; prefix?: string; suffix?: string; color?: string; fontSize?: number }) {
+  return <NumberFlow value={value} prefix={prefix} suffix={suffix} style={{ color, fontSize, fontWeight: "800", fontVariant: ["tabular-nums"] }} />;
+}
+function RollingLeaderboardDuration({ minutes }: { minutes: number }) {
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  return <View style={{ flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 4 }}>
+    {hours > 0 && <RollingLeaderboardNumber key="hours" value={hours} suffix="h" />}
+    {(hours === 0 || remainder > 0) && <RollingLeaderboardNumber key="minutes" value={remainder} suffix="m" />}
+  </View>;
+}
 
 function DayFilter({
   dates,
@@ -165,7 +181,8 @@ function PublicProfileView({ entry, onBack, onOpenWeeklyStats, viewerUser, viewe
 
 export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { onClose: () => void; user: User | null; tasks?: any[] }) {
   const [rows, setRows] = useState<any[]>([]);
-  const [selected, setSelected] = useState<any>(null);
+  const [selectedEntry, setSelected] = useState<any>(null);
+  const selected = rows.find((row) => row.uid === selectedEntry?.uid) ?? selectedEntry;
   const [selectedDate, setSelectedDate] = useState(dayKey());
   const [publicEntry, setPublicEntry] = useState<any>(null);
   const [isSyncing, setIsSyncing] = useState(true);
@@ -199,26 +216,21 @@ export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { 
   const inactiveDates = useMemo(() => Array.isArray(selected?.inactiveDates) ? selected.inactiveDates : [], [selected]);
   const dates = useMemo(
     () =>
-      Array.from(new Set([dayKey(), ...inactiveDates, ...tasks.map((task: any) => task.date).filter(Boolean)]))
+      [ALL_LEADERBOARD_DAYS, ...Array.from(new Set([dayKey(), ...inactiveDates, ...tasks.map((task: any) => task.date).filter(Boolean)]))
         .sort()
-        .reverse(),
+        .reverse()],
     [inactiveDates, tasks],
   );
   if (publicEntry) return <PublicProfileView entry={publicEntry} viewerUser={user} viewerTasks={viewerTasks} onBack={() => setPublicEntry(null)} onOpenWeeklyStats={() => { setSelected(publicEntry); setSelectedDate(dayKey()); setPublicEntry(null); }} />;
   if (selected) {
-    const hours = Math.floor((selected.studyMinutes || 0) / 60),
-      mins = (selected.studyMinutes || 0) % 60;
-    const studyTimeLabel = hours ? `${hours}h${mins ? ` ${mins}m` : ""}` : `${mins}m`;
+    const stats = leaderboardPeriodStats(selected, tasks, selectedDate);
     const rank = rows.findIndex((row) => row.uid === selected.uid) + 1;
     const medal = medalAssets[rank - 1];
-    const tasksForDay = [
-      ...(inactiveDates.includes(selectedDate) ? [{ name: "No task completed", completed: false, date: selectedDate, points: -50 }] : []),
-      ...tasks.filter((task: any) => task.date === selectedDate),
-    ];
+    const tasksForDay = leaderboardPeriodTasks(tasks, inactiveDates, selectedDate);
     const taskList = tasksForDay.length ? (
       tasksForDay.map((task: any, index: number) => {
         const overdue = !task.completed && String(task.date ?? "") < dayKey();
-        const meta = [task.subject, task.type, task.minutesSpent ? `${task.minutesSpent}m` : ""]
+        const meta = [selectedDate === ALL_LEADERBOARD_DAYS ? dateLabel(task.date) : "", task.subject, task.type, task.minutesSpent ? `${task.minutesSpent}m` : ""]
           .filter(Boolean)
           .join(" · ");
         return (
@@ -247,7 +259,7 @@ export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { 
         );
       })
     ) : (
-      <Text style={s.sub}>No tasks for this day.</Text>
+      <Text style={s.sub}>{selectedDate === ALL_LEADERBOARD_DAYS ? "No tasks this week." : "No tasks for this day."}</Text>
     );
     return (
       <View style={s.page}>
@@ -278,15 +290,15 @@ export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { 
           </View>
           <View style={s.profileStats}>
             <View>
-              <Text style={[s.profileValue, Number(selected.points) < 0 ? s.negativePoints : Number(selected.points) === 0 ? s.neutralPoints : s.positivePoints]}>{formatPointValue(selected.points)}</Text>
+              <View style={{ alignItems: "center" }}><RollingLeaderboardNumber value={stats.points} prefix={stats.points > 0 ? "+" : ""} color={pointsColor(stats.points)} /></View>
               <Text style={s.sub}>Points</Text>
             </View>
             <View>
-              <Text style={s.profileValue}>{selected.completed}</Text>
+              <View style={{ alignItems: "center" }}><RollingLeaderboardNumber value={stats.completed} /></View>
               <Text style={s.sub}>Completed</Text>
             </View>
             <View>
-              <Text style={s.profileValue}>{studyTimeLabel}</Text>
+              <RollingLeaderboardDuration minutes={stats.studyMinutes} />
               <Text style={s.sub}>Study time</Text>
             </View>
           </View>
@@ -301,7 +313,7 @@ export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { 
             />
           </View>
         </View>
-        <ScrollView onTouchStart={() => { if (dayFilterOpen) setDayFilterOpen(false); }} contentContainerStyle={s.tasksScroll}>
+        <ScrollView showsVerticalScrollIndicator={false} onTouchStart={() => { if (dayFilterOpen) setDayFilterOpen(false); }} contentContainerStyle={s.tasksScroll}>
           {taskList}
         </ScrollView>
       </View>
@@ -322,10 +334,10 @@ export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { 
           <Text style={s.sub}>Syncing leaderboard…</Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={s.body}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.body}>
           {rows.map((row, index) => (
             <View key={row.uid} style={s.row}>
-              <Pressable onPress={() => setSelected(row)} style={s.rankPress}>{index < 3 ? <Image source={medalAssets[index]} style={s.medal} /> : <Text style={s.rank}>#{index + 1}</Text>}</Pressable>
+              <Pressable onPress={() => { setSelected(row); setSelectedDate(dayKey()); }} style={s.rankPress}>{index < 3 ? <Image source={medalAssets[index]} style={s.medal} /> : <Text style={s.rank}>#{index + 1}</Text>}</Pressable>
               <Pressable style={s.publicIdentity} onPress={() => { setSelected(row); setSelectedDate(dayKey()); }}><View style={s.avatar}>
                 {row.avatar && avatarAssets[row.avatar] ? (
                   <Image source={avatarAssets[row.avatar]} style={s.avatarImage} />
@@ -343,7 +355,7 @@ export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { 
                 </Text>}
                 <Text style={s.xpMeta} numberOfLines={1}>Lv. {xpMeta(row).level} · {xpMeta(row).xp > 0 ? "+" : ""}{xpMeta(row).xp} XP</Text>
               </View></Pressable>
-              <Pressable onPress={() => setSelected(row)}><Text style={[s.points, Number(row.points) < 0 ? s.negativePoints : Number(row.points) === 0 ? s.neutralPoints : s.positivePoints]}>{formatPoints(row.points)}</Text></Pressable>
+              <Pressable onPress={() => { setSelected(row); setSelectedDate(dayKey()); }}><RollingLeaderboardNumber value={Number(row.points) || 0} prefix={Number(row.points) > 0 ? "+" : ""} suffix=" pts" fontSize={16} color={pointsColor(Number(row.points) || 0)} /></Pressable>
             </View>
           ))}
           {!rows.length && <Text style={s.empty}>No activity this week yet.</Text>}

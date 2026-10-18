@@ -704,3 +704,15 @@ select:not(:disabled),
     animation: none;
   }
 }
+
+/* Keep leaderboard lists scrollable without visible scrollbar chrome. */
+:is(html, body):has(.leaderboard-page),
+.leaderboard-page,
+.leaderboard-page * {
+  scrollbar-width: none;
+}
+:is(html, body):has(.leaderboard-page)::-webkit-scrollbar,
+.leaderboard-page::-webkit-scrollbar,
+.leaderboard-page *::-webkit-scrollbar {
+  display: none;
+}

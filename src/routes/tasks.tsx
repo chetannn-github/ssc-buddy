@@ -21,6 +21,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CompleteTaskDialog, TaskFormDialog } from "@/components/tasks/TaskDialogs";
 import { AppShell } from "@/components/layout/AppShell";
+import { LiquidProgressBar } from "@/components/profile/ProfileXpBar";
 import {
   formatDuration,
   loadDailyTasks,
@@ -396,17 +397,25 @@ function DailyTasks() {
                   {daySummary.completed} / {daySummary.total} completed
                 </span>
               </div>
-              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
-                <AnimatedBar value={progress} tone="bg-blue-500" />
+              <div className="mt-2">
+                <LiquidProgressBar
+                  key={taskDay}
+                  progress={progress / 100}
+                  color="#3b82f6"
+                  height={6}
+                  label={taskDay === "today" ? "Today's task progress" : "Tomorrow's task progress"}
+                />
               </div>
             </div>
             </div>
-            <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="min-h-0 flex-1 overflow-y-auto pr-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {dayTasks.length ? (
-                dayTasks.map((task) => (
+                <div className="divide-y divide-white/10 overflow-hidden rounded-lg bg-[#1b1b1b] px-3">
+                {dayTasks.map((task) => (
                   <TaskRow
                     key={task.id}
                     task={task}
+                    grouped
                     points={taskPoints.get(task.id) ?? 0}
                     onComplete={setCompleting}
                     onReopen={reopen}
@@ -416,7 +425,8 @@ function DailyTasks() {
                     }}
                     onDelete={() => setDeleting(task)}
                   />
-                ))
+                ))}
+                </div>
               ) : (
                 <div className="rounded-lg border border-dashed border-white/15 px-4 py-10 text-center text-sm text-zinc-400">
                   No tasks for {taskDay}. Add your first study task.
@@ -574,6 +584,7 @@ function DailyTasks() {
         </Tabs>
         <TaskFormDialog
           open={formOpen}
+          defaultSchedule={taskDay}
           onOpenChange={setFormOpen}
           task={editing}
           subjects={allSubjects}
@@ -630,6 +641,7 @@ function TaskRow({
   onEdit,
   onDelete,
   readOnly = false,
+  grouped = false,
 }: {
   task: DailyTask;
   points: number;
@@ -638,6 +650,7 @@ function TaskRow({
   onEdit: () => void;
   onDelete: () => void;
   readOnly?: boolean;
+  grouped?: boolean;
 }) {
   return (
     <div
@@ -654,7 +667,7 @@ function TaskRow({
               }
             }
       }
-      className={`flex items-center gap-3 rounded-lg border border-white/10 bg-[#1b1b1b] px-3 py-2.5 ${readOnly ? "" : "cursor-pointer transition-colors hover:border-white/20 hover:bg-white/[0.035] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60"}`}
+      className={`flex items-center gap-3 py-2.5 ${grouped ? "px-0" : "rounded-lg border border-white/10 bg-[#1b1b1b] px-3"} ${readOnly ? "" : "cursor-pointer transition-colors hover:bg-white/[0.035] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-400/60"}`}
     >
       <button
         type="button"

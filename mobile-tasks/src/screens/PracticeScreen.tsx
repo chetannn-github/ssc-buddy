@@ -28,6 +28,9 @@ import {
   View,
 } from "react-native";
 
+import { ALL_PRACTICE_EXERCISES, ALL_PRACTICE_EXERCISES_LABEL, combineQuestionExercises, samplePracticeQuestions } from "../domain/practice-exercises";
+import { QuestionPalette } from "../components/QuestionNavigation";
+import { useQuestionSwipe } from "../hooks/use-question-swipe";
 import { colors } from "../theme";
 import { dateKey } from "../domain/tasks";
 import { reportVerticalScroll } from "../navigation/bottomNavigationVisibility";
@@ -212,6 +215,7 @@ export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQ
   const [fixed, setFixed] = useState(true);
   const [random, setRandom] = useState(false);
   const [randomSeed, setRandomSeed] = useState(0);
+  const [mixedPaper, setMixedPaper] = useState<Question[] | null>(null);
   const [answerKey, setAnswerKey] = useState<Array<Option | null>>([]);
   const [savingNewKey, setSavingNewKey] = useState(false);
   const [savingAnswerKey, setSavingAnswerKey] = useState(false);
@@ -306,8 +310,9 @@ export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQ
   }, [user?.uid, practiceLoaded]);
   const subject = bank.subjects.find((item) => item.id === subjectId) ?? bank.subjects[0];
   const chapter = subject?.chapters.find((item) => item.id === chapterId) ?? subject?.chapters[0];
-  const exercise =
-    chapter?.exercises.find((item) => item.id === exerciseId) ?? chapter?.exercises[0];
+  const isAllExercises = exerciseId === ALL_PRACTICE_EXERCISES;
+  const combinedExercise = useMemo(() => combineQuestionExercises(chapter?.exercises ?? []), [chapter]);
+  const exercise = isAllExercises ? combinedExercise : (chapter?.exercises.find((item) => item.id === exerciseId) ?? chapter?.exercises[0]);
   useEffect(() => {
     if (!subject) return;
     if (!subject.chapters.some((item) => item.id === chapterId))
@@ -315,6 +320,11 @@ export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQ
   }, [subjectId, subject]);
   useEffect(() => {
     if (!chapter) return;
+    if (isAllExercises && combinedExercise) {
+      setFixed(true); setStart("1");
+      setCount((current) => String(Math.max(1, Math.min(500, combinedExercise.questionCount, Number(current) || 20))));
+      return;
+    }
     if (!chapter.exercises.some((item) => item.id === exerciseId))
       setExerciseId(chapter.exercises[0]?.id ?? "");
     const active = chapter.exercises.find((item) => item.id === exerciseId) ?? chapter.exercises[0];
@@ -323,17 +333,18 @@ export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQ
   }, [chapterId, chapter, exerciseId]);
   const exerciseQuestionTotal = exercise?.questions?.length ?? exercise?.questionCount ?? 1;
   const isQuestionExercise = Boolean(exercise?.questions?.length);
-  const startNumber = random ? 1 : Math.max(1, Math.min(exerciseQuestionTotal, Number(start) || 1));
-  const availableQuestions = random
+  const startNumber = isAllExercises || random ? 1 : Math.max(1, Math.min(exerciseQuestionTotal, Number(start) || 1));
+  const availableQuestions = isAllExercises || random
     ? exerciseQuestionTotal
     : Math.max(1, exerciseQuestionTotal - startNumber + 1);
-  const questionCount = fixed
-    ? Math.max(1, Math.min(availableQuestions, Number(count) || 1))
+  const questionCount = isAllExercises && phase !== "setup" && mixedPaper ? mixedPaper.length : isAllExercises || fixed
+    ? Math.max(1, Math.min(isAllExercises ? 500 : availableQuestions, availableQuestions, Number(count) || 1))
     : availableQuestions;
   const duration = Math.max(1, Math.min(180, Number(minutes) || 1));
-  const canContinue = Boolean(subject && chapter && exercise && minutes.trim() && (!fixed || count.trim()) && (isQuestionExercise ? (random || start.trim()) : start.trim()));
-  const selectedQuestions = useMemo(() => {
+  const canContinue = Boolean(subject && chapter && exercise && minutes.trim() && (!(isAllExercises || fixed) || count.trim()) && (isQuestionExercise ? (isAllExercises || random || start.trim()) : start.trim()));
+  const setupQuestions = useMemo(() => {
     const questions = exercise?.questions ?? [];
+    if (isAllExercises) return samplePracticeQuestions(questions, questionCount);
     if (!random) return questions.slice(startNumber - 1, startNumber - 1 + questionCount);
     const shuffle = <T,>(items: T[]) => {
       const copy = [...items];
@@ -349,7 +360,8 @@ export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQ
     const favouriteQuestions = questions.filter((question) => favouriteSet.has(question.id));
     const ordinaryQuestions = questions.filter((question) => !favouriteSet.has(question.id));
     return [...shuffle(favouriteQuestions), ...shuffle(ordinaryQuestions)].slice(0, questionCount);
-  }, [exercise?.questions, favourites, questionCount, random, randomSeed, startNumber]);
+  }, [exercise?.questions, favourites, isAllExercises, questionCount, random, randomSeed, startNumber]);
+  const selectedQuestions = isAllExercises && phase !== "setup" && mixedPaper ? mixedPaper : setupQuestions;
   const title = [subject?.name, chapter?.name, exercise?.name].filter(Boolean).join(" · ");
   const selectSubject = (next: string) => {
     const item = bank.subjects.find((x) => x.id === next);
@@ -359,7 +371,7 @@ export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQ
     setMenu(null);
   };
   const editExercise = () => {
-    if (!exercise) return;
+    if (!exercise || isAllExercises) return;
     setEditingExerciseId(exercise.id);
     setDraft(exercise.name);
     setCount(String(exercise.questionCount));
@@ -397,10 +409,12 @@ export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQ
   const begin = () => {
     if (!exercise || !subject || !chapter)
       return Alert.alert("Select a topic", "Choose a subject, chapter and exercise first.");
+    const paper = isAllExercises ? samplePracticeQuestions(exercise.questions ?? [], questionCount) : selectedQuestions;
+    if (isAllExercises) setMixedPaper(paper);
     const key = Array.from(
       { length: questionCount },
       (_, index) =>
-        selectedQuestions?.[index]?.correctAnswer ??
+        paper?.[index]?.correctAnswer ??
         exercise.answerKey[startNumber - 1 + index] ??
         null,
     );
@@ -437,8 +451,8 @@ export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQ
       id: makeId(),
       createdAt: new Date().toISOString(),
       date: dateKey(),
-      testMode: random ? "random" : "standard",
-      ...(random ? { attemptGroupId: reattemptOf ?? makeId() } : {}),
+      testMode: isAllExercises || random ? "random" : "standard",
+      ...(isAllExercises || random ? { attemptGroupId: reattemptOf ?? makeId() } : {}),
       subjectId: subject?.id ?? "",
       subject: subject?.name ?? "",
       chapterId: chapter?.id ?? "",
@@ -451,14 +465,14 @@ export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQ
       minutes: duration - Math.floor(remaining / 60),
       answers,
       answerKey,
-      ...(selectedQuestions ? { questionIds: selectedQuestions.map((question) => question.id), questionNumbers: selectedQuestions.map((question, index) => question.number ?? (random ? index + 1 : startNumber + index)) } : {}),
+      ...(selectedQuestions ? { questionIds: selectedQuestions.map((question) => question.id), questionNumbers: selectedQuestions.map((question, index) => isAllExercises ? index + 1 : question.number ?? (random ? index + 1 : startNumber + index)) } : {}),
       key: answerKey,
       correct,
       wrong,
       score: correct * bank.marking.positive - wrong * bank.marking.negative,
       duration,
       marking: bank.marking,
-      questions: exercise?.questions,
+      questions: isAllExercises ? selectedQuestions : exercise?.questions,
       attemptOf: reattemptOf ?? undefined,
     };
     const next = [saved, ...history];
@@ -636,7 +650,8 @@ export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQ
           const nextExercise = nextChapter?.exercises.find((item) => item.name === record.exercise);
           if (nextSubject) setSubjectId(nextSubject.id);
           if (nextChapter) setChapterId(nextChapter.id);
-          if (nextExercise) setExerciseId(nextExercise.id);
+          if (record.exerciseId === ALL_PRACTICE_EXERCISES || record.exercise === ALL_PRACTICE_EXERCISES_LABEL) setExerciseId(ALL_PRACTICE_EXERCISES);
+          else if (nextExercise) setExerciseId(nextExercise.id);
           setMinutes(String(record.duration ?? Math.max(1, record.minutes)));
           setCount(String(record.answers.length));
           setStart("1");
@@ -764,7 +779,7 @@ export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQ
           value={exercise?.name ?? "Select exercise"}
           open={menu === "exercise"}
           onPress={() => setMenu(menu === "exercise" ? null : "exercise")}
-          items={chapter?.exercises.map((x) => ({ id: x.id, label: x.name })) ?? []}
+          items={[...(combinedExercise ? [{ id: ALL_PRACTICE_EXERCISES, label: `${ALL_PRACTICE_EXERCISES_LABEL} · ${combinedExercise.questionCount}Q` }] : []), ...(chapter?.exercises.map((x) => ({ id: x.id, label: x.name })) ?? [])]}
           onSelect={(value) => {
             setExerciseId(value);
             setMenu(null);
@@ -772,7 +787,7 @@ export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQ
           onAdd={() => { setMenu(null); setJson(""); setJsonFileName(""); setJsonError(""); setDialog("exercise"); }}
           disabled={!chapter}
         />
-        {exercise ? (
+        {exercise && !isAllExercises ? (
           <Pressable onPress={editExercise} style={s.exerciseEdit}>
             <MaterialCommunityIcons name="pencil-outline" size={15} color={colors.accent} />
             <Text style={s.exerciseEditText} numberOfLines={1}>
@@ -808,7 +823,7 @@ export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQ
               </Pressable>
             ))}
           </View>
-          <TextInput
+          {!isAllExercises && <><TextInput
             value={start}
             onChangeText={(value) => {
               const digits = value.replace(/\D/g, "");
@@ -825,11 +840,11 @@ export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQ
             placeholder="Start question no."
             placeholderTextColor={colors.subdued}
           />
-          <Text style={s.helper}>{isQuestionExercise && random ? "Random test selects from the entire exercise." : `Numbering begins at Q${startNumber}. Chapter total ${exerciseQuestionTotal}.`}</Text>
+          <Text style={s.helper}>{isQuestionExercise && random ? "Random test selects from the entire exercise." : `Numbering begins at Q${startNumber}. Chapter total ${exerciseQuestionTotal}.`}</Text></>}
         <View style={s.configDivider} />
         <View style={s.configSection}>
           <Text style={s.label}>QUESTIONS</Text>
-          {isQuestionExercise && <View style={s.modeRow}>
+          {isQuestionExercise && !isAllExercises && <View style={s.modeRow}>
             <Pressable onPress={() => setRandom(false)} style={[s.mode, !random && s.modeActive]}>
               <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} style={[s.modeText, !random && s.modeTextActive]}>Sequential</Text>
             </Pressable>
@@ -846,7 +861,7 @@ export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQ
               <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} style={[s.modeText, random && s.modeTextActive]}>Random</Text>
             </Pressable>
           </View>}
-          <View style={s.modeRow}>
+          {!isAllExercises && <View style={s.modeRow}>
             <Pressable
               disabled={random}
               onPress={() => setFixed(false)}
@@ -857,8 +872,8 @@ export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQ
             <Pressable onPress={() => setFixed(true)} style={[s.mode, fixed && s.modeActive]}>
               <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} style={[s.modeText, fixed && s.modeTextActive]}>Fixed count</Text>
             </Pressable>
-          </View>
-          {fixed && (
+          </View>}
+          {(isAllExercises || fixed) && (
             <TextInput
               value={count}
               onChangeText={(value) => {
@@ -866,7 +881,7 @@ export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQ
                 setCount(
                   digits === ""
                     ? ""
-                    : String(Math.max(1, Math.min(availableQuestions, Number(digits) || 1))),
+                    : String(Math.max(1, Math.min(isAllExercises ? 500 : availableQuestions, availableQuestions, Number(digits) || 1))),
                 );
               }}
               onBlur={() => setCount(String(questionCount))}
@@ -878,7 +893,7 @@ export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQ
             />
           )}
           <Text style={s.helper}>
-            {random
+            {isAllExercises ? `${questionCount} questions mixed from all question-based exercises (${exerciseQuestionTotal} available).` : random
               ? "Random test starts at 1. Favourites are selected first."
               : fixed
                 ? `Questions Q${startNumber}–Q${startNumber + questionCount - 1} of ${exerciseQuestionTotal}`
@@ -1195,6 +1210,7 @@ function TestScreen({
 }) {
   const display = `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
   const question = questions?.[current];
+  const swipeHandlers = useQuestionSwipe(current, count, onCurrent);
   return (
     <View style={s.page}>
       <View style={s.testHeader}>
@@ -1207,7 +1223,7 @@ function TestScreen({
         <Text style={s.timer}>{display}</Text>
       </View>
       <ScrollView contentContainerStyle={s.content}>
-        <View style={s.questionCard}>
+        <View style={s.questionCard} {...swipeHandlers}>
           <Text style={s.questionText}>{question?.question ?? `Question ${current + 1}`}</Text>
           {!question ? (
             <Text style={s.helper}>Select the answer from your study material.</Text>
@@ -1228,21 +1244,12 @@ function TestScreen({
           ))}
         </View>
         <Text style={s.sectionTitle}>QUESTION PALETTE</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.palette}>
-          {Array.from({ length: count }, (_, index) => (
-            <Pressable
-              key={index}
-              onPress={() => onCurrent(index)}
-              style={[
-                s.paletteItem,
-                index === current && s.paletteCurrent,
-                answers[index] && s.paletteAnswered,
-              ]}
-            >
-              <Text style={s.paletteText}>{index + 1}</Text>
-            </Pressable>
-          ))}
-        </ScrollView>
+        <QuestionPalette
+          count={count}
+          current={current}
+          onCurrent={onCurrent}
+          getItemStyle={(index) => answers[index] ? s.paletteAnswered : undefined}
+        />
         <View style={s.nav}>
           <Pressable
             disabled={current === 0}
@@ -1617,6 +1624,8 @@ function SolutionView({ record, onBack }: { record: Record; onBack: () => void }
     setReattemptAnswers(Array(record.answers.length).fill(null));
   };
 
+  const swipeHandlers = useQuestionSwipe(current, questionCount, goToQuestion);
+
   return (
     <View style={s.page}>
       <View style={s.header}>
@@ -1643,7 +1652,7 @@ function SolutionView({ record, onBack }: { record: Record; onBack: () => void }
       <ScrollView contentContainerStyle={s.content}>
         {questionCount ? (
           <>
-            <View style={s.questionCard}>
+            <View style={s.questionCard} {...swipeHandlers}>
               <Text style={s.questionText}>
                 Q. {record.questionNumbers?.[current] ?? current + 1}
                 {question?.question ? ` · ${question.question}` : ""}
@@ -1736,24 +1745,17 @@ function SolutionView({ record, onBack }: { record: Record; onBack: () => void }
               ) : null}
             </View>
             <Text style={s.sectionTitle}>QUESTION PALETTE</Text>
-            <View style={s.palette}>
-              {Array.from({ length: questionCount }, (_, index) => index).map((index) => (
-                <Pressable
-                  key={questions[index]?.id ?? `answer-key-palette-${index}`}
-                  onPress={() => goToQuestion(index)}
-                  style={[
-                    s.paletteItem,
-                    index === current && s.paletteCurrent,
-                    !reattemptMode && !record.answers[index] && s.solutionPaletteSkipped,
-                    !reattemptMode && record.answers[index] === record.key[index] && s.solutionPaletteCorrect,
-                    !reattemptMode && record.answers[index] && record.answers[index] !== record.key[index] && s.solutionPaletteWrong,
-                    reattemptMode && reattemptAnswers[index] && s.paletteAnswered,
-                  ]}
-                >
-                  <Text style={s.paletteText}>{index + 1}</Text>
-                </Pressable>
-              ))}
-            </View>
+            <QuestionPalette
+              count={questionCount}
+              current={current}
+              onCurrent={goToQuestion}
+              getItemStyle={(index) => [
+                !reattemptMode && !record.answers[index] && s.solutionPaletteSkipped,
+                !reattemptMode && record.answers[index] === record.key[index] && s.solutionPaletteCorrect,
+                !reattemptMode && record.answers[index] && record.answers[index] !== record.key[index] && s.solutionPaletteWrong,
+                reattemptMode && reattemptAnswers[index] && s.paletteAnswered,
+              ]}
+            />
             <View style={s.nav}>
               <Pressable
                 disabled={current === 0}
@@ -1974,6 +1976,7 @@ function QuestionBank({
 }) {
   const [chapterFilter, setChapterFilter] = useState("all");
   const [currentQuestion, setCurrentQuestion] = useState(0);
+  const swipeHandlers = useQuestionSwipe(currentQuestion, viewing?.questions?.length ?? 0, setCurrentQuestion);
   const [subjectFilterOpen, setSubjectFilterOpen] = useState(false);
   const [chapterFilterOpen, setChapterFilterOpen] = useState(false);
   const visibleSubjects = subjects.filter((subject) => filter === "all" || subject.id === filter);
@@ -2024,7 +2027,7 @@ function QuestionBank({
             const question = viewing.questions[currentQuestion];
             return (
               <>
-                <View style={s.bankViewerCard}>
+                <View style={s.bankViewerCard} {...swipeHandlers}>
                   <View style={s.bankQuestionHeader}>
                     <Text style={s.bankQuestionNumber}>QUESTION {currentQuestion + 1}</Text>
                     <Pressable
@@ -2087,24 +2090,16 @@ function QuestionBank({
                 <View style={s.bankPalette}>
                   <Text style={s.sessionTitle}>Question palette</Text>
                   <Text style={s.bankSubhead}>Jump to any question</Text>
-                  <View style={s.palette}>
-                    {viewing.questions.map((item, index) => {
-                      const isFavourite = favourites.includes(item.id);
-                      const isCurrent = index === currentQuestion;
-                      return <Pressable
-                        key={item.id}
-                        onPress={() => setCurrentQuestion(index)}
-                        style={[
-                          s.paletteItem,
-                          isCurrent && s.paletteCurrent,
-                          isFavourite && s.paletteFavourite,
-                          isFavourite && isCurrent && s.paletteFavouriteCurrent,
-                        ]}
-                      >
-                        <Text style={[s.paletteText, isFavourite && isCurrent && s.paletteFavouriteCurrentText]}>{index + 1}</Text>
-                      </Pressable>;
-                    })}
-                  </View>
+                  <QuestionPalette
+                    count={viewing.questions.length}
+                    current={currentQuestion}
+                    onCurrent={setCurrentQuestion}
+                    getItemStyle={(index) => [
+                      favourites.includes(viewing.questions[index].id) && s.paletteFavourite,
+                      favourites.includes(viewing.questions[index].id) && index === currentQuestion && s.paletteFavouriteCurrent,
+                    ]}
+                    getTextStyle={(index) => favourites.includes(viewing.questions[index].id) && index === currentQuestion ? s.paletteFavouriteCurrentText : undefined}
+                  />
                 </View>
               </>
             );

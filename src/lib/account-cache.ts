@@ -10,6 +10,7 @@ const ACCOUNT_DATA_KEYS = [
   "cbt-history",
   "cbt-marking",
   "cbt-favorite-questions",
+  "ssc-buddy-question-learning",
   "cbt-study-store-version",
   "cbt-practice-profile",
   "ssc-cgl-2027-tracker-v1",

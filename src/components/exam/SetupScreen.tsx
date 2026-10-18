@@ -36,6 +36,8 @@ import {
   type Subject,
 } from "@/lib/exam";
 
+import { ALL_PRACTICE_EXERCISES, ALL_PRACTICE_EXERCISES_LABEL, combineQuestionExercises, samplePracticeQuestions } from "../../../mobile-tasks/src/domain/practice-exercises";
+
 export type TestConfig = {
   minutes: number;
   startNumber: number;
@@ -122,7 +124,7 @@ export function SetupScreen({
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [subject, setSubject] = useState(prefill?.subject ?? "");
   const [chapter, setChapter] = useState(prefill?.chapter ?? "");
-  const [exercise, setExercise] = useState(prefill?.exercise ?? "");
+  const [exercise, setExercise] = useState(prefill?.exercise === ALL_PRACTICE_EXERCISES_LABEL ? ALL_PRACTICE_EXERCISES : (prefill?.exercise ?? ""));
   const [newSubject, setNewSubject] = useState("");
   const [newChapter, setNewChapter] = useState("");
   const [chapterDraft, setChapterDraft] = useState<string | null>(null);
@@ -190,10 +192,12 @@ export function SetupScreen({
 
   const chapters = subjects.find((s) => s.name === subject)?.chapters ?? [];
   const exercises = chapters.find((c) => c.name === chapter)?.exercises ?? [];
-  const activeExercise = chapter ? getExercise(subject, chapter, exercise || null) : null;
+  const isAllExercises = exercise === ALL_PRACTICE_EXERCISES;
+  const combinedExercise = combineQuestionExercises(exercises);
+  const activeExercise = isAllExercises ? combinedExercise : (chapter ? getExercise(subject, chapter, exercise || null) : null);
   const activeExerciseName = activeExercise?.name ?? exercise;
   const isJsonExercise = Boolean(activeExercise?.questions?.length);
-  const parsedStart = Math.max(1, Number(startNumber) || 1);
+  const parsedStart = isAllExercises ? 1 : Math.max(1, Number(startNumber) || 1);
   const jsonQuestions = activeExercise?.questions ?? null;
   const orderedJsonQuestions = jsonQuestions;
   const jsonStartIndex = parsedStart - 1;
@@ -227,9 +231,10 @@ export function SetupScreen({
     !editingMarking &&
     !startTooHigh &&
     !countTooHigh &&
-    (countMode === "unlimited" || Number(questionCount) >= 1);
+    (isAllExercises ? Boolean(combinedExercise) && Number(questionCount) >= 1 && Number(questionCount) <= maxQuestionCount : (countMode === "unlimited" || Number(questionCount) >= 1));
 
   const buildRandomQuestions = () => {
+    if (isAllExercises) return samplePracticeQuestions(orderedJsonQuestions ?? [], parsedCount).map((question, index) => ({ question, index }));
     const favorites = new Set(loadFavoriteQuestionIds());
     const shuffle = <T,>(items: T[]) => [...items].sort(() => Math.random() - 0.5);
     const all = (orderedJsonQuestions ?? []).map((question, index) => ({ question, index }));
@@ -255,6 +260,14 @@ export function SetupScreen({
 
   const selectChapter = (name: string, exerciseName?: string) => {
     setChapter(name);
+    if (exerciseName === ALL_PRACTICE_EXERCISES || exerciseName === ALL_PRACTICE_EXERCISES_LABEL) {
+      const combined = combineQuestionExercises(subjects.find((item) => item.name === subject)?.chapters.find((item) => item.name === name)?.exercises ?? []);
+      setExercise(ALL_PRACTICE_EXERCISES);
+      setCountMode("fixed");
+      setStartNumber("1");
+      setQuestionCount(String(Math.min(50, combined?.questionCount ?? 1)));
+      return;
+    }
     const ex = getExercise(subject, name, exerciseName ?? null);
     setExercise(ex?.name ?? "");
     if (ex?.questions?.length) {
@@ -513,6 +526,7 @@ export function SetupScreen({
                 Question-based exercises
               </p>
               <div className="flex flex-wrap gap-1.5">
+                {questionExercises.length > 0 && <Button type="button" size="sm" variant={isAllExercises ? "default" : "outline"} onClick={() => selectChapter(chapter, ALL_PRACTICE_EXERCISES)}>All exercises · {combinedExercise?.questionCount}Q</Button>}
                 {questionExercises.map((ex) => (
                   <Button
                     key={ex.name}
@@ -530,15 +544,15 @@ export function SetupScreen({
                 </Button>
               </div>
             </div>
-            <button
+            {!isAllExercises && <button
               type="button"
               onClick={editChapter}
               className="text-xs font-medium text-primary underline-offset-2 hover:underline"
             >
               {isJsonExercise ? "Edit questions of" : "Edit questions & answer key of"} “
               {activeExerciseName || chapter}”
-            </button>
-            {isJsonExercise && (
+            </button>}
+            {isJsonExercise && !isAllExercises && (
               <button
                 type="button"
                 onClick={() => {
@@ -586,7 +600,7 @@ export function SetupScreen({
             </div>
           </div>
 
-          <div className="space-y-1.5">
+          {!isAllExercises && <div className="space-y-1.5">
             <Input
               inputMode="numeric"
               min={1}
@@ -625,7 +639,7 @@ export function SetupScreen({
                 : `Numbering begins at Q${parsedStart}.` +
                   (chapterTotal ? ` Chapter total ${chapterTotal}.` : "")}
             </p>
-          </div>
+          </div>}
         </div>
       </section>
 
@@ -634,7 +648,7 @@ export function SetupScreen({
         <Label className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">
           Questions
         </Label>
-        <div className="flex flex-wrap gap-2">
+        {!isAllExercises && <div className="flex flex-wrap gap-2">
           {isJsonExercise && (
             <>
               <Button
@@ -679,8 +693,8 @@ export function SetupScreen({
           >
             Fixed count
           </Button>
-        </div>
-        {countMode === "fixed" ? (
+        </div>}
+        {isAllExercises || countMode === "fixed" ? (
           <div className="space-y-1">
             <Input
               inputMode="numeric"
@@ -701,7 +715,7 @@ export function SetupScreen({
             <p
               className={cn("text-xs", countTooHigh ? "text-destructive" : "text-muted-foreground")}
             >
-              {countTooHigh
+              {isAllExercises ? `${parsedCount} questions mixed from all question-based exercises (${chapterTotal} available).` : countTooHigh
                 ? `Only ${available} questions remain (Q${parsedStart}–Q${chapterTotal}).`
                 : isJsonExercise && questionOrder === "random"
                   ? `${parsedCount} random questions. Favourites are selected first, then ordinary questions fill remaining slots.`
@@ -762,7 +776,7 @@ export function SetupScreen({
         disabled={!valid}
         onClick={() => {
           const randomSelection =
-            isJsonExercise && questionOrder === "random" ? buildRandomQuestions() : null;
+            isJsonExercise && (isAllExercises || questionOrder === "random") ? buildRandomQuestions() : null;
           const selectedQuestions = randomSelection
             ? randomSelection.map((item) => item.question)
             : isJsonExercise
@@ -773,7 +787,7 @@ export function SetupScreen({
           onStart({
             minutes: parsedMinutes,
             startNumber: parsedStart,
-            testMode: questionOrder === "random" ? "random" : "standard",
+            testMode: isAllExercises || questionOrder === "random" ? "random" : "standard",
             subjectId: subjects.find((item) => item.name === subject)?.id ?? null,
             subject,
             chapterId: chapters.find((item) => item.name === chapter)?.id ?? null,
@@ -781,7 +795,7 @@ export function SetupScreen({
             exercise: activeExerciseName || "",
             exerciseId: activeExercise?.id ?? null,
             marking,
-            questionCount: countMode === "fixed" ? parsedCount : null,
+            questionCount: isAllExercises || countMode === "fixed" ? parsedCount : null,
             maxQuestions: available,
             answerKey: (() => {
               if (randomSelection) return randomSelection.map((item) => item.question.correctAnswer);
@@ -798,7 +812,7 @@ export function SetupScreen({
               return full.slice(parsedStart - 1, parsedStart - 1 + len);
             })(),
             questions: selectedQuestions,
-            questionNumbers: randomSelection
+            questionNumbers: isAllExercises ? selectedQuestions?.map((_, index) => index + 1) ?? null : randomSelection
               ? randomSelection.map((item) => item.question.number ?? item.index + 1)
               : isJsonExercise
                 ? selectedQuestions?.map((question, index) => question.number ?? parsedStart + index) ?? null

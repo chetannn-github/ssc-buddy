@@ -1,3 +1,5 @@
+import { summarizeXp } from "./xp-levels";
+export { xpForLevel, xpSegmentProgress } from "./xp-levels";
 import type { Task } from "./tasks";
 
 export type XpSummary = { xp: number; level: number; levelStart: number; nextLevelXp: number; progress: number };
@@ -7,17 +9,9 @@ const todayKey = () => {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 };
 
-/**
- * Cumulative level thresholds double after level 1:
- * 0, 500, 1000, 2000, 4000… Negative XP stays at level 0.
- */
-export const xpForLevel = (level: number) => {
-  if (level <= 1) return 0;
-  return 500 * 2 ** (level - 2);
-};
 
 export const levelName = (level: number) => {
-  const names = ["Rookie", "Rookie", "Grinder", "Striker", "Slayer", "Apex", "Legend"];
+  const names = ["Noob", "Rookie", "Grinder", "Striker", "Slayer", "Apex", "Legend"];
   return names[level] ?? "Legend";
 };
 
@@ -47,12 +41,5 @@ export function getXpSummary(tasks: Pick<Task, "completed" | "date" | "minutesSp
   const overdue = tasks.filter((task) => !task.completed && task.date < today).length;
   const inactiveDays = inactiveCalendarDays(tasks, today);
   const xp = completed.length * 10 + Math.floor(minutes / 10) - overdue * 5 - inactiveDays * 50;
-  // Level 0 is the recovery band: its line should still advance as a negative
-  // XP total moves toward Level 1 rather than appearing permanently locked.
-  if (xp < 0) return { xp, level: 0, levelStart: -500, nextLevelXp: 0, progress: Math.max(0, Math.min(1, (xp + 500) / 500)) };
-  let level = 1;
-  while (xp >= xpForLevel(level + 1)) level += 1;
-  const levelStart = xpForLevel(level);
-  const nextLevelXp = xpForLevel(level + 1);
-  return { xp, level, levelStart, nextLevelXp, progress: Math.max(0, Math.min(1, (xp - levelStart) / (nextLevelXp - levelStart))) };
+  return summarizeXp(xp);
 }

@@ -4,9 +4,9 @@ import { File } from "expo-file-system";
 import { NumberFlow } from "number-flow-react-native";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ActivityIndicator, Animated, Easing, Modal, Pressable, ScrollView as NativeScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import Reanimated, { Easing as ReanimatedEasing, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 
 import { MockTestLogDialog, type MockTestLog } from "./MockTestLogDialog";
+import { LiquidProgressBar } from "../components/ProfileXpBar";
 import { colors } from "../theme";
 import { reportVerticalScroll } from "../navigation/bottomNavigationVisibility";
 import { migrateTrackerSections, syncTrackerSections, watchTrackerSections } from "../lib/firebase";
@@ -253,34 +253,10 @@ function AccordionChevron({ open }: { open: boolean }) {
   return <Animated.View style={{ transform: [{ rotate: rotation.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "90deg"] }) }] }}><MaterialCommunityIcons name="chevron-right" size={20} color={colors.muted} /></Animated.View>;
 }
 function Bar({ value }: { value: number }) {
-  const clamped = Math.max(0, Math.min(100, value));
-  const progress = useRef(new Animated.Value(clamped)).current;
-  useEffect(() => {
-    let animation: Animated.CompositeAnimation | undefined;
-    progress.stopAnimation((currentValue) => {
-      progress.setValue(currentValue);
-      animation = Animated.timing(progress, {
-        toValue: clamped,
-        duration: 980,
-        easing: Easing.bezier(0.16, 1, 0.3, 1),
-        useNativeDriver: false,
-      });
-      animation.start();
-    });
-    return () => animation?.stop();
-  }, [clamped, progress]);
-  return <View style={s.bar}><Animated.View style={[s.fill, { width: progress.interpolate({ inputRange: [0, 100], outputRange: ["0%", "100%"] }) }]} /></View>;
+  return <LiquidProgressBar progress={value / 100} color={colors.accent} height={6} style={s.bar} />;
 }
 function SmoothBar({ value }: { value: number }) {
-  const clamped = Math.max(0, Math.min(100, value));
-  const [trackWidth, setTrackWidth] = useState(0);
-  const width = useSharedValue(0);
-  useEffect(() => {
-    if (!trackWidth) return;
-    width.value = withTiming(trackWidth * clamped / 100, { duration: 820, easing: ReanimatedEasing.out(ReanimatedEasing.cubic) });
-  }, [clamped, trackWidth, width]);
-  const fillStyle = useAnimatedStyle(() => ({ width: width.value }));
-  return <View style={s.bar} onLayout={(event) => setTrackWidth(event.nativeEvent.layout.width)}><Reanimated.View style={[s.fill, fillStyle]} /></View>;
+  return <Bar value={value} />;
 }
 function TrackNumber({ value, suffix = "", style }: { value: number; suffix?: string; style: any }) {
   const [displayedValue, setDisplayedValue] = useState(value);

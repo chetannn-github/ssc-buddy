@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { NumberFlow } from "number-flow-react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { File } from "expo-file-system";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -20,8 +21,9 @@ import {
 import type { User } from "firebase/auth";
 
 import { dateKey, formatMinutes, summarizeTasks, type Task } from "../domain/tasks";
+import { LiquidProgressBar, ProfileXpBar } from "../components/ProfileXpBar";
 import { colors } from "../theme";
-import { getXpSummary, levelName, xpForLevel } from "../domain/xp";
+import { getXpSummary, levelName, xpForLevel, xpSegmentProgress } from "../domain/xp";
 import { reportVerticalScroll } from "../navigation/bottomNavigationVisibility";
 import type { PracticeProfile } from "../lib/profile-store";
 import type { MockTestLog } from "./MockTestLogDialog";
@@ -236,7 +238,6 @@ export function ProfileScreen({
   const xpSummary = useMemo(() => getXpSummary(tasks), [tasks]);
   const xpTimelineStart = Math.max(0, xpSummary.level - 3);
   const xpTimelineLevels = Array.from({ length: 6 }, (_, index) => xpTimelineStart + index);
-  const xpTimelineFillHeight = ((xpSummary.level - xpTimelineStart + xpSummary.progress) / 5) * 260;
   const isInitialProfileSetup = !profileSettings?.username;
   const [avatarFile, setAvatarFile] = useState(() =>
     profileSettings?.avatar && avatarAssets[profileSettings.avatar]
@@ -245,12 +246,6 @@ export function ProfileScreen({
   );
   const [viewingAvatar, setViewingAvatar] = useState(false);
   const [xpTimelineOpen, setXpTimelineOpen] = useState(false);
-  const xpTimelineProgress = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    if (!xpTimelineOpen) return;
-    xpTimelineProgress.setValue(0);
-    Animated.timing(xpTimelineProgress, { toValue: 1, duration: 650, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
-  }, [xpTimelineOpen, xpTimelineProgress]);
   const [spin] = useState(() => new Animated.Value(0));
   // A public profile arrives as one complete dashboard object. Seed every
   // profile section from it on the very first render instead of filling each
@@ -284,7 +279,7 @@ export function ProfileScreen({
     ? normalizePracticeRecords(Array.isArray(publicDashboard?.records) ? publicDashboard.records as Record<string, any>[] : [])
     : normalizePracticeRecords(sharedPracticeRecords));
   const lastPublicDashboard = useRef(publicDashboard);
-  const [range, setRange] = useState<Range>("today");
+  const [range, setRange] = useState<Range>("week");
   const [rangeOpen, setRangeOpen] = useState(false);
   const [rangeMenuVisible, setRangeMenuVisible] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
@@ -452,7 +447,7 @@ export function ProfileScreen({
   const trackerRevisions = trackerTotalFor("revision");
   const loggedMocks =
     trackerTotalFor("mock-test") + mockTests.filter((test) => withinRange(test.date, range)).length;
-  const activeRangeLabel = ranges.find((item) => item.key === range)?.label ?? "Today";
+  const activeRangeLabel = ranges.find((item) => item.key === range)?.label ?? "This week";
   const changeRange = (next: Range) => {
     setRange(next);
     setRangeOpen(false);
@@ -553,7 +548,7 @@ export function ProfileScreen({
             style={[styles.profileStreak, streak > 0 && styles.profileStreakActive]}
           >
             {streak > 0 ? <StreakFlame streak={streak} /> : <MaterialCommunityIcons name="fire" size={15} color="#a1a1aa" />}
-            <ProfileNumberFlow value={streak} style={[styles.profileStreakText, streak > 0 && styles.profileStreakTextActive]} />
+            <ProfileNumber value={streak} style={[styles.profileStreakText, streak > 0 && styles.profileStreakTextActive]} />
           </View>
           <View style={[styles.avatar, { width: 70, height: 70, borderRadius: 35 }]}>
             <Pressable onPress={() => setViewingAvatar(true)}>
@@ -575,7 +570,7 @@ export function ProfileScreen({
               <Text style={styles.name} numberOfLines={1}>
                 {name}
               </Text>
-              {leaderboardRank !== null && <View style={styles.weeklyRank}>{leaderboardRank <= 3 ? <Image source={rankMedals[leaderboardRank - 1]} style={styles.weeklyRankMedal} /> : <MaterialCommunityIcons name="trophy-outline" size={12} color="#fcd34d" />}<ProfileNumberFlow value={leaderboardRank} prefix="#" style={styles.weeklyRankText} /></View>}
+              {leaderboardRank !== null && <View style={styles.weeklyRank}>{leaderboardRank <= 3 ? <Image source={rankMedals[leaderboardRank - 1]} style={styles.weeklyRankMedal} /> : <MaterialCommunityIcons name="trophy-outline" size={12} color="#fcd34d" />}<ProfileNumber value={leaderboardRank} prefix="#" style={styles.weeklyRankText} /></View>}
               {!readOnly && <View style={styles.profileActions}>
                 <Pressable
                   accessibilityLabel="Edit profile"
@@ -592,8 +587,8 @@ export function ProfileScreen({
               </View>}
             </View>
             <Pressable accessibilityRole="button" accessibilityLabel="View XP level roadmap" style={styles.xpBlock} onPress={() => setXpTimelineOpen(true)}>
-              <Text style={[styles.xpText, xpSummary.xp < 0 && styles.xpNegative]}>Lv. {xpSummary.level} · {levelName(xpSummary.level)} · {xpSummary.xp > 0 ? "+" : ""}{xpSummary.xp} XP</Text>
-              {xpSummary.level > 0 && <View style={styles.xpTrack}><View style={[styles.xpFill, { width: `${xpSummary.progress * 100}%` }]} /></View>}
+              <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 3 }}><Text style={styles.xpText}>Lv.</Text><ProfileNumber value={xpSummary.level} style={styles.xpText} /><Text style={styles.xpText}>· {levelName(xpSummary.level)} ·</Text><ProfileNumber value={xpSummary.xp} prefix={xpSummary.xp > 0 ? "+" : ""} suffix=" XP" style={[styles.xpText, xpSummary.xp < 0 && styles.xpNegative]} /></View>
+              {xpSummary.level > 0 && <ProfileXpBar progress={xpSummary.progress} />}
             </Pressable>
           </View>
         </View>
@@ -983,7 +978,7 @@ export function ProfileScreen({
         <Pressable style={styles.xpDialogBackdrop} onPress={() => setXpTimelineOpen(false)}>
           <Pressable style={styles.xpDialog} onPress={() => undefined}>
             <View style={styles.xpDialogHeader}><View><Text style={styles.xpDialogEyebrow}>YOUR XP PATH</Text><Text style={styles.xpDialogTitle}>Level {xpSummary.level} · {levelName(xpSummary.level)}</Text></View><Pressable hitSlop={10} onPress={() => setXpTimelineOpen(false)}><MaterialCommunityIcons name="close" size={20} color={colors.muted} /></Pressable></View>
-            <View style={styles.xpTimeline}><View style={styles.xpTimelineRail} /><Animated.View style={[styles.xpTimelineFill, { height: xpTimelineProgress.interpolate({ inputRange: [0, 1], outputRange: [0, xpTimelineFillHeight] }) }]} />{xpTimelineLevels.map((level) => { const reached = xpSummary.level >= level; const current = xpSummary.level === level; const required = current ? `${xpSummary.xp > 0 ? "+" : ""}${xpSummary.xp} XP · ${Math.max(0, xpSummary.nextLevelXp - xpSummary.xp)} XP to Level ${xpSummary.level + 1}` : level === 0 ? "Below 0 XP" : `${xpForLevel(level)} XP`; return <View key={level} style={styles.xpTimelineRow}><View style={[styles.xpTimelineDot, reached && styles.xpTimelineDotReached, current && styles.xpTimelineDotCurrent]} /><View style={[styles.xpTimelineCopy, current && styles.xpTimelineCopyCurrent]}><Text style={[styles.xpTimelineName, current && styles.xpTimelineNameCurrent]}>Lv. {level} · {levelName(level)}</Text><Text style={styles.xpTimelineRequirement}>{required}</Text></View></View>; })}</View>
+            {xpTimelineOpen && <View style={styles.xpTimeline}>{xpTimelineLevels.map((level) => { const reached = xpSummary.level >= level; const current = xpSummary.level === level; const required = current ? `${xpSummary.xp > 0 ? "+" : ""}${xpSummary.xp} XP · ${Math.max(0, xpSummary.nextLevelXp - xpSummary.xp)} XP to Level ${xpSummary.level + 1}` : level === 0 ? "Below 0 XP" : `${xpForLevel(level)} XP`; return <View key={level} style={styles.xpTimelineRow}>{level < xpTimelineStart + 5 && <View style={styles.xpTimelineSegment}><LiquidProgressBar vertical progress={xpSegmentProgress(xpSummary.xp, level)} height={6} color="#a78bfa" label={`Level ${level} to ${level + 1} progress`} /></View>}<View style={[styles.xpTimelineDot, reached && styles.xpTimelineDotReached, current && styles.xpTimelineDotCurrent]} /><View style={[styles.xpTimelineCopy, current && styles.xpTimelineCopyCurrent]}><Text style={[styles.xpTimelineName, current && styles.xpTimelineNameCurrent]}>Lv. {level} · {levelName(level)}</Text><Text style={styles.xpTimelineRequirement}>{required}</Text></View></View>; })}</View>}
           </Pressable>
         </Pressable>
       </Modal>
@@ -1014,32 +1009,18 @@ function Stat({
         lastRow && styles.statLastRow,
       ]}
     >
-      <AnimatedStatValue value={value} />
+      <ProfileStatValue value={value} />
       <Text style={styles.statLabel}>{label}</Text>
     </View>
   );
 }
 
-function AnimatedStatValue({ value }: { value: string }) {
-  const isDuration = /[hm]/.test(value);
-  const target = useMemo(() => {
-    const hours = /^(\d+)h(?:\s+(\d+)m)?$/.exec(value);
-    if (hours) return Number(hours[1]) * 60 + Number(hours[2] ?? 0);
-    const minutes = /^(\d+)m$/.exec(value);
-    return minutes ? Number(minutes[1]) : Number(value) || 0;
-  }, [value]);
-  if (!isDuration) return <ProfileNumberFlow value={target} />;
-
-  const hours = Math.floor(target / 60);
-  const minutes = target % 60;
-  return <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: hours > 0 && minutes > 0 ? 3 : 0 }}>
-    {hours > 0 && <ProfileNumberFlow value={hours} suffix="h" />}
-    {(hours === 0 || minutes > 0) && <ProfileNumberFlow value={minutes} suffix="m" />}
-  </View>;
+function ProfileStatValue({ value }: { value: string }) {
+  return <Text style={styles.statValue}>{value}</Text>;
 }
 
-function ProfileNumberFlow({ value, prefix = "", suffix = "", style = styles.statValue }: { value: number; prefix?: string; suffix?: string; style?: any }) {
-  return <Text style={style}>{`${prefix}${value}${suffix}`}</Text>;
+function ProfileNumber({ value, prefix = "", suffix = "", style = styles.statValue }: { value: number; prefix?: string; suffix?: string; style?: any }) {
+  return <NumberFlow value={value} prefix={prefix} suffix={suffix} style={{ ...StyleSheet.flatten(style), fontVariant: ["tabular-nums"] }} />;
 }
 
 type HeatmapTrackerActivity = {
@@ -1332,9 +1313,9 @@ function ActivityHeatmap({
       <View style={styles.heatmapHeading}>
         {activityEnabled ? <>
           <View style={styles.heatmapFacts}>
-            <View style={styles.heatmapFact}><ProfileNumberFlow value={activeDays} style={styles.heatmapNumber} /><Text style={styles.heatmapMuted}> active days</Text></View>
+            <View style={styles.heatmapFact}><ProfileNumber value={activeDays} style={styles.heatmapNumber} /><Text style={styles.heatmapMuted}> active days</Text></View>
             <Text style={styles.heatmapMuted}>·</Text>
-            <View style={styles.heatmapFact}><ProfileNumberFlow value={streak} style={styles.heatmapNumber} /><Text style={styles.heatmapMuted}> max streak</Text></View>
+            <View style={styles.heatmapFact}><ProfileNumber value={streak} style={styles.heatmapNumber} /><Text style={styles.heatmapMuted}> max streak</Text></View>
           </View>
           <View style={styles.heatmapToggle} onLayout={(event) => setToggleWidth(event.nativeEvent.layout.width - 4)}>
             {toggleWidth > 0 ? (
@@ -1345,11 +1326,11 @@ function ActivityHeatmap({
             {(["activity", "tasks"] as const).map((option) => <Pressable key={option} onPress={() => setMode(option)} style={styles.heatmapToggleOption}><Text style={[styles.heatmapToggleText, mode === option && styles.heatmapToggleTextActive]}>{option === "activity" ? "Activity" : "Tasks"}</Text></Pressable>)}
           </View>
         </> : <>
-          <View style={styles.heatmapFact}><ProfileNumberFlow value={total} style={styles.heatmapNumber} /><Text style={styles.heatmapMuted}> tasks completed</Text></View>
+          <View style={styles.heatmapFact}><ProfileNumber value={total} style={styles.heatmapNumber} /><Text style={styles.heatmapMuted}> tasks completed</Text></View>
           <View style={styles.heatmapFacts}>
-            <View style={styles.heatmapFact}><ProfileNumberFlow value={activeDays} style={styles.heatmapNumber} /><Text style={styles.heatmapMuted}> active days</Text></View>
+            <View style={styles.heatmapFact}><ProfileNumber value={activeDays} style={styles.heatmapNumber} /><Text style={styles.heatmapMuted}> active days</Text></View>
             <Text style={styles.heatmapMuted}>·</Text>
-            <View style={styles.heatmapFact}><ProfileNumberFlow value={streak} style={styles.heatmapNumber} /><Text style={styles.heatmapMuted}> max streak</Text></View>
+            <View style={styles.heatmapFact}><ProfileNumber value={streak} style={styles.heatmapNumber} /><Text style={styles.heatmapMuted}> max streak</Text></View>
           </View>
         </>}
       </View>
@@ -1417,9 +1398,10 @@ function ActivityHeatmap({
             year: "numeric",
           })}
         </Text>
-        <Text style={styles.heatmapMuted}>
-          {selected} {mode === "tasks" ? `task${selected === 1 ? "" : "s"} completed` : `activit${selected === 1 ? "y" : "ies"}`}
-        </Text>
+        <View style={styles.heatmapFact}>
+          <ProfileNumber value={selected} style={styles.heatmapMuted} />
+          <Text style={styles.heatmapMuted}> {mode === "tasks" ? `task${selected === 1 ? "" : "s"} completed` : `activit${selected === 1 ? "y" : "ies"}`}</Text>
+        </View>
       </View>
       <NativeScrollView nestedScrollEnabled showsVerticalScrollIndicator={false} style={styles.activityList} contentContainerStyle={styles.activityListContent}>
         {!dataReady && mode === "activity" ? (
@@ -1431,7 +1413,7 @@ function ActivityHeatmap({
               <Text numberOfLines={1} style={styles.activityText}>
                 <Text style={styles.activityTitle}>{row.label}</Text> · {row.detail}
               </Text>
-              <Text style={styles.activityCount}>×{row.count}</Text>
+              <ProfileNumber value={row.count} prefix="×" style={styles.activityCount} />
             </View>
           ))
         ) : (
@@ -1570,33 +1552,11 @@ function TrackerCard({
   onPress: () => void;
 }) {
   const entrance = useRef(new Animated.Value(0)).current;
-  const [fillProgress, setFillProgress] = useState(0);
-  const signature = rows.map((row) => `${row.subject}:${row.completed}:${row.total}`).join("|");
   useEffect(() => {
-    entrance.setValue(0);
-    setFillProgress(0);
-    Animated.timing(entrance, {
-      toValue: 1,
-      duration: 320,
-      delay: index * 85,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start();
-    let frame = 0;
-    const startedAt = Date.now() + 100 + index * 85;
-    const animateFill = () => {
-      const elapsed = Date.now() - startedAt;
-      if (elapsed < 0) {
-        frame = requestAnimationFrame(animateFill);
-        return;
-      }
-      const progress = Math.min(1, elapsed / 650);
-      setFillProgress(1 - Math.pow(1 - progress, 3));
-      if (progress < 1) frame = requestAnimationFrame(animateFill);
-    };
-    frame = requestAnimationFrame(animateFill);
-    return () => cancelAnimationFrame(frame);
-  }, [entrance, index, signature]);
+    const animation = Animated.timing(entrance, { toValue: 1, duration: 320, delay: index * 85, easing: Easing.out(Easing.cubic), useNativeDriver: true });
+    animation.start();
+    return () => animation.stop();
+  }, [entrance, index]);
   return (
     <Animated.View
       style={{
@@ -1621,14 +1581,7 @@ function TrackerCard({
               <Text style={styles.trackerRowName} numberOfLines={1}>
                 {row.subject}
               </Text>
-              <View style={styles.trackerBar}>
-                <View
-                  style={[
-                    styles.trackerBarFill,
-                    { backgroundColor: tone, width: `${target * fillProgress}%` },
-                  ]}
-                />
-              </View>
+              <LiquidProgressBar progress={target / 100} color={tone} height={6} style={[styles.trackerBar, { height: 6 }]} />
               <Text style={styles.trackerRowCount}>
                 {row.completed}/{row.total}
               </Text>
@@ -2122,9 +2075,8 @@ const styles: Record<string, any> = StyleSheet.create({
   xpDialogHint: { marginTop: 3, color: "#a1a1aa", fontSize: 11 },
   xpDialogTrack: { height: 5, overflow: "hidden", borderRadius: 5, backgroundColor: "#303030", marginTop: 10 },
   xpTimeline: { position: "relative", marginTop: 20, gap: 10 },
-  xpTimelineRail: { position: "absolute", top: 12, bottom: 28, left: 5, width: 1, backgroundColor: "#373737" },
-  xpTimelineFill: { position: "absolute", top: 12, left: 5, width: 2, borderRadius: 2, backgroundColor: "#a78bfa" },
-  xpTimelineRow: { minHeight: 42, flexDirection: "row", alignItems: "flex-start", gap: 10 },
+  xpTimelineSegment: { position: "absolute", top: 13, bottom: -23, left: 2, width: 6 },
+  xpTimelineRow: { position: "relative", minHeight: 42, flexDirection: "row", alignItems: "flex-start", gap: 10 },
   xpTimelineDot: { zIndex: 1, width: 11, height: 11, marginTop: 8, borderRadius: 6, borderWidth: 2, borderColor: "#1a1a1a", backgroundColor: "#454545" },
   xpTimelineDotReached: { backgroundColor: "#a78bfa" },
   xpTimelineDotCurrent: { width: 12, height: 12, borderRadius: 6, backgroundColor: "#c4b5fd" },

@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getFirebaseAuth, loadQuickRecallSeed } from "../lib/firebase";
+import { mergeRecallLearning, filterRecallScope, selectRecallQuestions } from "./recall-selection";
 
 export type QuizChoice = "A" | "B" | "C" | "D";
 export type UnlockQuestion = {
@@ -7,12 +8,14 @@ export type UnlockQuestion = {
   subjectId: string;
   subject: string;
   chapter: string;
+  exerciseId: string;
+  exercise: string;
   question: string;
   options: [string, string, string, string];
   correctAnswer: QuizChoice;
   explanation?: string;
 };
-export type QuickRecallScope = { subjectId: string; chapter: string };
+export type QuickRecallScope = { subjectId: string; chapter: string; exerciseId?: string };
 export const RANDOM_RECALL_SCOPE = "random";
 
 type LearningStat = { askedCount: number; correctCount: number; wrongCount: number; lastAskedAt: string; lastOutcome: "correct" | "wrong" };
@@ -43,7 +46,6 @@ const makeRunId = () => `quick-recall-${Date.now()}-${Math.random().toString(36)
 
 const isChoice = (value: unknown): value is QuizChoice => typeof value === "string" && choices.includes(value as QuizChoice);
 const questionKey = (question: Pick<UnlockQuestion, "subjectId" | "id">) => `${question.subjectId}:${question.id}`;
-const accuracyPriority = (stat?: LearningStat) => !stat?.askedCount ? 0 : (1 - stat.correctCount / stat.askedCount) * 25;
 
 function practiceStats(records: any[]) {
   const performance = new Map<string, PracticePerformance>();
@@ -78,7 +80,7 @@ function asQuestions() {
       const answer = item?.correctAnswer;
       if (!item?.id || !item?.question || !Array.isArray(item?.options) || item.options.length !== 4 || !isChoice(answer)) return;
       questions.push({
-        id: String(item.id), subjectId: String(subject.id ?? subject.name ?? "general"), subject: String(subject.name ?? "General"), chapter: String(chapter.name ?? "Practice"),
+        id: String(item.id), subjectId: String(subject.id ?? subject.name ?? "general"), subject: String(subject.name ?? "General"), chapter: String(chapter.name ?? "Practice"), exerciseId: String(exercise.id ?? exercise.name ?? "Exercise 1"), exercise: String(exercise.name ?? "Exercise 1"),
         question: String(item.question), options: item.options as [string, string, string, string], correctAnswer: answer, explanation: typeof item.explanation === "string" ? item.explanation : "",
       });
     }))));
@@ -92,9 +94,7 @@ export async function loadUnlockQuiz(): Promise<UnlockQuizState | null> {
 
 async function save(state: UnlockQuizState) { await AsyncStorage.setItem(STORE, JSON.stringify(state)); return state; }
 
-const shuffle = <T,>(items: T[]) => [...items].sort(() => Math.random() - 0.5);
-
-/** Builds a 3-question same-subject session, favouring favourites and earlier mistakes. */
+/** Builds a balanced same-subject session, cooling down recent answers. */
 export async function startUnlockQuiz(scope: QuickRecallScope = { subjectId: RANDOM_RECALL_SCOPE, chapter: RANDOM_RECALL_SCOPE }): Promise<UnlockQuizState | null> {
   const local = await asQuestions();
   const user = getFirebaseAuth().currentUser;
@@ -103,38 +103,10 @@ export async function startUnlockQuiz(scope: QuickRecallScope = { subjectId: RAN
   const { questions, favourites, practice } = source;
   if (!questions.length) return null;
   const old = await loadUnlockQuiz();
-  const stats = (remote?.stats as unknown as Record<string, LearningStat> | undefined) ?? old?.stats ?? {};
-  const scopedQuestions = questions.filter((item) => (scope.subjectId === RANDOM_RECALL_SCOPE || item.subjectId === scope.subjectId) && (scope.chapter === RANDOM_RECALL_SCOPE || item.chapter === scope.chapter));
+  const stats = mergeRecallLearning((remote?.stats ?? {}) as Record<string, LearningStat>, old?.stats ?? {});
+  const scopedQuestions = filterRecallScope(questions, scope);
   if (!scopedQuestions.length) return null;
-  const allSubjects = [...new Set(scopedQuestions.map((item) => item.subjectId))];
-  // A full unlock sprint must remain within one subject. Prefer only subjects
-  // with at least three question-bank questions; fall back gracefully while a
-  // new bank is still being built.
-  const subjects = allSubjects.filter((id) => scopedQuestions.filter((item) => item.subjectId === id).length >= 3);
-  const eligibleSubjects = subjects.length ? subjects : allSubjects;
-  const subjectId = eligibleSubjects
-    .map((id) => {
-      const items = scopedQuestions.filter((item) => item.subjectId === id);
-      const score = items.reduce((total, item) => {
-        const stat = stats[questionKey(item)];
-        const normal = practice.get(questionKey(item)); const askedCount = (normal?.askedCount ?? 0) + (stat?.askedCount ?? 0); const correctCount = (normal?.correctCount ?? 0) + (stat?.correctCount ?? 0);
-        return total + (favourites.has(item.id) ? 24 : 0) + (normal?.wrongCount ?? 0) * 16 + (stat?.wrongCount ?? 0) * 8 + accuracyPriority({ askedCount, correctCount, wrongCount: 0, lastAskedAt: "", lastOutcome: "correct" }) - askedCount * 1.5;
-      }, 0);
-      return { id, score: score + Math.random() * 4 };
-    })
-    .sort((a, b) => b.score - a.score)[0]?.id;
-  const pool = scopedQuestions.filter((item) => item.subjectId === subjectId);
-  const ordered = shuffle(pool).sort((left, right) => {
-    const leftStat = stats[questionKey(left)];
-    const rightStat = stats[questionKey(right)];
-    const leftNormal = practice.get(questionKey(left)); const rightNormal = practice.get(questionKey(right));
-    const leftAsked = (leftNormal?.askedCount ?? 0) + (leftStat?.askedCount ?? 0); const rightAsked = (rightNormal?.askedCount ?? 0) + (rightStat?.askedCount ?? 0);
-    const leftCorrect = (leftNormal?.correctCount ?? 0) + (leftStat?.correctCount ?? 0); const rightCorrect = (rightNormal?.correctCount ?? 0) + (rightStat?.correctCount ?? 0);
-    const leftScore = (favourites.has(left.id) ? 1000 : 0) + (leftNormal?.wrongCount ?? 0) * 100 + (leftStat?.wrongCount ?? 0) * 50 + accuracyPriority({ askedCount: leftAsked, correctCount: leftCorrect, wrongCount: 0, lastAskedAt: "", lastOutcome: "correct" }) - leftAsked;
-    const rightScore = (favourites.has(right.id) ? 1000 : 0) + (rightNormal?.wrongCount ?? 0) * 100 + (rightStat?.wrongCount ?? 0) * 50 + accuracyPriority({ askedCount: rightAsked, correctCount: rightCorrect, wrongCount: 0, lastAskedAt: "", lastOutcome: "correct" }) - rightAsked;
-    return rightScore - leftScore;
-  });
-  const selected = ordered.slice(0, Math.min(3, ordered.length));
+  const selected = selectRecallQuestions(scopedQuestions, favourites, stats, practice);
   return save({ runId: makeRunId(), startedAt: new Date().toISOString(), status: "active", subject: selected[0]?.subject ?? "General", questions: selected, index: 0, correct: 0, answers: [], stats });
 }
 
@@ -142,7 +114,7 @@ function toQuestionSource(seed: Awaited<ReturnType<typeof loadQuickRecallSeed>>)
   const questions: UnlockQuestion[] = [];
   seed.subjects.forEach((subject: any) => subject?.chapters?.forEach((chapter: any) => chapter?.exercises?.forEach((exercise: any) => exercise?.questions?.forEach((item: any) => {
     if (!item?.id || !item?.question || !Array.isArray(item?.options) || item.options.length !== 4 || !isChoice(item?.correctAnswer)) return;
-    questions.push({ id: String(item.id), subjectId: String(subject.id ?? subject.name ?? "general"), subject: String(subject.name ?? "General"), chapter: String(chapter?.name ?? "Practice"), question: String(item.question), options: item.options as [string, string, string, string], correctAnswer: item.correctAnswer, explanation: typeof item.explanation === "string" ? item.explanation : "" });
+    questions.push({ id: String(item.id), subjectId: String(subject.id ?? subject.name ?? "general"), subject: String(subject.name ?? "General"), chapter: String(chapter?.name ?? "Practice"), exerciseId: String(exercise.id ?? exercise.name ?? "Exercise 1"), exercise: String(exercise.name ?? "Exercise 1"), question: String(item.question), options: item.options as [string, string, string, string], correctAnswer: item.correctAnswer, explanation: typeof item.explanation === "string" ? item.explanation : "" });
   }))));
   return { questions, favourites: new Set(seed.favourites), practice: practiceStats(seed.attempts) };
 }

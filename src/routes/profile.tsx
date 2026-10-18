@@ -19,6 +19,8 @@ import {
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AppShell } from "@/components/layout/AppShell";
+import { RollingNumber, RollingDuration } from "@/components/ui/rolling-number";
+import { LiquidProgressBar, ProfileXpBar } from "@/components/profile/ProfileXpBar";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -52,7 +54,7 @@ import { checkUsernameAvailability, normalizeUsername, saveProfileWithUsername, 
 import type { PublicProfile } from "@/lib/firebase-sync";
 import { formatDuration, loadDailyTasks, type DailyTask } from "@/lib/daily-tasks";
 import { currentWeekKey, watchLeaderboard } from "@/lib/leaderboard";
-import { getXpSummary, levelName, xpForLevel } from "@/lib/xp";
+import { getXpSummary, levelName, xpForLevel, xpSegmentProgress } from "@/lib/xp";
 
 const title = "Profile";
 const description = "Your yearly practice activity and progress.";
@@ -134,7 +136,7 @@ function DayActivityDetails({ date, items }: { date: string; items: DayActivityD
       <div className="flex items-center justify-between gap-3">
         <span className="font-medium text-zinc-100">{formatDate(date)}</span>
         <span className="text-zinc-500">
-          {total} activit{total === 1 ? "y" : "ies"}
+          <RollingNumber value={total} /> activit{total === 1 ? "y" : "ies"}
         </span>
       </div>
       {items.length ? (
@@ -153,7 +155,7 @@ function DayActivityDetails({ date, items }: { date: string; items: DayActivityD
                   <span className="text-zinc-100">{item.label}</span> · {item.detail}
                 </span>
               </span>
-              <span className="shrink-0 font-mono text-zinc-500">×{item.count}</span>
+              <span className="shrink-0 font-mono text-zinc-500"><RollingNumber value={item.count} prefix="×" /></span>
             </li>
           ))}
         </ul>
@@ -386,17 +388,17 @@ function ActivityHeatmap({
     <section className="overflow-visible py-3 text-zinc-100 sm:py-4">
       <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-2 text-sm">
         <p className="text-zinc-400">
-          {totalActivity} {mode === "tasks" ? "tasks completed" : "activities"} · {rangeLabels[range].toLowerCase()}
+          <RollingNumber value={totalActivity} /> {mode === "tasks" ? "tasks completed" : "activities"} · {rangeLabels[range].toLowerCase()}
         </p>
         <div className="ml-auto flex flex-wrap items-center justify-end gap-x-5 gap-y-2">
           <p className="text-zinc-400">
             <span className="inline-flex items-center gap-2">
-              <span className="font-semibold text-zinc-100">{activeDays}</span>
+              <span className="font-semibold text-zinc-100"><RollingNumber value={activeDays} /></span>
               <span>active days</span>
             </span>
             <span className="mx-3 text-zinc-600 sm:mx-4">·</span>
             <span className="inline-flex items-center gap-2">
-              <span className="font-semibold text-zinc-100">{maxStreak}</span>
+              <span className="font-semibold text-zinc-100"><RollingNumber value={maxStreak} /></span>
               <span>max streak</span>
             </span>
           </p>
@@ -510,32 +512,6 @@ function defaultAvatar(name: string, files: string[]) {
 
 function avatarUrl(file: string) {
   return `/avatars/${encodeURIComponent(file)}`;
-}
-
-function AnimatedNumber({ value }: { value: number }) {
-  const [displayValue, setDisplayValue] = useState(value);
-  const displayValueRef = useRef(value);
-
-  useEffect(() => {
-    const startValue = displayValueRef.current;
-    const difference = value - startValue;
-    if (!difference) return;
-    const startedAt = performance.now();
-    const duration = 360;
-    let frame = 0;
-    const animate = (now: number) => {
-      const progress = Math.min(1, (now - startedAt) / duration);
-      const eased = 1 - (1 - progress) ** 3;
-      const next = Math.round(startValue + difference * eased);
-      displayValueRef.current = next;
-      setDisplayValue(next);
-      if (progress < 1) frame = requestAnimationFrame(animate);
-    };
-    frame = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(frame);
-  }, [value]);
-
-  return <>{displayValue}</>;
 }
 
 function StatCell({ label, children }: { label: string; children: ReactNode }) {
@@ -663,17 +639,17 @@ function TargetProgress({
       </div>
       {showPractice && <div className="grid grid-cols-2 divide-x-0 divide-y divide-white/10 px-2 py-1.5 sm:grid-cols-5 sm:divide-x sm:divide-y-0 sm:px-3">
         <StatCell label="Question goal">
-          <AnimatedNumber value={goal} />
+          <RollingNumber value={goal} />
         </StatCell>
         <StatCell label="Practice sessions">
-          <AnimatedNumber value={tests} />
+          <RollingNumber value={tests} />
         </StatCell>
         <StatCell label="Questions done">
-          <AnimatedNumber value={attempted} />
+          <RollingNumber value={attempted} />
         </StatCell>
         {practiceStats.slice(1).map(({ label, value }) => (
           <StatCell key={label} label={label}>
-            <AnimatedNumber value={value} />
+            <RollingNumber value={value} />
           </StatCell>
         ))}
       </div>}
@@ -683,24 +659,24 @@ function TargetProgress({
       {showTracker && <div className="grid grid-cols-3 divide-x divide-y divide-white/10 px-2 py-1.5 sm:grid-cols-6 sm:divide-y-0 sm:px-3">
         {trackerStats.map(({ label, value }) => (
           <StatCell key={label} label={label}>
-            <AnimatedNumber value={value} />
+            <RollingNumber value={value} />
           </StatCell>
         ))}
-        <StatCell label="Study time">{formatDuration(studyMinutes)}</StatCell>
+        <StatCell label="Study time"><RollingDuration minutes={studyMinutes} /></StatCell>
         <StatCell label="Tasks completed">
-          <AnimatedNumber value={completedTasks} />
+          <RollingNumber value={completedTasks} />
         </StatCell>
         <StatCell label="Incomplete tasks">
-          <AnimatedNumber value={incompleteTasks} />
+          <RollingNumber value={incompleteTasks} />
         </StatCell>
       </div>}
       {!showTracker && <div className="grid grid-cols-3 divide-x divide-y divide-white/10 px-2 py-1.5 sm:divide-y-0 sm:px-3">
-        <StatCell label="Study time">{formatDuration(studyMinutes)}</StatCell>
+        <StatCell label="Study time"><RollingDuration minutes={studyMinutes} /></StatCell>
         <StatCell label="Tasks completed">
-          <AnimatedNumber value={completedTasks} />
+          <RollingNumber value={completedTasks} />
         </StatCell>
         <StatCell label="Incomplete tasks">
-          <AnimatedNumber value={incompleteTasks} />
+          <RollingNumber value={incompleteTasks} />
         </StatCell>
       </div>}
     </section>
@@ -721,12 +697,7 @@ function TrackerRow({
   return (
     <div className="grid grid-cols-[5.5rem_minmax(0,1fr)_auto] items-center gap-2 py-1.5 text-sm sm:grid-cols-[7rem_minmax(0,1fr)_auto]">
       <span className="truncate text-zinc-300">{label}</span>
-      <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
-        <div
-          className={`h-full rounded-full ${tone}`}
-          style={{ width: `${Math.min(100, pct(done, total))}%` }}
-        />
-      </div>
+      <LiquidProgressBar progress={pct(done, total) / 100} color={tone === "bg-emerald-500" ? "#10b981" : tone === "bg-violet-500" ? "#8b5cf6" : "#3b82f6"} />
       <span className="font-mono text-xs text-zinc-500">
         {done}/{total}
       </span>
@@ -861,7 +832,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
   const [records, setRecords] = useState<TestRecord[]>([]);
   const [dailyTasks, setDailyTasks] = useState<DailyTask[]>([]);
   const [tracker, setTracker] = useState<TrackerData | null>(null);
-  const [range, setRange] = useState<ActivityRange>("today");
+  const [range, setRange] = useState<ActivityRange>("week");
   const [profile, setProfile] = useState<PracticeProfile | null>(null);
   const [editingProfile, setEditingProfile] = useState(false);
   const [importingData, setImportingData] = useState(false);
@@ -887,7 +858,6 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
   const [promptCopied, setPromptCopied] = useState(false);
   const [leaderboardRank, setLeaderboardRank] = useState<number | null>(null);
   const [xpTimelineOpen, setXpTimelineOpen] = useState(false);
-  const [xpTimelineAnimated, setXpTimelineAnimated] = useState(false);
   const importFileRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const authUser = useAuthUser();
@@ -1028,8 +998,6 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
   const xpNextLabel = xpSummary.level === 0 ? "Reach 0 XP to begin" : `${Math.max(0, xpSummary.nextLevelXp - xpSummary.xp)} XP to Level ${xpSummary.level + 1}`;
   const xpTimelineStart = Math.max(0, xpSummary.level - 3);
   const xpTimelineLevels = Array.from({ length: 6 }, (_, index) => xpTimelineStart + index);
-  const xpTimelineFill = ((xpSummary.level - xpTimelineStart + xpSummary.progress) / 5) * 100;
-  useEffect(() => { if (!xpTimelineOpen) { setXpTimelineAnimated(false); return; } const frame = requestAnimationFrame(() => setXpTimelineAnimated(true)); return () => cancelAnimationFrame(frame); }, [xpTimelineOpen]);
   const saveProfile = async () => {
     if (!nameDraft.trim() || Number(goalDraft) < 1 || isSavingProfile || (authUser && usernameStatus !== "available")) return;
     setIsSavingProfile(true);
@@ -1228,8 +1196,8 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
                 </Button>}
               </div>
               <button type="button" onClick={() => setXpTimelineOpen(true)} className="mt-1 w-full max-w-52 text-center outline-none sm:text-left">
-                <span className={`text-xs font-semibold ${xpSummary.xp > 0 ? "text-emerald-300" : xpSummary.xp < 0 ? "text-red-300" : "text-zinc-400"}`}>Lv. {xpSummary.level} · {levelName(xpSummary.level)} · {xpSummary.xp > 0 ? "+" : ""}{xpSummary.xp} XP</span>
-                {xpSummary.level > 0 && <div className="mt-1 h-1 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-violet-400 transition-[width] duration-500" style={{ width: `${xpSummary.progress * 100}%` }} /></div>}
+                <span className={`text-xs font-semibold ${xpSummary.xp > 0 ? "text-emerald-300" : xpSummary.xp < 0 ? "text-red-300" : "text-zinc-400"}`}>Lv. <RollingNumber value={xpSummary.level} /> · {levelName(xpSummary.level)} · <RollingNumber value={xpSummary.xp} prefix={xpSummary.xp > 0 ? "+" : ""} suffix=" XP" /></span>
+                {xpSummary.level > 0 && <ProfileXpBar progress={xpSummary.progress} />}
               </button>
               {readOnly && publicProfile?.username && <div className="mt-0 flex flex-wrap items-center justify-center gap-1.5 sm:justify-start">
                 <Button type="button" variant="ghost" className="h-9 gap-1.5 px-2.5 text-sm text-zinc-300 hover:bg-white/10 hover:text-white" onClick={() => void navigate({ to: "/weekly-stats/$username", params: { username: publicProfile.username } })}>
@@ -1489,7 +1457,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
       <Dialog open={xpTimelineOpen} onOpenChange={setXpTimelineOpen}>
         <DialogContent className="border-white/10 bg-[#1b1b1b] p-5 text-zinc-100 sm:max-w-sm">
           <DialogHeader><DialogTitle>Level {xpSummary.level} · {levelName(xpSummary.level)}</DialogTitle><DialogDescription className="text-zinc-400">Your all-time XP path</DialogDescription></DialogHeader>
-          <div className="relative space-y-2 pt-2 before:absolute before:top-4 before:bottom-9 before:left-[5px] before:w-px before:bg-zinc-700"><span className="absolute top-4 left-[5px] z-[1] w-px origin-top bg-violet-400 transition-[height] duration-700 ease-out" style={{ height: xpTimelineAnimated ? `${xpTimelineFill}%` : "0%" }} />{xpTimelineLevels.map((level) => { const current = level === xpSummary.level; const reached = level <= xpSummary.level; const detail = current ? `${xpSummary.xp > 0 ? "+" : ""}${xpSummary.xp} XP · ${Math.max(0, xpSummary.nextLevelXp - xpSummary.xp)} XP to Level ${xpSummary.level + 1}` : level === 0 ? "Below 0 XP" : `${xpForLevel(level)} XP`; return <div key={level} className="relative flex items-start gap-3"><span className={`z-10 mt-2 h-2.5 w-2.5 shrink-0 rounded-full border-2 border-[#1b1b1b] ${current ? "bg-violet-300 ring-4 ring-violet-400/15" : reached ? "bg-violet-400" : "bg-zinc-700"}`} /><div className={`min-w-0 flex-1 rounded-lg px-3 py-2 ${current ? "border border-violet-300/20 bg-violet-400/[0.09]" : "bg-white/[0.025]"}`}><p className={`text-sm font-semibold ${current ? "text-white" : "text-zinc-300"}`}>Lv. {level} · {levelName(level)}</p><p className="text-xs text-zinc-500">{detail}</p></div></div>; })}</div>
+          <div className="relative space-y-2 pt-2">{xpTimelineLevels.map((level) => { const current = level === xpSummary.level; const reached = level <= xpSummary.level; const detail = current ? `${xpSummary.xp > 0 ? "+" : ""}${xpSummary.xp} XP · ${Math.max(0, xpSummary.nextLevelXp - xpSummary.xp)} XP to Level ${xpSummary.level + 1}` : level === 0 ? "Below 0 XP" : `${xpForLevel(level)} XP`; return <div key={level} className="relative flex items-start gap-3">{level < xpTimelineStart + 5 && <div className="absolute left-[2px] top-[13px] w-1.5" style={{ height: "calc(100% + 8px)" }}><LiquidProgressBar vertical height={6} progress={xpSegmentProgress(xpSummary.xp, level)} color="#a78bfa" label={`Level ${level} to ${level + 1} progress`} /></div>}<span className={`z-10 mt-2 h-2.5 w-2.5 shrink-0 rounded-full border-2 border-[#1b1b1b] ${current ? "bg-violet-300 ring-4 ring-violet-400/15" : reached ? "bg-violet-400" : "bg-zinc-700"}`} /><div className={`min-w-0 flex-1 rounded-lg px-3 py-2 ${current ? "border border-violet-300/20 bg-violet-400/[0.09]" : "bg-white/[0.025]"}`}><p className={`text-sm font-semibold ${current ? "text-white" : "text-zinc-300"}`}>Lv. {level} · {levelName(level)}</p><p className="text-xs text-zinc-500">{detail}</p></div></div>; })}</div>
         </DialogContent>
       </Dialog>
     </AppShell>

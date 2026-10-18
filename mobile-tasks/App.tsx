@@ -23,9 +23,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import Svg, { Circle } from "react-native-svg";
 import { NumberFlow } from "number-flow-react-native";
-import Reanimated, { Easing as ReanimatedEasing, useAnimatedProps, useSharedValue, withTiming } from "react-native-reanimated";
 import {
   createTaskId,
   dateKey,
@@ -39,6 +37,7 @@ import {
   type Task,
   type TaskType,
 } from "./src/domain/tasks";
+import { TaskRingFill } from "./src/components/TaskRingFill";
 import { TaskRow } from "./src/components/TaskRow";
 import { BottomNavigation } from "./src/components/BottomNavigation";
 import { type TabKey, tabs } from "./src/navigation/tabs";
@@ -68,7 +67,6 @@ void ExpoSplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 const rankMedals = [require("./assets/gold-medal.png"), require("./assets/silver-medal.png"), require("./assets/bronze-medal.png")];
 
-const ReanimatedCircle = Reanimated.createAnimatedComponent(Circle);
 type TaskRange = "today" | "week" | "month" | "3months" | "year";
 const TASK_RANGE_LABELS: Record<TaskRange, string> = { today: "Today", week: "This week", month: "This month", "3months": "Last 3 months", year: "This year" };
 const TASK_TABS = ["Tasks", "Analytics", "History"] as const;
@@ -108,40 +106,9 @@ const ScrollView = (props: any) => <NativeScrollView {...props} scrollEventThrot
 
 function CompletionRing({ percent }: { percent: number }) {
   const value = Math.max(0, Math.min(100, percent));
-  const progress = useSharedValue(0);
-  const size = 112;
-  const stroke = 10;
-  const radius = (size - stroke) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const ringAnimatedProps = useAnimatedProps(() => ({
-    strokeDashoffset: circumference * (1 - progress.value / 100),
-  }));
-
-  useEffect(() => {
-    progress.value = withTiming(value, {
-      duration: 760,
-      easing: ReanimatedEasing.out(ReanimatedEasing.cubic),
-    });
-  }, [progress, value]);
-
   return (
     <View style={styles.ring}>
-      <Svg width={size} height={size} style={styles.ringSvg}>
-        <Circle cx={size / 2} cy={size / 2} r={radius} fill="transparent" stroke="#343434" strokeWidth={stroke} />
-        <ReanimatedCircle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          fill="transparent"
-          stroke="#60a5fa"
-          strokeWidth={stroke}
-          strokeLinecap="round"
-          strokeDasharray={circumference}
-          animatedProps={ringAnimatedProps}
-          rotation="-90"
-          origin={`${size / 2}, ${size / 2}`}
-        />
-      </Svg>
+      <TaskRingFill percent={value} />
       <RollingMetric value={value} suffix="%" color="#fafafa" fontSize={25} />
     </View>
   );
@@ -729,7 +696,7 @@ export default function App() {
     setCustomSubject("");
     setAddSubjectDialog(false);
     setType("Practice Session");
-    setSchedule("today");
+    setSchedule(taskDay);
     setEditor("new");
   };
   const openEdit = (task: Task) => {
@@ -930,10 +897,12 @@ export default function App() {
             {todayTasks.length === 0 ? (
                 <Empty onPress={openNew} />
             ) : (
-              todayTasks.map((task) => (
+              todayTasks.map((task, index) => (
                 <TaskRow
                   key={task.id}
                   task={task}
+                  grouped
+                  last={index === todayTasks.length - 1}
                   points={taskPoints.get(task.id) ?? 0}
                   onDone={() => {
                     if (!canUseTaskRow()) return;
@@ -1164,6 +1133,7 @@ function TaskDropdown({ label, open, onToggle, options, onSelect, compact = fals
   }, [open, renderMenu, visibility]);
   return <View style={[styles.dropdownWrap, compact && styles.dropdownWrapCompact, open && styles.dropdownWrapOpen]}><Pressable style={[styles.dropdownTrigger, open && styles.dropdownTriggerOpen]} onPress={onToggle}><Text numberOfLines={1} style={styles.dropdownValue}>{label}</Text><View style={styles.dropdownChevronButton}><MaterialCommunityIcons name={open ? "chevron-up" : "chevron-down"} size={18} color="#a1a1aa" /></View></Pressable>{renderMenu && <Animated.View pointerEvents={open ? "auto" : "none"} style={[styles.dropdownMenu, { opacity: visibility, transform: [{ translateY: visibility.interpolate({ inputRange: [0, 1], outputRange: [-6, 0] }) }, { scale: visibility.interpolate({ inputRange: [0, 1], outputRange: [0.98, 1] }) }] }]}>{options.map((option) => { const selected = option.value === label || option.label === label; return <Pressable key={option.value} style={[styles.dropdownOption, selected && styles.dropdownOptionSelected]} onPress={() => onSelect(option.value)}><Text style={[styles.dropdownOptionText, selected && styles.dropdownOptionTextSelected]}>{option.label}</Text>{selected && <MaterialCommunityIcons name="check" size={16} color="#171717" />}</Pressable>; })}</Animated.View>}</View>;
 }
+
 function Empty({ onPress }: { onPress: () => void }) {
   return (
     <View style={styles.empty}>
@@ -1270,7 +1240,7 @@ const styles = StyleSheet.create({
   content: { position: "relative", padding: 20, gap: 12, paddingBottom: 60 },
   tasksContent: { paddingTop: 0 },
   tasksSticky: { backgroundColor: "#101010", paddingTop: 20, paddingBottom: 12 },
-  tasksList: { gap: 8 },
+  tasksList: { backgroundColor: "#1a1a1a", borderRadius: 13, paddingHorizontal: 10, overflow: "hidden" },
   heroHeadingActions: { flexDirection: "row", alignItems: "center", gap: 8 },
   livePoints: { flexDirection: "row", alignItems: "center", gap: 3 },
   pointsSpark: { width: 16, height: 16 },

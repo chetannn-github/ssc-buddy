@@ -1,4 +1,5 @@
-import { useEffect, useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
+import { LiquidProgressBar } from "../../../../src/components/profile/ProfileXpBar";
 
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
@@ -23,21 +24,11 @@ export function Bar({
   value: number;
   tone?: "blue" | "green" | undefined;
 }) {
-  const target = Math.max(0, Math.min(100, value));
-  const [displayValue, setDisplayValue] = useState(0);
-
-  useEffect(() => {
-    const frame = requestAnimationFrame(() => setDisplayValue(target));
-    return () => cancelAnimationFrame(frame);
-  }, [target]);
-
   return (
-    <div className="h-[6px] w-full overflow-hidden rounded-full bg-track">
-      <div
-        className={`h-full rounded-full transition-[width] duration-700 ease-out motion-reduce:transition-none ${tone === "green" ? "bg-accent-green" : "bg-accent-blue"}`}
-        style={{ width: `${displayValue}%` }}
-      />
-    </div>
+    <LiquidProgressBar
+      progress={value / 100}
+      color={tone === "green" ? "var(--accent-green)" : "var(--accent-blue)"}
+    />
   );
 }
 

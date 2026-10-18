@@ -32,12 +32,14 @@ export function TaskFormDialog({
   task,
   subjects,
   onSubmit,
+  defaultSchedule = "today",
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   task: DailyTask | null;
   subjects: string[];
   onSubmit: (draft: TaskDraft) => void | Promise<void>;
+  defaultSchedule?: "today" | "tomorrow";
 }) {
   const [name, setName] = useState("");
   const [subject, setSubject] = useState("Other");
@@ -57,8 +59,8 @@ export function TaskFormDialog({
     setType(task?.type ?? "Lecture");
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
-    setSchedule(task?.date === todayKey(tomorrow) ? "tomorrow" : "today");
-  }, [open, task, subjects]);
+    setSchedule(task ? (task.date === todayKey(tomorrow) ? "tomorrow" : "today") : defaultSchedule);
+  }, [open, task, subjects, defaultSchedule]);
   const submit = async () => {
     if (!name.trim() || isSaving) return;
     const date = new Date();

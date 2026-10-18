@@ -13,10 +13,12 @@ import {
 import { useAuthUser } from "@/lib/auth-context";
 import { loadQuickRecallSeed, recordQuickRecallAnswer, recordQuickRecallPractice, watchQuickRecallSeed, type QuickRecallSeed } from "@/lib/firebase-sync";
 
+import { ALL_RECALL_EXERCISES, filterRecallScope, mergeRecallLearning, selectRecallQuestions } from "../../mobile-tasks/src/domain/recall-selection";
+
 export const Route = createFileRoute("/quick-recall")({ component: QuickRecall });
 
-type RecallQuestion = McqQuestion & { subject: string; subjectId: string; chapter: string };
-type RecallScope = { subjectId: string; chapter: string };
+type RecallQuestion = McqQuestion & { subject: string; subjectId: string; chapter: string; exerciseId: string; exercise: string };
+type RecallScope = { subjectId: string; chapter: string; exerciseId?: string };
 const RANDOM_SCOPE = "random";
 type RecallOption = { value: string; label: string };
 type LearningStat = { askedCount: number; correctCount: number; wrongCount: number; lastAskedAt: string; lastOutcome: "correct" | "wrong" };
@@ -42,18 +44,11 @@ function statKey(question: Pick<RecallQuestion, "subjectId" | "id">) {
   return `${question.subjectId}:${question.id}`;
 }
 
-// Keep favourites first, but surface the weakest favourites ahead of ones the
-// learner already answers reliably. A new question has no accuracy signal yet.
-function accuracyPriority(stat?: LearningStat) {
-  if (!stat?.askedCount) return 0;
-  return (1 - stat.correctCount / stat.askedCount) * 25;
-}
-
 function questionPool(subjects = loadSubjects()): RecallQuestion[] {
   return subjects.flatMap((subject) =>
     subject.chapters.flatMap((chapter) =>
       chapter.exercises.flatMap((exercise) =>
-        (exercise.questions ?? []).map((question) => ({ ...question, subject: subject.name, subjectId: subject.id, chapter: chapter.name })),
+        (exercise.questions ?? []).map((question) => ({ ...question, subject: subject.name, subjectId: subject.id, chapter: chapter.name, exerciseId: String(exercise.id ?? exercise.name ?? "Exercise 1"), exercise: exercise.name || "Exercise 1" })),
       ),
     ),
   );
@@ -80,42 +75,15 @@ function normalPracticeStats(records = loadHistory()) {
   return performance;
 }
 
-/** Same-subject 3-question selection: favourites, prior mistakes, then least-seen questions. */
+/** Same-subject recall with recent-answer cooldowns and balanced priorities. */
 function buildRecall(seed?: QuickRecallSeed, scope: RecallScope = { subjectId: RANDOM_SCOPE, chapter: RANDOM_SCOPE }): RecallQuestion[] {
   const pool = questionPool(seed?.subjects as ReturnType<typeof loadSubjects> | undefined);
-  const scoped = pool.filter((item) => (scope.subjectId === RANDOM_SCOPE || item.subjectId === scope.subjectId) && (scope.chapter === RANDOM_SCOPE || item.chapter === scope.chapter));
+  const scoped = filterRecallScope(pool, scope);
   if (!scoped.length) return [];
   const favourites = new Set(seed?.favouriteQuestionIds ?? loadFavoriteQuestionIds());
-  const stats = (seed?.learningStats ?? loadStats()) as Record<string, LearningStat>;
+  const stats = mergeRecallLearning((seed?.learningStats ?? {}) as Record<string, LearningStat>, loadStats());
   const practice = normalPracticeStats(seed?.attempts as ReturnType<typeof loadHistory> | undefined);
-  const grouped = new Map<string, RecallQuestion[]>();
-  scoped.forEach((question) => grouped.set(question.subjectId, [...(grouped.get(question.subjectId) ?? []), question]));
-  const selectedSubject = [...grouped.entries()]
-    .map(([id, items]) => ({
-      id,
-      score: items.reduce((total, question) => {
-        const stat = stats[statKey(question)];
-        const normal = practice.get(statKey(question));
-        const askedCount = (normal?.askedCount ?? 0) + (stat?.askedCount ?? 0);
-        const correctCount = (normal?.correctCount ?? 0) + (stat?.correctCount ?? 0);
-        return total + (favourites.has(question.id) ? 24 : 0) + (normal?.wrongCount ?? 0) * 16 + (stat?.wrongCount ?? 0) * 8 + accuracyPriority({ askedCount, correctCount, wrongCount: 0, lastAskedAt: "", lastOutcome: "correct" }) - askedCount * 1.5;
-      }, 0) + Math.random() * 4,
-    }))
-    .sort((left, right) => right.score - left.score)[0]?.id;
-  const selected = grouped.get(selectedSubject ?? "") ?? scoped;
-  return [...selected]
-    .sort(() => Math.random() - 0.5)
-    .sort((left, right) => {
-      const score = (question: RecallQuestion) => {
-        const stat = stats[statKey(question)];
-        const normal = practice.get(statKey(question));
-        const askedCount = (normal?.askedCount ?? 0) + (stat?.askedCount ?? 0);
-        const correctCount = (normal?.correctCount ?? 0) + (stat?.correctCount ?? 0);
-        return (favourites.has(question.id) ? 1000 : 0) + (normal?.wrongCount ?? 0) * 100 + (stat?.wrongCount ?? 0) * 50 + accuracyPriority({ askedCount, correctCount, wrongCount: 0, lastAskedAt: "", lastOutcome: "correct" }) - askedCount;
-      };
-      return score(right) - score(left);
-    })
-    .slice(0, 3);
+  return selectRecallQuestions(scoped, favourites, stats, practice);
 }
 
 function QuickRecall() {
@@ -131,7 +99,7 @@ function QuickRecall() {
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [complete, setComplete] = useState(false);
   const [setup, setSetup] = useState(true);
-  const [scope, setScope] = useState<RecallScope>({ subjectId: RANDOM_SCOPE, chapter: RANDOM_SCOPE });
+  const [scope, setScope] = useState<RecallScope>({ subjectId: RANDOM_SCOPE, chapter: RANDOM_SCOPE, exerciseId: ALL_RECALL_EXERCISES });
   const question = questions[index];
   const correct = answers.reduce((total, answer, answerIndex) => total + Number(answer === questions[answerIndex]?.correctAnswer), 0);
 
@@ -141,7 +109,7 @@ function QuickRecall() {
     let active = true;
     const applyInitialSeed = (nextSeed: QuickRecallSeed) => {
       if (!active) return;
-      setSeed(nextSeed);
+      setSeed({ ...nextSeed, learningStats: mergeRecallLearning(nextSeed.learningStats as Record<string, LearningStat>, loadStats()) });
       setQuestions(buildRecall(nextSeed));
       setIndex(0);
       setAnswers([]);
@@ -156,7 +124,7 @@ function QuickRecall() {
     // replace a live three-question sprint under the user's finger.
     const stop = watchQuickRecallSeed(user, (nextSeed) => {
       if (!active) return;
-      setSeed(nextSeed);
+      setSeed({ ...nextSeed, learningStats: mergeRecallLearning(nextSeed.learningStats as Record<string, LearningStat>, loadStats()) });
     });
     return () => { active = false; stop(); };
   }, [user?.uid]);
@@ -184,11 +152,16 @@ function QuickRecall() {
   const availableSubjects = useMemo(() => [...new Map(questionPool(seed?.subjects as ReturnType<typeof loadSubjects> | undefined).map((item) => [item.subjectId, item])).values()], [seed]);
   const selectedSubject = availableSubjects.find((item) => item.subjectId === scope.subjectId);
   const availableChapters = selectedSubject ? [...new Set(questionPool(seed?.subjects as ReturnType<typeof loadSubjects> | undefined).filter((item) => item.subjectId === selectedSubject.subjectId).map((item) => item.chapter))] : [];
+  const availableExercises = selectedSubject && scope.chapter !== RANDOM_SCOPE
+    ? [...new Map(questionPool(seed?.subjects as ReturnType<typeof loadSubjects> | undefined)
+      .filter((item) => item.subjectId === selectedSubject.subjectId && item.chapter === scope.chapter)
+      .map((item) => [item.exerciseId, { value: item.exerciseId, label: item.exercise }])).values()]
+    : [];
   const start = () => { restart(); setSetup(false); };
   const choose = (choice: Option) => {
     if (!question || selected) return;
     setSelected(choice);
-    const stats = loadStats();
+    const stats = mergeRecallLearning((seed?.learningStats ?? {}) as Record<string, LearningStat>, loadStats());
     const key = statKey(question);
     const prior = stats[key] ?? { askedCount: 0, correctCount: 0, wrongCount: 0, lastAskedAt: "", lastOutcome: "correct" as const };
     const isCorrect = choice === question.correctAnswer;
@@ -200,6 +173,7 @@ function QuickRecall() {
       lastAskedAt: new Date().toISOString(),
       lastOutcome: isCorrect ? "correct" : "wrong",
     };
+    setSeed((current) => current ? { ...current, learningStats: stats } : current);
     try { localStorage.setItem(STAT_KEY, JSON.stringify({ stats })); } catch { /* optional cache */ }
     if (user) {
       // Same two transaction writes as the Android and Windows widget.
@@ -226,7 +200,7 @@ function QuickRecall() {
       <main className="exam-dark -mx-4 -my-6 min-h-[calc(100vh-4rem)] bg-[#121212] px-4 py-4 text-zinc-100 sm:-mx-6 sm:px-6">
         <section className="mx-auto max-w-xl">
           {setup ? (
-            <div className="rounded-xl bg-[#1b1b1b] p-5"><p className="text-[11px] font-medium tracking-[.14em] text-blue-300 uppercase">Quick recall</p><h1 className="mt-2 text-xl font-medium">Choose your focus</h1><p className="mt-1 text-sm text-zinc-400">Random prioritises favourites and earlier mistakes.</p><div className="mt-5 grid gap-3 sm:grid-cols-2"><RecallDropdown label="Subject" value={scope.subjectId} options={[{ value: RANDOM_SCOPE, label: "Random" }, ...availableSubjects.map((item) => ({ value: item.subjectId, label: item.subject }))]} onChange={(subjectId) => setScope({ subjectId, chapter: RANDOM_SCOPE })} /><RecallDropdown label="Chapter" disabled={!selectedSubject} value={scope.chapter} options={[{ value: RANDOM_SCOPE, label: "Random" }, ...availableChapters.map((chapter) => ({ value: chapter, label: chapter }))]} onChange={(chapter) => setScope((value) => ({ ...value, chapter }))} /></div><div className="mt-5 flex justify-end"><Button size="sm" onClick={start}>Start recall <ArrowRight className="h-3.5 w-3.5" /></Button></div></div>
+            <div className="rounded-xl bg-[#1b1b1b] p-5"><p className="text-[11px] font-medium tracking-[.14em] text-blue-300 uppercase">Quick recall</p><h1 className="mt-2 text-xl font-medium">Choose your focus</h1><p className="mt-1 text-sm text-zinc-400">Mixes fresh questions and earlier mistakes, with fewer recent repeats.</p><div className="mt-5 grid gap-3 sm:grid-cols-3"><RecallDropdown label="Subject" value={scope.subjectId} options={[{ value: RANDOM_SCOPE, label: "Random" }, ...availableSubjects.map((item) => ({ value: item.subjectId, label: item.subject }))]} onChange={(subjectId) => setScope({ subjectId, chapter: RANDOM_SCOPE, exerciseId: ALL_RECALL_EXERCISES })} /><RecallDropdown label="Chapter" disabled={!selectedSubject} value={scope.chapter} options={[{ value: RANDOM_SCOPE, label: "Random" }, ...availableChapters.map((chapter) => ({ value: chapter, label: chapter }))]} onChange={(chapter) => setScope((value) => ({ ...value, chapter, exerciseId: ALL_RECALL_EXERCISES }))} /><RecallDropdown label="Exercise" disabled={!selectedSubject || scope.chapter === RANDOM_SCOPE} value={scope.exerciseId ?? ALL_RECALL_EXERCISES} options={[{ value: ALL_RECALL_EXERCISES, label: "All exercises" }, ...availableExercises]} onChange={(exerciseId) => setScope((value) => ({ ...value, exerciseId }))} /></div><div className="mt-5 flex justify-end"><Button size="sm" onClick={start}>Start recall <ArrowRight className="h-3.5 w-3.5" /></Button></div></div>
           ) : !questions.length ? (
             <div className="rounded-xl bg-[#1b1b1b] px-5 py-12 text-center">
               <Sparkles className="mx-auto h-6 w-6 text-blue-300" />
