@@ -1,3 +1,4 @@
+import { RollingNumber } from "../../../../src/components/ui/rolling-number";
 import { useState } from "react";
 import { useTracker } from "@/lib/tracker-store";
 import { pct, testsDone } from "@/lib/tracker";
@@ -20,7 +21,7 @@ export function Tests() {
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <Label>Sectional tests</Label>
           <span className="font-mono text-[13px] text-muted-foreground">
-            {totalDone} / {totalTarget} total
+            <RollingNumber value={totalDone} /> / <RollingNumber value={totalTarget} suffix=" total" />
           </span>
         </div>
         <div className="mt-1.5">
@@ -34,7 +35,7 @@ export function Tests() {
                   <Bar value={pct(done, target)} />
                 </div>
                 <span className="shrink-0 font-mono text-[13px] text-muted-foreground">
-                  {done} / {target}
+                  <RollingNumber value={done} /> / <RollingNumber value={target} />
                 </span>
                 <Num
                   ariaLabel={`${s.name} test target`}
@@ -62,7 +63,7 @@ export function Tests() {
                     <Bar value={pct(done, target)} tone="green" />
                   </div>
                   <span className="shrink-0 font-mono text-[13px] text-muted-foreground">
-                    {done} / {target}
+                    <RollingNumber value={done} /> / <RollingNumber value={target} />
                   </span>
                   <Num
                     ariaLabel={`${label} mock target`}

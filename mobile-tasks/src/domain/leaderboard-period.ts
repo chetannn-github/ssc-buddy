@@ -15,6 +15,7 @@ export function leaderboardPeriodStats(entry: Entry, tasks: Task[], period: stri
     return {
       points: number(entry.points),
       completed: number(entry.completed),
+      notCompleted: tasks.filter((task) => !task.completed).length,
       studyMinutes: number(entry.studyMinutes),
     };
   const selected = tasks.filter((task) => task.date === period);
@@ -24,6 +25,7 @@ export function leaderboardPeriodStats(entry: Entry, tasks: Task[], period: stri
       selected.reduce((total, task) => total + number(task.points), 0) -
       (entry.inactiveDates?.includes(period) ? 50 : 0),
     completed: completed.length,
+    notCompleted: selected.length - completed.length,
     studyMinutes: completed.reduce(
       (total, task) => total + Math.max(0, number(task.minutesSpent)),
       0,

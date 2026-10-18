@@ -19,7 +19,7 @@ type Props = {
 export function TaskRow({ task, points, onDone, onReopen, onEdit, onDelete, compact = false, grouped = false, last = false }: Props) {
   return (
     <View>
-      <View style={[styles.task, task.completed && styles.completed, compact && styles.compact, grouped && styles.grouped, grouped && task.completed && styles.groupedCompleted, grouped && last && styles.groupedLast]}>
+      <View style={[styles.task, task.completed && styles.completed, compact && styles.compact, grouped && styles.grouped, grouped && !compact && task.completed && styles.groupedCompleted, grouped && last && styles.groupedLast]}>
         {compact ? (
           <View style={[styles.check, task.completed ? styles.checkComplete : styles.checkIncompleteHistory]}>
             <Text style={[styles.checkText, !task.completed && styles.incompleteHistoryText]}>

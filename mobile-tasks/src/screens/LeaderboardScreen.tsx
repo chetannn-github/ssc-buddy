@@ -234,7 +234,7 @@ export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { 
           .filter(Boolean)
           .join(" · ");
         return (
-          <View key={`${task.name}-${index}`} style={s.task}>
+          <View key={`${task.name}-${index}`} style={[s.task, index === tasksForDay.length - 1 && s.taskLast]}>
             {task.completed ? <MaterialCommunityIcons name="check-circle" size={16} color="#86efac" /> : overdue ? <MaterialCommunityIcons name="close-circle" size={16} color="#fca5a5" /> : <View style={{ width: 16, height: 16, borderWidth: 1, borderColor: "#a1a1aa", borderRadius: 8 }} />}
             <View style={{ flex: 1 }}>
               <Text style={s.name} numberOfLines={1}>
@@ -289,15 +289,19 @@ export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { 
             <Pressable style={s.detailIdentity} onPress={() => setPublicEntry({ ...selected, leaderboardRank: rank })}><Text style={s.profileName}>{selected.name}</Text><Text style={[s.sub, s.centeredUsername]}>@{selected.username}</Text><Text style={s.xpMeta}>Lv. {xpMeta(selected).level} · {xpMeta(selected).xp > 0 ? "+" : ""}{xpMeta(selected).xp} XP</Text></Pressable>
           </View>
           <View style={s.profileStats}>
-            <View>
+            <View style={s.profileStat}>
               <View style={{ alignItems: "center" }}><RollingLeaderboardNumber value={stats.points} prefix={stats.points > 0 ? "+" : ""} color={pointsColor(stats.points)} /></View>
               <Text style={s.sub}>Points</Text>
             </View>
-            <View>
+            <View style={s.profileStat}>
               <View style={{ alignItems: "center" }}><RollingLeaderboardNumber value={stats.completed} /></View>
               <Text style={s.sub}>Completed</Text>
             </View>
-            <View>
+            <View style={s.profileStat}>
+              <View style={{ alignItems: "center" }}><RollingLeaderboardNumber value={stats.notCompleted} /></View>
+              <Text style={s.sub}>Not completed</Text>
+            </View>
+            <View style={s.profileStat}>
               <RollingLeaderboardDuration minutes={stats.studyMinutes} />
               <Text style={s.sub}>Study time</Text>
             </View>
@@ -314,7 +318,7 @@ export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { 
           </View>
         </View>
         <ScrollView showsVerticalScrollIndicator={false} onTouchStart={() => { if (dayFilterOpen) setDayFilterOpen(false); }} contentContainerStyle={s.tasksScroll}>
-          {taskList}
+          {tasksForDay.length ? <View style={s.taskGroup}>{taskList}</View> : taskList}
         </ScrollView>
       </View>
     );
@@ -447,23 +451,24 @@ const s = StyleSheet.create({
   detailRank: { position: "absolute", right: 0, top: 2, marginTop: 0 },
   profileMedal: { width: 16, height: 16, resizeMode: "contain" },
   profileRankText: { color: colors.text, fontSize: 12, fontWeight: "800" },
-  profileStats: { marginTop: 28, flexDirection: "row", gap: 30 },
+  profileStats: { marginTop: 28, flexDirection: "row", flexWrap: "wrap", justifyContent: "center", rowGap: 16, width: "100%" },
+  profileStat: { width: "50%", alignItems: "center" },
   profileValue: { color: colors.text, fontSize: 18, fontWeight: "800", textAlign: "center" },
   positivePoints: { color: "#86efac" },
   negativePoints: { color: "#fca5a5" },
   neutralPoints: { color: colors.subdued },
   tasks: { alignSelf: "stretch", marginTop: 30, gap: 9 },
-  tasksScroll: { gap: 9, paddingHorizontal: 30, paddingTop: 8, paddingBottom: 36 },
+  tasksScroll: { paddingHorizontal: 30, paddingTop: 8, paddingBottom: 36 },
   tasksTitle: { color: colors.subdued, fontSize: 10, fontWeight: "800", letterSpacing: 1.5 },
+  taskGroup: { borderRadius: 12, backgroundColor: colors.surface, paddingHorizontal: 12, overflow: "hidden" },
+  taskLast: { borderBottomWidth: 0 },
   task: {
     flexDirection: "row",
     alignItems: "center",
     gap: 9,
-    padding: 12,
-    borderRadius: 12,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   taskNameLine: { flexDirection: "row", alignItems: "center", gap: 7 },
   taskPoints: { color: "#86efac", fontSize: 11, fontWeight: "800" },

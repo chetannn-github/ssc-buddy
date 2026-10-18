@@ -21,6 +21,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CompleteTaskDialog, TaskFormDialog } from "@/components/tasks/TaskDialogs";
 import { AppShell } from "@/components/layout/AppShell";
+import { RollingNumber, RollingDuration } from "@/components/ui/rolling-number";
 import { LiquidProgressBar } from "@/components/profile/ProfileXpBar";
 import {
   formatDuration,
@@ -49,23 +50,6 @@ const rangeLabels: Record<RangeKey, string> = {
 };
 const historyRangeOptions: RangeKey[] = ["week", "month", "3months", "year"];
 
-function AnimatedBar({ value, tone }: { value: number; tone: string }) {
-  const target = Math.max(0, Math.min(100, value));
-  const [displayValue, setDisplayValue] = useState(0);
-
-  useEffect(() => {
-    setDisplayValue(0);
-    const frame = requestAnimationFrame(() => setDisplayValue(target));
-    return () => cancelAnimationFrame(frame);
-  }, [target]);
-
-  return (
-    <div
-      className={`h-full rounded-full ${tone} transition-[width] duration-700 ease-out motion-reduce:transition-none`}
-      style={{ width: `${displayValue}%` }}
-    />
-  );
-}
 
 function DailyTasks() {
   const [tasks, setTasks] = useState<DailyTask[]>(() => loadDailyTasks());
@@ -314,7 +298,7 @@ function DailyTasks() {
                 }
                 className="ml-auto h-9 rounded-md border border-white/15 bg-[#1b1b1b] px-3 text-sm text-zinc-300 transition-colors hover:bg-white/10 hover:text-white"
               >
-                {taskDay === "today" ? `Tomorrow (${tomorrowTaskCount})` : "Today"}
+                {taskDay === "today" ? <span>Tomorrow (<RollingNumber value={tomorrowTaskCount} />)</span> : "Today"}
               </button>
             )}
             {activeTab === "history" && (
@@ -371,14 +355,11 @@ function DailyTasks() {
             <div className="shrink-0 space-y-3 bg-[#121212] pb-3">
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {[
-                [
-                  taskDay === "today" ? "Today's tasks" : "Tomorrow's tasks",
-                  String(daySummary.total),
-                ],
-                ["Completed", String(daySummary.completed)],
-                ["Pending", String(daySummary.pending)],
-                ["Study time", formatDuration(daySummary.minutes)],
-              ].map(([label, value]) => (
+                { label: "Tasks", value: <RollingNumber value={daySummary.total} /> },
+                { label: "Completed", value: <RollingNumber value={daySummary.completed} /> },
+                { label: "Pending", value: <RollingNumber value={daySummary.pending} /> },
+                { label: "Study time", value: <RollingDuration minutes={daySummary.minutes} /> },
+              ].map(({label, value}) => (
                 <div
                   key={label}
                   className="rounded-lg border border-white/10 bg-[#1b1b1b] px-3 py-2"
@@ -394,12 +375,11 @@ function DailyTasks() {
                   {taskDay === "today" ? "Today's progress" : "Tomorrow's progress"}
                 </span>
                 <span>
-                  {daySummary.completed} / {daySummary.total} completed
+                  <RollingNumber value={daySummary.completed} /> / <RollingNumber value={daySummary.total} suffix=" completed" />
                 </span>
               </div>
               <div className="mt-2">
                 <LiquidProgressBar
-                  key={taskDay}
                   progress={progress / 100}
                   color="#3b82f6"
                   height={6}
@@ -437,10 +417,10 @@ function DailyTasks() {
           <TabsContent value="analytics" className="mt-5 space-y-5">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               {[
-                ["Time spent", formatDuration(scopedSummary.minutes)],
-                ["Tasks completed", String(scopedSummary.completed)],
-                ["Pending", String(scopedSummary.pending)],
-              ].map(([label, value]) => (
+                { label: "Time spent", value: <RollingDuration minutes={scopedSummary.minutes} /> },
+                { label: "Tasks completed", value: <RollingNumber value={scopedSummary.completed} /> },
+                { label: "Pending", value: <RollingNumber value={scopedSummary.pending} /> },
+              ].map(({label, value}) => (
                 <div
                   key={label}
                   className="rounded-xl border border-white/10 bg-[#1b1b1b] px-4 py-3"
@@ -460,16 +440,15 @@ function DailyTasks() {
                         <div className="flex justify-between text-sm">
                           <span>{name}</span>
                           <span className="text-zinc-400">
-                            {stats.count} tasks · {formatDuration(stats.minutes)}
+                            <RollingNumber value={stats.count} suffix=" tasks" /> · <RollingDuration minutes={stats.minutes} />
                           </span>
                         </div>
-                        <div className="mt-2 h-2 rounded-full bg-white/10">
-                          <AnimatedBar
-                            value={Math.max(
-                              4,
-                              (stats.minutes / Math.max(1, bySubject[0]?.[1].minutes ?? 1)) * 100,
-                            )}
-                            tone="bg-emerald-500"
+                        <div className="mt-2">
+                          <LiquidProgressBar
+                            progress={stats.minutes > 0 ? Math.max(0.04, stats.minutes / Math.max(1, bySubject[0]?.[1].minutes ?? 1)) : 0}
+                            color="#10b981"
+                            height={8}
+                            label={`Subject study time: ${name}`}
                           />
                         </div>
                       </div>
@@ -488,16 +467,15 @@ function DailyTasks() {
                         <div className="flex justify-between text-sm">
                           <span>{name}</span>
                           <span className="text-zinc-400">
-                            {stats.count} tasks · {formatDuration(stats.minutes)}
+                            <RollingNumber value={stats.count} suffix=" tasks" /> · <RollingDuration minutes={stats.minutes} />
                           </span>
                         </div>
-                        <div className="mt-2 h-2 rounded-full bg-white/10">
-                          <AnimatedBar
-                            value={Math.max(
-                              4,
-                              (stats.minutes / Math.max(1, byType[0]?.[1].minutes ?? 1)) * 100,
-                            )}
-                            tone="bg-blue-500"
+                        <div className="mt-2">
+                          <LiquidProgressBar
+                            progress={stats.minutes > 0 ? Math.max(0.04, stats.minutes / Math.max(1, byType[0]?.[1].minutes ?? 1)) : 0}
+                            color="#3b82f6"
+                            height={8}
+                            label={`Task-type study time: ${name}`}
                           />
                         </div>
                       </div>
@@ -549,12 +527,12 @@ function DailyTasks() {
                         })}
                       </h2>
                       <p className="mt-1 text-sm text-zinc-500">
-                        {formatDuration(summarizeTasks(activeHistoryDay[1]).minutes)} study time
+                        <RollingDuration minutes={summarizeTasks(activeHistoryDay[1]).minutes} /> study time
                       </p>
                     </div>
                     {!activeHistoryDay[1].some((task) => task.completed) && <strong className="font-mono text-sm text-red-300">Inactive day · −50 pts</strong>}
                   </div>
-                  <div className="mt-5 space-y-2">
+                  <div className="mt-5 divide-y divide-white/10">
                     {[...activeHistoryDay[1]]
                       .sort((a, b) => Number(a.completed) - Number(b.completed))
                       .map((task) => (
@@ -570,6 +548,7 @@ function DailyTasks() {
                           }}
                           onDelete={() => persist(tasks.filter((item) => item.id !== task.id))}
                           readOnly
+                          grouped
                         />
                       ))}
                   </div>
@@ -682,10 +661,10 @@ function TaskRow({
         {!task.completed && readOnly && <X className="h-4 w-4" />}
       </button>
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2"><p className={task.completed ? "truncate text-sm text-zinc-500 line-through" : "truncate text-sm font-medium"}>{task.name}</p><span className={`shrink-0 font-mono text-[11px] font-semibold ${points > 0 ? "text-emerald-300" : points < 0 ? "text-red-300" : "text-zinc-500"}`}>{points > 0 ? `+${points}` : points < 0 ? `−${Math.abs(points)}` : "0"} pts</span></div>
+        <div className="flex items-center gap-2"><p className={task.completed ? "truncate text-sm text-zinc-500 line-through" : "truncate text-sm font-medium"}>{task.name}</p><span className={`shrink-0 font-mono text-[11px] font-semibold ${points > 0 ? "text-emerald-300" : points < 0 ? "text-red-300" : "text-zinc-500"}`}><RollingNumber value={points} prefix={points > 0 ? "+" : ""} suffix=" pts" /></span></div>
         <p className="mt-0.5 text-xs text-zinc-500">
           {task.subject} · {task.type}
-          {task.completed && task.minutesSpent ? ` · ${formatDuration(task.minutesSpent)}` : ""}
+          {task.completed && task.minutesSpent ? <> · <RollingDuration minutes={task.minutesSpent} /></> : ""}
         </p>
       </div>
       {!readOnly && (

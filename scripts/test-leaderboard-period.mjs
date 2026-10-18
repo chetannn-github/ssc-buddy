@@ -24,7 +24,7 @@ const tasks = [
 ];
 
 test("All week uses the published weekly totals", () => {
-  assert.deepEqual(stats(entry, tasks, all), { points: -20, completed: 2, studyMinutes: 90 });
+  assert.deepEqual(stats(entry, tasks, all), { points: -20, completed: 2, notCompleted: 2, studyMinutes: 90 });
   assert.equal(visible(tasks, entry.inactiveDates, all).length, 5);
 });
 
@@ -32,11 +32,13 @@ test("selecting a day filters every metric, including pending penalties", () => 
   assert.deepEqual(stats(entry, tasks, "2026-10-13"), {
     points: 11,
     completed: 1,
+    notCompleted: 1,
     studyMinutes: 60,
   });
   assert.deepEqual(stats(entry, tasks, "2026-10-15"), {
     points: 24,
     completed: 1,
+    notCompleted: 0,
     studyMinutes: 30,
   });
   assert.equal(visible(tasks, entry.inactiveDates, "2026-10-13").length, 2);
@@ -46,6 +48,7 @@ test("inactive-day penalties apply exactly once and stay visible", () => {
   assert.deepEqual(stats(entry, tasks, "2026-10-14"), {
     points: -55,
     completed: 0,
+    notCompleted: 1,
     studyMinutes: 0,
   });
   const rows = visible(tasks, [...entry.inactiveDates, ...entry.inactiveDates], "2026-10-14");
@@ -57,6 +60,11 @@ test("inactive-day penalties apply exactly once and stay visible", () => {
 });
 
 test("an empty date does not fall back to weekly totals", () => {
-  assert.deepEqual(stats(entry, tasks, "2026-10-18"), { points: 0, completed: 0, studyMinutes: 0 });
+  assert.deepEqual(stats(entry, tasks, "2026-10-18"), { points: 0, completed: 0, notCompleted: 0, studyMinutes: 0 });
   assert.deepEqual(visible(tasks, entry.inactiveDates, "2026-10-18"), []);
+});
+
+test("inactivity penalties are not counted as incomplete tasks", () => {
+  assert.equal(stats(entry, [], "2026-10-14").notCompleted, 0);
+  assert.equal(stats(entry, [], all).notCompleted, 0);
 });

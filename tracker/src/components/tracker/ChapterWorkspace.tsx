@@ -1,3 +1,4 @@
+import { RollingNumber } from "../../../../src/components/ui/rolling-number";
 import { ChevronRight, GripVertical, ListOrdered, Star, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTracker } from "@/lib/tracker-store";
@@ -248,7 +249,7 @@ export function ChapterWorkspace({ mode }: { mode: Mode }) {
           <div className="flex items-baseline justify-between gap-2">
             <h2 className="text-sm font-semibold">Overall syllabus</h2>
             <span className="font-mono text-xs text-muted-foreground">
-              {overall.done} / {overall.total} · {pct(overall.done, overall.total)}%
+              <RollingNumber value={overall.done} /> / <RollingNumber value={overall.total} /> · <RollingNumber value={pct(overall.done, overall.total)} suffix="%" />
             </span>
           </div>
           <div className="mt-2">
@@ -305,7 +306,7 @@ export function ChapterWorkspace({ mode }: { mode: Mode }) {
                   <div className="min-w-0">
                     <h2 className="text-base font-semibold">{subject.name}</h2>
                     <p className="font-mono text-xs text-muted-foreground">
-                      {progress.done} / {progress.total} · {pct(progress.done, progress.total)}%
+                      <RollingNumber value={progress.done} /> / <RollingNumber value={progress.total} /> · <RollingNumber value={pct(progress.done, progress.total)} suffix="%" />
                     </p>
                   </div>
                 </button>
@@ -509,10 +510,10 @@ function ChapterRow({
         </div>
       </button>
       <span className="w-18 shrink-0 text-right font-mono text-xs text-muted-foreground">
-        {done}/{total}
+        <RollingNumber value={done} />/<RollingNumber value={total} />
       </span>
       <span className="w-9 shrink-0 text-right font-mono text-xs text-muted-foreground">
-        {pct(done, total)}%
+        <RollingNumber value={pct(done, total)} suffix="%" />
       </span>
       {reordering ? (
         <div className="flex shrink-0">
@@ -635,9 +636,9 @@ function ChapterDrawer({
         <div className="mt-5">
           <div className="flex items-center justify-between font-mono text-sm text-zinc-400">
             <span>
-              {chapter.completed} / {chapter.total} lectures
+              <RollingNumber value={chapter.completed} /> / <RollingNumber value={chapter.total} suffix=" lectures" />
             </span>
-            <span>{pct(chapter.completed, chapter.total)}%</span>
+            <span><RollingNumber value={pct(chapter.completed, chapter.total)} suffix="%" /></span>
           </div>
           <div className="mt-2">
             <Bar value={pct(chapter.completed, chapter.total)} />
@@ -645,7 +646,7 @@ function ChapterDrawer({
         </div>
         <div className="mt-5 flex items-center gap-2">
           <span className="grid h-10 w-20 place-items-center rounded-lg bg-track font-mono">
-            {chapter.completed}
+            <RollingNumber value={chapter.completed} />
           </span>
           <IconButton
             label="Increase completed lectures"
@@ -654,7 +655,7 @@ function ChapterDrawer({
           >
             +
           </IconButton>
-          <span className="text-sm text-zinc-400">of {chapter.total}</span>
+          <span className="text-sm text-zinc-400">of <RollingNumber value={chapter.total} /></span>
         </div>
         <div className="mt-5 grid grid-cols-2 gap-2">
           <button
@@ -684,7 +685,7 @@ function ChapterDrawer({
                     <div className="mb-2 flex justify-between text-sm">
                       <span>{type.name}</span>
                       <span className="font-mono text-zinc-400">
-                        {done}/{target}
+                        <RollingNumber value={done} />/<RollingNumber value={target} />
                       </span>
                     </div>
                     <RevisionDots

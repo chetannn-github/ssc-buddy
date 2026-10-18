@@ -3,7 +3,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Image as ExpoImage } from "expo-image";
 import * as ExpoSplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import {
   Animated,
@@ -37,6 +37,7 @@ import {
   type Task,
   type TaskType,
 } from "./src/domain/tasks";
+import { LiquidProgressBar } from "./src/components/ProfileXpBar";
 import { TaskRingFill } from "./src/components/TaskRingFill";
 import { TaskRow } from "./src/components/TaskRow";
 import { BottomNavigation } from "./src/components/BottomNavigation";
@@ -925,8 +926,8 @@ export default function App() {
             </View>
             <View style={styles.analyticsFilters}><TaskDropdown label={TASK_RANGE_LABELS[analyticsRange]} open={analyticsRangeOpen} onToggle={() => { setAnalyticsRangeOpen((value) => !value); setAnalyticsSubjectOpen(false); }} options={(["today", "week", "month", "3months", "year"] as TaskRange[]).map((value) => ({ value, label: TASK_RANGE_LABELS[value] }))} onSelect={(value) => { setAnalyticsRange(value as TaskRange); setAnalyticsRangeOpen(false); }} /><TaskDropdown label={analyticsSubject} open={analyticsSubjectOpen} onToggle={() => { setAnalyticsSubjectOpen((value) => !value); setAnalyticsRangeOpen(false); }} options={["All subjects", ...subjectOptions.filter((item) => item !== "Other")].map((value) => ({ value, label: value }))} onSelect={(value) => { setAnalyticsSubject(value); setAnalyticsSubjectOpen(false); }} /></View>
             <View style={styles.metricGrid}>
-              <Metric label="Time spent" value={formatMinutes(analyticsSummary.minutes)} note={TASK_RANGE_LABELS[analyticsRange]} />
-              <Metric label="Completed / pending" value={`${analyticsSummary.done} / ${analyticsSummary.total - analyticsSummary.done}`} note={`${analyticsSummary.percent}% completion`} />
+              <Metric label="Time spent" value={<RollingDuration minutes={analyticsSummary.minutes} fontSize={20} />} note={TASK_RANGE_LABELS[analyticsRange]} />
+              <Metric label="Completed / pending" value={<View style={styles.analyticsNumbers}><RollingMetric value={analyticsSummary.done} fontSize={20} color="#fafafa" /><Text style={styles.analyticsSlash}> / </Text><RollingMetric value={analyticsSummary.total - analyticsSummary.done} fontSize={20} color="#fafafa" /></View>} note={<RollingMetric value={analyticsSummary.percent} suffix="% completion" fontSize={12} color="#a1a1aa" />} />
             </View>
             <Breakdown title="Subject-wise study time" items={subjectBreakdown} tone="mint" />
             <Breakdown title="Task-type breakdown" items={typeBreakdown} tone="blue" />
@@ -1144,12 +1145,12 @@ function Empty({ onPress }: { onPress: () => void }) {
     </View>
   );
 }
-function Metric({ label, value, note }: { label: string; value: string; note: string }) {
+function Metric({ label, value, note }: { label: string; value: ReactNode; note: ReactNode }) {
   return (
     <View style={styles.metric}>
       <Text style={styles.statLabel}>{label.toUpperCase()}</Text>
-      <Text style={styles.metricValue}>{value}</Text>
-      <Text style={styles.muted}>{note}</Text>
+      <View style={styles.metricValue}>{value}</View>
+      {typeof note === "string" ? <Text style={styles.muted}>{note}</Text> : note}
     </View>
   );
 }
@@ -1163,24 +1164,13 @@ function Breakdown({
   tone: "mint" | "blue";
 }) {
   const leadingMinutes = Math.max(1, items[0]?.[1].minutes ?? 1);
-  const progress = useRef(new Animated.Value(0)).current;
-  const animationKey = items.map(([name, data]) => `${name}:${data.minutes}`).join("|");
-  useEffect(() => {
-    progress.setValue(0);
-    Animated.timing(progress, {
-      toValue: 1,
-      duration: 820,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: false,
-    }).start();
-  }, [animationKey, progress]);
   return (
     <View style={styles.breakdown}>
       <Text style={styles.breakdownTitle}>{title}</Text>
       {items.length ? items.map(([name, data]) => (
         <View key={name} style={styles.breakdownRow}>
-          <View style={styles.breakdownLabel}><Text style={styles.breakdownName}>{name}</Text><Text style={styles.breakdownMeta}>{data.count} tasks · {formatMinutes(data.minutes)}</Text></View>
-          <View style={styles.breakdownTrack}><Animated.View style={[styles.breakdownFill, tone === "blue" && styles.breakdownFillBlue, { width: progress.interpolate({ inputRange: [0, 1], outputRange: ["0%", `${Math.max(4, (data.minutes / leadingMinutes) * 100)}%`] }) }]} /></View>
+          <View style={styles.breakdownLabel}><Text style={styles.breakdownName}>{name}</Text><View style={styles.analyticsNumbers}><RollingMetric value={data.count} suffix=" tasks · " color="#a1a1aa" fontSize={12} /><RollingDuration minutes={data.minutes} color="#a1a1aa" fontSize={12} /></View></View>
+          <LiquidProgressBar progress={data.minutes > 0 ? Math.max(0.04, data.minutes / leadingMinutes) : 0} color={tone === "blue" ? "#60a5fa" : "#5eead4"} height={7} style={styles.breakdownTrack} label={`${title}: ${name}`} />
         </View>
       )) : <Text style={styles.emptyAnalytics}>Complete tasks to see analytics.</Text>}
     </View>
@@ -1325,10 +1315,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#303030",
   },
-  metricValue: { color: "#fafafa", fontSize: 20, fontWeight: "800", marginTop: 5 },
+  metricValue: { marginTop: 5 },
+  analyticsNumbers: { flexDirection: "row", alignItems: "center" },
+  analyticsSlash: { color: "#fafafa", fontSize: 20, fontWeight: "800" },
   analyticsHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   rangeControl: { flexDirection: "row", gap: 3, padding: 3, borderRadius: 11, backgroundColor: "#1c1c1c" },
-  analyticsFilters: { flexDirection: "row", gap: 8, zIndex: 20 },
+  analyticsFilters: { flexDirection: "row", gap: 8, zIndex: 900, elevation: 900 },
   rangeButton: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
   rangeButtonActive: { backgroundColor: "#303030" },
   rangeText: { color: "#71717a", fontSize: 11, fontWeight: "700" },
@@ -1361,8 +1353,6 @@ const styles = StyleSheet.create({
   breakdownName: { flex: 1, color: "#e4e4e7", fontSize: 13, fontWeight: "600" },
   breakdownMeta: { color: "#a1a1aa", fontSize: 12 },
   breakdownTrack: { height: 7, overflow: "hidden", marginTop: 8, borderRadius: 5, backgroundColor: "#303030" },
-  breakdownFill: { height: "100%", borderRadius: 5, backgroundColor: "#60a5fa" },
-  breakdownFillBlue: { backgroundColor: "#60a5fa" },
   emptyAnalytics: { color: "#71717a", marginTop: 12, fontSize: 13 },
   chart: {
     height: 150,
