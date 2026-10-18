@@ -710,15 +710,10 @@ export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQ
           saveFavourites(next);
         }}
         onDeleteQuestion={(exerciseId, questionId) => {
-          Alert.alert("Delete question?", "It will be removed from new practice tests and Quick Recall. Saved attempts and scores stay unchanged.", [
-            { text: "Cancel", style: "cancel" },
-            { text: "Delete", style: "destructive", onPress: () => {
-              const next = { ...bankRef.current, subjects: bankRef.current.subjects.map((item) => removeBankQuestion(item, exerciseId, questionId)) };
-              void saveBank(next).catch(() => Alert.alert("Sync pending", "The question is removed on this device. Connect and retry syncing before using another device."));
-              const stillUsed = next.subjects.some((item) => item.chapters.some((chapter) => chapter.exercises.some((exercise) => exercise.questions?.some((question) => question.id === questionId))));
-              if (!stillUsed) saveFavourites(favouritesRef.current.filter((id) => id !== questionId));
-            } },
-          ]);
+          const next = { ...bankRef.current, subjects: bankRef.current.subjects.map((item) => removeBankQuestion(item, exerciseId, questionId)) };
+          void saveBank(next).catch(() => Alert.alert("Sync pending", "Connect to sync this change."));
+          const stillUsed = next.subjects.some((item) => item.chapters.some((chapter) => chapter.exercises.some((exercise) => exercise.questions?.some((question) => question.id === questionId))));
+          if (!stillUsed) saveFavourites(favouritesRef.current.filter((id) => id !== questionId));
         }}
         viewing={viewingQuestions}
         onView={setViewingQuestions}
@@ -2034,6 +2029,7 @@ function QuestionBank({
   onBack: () => void;
 }) {
   const viewing = subjects.flatMap((subject) => subject.chapters.flatMap((chapter) => chapter.exercises)).find((exercise) => exercise.id === selectedViewing?.id) ?? null;
+  const [deleting, setDeleting] = useState<{ exerciseId: string; questionId: string } | null>(null);
   const [chapterFilter, setChapterFilter] = useState("all");
   const [questionIndex, setCurrentQuestion] = useState(0);
   const currentQuestion = Math.max(0, Math.min(questionIndex, (viewing?.questions?.length ?? 1) - 1));
@@ -2091,7 +2087,7 @@ function QuestionBank({
                 <View style={s.bankViewerCard} {...swipeHandlers}>
                   <View style={s.bankQuestionHeader}>
                     <Text style={s.bankQuestionNumber}>QUESTION {currentQuestion + 1}</Text>
-                    <Pressable accessibilityLabel="Delete question" onPress={() => onDeleteQuestion(viewing.id, question.id)} hitSlop={8}><MaterialCommunityIcons name="trash-can-outline" size={21} color="#fca5a5" /></Pressable>
+                    <Pressable accessibilityLabel="Delete question" onPress={() => setDeleting({ exerciseId: viewing.id, questionId: question.id })} hitSlop={8}><MaterialCommunityIcons name="trash-can-outline" size={21} color="#fca5a5" /></Pressable>
                     <Pressable
                       onPress={() => onToggleFavourite(question.id)}
                       style={[
@@ -2165,6 +2161,22 @@ function QuestionBank({
             );
           })()}
         </ScrollView>
+        <Modal transparent visible={deleting !== null} animationType="fade" statusBarTranslucent onRequestClose={() => setDeleting(null)}>
+          <Pressable style={s.backdrop} onPress={() => setDeleting(null)}>
+            <Pressable accessibilityViewIsModal style={s.dialog} onPress={() => undefined}>
+              <Text style={s.deleteQuestionTitle}>Delete question?</Text>
+              <View style={s.deleteQuestionActions}>
+                <Pressable accessibilityRole="button" style={s.outline} onPress={() => setDeleting(null)}><Text style={s.outlineText}>Cancel</Text></Pressable>
+                <Pressable accessibilityRole="button" style={s.deleteQuestionButton} onPress={() => {
+                  if (!deleting) return;
+                  const target = deleting;
+                  setDeleting(null);
+                  onDeleteQuestion(target.exerciseId, target.questionId);
+                }}><Text style={s.deleteQuestionButtonText}>Delete</Text></Pressable>
+              </View>
+            </Pressable>
+          </Pressable>
+        </Modal>
       </View>
     );
   return (
@@ -3042,6 +3054,10 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
+  deleteQuestionTitle: { color: colors.text, fontSize: 18, fontWeight: "700" },
+  deleteQuestionActions: { flexDirection: "row", justifyContent: "flex-end", alignItems: "center", gap: 10, marginTop: 24 },
+  deleteQuestionButton: { borderRadius: 10, backgroundColor: "#ef4444", paddingHorizontal: 18, paddingVertical: 11 },
+  deleteQuestionButtonText: { color: "#fff", fontWeight: "700", fontSize: 14 },
   backdrop: { flex: 1, justifyContent: "center", padding: 20, backgroundColor: "rgba(0,0,0,.72)" },
   sheetBackdrop: { justifyContent: "flex-end", padding: 0 },
   dialog: {

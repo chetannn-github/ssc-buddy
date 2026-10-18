@@ -1,3 +1,4 @@
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Star, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -27,6 +28,7 @@ export const Route = createFileRoute("/question-view")({
 
 function QuestionViewer() {
   const { subject: subjectName, chapter: chapterName, exercise: exerciseName } = Route.useSearch();
+  const [deleting, setDeleting] = useState<{ subjectId: string; exerciseId: string; questionId: string } | null>(null);
   const [currentIndex, setCurrent] = useState(0);
   const [favoriteIds, setFavoriteIds] = useState(() => new Set(loadFavoriteQuestionIds()));
   const [subjects, setSubjects] = useState(() => loadSubjects());
@@ -65,8 +67,7 @@ function QuestionViewer() {
                 </div>
                 <div className="flex items-center gap-2">
                   <Button size="sm" variant="ghost" className="h-8 text-red-300 hover:bg-red-400/10 hover:text-red-200" onClick={() => {
-                    if (!subjectId || !exercise || !question || !window.confirm("Delete this question from the bank? It will no longer appear in new practice tests or Quick Recall. Saved attempts and scores will stay unchanged.")) return;
-                    setSubjects(deleteBankQuestion(subjectId, exercise.id, question.id));
+                    if (subjectId && exercise && question) setDeleting({ subjectId, exerciseId: exercise.id, questionId: question.id });
                   }}><Trash2 className="h-3.5 w-3.5" /> Delete</Button>
                   <Button
                     size="sm"
@@ -144,6 +145,19 @@ function QuestionViewer() {
           </div>
         )}
       </div>
+      <AlertDialog open={deleting !== null} onOpenChange={(open) => { if (!open) setDeleting(null); }}>
+        <AlertDialogContent aria-describedby={undefined} className="max-w-sm border-white/10 bg-[#202020] text-zinc-100">
+          <AlertDialogHeader><AlertDialogTitle>Delete question?</AlertDialogTitle></AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-white/15 bg-transparent text-zinc-300 hover:bg-white/10 hover:text-white">Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-red-500 text-white hover:bg-red-600" onClick={() => {
+              if (!deleting) return;
+              setSubjects(deleteBankQuestion(deleting.subjectId, deleting.exerciseId, deleting.questionId));
+              setDeleting(null);
+            }}>Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppShell>
   );
 }
