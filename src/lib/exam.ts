@@ -1,4 +1,4 @@
-import { applyQuestionDeletions, removeBankQuestion } from "../../mobile-tasks/src/domain/question-deletion";
+import { applyQuestionDeletions, prepareImportedQuestions, removeBankQuestion } from "../../mobile-tasks/src/domain/question-deletion";
 import { quickRecallHistoryKey } from "../../mobile-tasks/src/domain/quick-recall-history";
 import type { RecallQuestionSnapshot } from "../../mobile-tasks/src/domain/quick-recall-solutions";
 export type Option = "A" | "B" | "C" | "D";
@@ -304,7 +304,9 @@ export function upsertExercise(
     existing.name = name;
     existing.questionCount = questionCount;
     existing.answerKey = answerKey;
-    existing.questions = questions?.map(normalizeQuestion);
+    existing.questions = questions && prepareImportedQuestions(
+      subject, existing.id, questions.map(normalizeQuestion), () => newDocumentId("question"),
+    );
   } else {
     chapter.exercises.push({
       id: newDocumentId("exercise"),

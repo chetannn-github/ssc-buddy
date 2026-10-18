@@ -9,6 +9,16 @@ type BankSubject = {
 export const deletedQuestionKey = (exerciseId: string, questionId: string) =>
   JSON.stringify([exerciseId, questionId]);
 
+/** Explicit imports restore deleted rows with new identities, retaining stale-upload protection. */
+export function prepareImportedQuestions<T extends { id: string }>(
+  subject: { deletedQuestionIds?: string[] }, exerciseId: string, questions: T[], createId: () => string,
+): T[] {
+  const deleted = new Set(subject.deletedQuestionIds ?? []);
+  return questions.map((question) => deleted.has(deletedQuestionKey(exerciseId, question.id))
+    ? { ...question, id: createId() }
+    : question);
+}
+
 export function applyQuestionDeletions<T extends BankSubject>(subject: T): T {
   const deleted = new Set(subject.deletedQuestionIds ?? []);
   if (!deleted.size) return subject;

@@ -31,7 +31,7 @@ import {
   View,
 } from "react-native";
 
-import { snapshotQuestionPaper, applyQuestionDeletions, mergeQuestionDeletions, removeBankQuestion, isQuestionAttempt } from "../domain/question-deletion";
+import { snapshotQuestionPaper, applyQuestionDeletions, mergeQuestionDeletions, prepareImportedQuestions, removeBankQuestion, isQuestionAttempt } from "../domain/question-deletion";
 import { ALL_PRACTICE_EXERCISES, ALL_PRACTICE_EXERCISES_LABEL, combineQuestionExercises, samplePracticeQuestions } from "../domain/practice-exercises";
 import { QuestionPalette } from "../components/QuestionNavigation";
 import { useQuestionSwipe } from "../hooks/use-question-swipe";
@@ -644,6 +644,9 @@ export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQ
       }
       const quantity = questions?.length ?? Math.max(1, Math.min(500, Number(count) || 20));
       const existing = chapter.exercises.find((item) => item.id === editingExerciseId);
+      if (existing && questions) {
+        questions = prepareImportedQuestions(subject, existing.id, questions, makeId);
+      }
       const next = {
         id: existing?.id ?? makeId(),
         name: value,

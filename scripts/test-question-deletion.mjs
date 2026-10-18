@@ -8,7 +8,7 @@ const compile = (source) => ts.transpileModule(source, {
 }).outputText;
 const url = (source) => `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`;
 const domainUrl = url(compile(await readFile(new URL("../mobile-tasks/src/domain/question-deletion.ts", import.meta.url), "utf8")));
-const { removeBankQuestion, mergeQuestionDeletions, pruneDeletedRecall, isQuestionAttempt, snapshotQuestionPaper } = await import(domainUrl);
+const { removeBankQuestion, mergeQuestionDeletions, prepareImportedQuestions, pruneDeletedRecall, isQuestionAttempt, snapshotQuestionPaper } = await import(domainUrl);
 const recallHistoryUrl = url(compile(await readFile(new URL("../mobile-tasks/src/domain/quick-recall-history.ts", import.meta.url), "utf8")));
 const examSource = compile(await readFile(new URL("../src/lib/exam.ts", import.meta.url), "utf8"))
   .replace("../../mobile-tasks/src/domain/question-deletion", domainUrl)
@@ -54,6 +54,35 @@ globalThis.localStorage = { getItem: (key) => storage.get(key) ?? null, setItem:
 const question = (id, correctAnswer = "A") => ({ id, question: `Question ${id}`, options: ["a", "b", "c", "d"], correctAnswer, explanation: "Saved explanation" });
 const bank = () => ({ id: "subject", name: "Maths", chapters: [{ id: "chapter", name: "Arithmetic", exercises: [{ id: "exercise", name: "Set 1", questions: [question("q1"), question("q2", "B"), question("q3", "C")], questionCount: 3, answerKey: ["A", "B", "C"] }] }] });
 const exercise = (subject) => subject.chapters[0].exercises[0];
+
+test("replacing an existing exercise restores imported deleted rows without clearing tombstones", () => {
+  const original = bank();
+  const deleted = removeBankQuestion(removeBankQuestion(original, "exercise", "q1"), "exercise", "q2");
+  storage.clear();
+  exam.saveSubjects([deleted]);
+  const saved = exam.upsertExercise("Maths", "Arithmetic", "Set 1", 3, ["A", "B", "C"], exercise(original).questions, "exercise")[0];
+  assert.equal(exercise(saved).questions.length, 3);
+  assert.deepEqual(exercise(saved).questions.map(q => q.question), exercise(original).questions.map(q => q.question));
+  assert.notEqual(exercise(saved).questions[0].id, "q1");
+  assert.notEqual(exercise(saved).questions[1].id, "q2");
+  assert.equal(exercise(saved).questions[2].id, "q3");
+  assert.deepEqual(saved.deletedQuestionIds, deleted.deletedQuestionIds);
+  assert.equal(exercise(mergeQuestionDeletions(saved, deleted)).questions.length, 3);
+  assert.deepEqual(exercise(mergeQuestionDeletions(original, saved)).questions.map(q => q.id), ["q3"]);
+});
+
+test("mobile import preparation preserves order, answers and unaffected IDs through cloud merge", () => {
+  const original = bank();
+  const deleted = removeBankQuestion(original, "exercise", "q1");
+  const questions = prepareImportedQuestions(deleted, "exercise", exercise(original).questions, () => "restored-q1");
+  const replacement = { ...deleted, chapters: [{ ...deleted.chapters[0], exercises: [{ ...exercise(original), questions }] }] };
+  const saved = exercise(mergeQuestionDeletions(replacement, deleted));
+  assert.deepEqual(saved.questions.map(q => q.id), ["restored-q1", "q2", "q3"]);
+  assert.deepEqual(saved.answerKey, ["A", "B", "C"]);
+  assert.equal(saved.questionCount, 3);
+  assert.deepEqual(exercise(original).questions.map(q => q.id), ["q1", "q2", "q3"]);
+  assert.deepEqual(prepareImportedQuestions(deleted, "other", exercise(original).questions, () => "unused"), exercise(original).questions);
+});
 
 test("middle deletion updates the bank/key/count, preserves survivor IDs, and does not mutate input", () => {
   const original = bank();
