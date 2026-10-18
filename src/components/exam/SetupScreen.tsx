@@ -8,7 +8,9 @@ import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -510,61 +512,48 @@ export function SetupScreen({
 
         {chapter && (
           <div className="space-y-1.5 rounded-lg border border-border bg-background/50 p-2">
-            <div>
-              <div>
-                <p className="mb-1 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
-                  Answer-key exercises
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {answerKeyExercises.map((ex) => (
-                    <Button
-                      key={ex.name}
-                      type="button"
-                      size="sm"
-                      variant={ex.name === activeExerciseName ? "default" : "outline"}
-                      onClick={() => selectChapter(chapter, ex.name)}
-                    >
-                      {ex.name}
-                      {ex.questionCount ? ` · ${ex.questionCount}Q` : ""}
-                    </Button>
-                  ))}
-                  <Button type="button" size="sm" variant="ghost" onClick={addExercise}>
-                    + Add answer-key exercise
-                  </Button>
-                </div>
-              </div>
-            </div>
-            <div className={answerKeyExercises.length > 0 ? "mt-3" : ""}>
-              <p className="mb-1 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
-                Question-based exercises
-              </p>
-              <div className="flex flex-wrap gap-1.5">
+            <Label htmlFor="practice-exercise" className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+              Exercise
+            </Label>
+            <Select value={exercise} onValueChange={(value) => selectChapter(chapter, value)} disabled={!exercises.length}>
+              <SelectTrigger id="practice-exercise">
+                <SelectValue placeholder="Select exercise" />
+              </SelectTrigger>
+              <SelectContent className="exam-select-content">
                 {combinedExercise && (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={isAllExercises ? "default" : "outline"}
-                    onClick={() => selectChapter(chapter, ALL_PRACTICE_EXERCISES)}
-                  >
-                    All exercises · {combinedExercise?.questionCount}Q
-                  </Button>
+                  <SelectItem value={ALL_PRACTICE_EXERCISES}>
+                    {ALL_PRACTICE_EXERCISES_LABEL} · {combinedExercise.questionCount}Q
+                  </SelectItem>
                 )}
-                {questionExercises.map((ex) => (
-                  <Button
-                    key={ex.name}
-                    type="button"
-                    size="sm"
-                    variant={ex.name === activeExerciseName ? "default" : "outline"}
-                    onClick={() => selectChapter(chapter, ex.name)}
-                  >
-                    {ex.name}
-                    {ex.questionCount ? ` · ${ex.questionCount}Q` : ""}
-                  </Button>
-                ))}
-                <Button type="button" size="sm" variant="secondary" onClick={openJsonExercise}>
-                  + Add question exercise
-                </Button>
-              </div>
+                {questionExercises.length > 0 && (
+                  <SelectGroup>
+                    <SelectLabel>Question-based exercises</SelectLabel>
+                    {questionExercises.map((ex) => (
+                      <SelectItem key={ex.id} value={ex.name}>
+                        {ex.name} · {ex.questions?.length ?? 0}Q
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                )}
+                {answerKeyExercises.length > 0 && (
+                  <SelectGroup>
+                    <SelectLabel>Answer-key exercises</SelectLabel>
+                    {answerKeyExercises.map((ex) => (
+                      <SelectItem key={ex.id} value={ex.name}>
+                        {ex.name}{ex.questionCount ? ` · ${ex.questionCount}Q` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                )}
+              </SelectContent>
+            </Select>
+            <div className="flex flex-wrap gap-1.5">
+              <Button type="button" size="sm" variant="secondary" onClick={openJsonExercise}>
+                + Add question exercise
+              </Button>
+              <Button type="button" size="sm" variant="ghost" onClick={addExercise}>
+                + Add answer-key exercise
+              </Button>
             </div>
             {!isAllExercises && (
               <button
