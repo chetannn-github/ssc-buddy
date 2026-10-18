@@ -24,6 +24,7 @@ import {
   Pressable,
   ScrollView as NativeScrollView,
   StyleSheet as NativeStyleSheet,
+  Switch,
   Text,
   TextInput,
   useWindowDimensions,
@@ -2105,6 +2106,8 @@ function QuestionBank({
   const [deleting, setDeleting] = useState<{ exerciseId: string; questionId: string } | null>(null);
   const [chapterFilter, setChapterFilter] = useState("all");
   const [questionIndex, setCurrentQuestion] = useState(0);
+  const [attemptMode, setAttemptMode] = useState(true);
+  const [attemptAnswers, setAttemptAnswers] = useState<{ [id: string]: Option | null }>({});
   const currentQuestion = Math.max(0, Math.min(questionIndex, (viewing?.questions?.length ?? 1) - 1));
   const swipeHandlers = useQuestionSwipe(currentQuestion, viewing?.questions?.length ?? 0, setCurrentQuestion);
   const [subjectFilterOpen, setSubjectFilterOpen] = useState(false);
@@ -2156,6 +2159,9 @@ function QuestionBank({
         <ScrollView contentContainerStyle={s.content}>
           {(() => {
             const question = viewing.questions[currentQuestion];
+            const attemptId = JSON.stringify([viewing.id, question.id]);
+            const selectedAnswer = attemptAnswers[attemptId] ?? null;
+            const revealAnswer = !attemptMode || selectedAnswer !== null;
             return (
               <>
                 <View style={s.bankViewerCard} {...swipeHandlers}>
@@ -2178,23 +2184,44 @@ function QuestionBank({
                     </Pressable>
                     </View>
                   </View>
+                  <View style={s.bankAttemptMode}>
+                    <Text style={s.sessionTitle}>Attempt Mode</Text>
+                    <Switch
+                      accessibilityLabel="Attempt Mode"
+                      value={attemptMode}
+                      onValueChange={setAttemptMode}
+                      trackColor={{ false: "#454545", true: "#258b64" }}
+                      thumbColor={attemptMode ? "#6ee7b7" : "#d4d4d4"}
+                    />
+                  </View>
                   <Text style={s.bankQuestion}>{question.question}</Text>
                   {question.options.map((option, optionIndex) => {
-                    const correct = choices[optionIndex] === question.correctAnswer;
+                    const optionKey = choices[optionIndex];
+                    const correct = revealAnswer && optionKey === question.correctAnswer;
+                    const selected = attemptMode && selectedAnswer === optionKey;
+                    const wrong = selected && optionKey !== question.correctAnswer;
                     return (
-                      <View
+                      <Pressable
                         key={`${question.id}-${optionIndex}`}
-                        style={[s.bankOption, correct && s.bankOptionCorrect]}
+                        accessibilityRole="button"
+                        accessibilityState={{ disabled: !attemptMode, selected }}
+                        disabled={!attemptMode}
+                        onPress={() => setAttemptAnswers((previous) => ({
+                          ...previous,
+                          [attemptId]: previous[attemptId] === optionKey ? null : optionKey,
+                        }))}
+                        style={[s.bankOption, correct && s.bankOptionCorrect, wrong && s.solutionOptionWrong]}
                       >
                         <Text style={[s.bankOptionLetter, correct && s.bankOptionLetterCorrect]}>
                           {choices[optionIndex]}
                         </Text>
                         <Text style={s.bankOptionText}>{option}</Text>
                         {correct ? <Text style={s.correctPill}>Correct</Text> : null}
-                      </View>
+                        {wrong ? <Text style={s.bankIncorrectPill}>Incorrect</Text> : null}
+                      </Pressable>
                     );
                   })}
-                  {question.explanation ? (
+                  {question.explanation && revealAnswer ? (
                     <Text style={s.explanation}>{question.explanation}</Text>
                   ) : null}
                   <View style={s.viewerNav}>
@@ -3059,6 +3086,8 @@ const s = StyleSheet.create({
     borderColor: "#353535",
   },
   bankOptionCorrect: { borderColor: "#258b64", backgroundColor: "#153c35" },
+  bankAttemptMode: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 8 },
+  bankIncorrectPill: { borderRadius: 7, paddingHorizontal: 7, paddingVertical: 3, color: "#fca5a5", fontSize: 10, fontWeight: "800", backgroundColor: "#4c2027" },
   bankOptionLetter: {
     width: 25,
     height: 25,

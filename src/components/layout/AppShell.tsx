@@ -327,9 +327,14 @@ function DailyManifestation({
         aria-labelledby="manifestation-title"
         className="w-full max-w-md rounded-2xl border border-white/10 bg-[#171717] p-6 text-zinc-100 shadow-[0_24px_80px_-24px_black]"
       >
-        <h2 id="manifestation-title" className="text-lg font-semibold">
-          Daily manifestation
-        </h2>
+        <div className="flex items-center justify-between gap-3">
+          <h2 id="manifestation-title" className="text-lg font-semibold">
+            Daily manifestation
+          </h2>
+          <span aria-live="polite" aria-label={`Repetition ${step} of 3`} className="shrink-0 rounded-full bg-white/10 px-3 py-1 text-sm font-semibold tabular-nums text-zinc-200">
+            {step}/3
+          </span>
+        </div>
         <blockquote className="mt-4 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-center text-base font-medium leading-7 text-zinc-100">
           “{manifestation}”
         </blockquote>

@@ -1108,7 +1108,7 @@ function SplashScreen() {
 }
 
 function DailyManifestationDialog({ phrase, entry, repeats, error, onChange, onContinue }: { phrase: string; entry: string; repeats: number; error: string; onChange: (value: string) => void; onContinue: () => void }) {
-  return <Modal transparent visible={Boolean(phrase)} animationType="fade"><View style={styles.manifestationBackdrop}><View style={styles.manifestationDialog}><Text style={styles.manifestationTitle}>Daily manifestation</Text><View style={styles.manifestationPhrase}><Text style={styles.manifestationPhraseText}>“{phrase}”</Text></View><TextInput autoFocus value={entry} onChangeText={onChange} autoCapitalize="characters" placeholder="Type here" placeholderTextColor="#71717a" style={styles.manifestationInput} onSubmitEditing={onContinue} /><Text style={styles.manifestationError}>{error || " "}</Text><Pressable style={styles.manifestationButton} onPress={onContinue}><Text style={styles.manifestationButtonText}>{repeats === 2 ? "Done" : "Continue"}</Text></Pressable></View></View></Modal>;
+  return <Modal transparent visible={Boolean(phrase)} animationType="fade"><View style={styles.manifestationBackdrop}><View style={styles.manifestationDialog}><View style={styles.manifestationHeading}><Text style={styles.manifestationTitle}>Daily manifestation</Text><Text accessibilityLiveRegion="polite" accessibilityLabel={`Repetition ${repeats + 1} of 3`} style={styles.manifestationCounter}>{repeats + 1}/3</Text></View><View style={styles.manifestationPhrase}><Text style={styles.manifestationPhraseText}>“{phrase}”</Text></View><TextInput autoFocus value={entry} onChangeText={onChange} autoCapitalize="characters" placeholder="Type here" placeholderTextColor="#71717a" style={styles.manifestationInput} onSubmitEditing={onContinue} /><Text style={styles.manifestationError}>{error || " "}</Text><Pressable style={styles.manifestationButton} onPress={onContinue}><Text style={styles.manifestationButtonText}>{repeats === 2 ? "Done" : "Continue"}</Text></Pressable></View></View></Modal>;
 }
 
 function Field(props: {
@@ -1509,6 +1509,8 @@ const styles = StyleSheet.create({
   manifestationIcon: { width: 49, height: 49, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: "#203040" },
   manifestationIconText: { color: "#93c5fd", fontSize: 29, fontWeight: "800" },
   manifestationTitle: { color: "#fafafa", fontSize: 18, fontWeight: "700" },
+  manifestationHeading: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
+  manifestationCounter: { color: "#e4e4e7", fontSize: 14, fontWeight: "700", fontVariant: ["tabular-nums"], backgroundColor: "rgba(255,255,255,.10)", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4 },
   manifestationPhrase: { borderRadius: 12, paddingHorizontal: 16, paddingVertical: 13, alignItems: "center", marginTop: 16, backgroundColor: "rgba(0,0,0,.20)", borderWidth: 1, borderColor: "#383838" },
   manifestationPhraseText: { color: "#f4f4f5", fontSize: 16, fontWeight: "600", lineHeight: 24, textAlign: "center" },
   manifestationInput: { height: 44, borderRadius: 10, paddingHorizontal: 13, color: "#fafafa", backgroundColor: "rgba(0,0,0,.30)", borderWidth: 1, borderColor: "#383838", fontSize: 14, fontWeight: "600", marginTop: 16 },
