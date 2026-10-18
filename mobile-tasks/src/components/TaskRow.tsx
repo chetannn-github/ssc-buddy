@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { formatMinutes, type Task } from "../domain/tasks";
+import { dateKey, formatMinutes, type Task } from "../domain/tasks";
 import { colors } from "../theme";
 
 type Props = {
@@ -42,7 +42,7 @@ export function TaskRow({ task, points, onDone, onReopen, onEdit, onDelete, comp
             {task.completed ? ` · ${formatMinutes(task.minutesSpent ?? 0)} completed` : ""}
           </Text>
         </Pressable>
-        {!compact ? (
+        {!compact && task.date !== dateKey() ? (
           <View style={styles.actions}>
             <Pressable accessibilityLabel="Delete task" onPress={onDelete} hitSlop={9} style={styles.iconAction}><MaterialCommunityIcons name="close" size={18} color={colors.muted} /></Pressable>
           </View>

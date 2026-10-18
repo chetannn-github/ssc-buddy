@@ -592,6 +592,7 @@ function DailyTasks() {
                 disabled={isDeleting}
                 onClick={async () => {
                   if (!deleting || isDeleting) return;
+                  if (deleting.date === todayKey()) { setDeleting(null); return; }
                   setIsDeleting(true);
                   try {
                     await persist(tasks.filter((item) => item.id !== deleting.id));
@@ -667,7 +668,7 @@ function TaskRow({
           {task.completed && task.minutesSpent ? <> · <RollingDuration minutes={task.minutesSpent} /></> : ""}
         </p>
       </div>
-      {!readOnly && (
+      {!readOnly && task.date !== todayKey() && (
         <>
           <Button size="icon" variant="ghost" onClick={(event) => { event.stopPropagation(); onDelete(); }}>
             <X className="h-4 w-4" />

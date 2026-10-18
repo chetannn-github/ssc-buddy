@@ -786,12 +786,14 @@ export default function App() {
       ),
     );
   };
-  const remove = (id: string) => setDeletingTask(tasks.find((task) => task.id === id) ?? null);
+  const remove = (id: string) => setDeletingTask(tasks.find((task) => task.id === id && task.date !== dateKey()) ?? null);
   const canUseTaskRow = () => Date.now() >= taskRowInteractionBlockedUntil.current;
   const confirmDelete = async () => {
     if (!deletingTask) return;
+    if (deletingTask.date === dateKey()) { setDeletingTask(null); return; }
     setTaskActionLoading(true);
     await new Promise((resolve) => setTimeout(resolve, 280));
+    if (deletingTask.date === dateKey()) { setDeletingTask(null); setTaskActionLoading(false); return; }
     persist(tasks.filter((task) => task.id !== deletingTask.id));
     setDeletingTask(null); setTaskActionLoading(false);
   };
