@@ -1,4 +1,5 @@
 import { initializeApp } from "firebase/app";
+import { appendRecallQuestionSnapshots, type RecallQuestionInput } from "../../../mobile-tasks/src/domain/quick-recall-solutions";
 import {
   GoogleAuthProvider,
   createUserWithEmailAndPassword,
@@ -244,7 +245,7 @@ export type QuickRecallPracticeInput = {
   runId: string;
   date: string;
   startedAt: string;
-  questions: Array<{ id: string; subjectId: string; correctAnswer: string }>;
+  questions: Array<RecallQuestionInput & { subjectId: string }>;
   answers: string[];
 };
 
@@ -271,6 +272,7 @@ export async function recordQuickRecallPractice(user: User, input: QuickRecallPr
       testMode: "quick-recall", subjectId: "quick-recall", subject: "Quick Recall", chapter: "", exercise: "Quick Recall",
       startNumber: 1, durationMinutes: null, timeTakenSeconds: Math.max(0, Number(current.timeTakenSeconds) || 0),
       answers: [...oldAnswers, ...answers], questionIds: [...oldIds, ...questions.map((question) => question.id)],
+      quickRecallQuestions: appendRecallQuestionSnapshots(current, questions),
       answerKey: [...oldKey, ...questions.map((question) => question.correctAnswer)], correct: nextCorrect, wrong: nextWrong,
       marking: { positive: 1, negative: 0 }, score: nextCorrect, quickRecallRunIds: [...runIds, input.runId], updatedAtServer: serverTimestamp(),
     });

@@ -34,6 +34,7 @@ import { loadTrackerData, saveTrackerData } from "@/lib/tracker-store";
 import { migrateTrackerIfEmpty, readTrackerSections, watchTrackerSections } from "@/lib/tracker-sync";
 import { WEB_CLOUD_SYNC_ENABLED } from "@/lib/web-cloud-sync";
 import { prepareWebAccountCache } from "@/lib/account-cache";
+import { loadActiveTest } from "@/lib/active-test";
 import type { User } from "firebase/auth";
 
 const DEBUG_FREEZE = import.meta.env.DEV;
@@ -180,6 +181,14 @@ function RootComponent() {
 
   const navigate = useNavigate();
   const path = useRouterState({ select: (state) => state.location.pathname });
+  const resumeChecked = useRef<string | null>(null);
+  useEffect(() => {
+    if (!authResolved || !workspaceReady || (isFirebaseConfigured && !syncUser)) return;
+    const owner = syncUser?.uid ?? "offline";
+    if (resumeChecked.current === owner) return;
+    resumeChecked.current = owner;
+    if (loadActiveTest() && path !== "/test") void navigate({ to: "/test", search: {}, replace: true });
+  }, [authResolved, workspaceReady, syncUser, path, navigate]);
 
   // Temporary development diagnostics for UI stalls. This is intentionally not
   // included in production builds, and does not write or alter application data.

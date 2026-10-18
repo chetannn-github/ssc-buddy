@@ -1,4 +1,6 @@
 import { applyQuestionDeletions, removeBankQuestion } from "../../mobile-tasks/src/domain/question-deletion";
+import { quickRecallHistoryKey } from "../../mobile-tasks/src/domain/quick-recall-history";
+import type { RecallQuestionSnapshot } from "../../mobile-tasks/src/domain/quick-recall-solutions";
 export type Option = "A" | "B" | "C" | "D";
 
 export type Verdict = "correct" | "incorrect" | null;
@@ -41,6 +43,7 @@ export type TestRecord = {
   questionIds?: string[];
   answerKey?: (Option | null)[];
   questions?: McqQuestion[] | undefined;
+  quickRecallQuestions?: Record<string, RecallQuestionSnapshot>;
 
   evaluations?: Verdict[];
   correct: number | null;
@@ -269,6 +272,7 @@ export function upsertExercise(
   questionCount: number | null = null,
   answerKey: (Option | null)[] | null = null,
   questions?: McqQuestion[],
+  exerciseId?: string | null,
 ): Subject[] {
   const subjects = loadSubjects();
   const subject = subjects.find((s) => s.name === subjectName);
@@ -287,8 +291,17 @@ export function upsertExercise(
   }
 
   const name = exerciseName.trim() || DEFAULT_EXERCISE;
-  const existing = chapter.exercises.find((e) => e.name.toLowerCase() === name.toLowerCase());
+  if (exerciseId !== undefined && chapter.exercises.some((e) => e.id !== exerciseId && e.name.toLowerCase() === name.toLowerCase())) {
+    throw new Error("An exercise with this name already exists. Choose another name or edit the existing exercise.");
+  }
+  // An explicit ID edits that exercise even after renaming. Null creates a new
+  // exercise; omitted retains name-based updates for legacy answer-key callers.
+  const existing = exerciseId === undefined
+    ? chapter.exercises.find((e) => e.name.toLowerCase() === name.toLowerCase())
+    : exerciseId === null ? undefined : chapter.exercises.find((e) => e.id === exerciseId);
+  if (exerciseId && !existing) throw new Error("This exercise is no longer available. Reopen the exercise and try again.");
   if (existing) {
+    existing.name = name;
     existing.questionCount = questionCount;
     existing.answerKey = answerKey;
     existing.questions = questions?.map(normalizeQuestion);
@@ -466,6 +479,8 @@ export function getRecord(id: string): TestRecord | null {
 }
 
 export function attemptKey(r: TestRecord) {
+  const recallKey = quickRecallHistoryKey(r);
+  if (recallKey) return recallKey;
   if (r.testMode === "random") return r.attemptGroupId ?? r.id;
   return `${r.subjectId ?? r.subject}||${r.chapterId ?? r.chapter}||${r.exerciseId ?? r.exercise ?? ""}||${r.startNumber}||${r.answers.length}${r.questionIds?.length ? `||q:${JSON.stringify(r.questionIds)}` : ""}`;
 }

@@ -5,6 +5,7 @@ const OWNER_KEY = "ssc-buddy:local-cache-owner:v1";
 // These are app-owned caches only. Firebase's own auth persistence is never
 // removed, otherwise signing out would also break normal account switching.
 const ACCOUNT_DATA_KEYS = [
+  "ssc-buddy:active-test:v1",
   "ssc-buddy:tasks:v2",
   "ssc-buddy-mobile:tasks:v1",
   "cbt-subjects",

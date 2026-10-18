@@ -1,0 +1,56 @@
+.streak-liquid-fill {
+  animation: streak-liquid-rise 900ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.streak-liquid-wave {
+  animation: streak-liquid-wave 2.8s ease-in-out infinite alternate;
+}
+.streak-liquid-bubble {
+  opacity: 0;
+  animation: streak-liquid-bubble 2.8s linear infinite;
+}
+.streak-liquid-bubble-second {
+  animation-delay: -1.4s;
+}
+@keyframes streak-liquid-rise {
+  from {
+    transform: translateY(24px);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@keyframes streak-liquid-wave {
+  from {
+    transform: translateX(-12px);
+  }
+  to {
+    transform: translateX(12px);
+  }
+}
+@keyframes streak-liquid-bubble {
+  0% {
+    transform: translate(0, 1px);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.8;
+  }
+  75% {
+    opacity: 0.45;
+  }
+  100% {
+    transform: translate(1px, -16px);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .streak-liquid-fill,
+  .streak-liquid-wave {
+    animation: none;
+    transform: none;
+  }
+  .streak-liquid-bubble {
+    display: none;
+    animation: none;
+  }
+}

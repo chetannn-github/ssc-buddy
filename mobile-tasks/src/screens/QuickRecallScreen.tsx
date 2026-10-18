@@ -6,6 +6,7 @@ import type { User } from "firebase/auth";
 import { pruneUnlockQuiz, advanceUnlockQuiz, answerUnlockQuiz, releaseUnlockQuizReview, startUnlockQuiz, RANDOM_RECALL_SCOPE, type QuickRecallScope, type UnlockQuizState } from "../domain/unlock-quiz";
 import { watchPracticeEntities, loadQuickRecallSeed, recordQuickRecallPractice, writeQuestionLearning } from "../lib/firebase";
 import { colors } from "../theme";
+import { dateKey } from "../domain/tasks";
 import { RecallScopeDropdown } from "./RecallScopeDropdown";
 
 import { ALL_RECALL_EXERCISES } from "../domain/recall-selection";
@@ -53,7 +54,7 @@ export function QuickRecallScreen({ user, onClose, onGoProfile }: { user: User |
     setQuiz(next);
     if (!user || !next || next.selected !== choice || next.questions[next.index]?.id !== question.id) return;
     void writeQuestionLearning(user, { stats: next.stats });
-    void recordQuickRecallPractice(user, { runId: `${next.runId}:${next.index}`, date: new Date().toISOString().slice(0, 10), startedAt: next.startedAt, questions: [question], answers: [choice] });
+    void recordQuickRecallPractice(user, { runId: `${next.runId}:${next.index}`, date: dateKey(), startedAt: next.startedAt, questions: [question], answers: [choice] });
   };
   const next = async () => setQuiz(await advanceUnlockQuiz());
   if (loading) return <View style={styles.page}><View style={styles.loader}><ActivityIndicator color="#60a5fa" /><Text style={styles.muted}>Preparing quick recall…</Text></View></View>;

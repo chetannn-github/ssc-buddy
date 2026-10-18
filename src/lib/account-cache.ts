@@ -5,6 +5,7 @@
 const OWNER_KEY = "ssc-buddy:local-cache-owner:v1";
 
 const ACCOUNT_DATA_KEYS = [
+  "ssc-buddy:active-test:v1",
   "ssc-buddy:tasks:v2",
   "cbt-subjects",
   "cbt-history",

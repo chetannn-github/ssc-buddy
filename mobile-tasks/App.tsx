@@ -48,6 +48,7 @@ import { isFirebaseConfigured, migrateTasksIfEmpty, observeSession, patchCloudPr
 import { logout } from "./src/lib/firebase";
 import { defaultProfile, loadProfile, normalizeProfile, saveProfile, type PracticeProfile } from "./src/lib/profile-store";
 import { prepareMobileAccountCache } from "./src/lib/account-cache";
+import { loadActiveTest } from "./src/lib/active-test";
 import { avatarAssets, ProfileScreen } from "./src/screens/ProfileScreen";
 import { LeaderboardScreen } from "./src/screens/LeaderboardScreen";
 import { MediaOverlay, type MediaMode } from "./src/screens/MediaOverlay";
@@ -346,8 +347,10 @@ export default function App() {
         setAuthReady(true);
         return;
       }
-      void prepareMobileAccountCache(nextUser.uid).then((switchedAccount) => {
+      void prepareMobileAccountCache(nextUser.uid).then(async (switchedAccount) => {
+        const activeTest = await loadActiveTest().catch(() => null);
         if (version !== authChangeVersion.current) return;
+        if (activeTest) setAppTab("practice");
         if (switchedAccount) {
           taskCacheVersion.current += 1;
           profileCacheVersion.current += 1;
@@ -455,6 +458,18 @@ export default function App() {
   useEffect(() => {
     if (authenticated && profileSettings && !profileSettings.username) setAppTab("profile");
   }, [authenticated, profileSettings?.username]);
+  const resumedTestOwner = useRef<string | null>(null);
+  useEffect(() => {
+    if (!authenticated || !user || !profileSettings?.username || profileSettings.practiceSessionEnabled === false) return;
+    if (resumedTestOwner.current === user.uid) return;
+    let stopped = false;
+    void loadActiveTest().then((saved) => {
+      if (stopped) return;
+      resumedTestOwner.current = user.uid;
+      if (saved) setAppTab("practice");
+    }).catch(() => undefined);
+    return () => { stopped = true; };
+  }, [authenticated, user?.uid, profileSettings?.username, profileSettings?.practiceSessionEnabled]);
   useEffect(() => {
     if (profileSettings?.practiceSessionEnabled === false && appTab === "practice") setAppTab("profile");
   }, [appTab, profileSettings?.practiceSessionEnabled]);

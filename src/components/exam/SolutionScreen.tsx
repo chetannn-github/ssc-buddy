@@ -2,7 +2,9 @@ import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import type { Option, TestRecord } from "@/lib/exam";
+import { loadSubjects, type Option, type TestRecord } from "@/lib/exam";
+import { isQuickRecallRecord } from "../../../mobile-tasks/src/domain/quick-recall-history";
+import { resolveRecallQuestions } from "../../../mobile-tasks/src/domain/quick-recall-solutions";
 
 const OPTIONS: Option[] = ["A", "B", "C", "D"];
 
@@ -35,7 +37,14 @@ export function SolutionScreen({ record, onExit }: Props) {
   const original = record.answers[current] ?? null;
   const correctOpt = key[current] ?? null;
   const retry = retryAnswers[current] ?? null;
-  const question = record.questions?.[current];
+  const questions = useMemo(
+    () =>
+      isQuickRecallRecord(record)
+        ? resolveRecallQuestions(record, loadSubjects())
+        : record.questions,
+    [record],
+  );
+  const question = questions?.[current];
 
   const paletteClass = (i: number) =>
     cn(
@@ -139,6 +148,11 @@ export function SolutionScreen({ record, onExit }: Props) {
           {question && (
             <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-foreground">
               {question.question}
+            </p>
+          )}
+          {!question && isQuickRecallRecord(record) && (
+            <p className="mt-4 text-sm text-muted-foreground">
+              Question text is unavailable for this older answer.
             </p>
           )}
 

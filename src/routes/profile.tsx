@@ -4,7 +4,6 @@ import {
   Check,
   ChevronDown,
   Copy,
-  Flame,
   LoaderCircle,
   LogOut,
   Music2,
@@ -16,11 +15,15 @@ import {
   Upload,
   Trophy,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { AppShell } from "@/components/layout/AppShell";
 import { RollingNumber, RollingDuration } from "@/components/ui/rolling-number";
 import { LiquidProgressBar, ProfileXpBar } from "@/components/profile/ProfileXpBar";
+import { StreakLiquidFlame } from "@/components/profile/StreakLiquidFlame";
+import "@/components/profile/liquid-heatmap.css";
+import { useRandomHeatmapFill } from "@/components/profile/use-random-heatmap-fill";
+import { fixedHeatmapColor, heatmapCellColors, nextProfileColorTheme, type HeatmapColorCycle } from "../../mobile-tasks/src/domain/heatmap-colors";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -167,6 +170,7 @@ function DayActivityDetails({ date, items }: { date: string; items: DayActivityD
 }
 
 function ActivityHeatmap({
+  colorTheme,
   records,
   tracker,
   tasks,
@@ -175,6 +179,7 @@ function ActivityHeatmap({
   publicActivity,
   dataReady = true,
 }: {
+  colorTheme: HeatmapColorCycle;
   records: TestRecord[];
   tracker: TrackerData | null;
   tasks: DailyTask[];
@@ -183,6 +188,7 @@ function ActivityHeatmap({
   publicActivity?: Record<string, number> | undefined;
   dataReady?: boolean;
 }) {
+  const { cycle: liquidCycle, enabled: liquidEnabled } = useRandomHeatmapFill(colorTheme);
   const todayKey = localDay(new Date());
   const hasTodayTask = tasks.some((task) => task.completed && activityDay(task.date) === todayKey);
   const hasTodayActivity = Boolean(
@@ -425,6 +431,8 @@ function ActivityHeatmap({
                     {month.days.map(({ date, value, maximum }) => {
                       const intensity =
                         value === 0 ? 0 : Math.min(4, Math.ceil((value / maximum) * 4));
+                      const liquidColors = heatmapCellColors(localDay(date), intensity, liquidCycle);
+                      const cellColor = fixedHeatmapColor(intensity, mode);
                       return (
                         <button
                           type="button"
@@ -451,13 +459,15 @@ function ActivityHeatmap({
                           aria-label={`${formatDate(localDay(date))}: ${value} ${mode === "tasks" ? "tasks completed" : "activities"}`}
                           className={cn(
                             "group relative aspect-square w-full rounded-[3px] ring-1 ring-inset ring-white/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300",
-                            intensity === 0 && "bg-zinc-700",
-                            intensity === 1 && "bg-emerald-200",
-                            intensity === 2 && "bg-emerald-300",
-                            intensity === 3 && "bg-emerald-500",
-                            intensity === 4 && "bg-emerald-700",
+                            "bg-zinc-700",
                           )}
                         >
+                          {intensity > 0 && <span aria-hidden="true" className={cn("heatmap-liquid", !liquidEnabled && "heatmap-liquid-paused")} style={{ backgroundColor: "#3f3f46", "--heatmap-liquid-color": cellColor } as CSSProperties}>
+                            <span key={`${mode}-${liquidCycle.seed}`} className="heatmap-liquid-fill heatmap-color-refill" style={{ height: "100%", animationDuration: "1200ms" }}>
+                              <span className="heatmap-liquid-bubble" style={{ animationDelay: `-${liquidColors.delay}ms` }} />
+                              <span className="heatmap-liquid-bubble heatmap-liquid-bubble-second" style={{ animationDelay: `-${liquidColors.delay + 1400}ms` }} />
+                            </span>
+                          </span>}
                         </button>
                       );
                     })}
@@ -491,11 +501,8 @@ function ActivityHeatmap({
             className={cn(
               "h-3 w-3 rounded-[3px]",
               intensity === 0 && "bg-zinc-700",
-              intensity === 1 && "bg-emerald-200",
-              intensity === 2 && "bg-emerald-300",
-              intensity === 3 && "bg-emerald-500",
-              intensity === 4 && "bg-emerald-700",
             )}
+            style={intensity > 0 ? { backgroundColor: fixedHeatmapColor(intensity, mode) } : undefined}
           />
         ))}
         More
@@ -829,6 +836,13 @@ type ProfileProps = {
 };
 
 export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
+  const [colorTheme, setColorTheme] = useState<HeatmapColorCycle>({ seed: 0, previousShift: -1, shift: 0 });
+  const themeChosen = useRef(false);
+  useEffect(() => {
+    if (themeChosen.current) return;
+    themeChosen.current = true;
+    setColorTheme(nextProfileColorTheme());
+  }, []);
   const [records, setRecords] = useState<TestRecord[]>([]);
   const [dailyTasks, setDailyTasks] = useState<DailyTask[]>([]);
   const [tracker, setTracker] = useState<TrackerData | null>(null);
@@ -1142,13 +1156,13 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
                 <button
                   type="button"
                   onClick={() => setPreviewingAvatar(true)}
-                  className="group relative h-24 w-24 shrink-0 overflow-hidden rounded-full ring-2 ring-white/10 transition-transform hover:scale-105 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+                  className="group relative h-24 w-24 shrink-0 overflow-hidden rounded-full ring-1 ring-white/10 transition-transform hover:scale-105 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
                   aria-label="Preview profile image"
                 >
                   <img
                     src={avatarUrl(avatar)}
                     alt="Profile avatar"
-                    className="h-full w-full object-cover"
+                    className="relative z-10 h-full w-full rounded-full object-cover"
                   />
                   <span className="absolute inset-0 bg-black/0 transition-colors group-hover:bg-black/20" />
                 </button>
@@ -1159,7 +1173,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
                 type="button"
                 size="icon"
                 variant="ghost"
-                className="absolute right-0 bottom-0 h-8 w-8 rounded-full bg-[#202020] text-zinc-300 ring-1 ring-white/10 hover:bg-white/10 hover:text-zinc-100"
+                className="absolute right-0 bottom-0 z-20 h-8 w-8 rounded-full bg-[#202020] text-zinc-300 ring-1 ring-white/10 hover:bg-white/10 hover:text-zinc-100"
                 onClick={updateAvatar}
                 disabled={avatarFiles.length < 2}
                 aria-label="Change profile image"
@@ -1180,7 +1194,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
                     title={`${consistencyStreak}-day consistency streak`}
                     className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-400/15 px-2 py-1 text-xs font-semibold text-amber-200"
                   >
-                    <Flame className="h-3.5 w-3.5 fill-amber-300 text-amber-300" />
+                    <StreakLiquidFlame active={consistencyStreak > 0} className="h-3.5 w-3.5" />
                     {consistencyStreak}
                   </span>
                 )}
@@ -1250,7 +1264,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
               showTracker={profile?.trackProgressEnabled !== false}
             />
 
-            <ActivityHeatmap records={records} tracker={tracker} tasks={dailyTasks} range="year" activityEnabled={profile?.practiceSessionEnabled !== false || profile?.trackProgressEnabled !== false} publicActivity={readOnly && !publicProfile?.dashboard ? publicProfile?.activity : undefined} dataReady={readOnly || profile !== null} />
+            <ActivityHeatmap colorTheme={colorTheme} records={records} tracker={tracker} tasks={dailyTasks} range="year" activityEnabled={profile?.practiceSessionEnabled !== false || profile?.trackProgressEnabled !== false} publicActivity={readOnly && !publicProfile?.dashboard ? publicProfile?.activity : undefined} dataReady={readOnly || profile !== null} />
           </div>
 
           {profile?.trackProgressEnabled !== false && <StudyTrackerOverview tracker={tracker} readOnly={readOnly} />}

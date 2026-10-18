@@ -14,6 +14,8 @@
     "test:quick-recall": "node --test scripts/test-quick-recall.mjs",
     "test:practice-exercises": "node --test scripts/test-practice-exercises.mjs",
     "test:question-navigation": "node --test scripts/test-question-navigation.mjs",
+    "test:active-test": "node --test scripts/test-active-test-session.mjs",
+    "test:floating-player": "node --test scripts/test-floating-player.mjs",
     "test:leaderboard-period": "node --test scripts/test-leaderboard-period.mjs",
     "format": "prettier --write ."
   },

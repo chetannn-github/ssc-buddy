@@ -23,6 +23,8 @@ import {
 const OPTIONS: Option[] = ["A", "B", "C", "D"];
 
 type Props = {
+  initialProgress?: { states: QuestionState[]; current: number; remaining: number } | null;
+  onProgress: (progress: { states: QuestionState[]; current: number; remaining: number }) => void;
   minutes: number;
   startNumber: number;
   subject: string;
@@ -38,6 +40,8 @@ type Props = {
 const blank = (visited: boolean): QuestionState => ({ answer: null, marked: false, visited });
 
 export function TestScreen({
+  initialProgress,
+  onProgress,
   minutes,
   startNumber,
   subject,
@@ -50,25 +54,42 @@ export function TestScreen({
   onSubmit,
 }: Props) {
   const total = minutes * 60;
-  const [states, setStates] = useState<QuestionState[]>(() =>
-    questionCount && questionCount > 0
-      ? Array.from({ length: questionCount }, (_, i) => blank(i === 0))
-      : [blank(true)],
+  const [states, setStates] = useState<QuestionState[]>(
+    () =>
+      initialProgress?.states ??
+      (questionCount && questionCount > 0
+        ? Array.from({ length: questionCount }, (_, i) => blank(i === 0))
+        : [blank(true)]),
   );
-  const [current, setCurrent] = useState(0);
-  const [seconds, setSeconds] = useState(total);
+  const [current, setCurrent] = useState(initialProgress?.current ?? 0);
+  const [seconds, setSeconds] = useState(initialProgress?.remaining ?? total);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(initialDarkMode);
   const [isThemeSwitching, setIsThemeSwitching] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const submitted = useRef(false);
   const themeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const answers = useMemo(() => states.map((s) => s.answer), [states]);
 
   useEffect(() => {
-    const id = setInterval(() => setSeconds((s) => Math.max(0, s - 1)), 1000);
+    const id = setInterval(() => {
+      if (document.visibilityState === "visible") setSeconds((s) => Math.max(0, s - 1));
+    }, 1000);
     return () => clearInterval(id);
   }, []);
+
+  useEffect(() => {
+    if (submitted.current) return;
+    try {
+      onProgress({ states, current, remaining: seconds });
+      setSaveError(null);
+    } catch {
+      setSaveError(
+        "Progress could not be saved locally. Please free some storage before closing this test.",
+      );
+    }
+  }, [states, current, seconds, onProgress]);
 
   useEffect(
     () => () => {
@@ -80,7 +101,12 @@ export function TestScreen({
   const submit = (list: (Option | null)[], remaining: number) => {
     if (submitted.current) return;
     submitted.current = true;
-    onSubmit(list, total - remaining);
+    try {
+      onSubmit(list, total - remaining);
+    } catch {
+      submitted.current = false;
+      setSaveError("Result could not be saved locally. Please try submitting again.");
+    }
   };
 
   useEffect(() => {
@@ -149,6 +175,11 @@ export function TestScreen({
         darkMode ? "exam-dark bg-[#121212] text-zinc-100" : "bg-background",
       )}
     >
+      {saveError && (
+        <p role="alert" className="bg-destructive px-4 py-2 text-sm text-destructive-foreground">
+          {saveError}
+        </p>
+      )}
       <header
         className={cn(
           "sticky top-0 z-20 h-16 shadow-[var(--shadow-card)]",

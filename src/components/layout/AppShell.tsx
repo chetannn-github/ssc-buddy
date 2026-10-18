@@ -1,4 +1,8 @@
 import type { PointerEvent, ReactNode } from "react";
+import { FloatingMusicPlayer } from "@/components/layout/FloatingMusicPlayer";
+import { MusicRingLiquid } from "@/components/layout/MusicRingLiquid";
+import { StreakLiquidFlame } from "@/components/profile/StreakLiquidFlame";
+import type { PlayerCorner } from "../../../mobile-tasks/src/domain/floating-player";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   BarChart3,
@@ -763,6 +767,7 @@ export function MotivationalMusic({ onClose }: { onClose: () => void }) {
   const [selectedTrack, setSelectedTrack] = useState<string | null>(null);
   const [likedTracks, setLikedTracks] = useState(() => loadLikes(MUSIC_LIKES_KEY));
   const [minimized, setMinimized] = useState(false);
+  const [miniCorner, setMiniCorner] = useState<PlayerCorner>("bottom-right");
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [selectedPlaylist, setSelectedPlaylist] = useState("");
@@ -932,27 +937,18 @@ export function MotivationalMusic({ onClose }: { onClose: () => void }) {
     return (
       <>
         {audioPlayer}
-        <div className="fixed right-4 bottom-4 z-[75] flex max-w-[calc(100vw-2rem)] items-center gap-2 rounded-xl border border-white/10 bg-[#1b1b1b] p-2 pl-3 text-zinc-100 shadow-2xl">
-          <button
-            type="button"
-            onClick={() => setMinimized(false)}
-            className="min-w-0 text-left"
-            aria-label="Expand music player"
-          >
-            <span className="block max-w-40 truncate text-xs font-medium">
-              {selectedTrack ? trackTitle(selectedTrack) : "Music"}
-            </span>
-          </button>
+        <FloatingMusicPlayer corner={miniCorner} onCornerChange={setMiniCorner}>
           <button
             type="button"
             onClick={togglePlayback}
             aria-label="Play or pause music"
-            className="relative grid h-8 w-8 place-items-center overflow-hidden rounded-lg p-[2px]"
+            className="relative grid h-8 w-8 place-items-center overflow-hidden rounded-full p-[2px]"
             style={{
               background: `conic-gradient(#ef4444 ${playbackPercent}%, rgba(255,255,255,0.12) 0)`,
             }}
           >
-            <span className="grid h-full w-full place-items-center overflow-hidden rounded-md bg-[#1b1b1b]">
+            <MusicRingLiquid progress={playbackPercent} playing={isPlaying} />
+            <span className="relative z-10 grid h-full w-full place-items-center overflow-hidden rounded-full bg-[#1b1b1b]">
               {coverUrl ? (
                 <img
                   draggable={false}
@@ -970,13 +966,23 @@ export function MotivationalMusic({ onClose }: { onClose: () => void }) {
           </button>
           <button
             type="button"
+            onClick={() => setMinimized(false)}
+            className="min-w-0 text-left"
+            aria-label="Expand music player"
+          >
+            <span className="block max-w-40 truncate text-xs font-medium">
+              {selectedTrack ? trackTitle(selectedTrack) : "Music"}
+            </span>
+          </button>
+          <button
+            type="button"
             onClick={onClose}
             aria-label="Close music player"
             className="grid h-8 w-8 place-items-center rounded-lg text-zinc-500 hover:bg-white/10 hover:text-zinc-100"
           >
             <X className="h-4 w-4" />
           </button>
-        </div>
+        </FloatingMusicPlayer>
       </>
     );
   }
@@ -1023,7 +1029,8 @@ export function MotivationalMusic({ onClose }: { onClose: () => void }) {
                 }}
                 aria-label="Play or pause music"
               >
-                <span className="grid h-full w-full place-items-center overflow-hidden rounded-full bg-[#171717]">
+                <MusicRingLiquid progress={playbackPercent} playing={isPlaying} />
+                <span className="relative z-10 grid h-full w-full place-items-center overflow-hidden rounded-full bg-[#171717]">
                   {coverUrl ? (
                     <img
                       draggable={false}
@@ -1039,7 +1046,7 @@ export function MotivationalMusic({ onClose }: { onClose: () => void }) {
                   )}
                 </span>
                 <span
-                  className="pointer-events-none absolute inset-0"
+                  className="pointer-events-none absolute inset-0 z-20"
                   style={{ transform: `rotate(${playbackPercent * 3.6}deg)` }}
                 >
                   <span className="absolute top-0 left-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-0.5 rounded-full border-2 border-[#171717] bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.9)]" />
@@ -1344,9 +1351,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
                 : "bg-white/10 text-white/75 hover:bg-white/15 hover:text-white",
             )}
           >
-            <Flame
-              className={cn("h-4 w-4", currentStreak > 0 && "fill-amber-300 text-amber-300")}
-            />
+            <StreakLiquidFlame active={currentStreak > 0} className="h-4 w-4" />
             <span>{currentStreak}</span>
           </Link>
         </div>

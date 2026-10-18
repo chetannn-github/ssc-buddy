@@ -9,10 +9,46 @@ const compile = (source) => ts.transpileModule(source, {
 const url = (source) => `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`;
 const domainUrl = url(compile(await readFile(new URL("../mobile-tasks/src/domain/question-deletion.ts", import.meta.url), "utf8")));
 const { removeBankQuestion, mergeQuestionDeletions, pruneDeletedRecall, isQuestionAttempt, snapshotQuestionPaper } = await import(domainUrl);
+const recallHistoryUrl = url(compile(await readFile(new URL("../mobile-tasks/src/domain/quick-recall-history.ts", import.meta.url), "utf8")));
 const examSource = compile(await readFile(new URL("../src/lib/exam.ts", import.meta.url), "utf8"))
-  .replace("../../mobile-tasks/src/domain/question-deletion", domainUrl);
+  .replace("../../mobile-tasks/src/domain/question-deletion", domainUrl)
+  .replace("../../mobile-tasks/src/domain/quick-recall-history", recallHistoryUrl);
 const exam = await import(url(examSource));
 const storage = new Map();
+const importUrl = url(compile(await readFile(new URL("../mobile-tasks/src/domain/question-import.ts", import.meta.url), "utf8")));
+const { parseQuestionsJson } = await import(importUrl);
+
+test("web JSON saves accept app letter and zero-based answer formats", () => {
+  const parsed = parseQuestionsJson(JSON.stringify(["A", "B", "C", "D", 0, 1, 2, 3].map((correctAnswer) => ({ question: "Q", options: ["a", "b", "c", "d"], correctAnswer }))), () => "generated-id");
+  assert.deepEqual(parsed.map((item) => item.correctAnswer), ["A", "B", "C", "D", "A", "B", "C", "D"]);
+  for (const correctAnswer of ["E", "0", -1, 4, 1.5, null]) {
+    assert.throws(() => parseQuestionsJson(JSON.stringify([{ question: "Q", options: ["a", "b", "c", "d"], correctAnswer }]), () => "id"));
+  }
+});
+
+test("JSON exercise edits preserve identity when renamed and new saves do not overwrite existing exercises", () => {
+  storage.clear();
+  exam.saveSubjects([bank()]);
+  let saved = exam.upsertExercise("Maths", "Arithmetic", "Renamed", 1, ["A"], [question("new")], "exercise");
+  assert.equal(saved[0].chapters[0].exercises.length, 1);
+  assert.equal(exercise(saved[0]).id, "exercise");
+  assert.equal(exercise(saved[0]).name, "Renamed");
+  assert.deepEqual(exercise(saved[0]).questions.map((item) => item.id), ["new"]);
+  saved = exam.upsertExercise("Maths", "Arithmetic", "New set", 1, ["A"], [question("q4")], null);
+  assert.equal(saved[0].chapters[0].exercises.length, 2);
+  assert.notEqual(saved[0].chapters[0].exercises[1].id, "exercise");
+  const before = JSON.stringify(saved);
+  assert.throws(() => exam.upsertExercise("Maths", "Arithmetic", "Renamed", 1, ["A"], [question("q5")], null));
+  assert.throws(() => exam.upsertExercise("Maths", "Arithmetic", "Missing edit", 1, ["A"], [question("q5")], "deleted-id"));
+  assert.equal(JSON.stringify(exam.loadSubjects()), before);
+});
+
+test("Quick Recall has one history group per calendar day regardless of question count", () => {
+  const recall = { id: "quick-recall:2026-10-18", testMode: "quick-recall", subject: "Quick Recall", date: "2026-10-18", answers: ["A"], questionIds: ["q1"] };
+  assert.equal(exam.attemptKey(recall), exam.attemptKey({ ...recall, answers: ["A", "B"], questionIds: ["q1", "q2"] }));
+  assert.notEqual(exam.attemptKey(recall), exam.attemptKey({ ...recall, id: "quick-recall:2026-10-19", date: "2026-10-19" }));
+  assert.equal(exam.attemptKey({ ...recall, id: "legacy-recall", testMode: undefined }), "quick-recall:2026-10-18");
+});
 globalThis.localStorage = { getItem: (key) => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value), removeItem: (key) => storage.delete(key) };
 
 const question = (id, correctAnswer = "A") => ({ id, question: `Question ${id}`, options: ["a", "b", "c", "d"], correctAnswer, explanation: "Saved explanation" });

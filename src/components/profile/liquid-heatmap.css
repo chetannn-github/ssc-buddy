@@ -1,0 +1,121 @@
+.heatmap-liquid {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+}
+.heatmap-liquid-fill {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  background: var(--heatmap-liquid-color);
+  transition: height 600ms ease-out;
+}
+.heatmap-color-refill {
+  animation-name: heatmap-color-refill;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  animation-fill-mode: both;
+}
+@keyframes heatmap-color-refill {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+.heatmap-liquid-paused .heatmap-color-refill,
+.heatmap-liquid-paused .heatmap-liquid-bubble,
+.heatmap-liquid-paused .heatmap-liquid-fill::before,
+.heatmap-liquid-paused .heatmap-liquid-fill::after {
+  animation-play-state: paused;
+}
+.heatmap-liquid-fill::before {
+  content: "";
+  position: absolute;
+  left: -100%;
+  top: -3px;
+  width: 300%;
+  height: 6px;
+  background: var(--heatmap-liquid-color);
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 12' preserveAspectRatio='none'%3E%3Cpath d='M0 4 Q5 0 10 4 T20 4 T30 4 T40 4 T50 4 T60 4 V12 H0Z' fill='white'/%3E%3C/svg%3E");
+  mask-size: 100% 100%;
+  animation: heatmap-liquid-wave 2.8s linear infinite;
+}
+.heatmap-liquid-fill::after {
+  display: none;
+  content: "";
+  position: absolute;
+  top: 1px;
+  bottom: 0;
+  left: -40%;
+  width: 25%;
+  background: linear-gradient(90deg, transparent, #ffffff40, transparent);
+  animation: heatmap-liquid-glint 2.8s linear infinite;
+}
+@keyframes heatmap-liquid-wave {
+  to {
+    transform: translateX(33.333%);
+  }
+}
+@keyframes heatmap-liquid-glint {
+  to {
+    transform: translateX(600%);
+  }
+}
+.heatmap-liquid-bubble {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  animation: heatmap-bubble-rise 2.8s linear infinite;
+}
+.heatmap-liquid-bubble::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 25%;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: #f0fdfa;
+}
+.heatmap-liquid-bubble-second::before {
+  left: 65%;
+  width: 1.5px;
+  height: 1.5px;
+}
+@keyframes heatmap-bubble-rise {
+  0% {
+    transform: translate3d(0, 110%, 0) scale(0.6);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.7;
+  }
+  75% {
+    opacity: 0.45;
+  }
+  100% {
+    transform: translate3d(1px, -25%, 0) scale(1);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .heatmap-liquid-fill {
+    transition: none;
+    animation: none;
+    transform: none;
+  }
+  .heatmap-liquid-fill::before,
+  .heatmap-liquid-fill::after {
+    animation: none;
+  }
+  .heatmap-liquid-fill::after {
+    display: none;
+  }
+  .heatmap-liquid-bubble {
+    display: none;
+    animation: none;
+  }
+}

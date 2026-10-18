@@ -1,9 +1,18 @@
-import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Star, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import {
   deleteBankQuestion,
   loadFavoriteQuestionIds,
@@ -12,6 +21,7 @@ import {
   questionFavoriteId,
   toggleFavoriteQuestion,
   type McqQuestion,
+  type Option,
 } from "@/lib/exam";
 import { cn } from "@/lib/utils";
 
@@ -28,14 +38,24 @@ export const Route = createFileRoute("/question-view")({
 
 function QuestionViewer() {
   const { subject: subjectName, chapter: chapterName, exercise: exerciseName } = Route.useSearch();
-  const [deleting, setDeleting] = useState<{ subjectId: string; exerciseId: string; questionId: string } | null>(null);
+  const [deleting, setDeleting] = useState<{
+    subjectId: string;
+    exerciseId: string;
+    questionId: string;
+  } | null>(null);
   const [currentIndex, setCurrent] = useState(0);
+  const [attemptMode, setAttemptMode] = useState(true);
+  const [attemptAnswers, setAttemptAnswers] = useState<Record<string, Option | null>>({});
   const [favoriteIds, setFavoriteIds] = useState(() => new Set(loadFavoriteQuestionIds()));
   const [subjects, setSubjects] = useState(() => loadSubjects());
-  useEffect(() => onPracticePersist((key) => {
-    if (key === "cbt-subjects") setSubjects(loadSubjects());
-    if (key === "cbt-favorite-questions") setFavoriteIds(new Set(loadFavoriteQuestionIds()));
-  }), []);
+  useEffect(
+    () =>
+      onPracticePersist((key) => {
+        if (key === "cbt-subjects") setSubjects(loadSubjects());
+        if (key === "cbt-favorite-questions") setFavoriteIds(new Set(loadFavoriteQuestionIds()));
+      }),
+    [],
+  );
   const subjectId = subjects.find((item) => item.name === subjectName)?.id;
   const exercise = useMemo(() => {
     const subject = subjects.find((item) => item.name === subjectName);
@@ -49,6 +69,9 @@ function QuestionViewer() {
     ? questionFavoriteId(subjectName, chapterName, exerciseName, question, current)
     : "";
   const isFavorite = favoriteIds.has(favoriteId);
+  const attemptId = JSON.stringify([subjectId, exercise?.id, question?.id]);
+  const selectedAnswer = attemptAnswers[attemptId] ?? null;
+  const revealAnswer = !attemptMode || selectedAnswer !== null;
 
   return (
     <AppShell title="Question viewer">
@@ -65,10 +88,31 @@ function QuestionViewer() {
                     Question {question.number ?? current + 1}
                   </h2>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Button size="sm" variant="ghost" className="h-8 text-red-300 hover:bg-red-400/10 hover:text-red-200" onClick={() => {
-                    if (subjectId && exercise && question) setDeleting({ subjectId, exerciseId: exercise.id, questionId: question.id });
-                  }}><Trash2 className="h-3.5 w-3.5" /> Delete</Button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-xs">
+                    Attempt Mode
+                    <Switch
+                      checked={attemptMode}
+                      onCheckedChange={setAttemptMode}
+                      aria-label="Attempt Mode"
+                      className="data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-white/30"
+                    />
+                  </label>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 text-red-300 hover:bg-red-400/10 hover:text-red-200"
+                    onClick={() => {
+                      if (subjectId && exercise && question)
+                        setDeleting({
+                          subjectId,
+                          exerciseId: exercise.id,
+                          questionId: question.id,
+                        });
+                    }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" /> Delete
+                  </Button>
                   <Button
                     size="sm"
                     variant="outline"
@@ -92,11 +136,22 @@ function QuestionViewer() {
                     key={option}
                     option={option}
                     text={question.options[index] ?? ""}
-                    correct={option === question.correctAnswer}
+                    correct={revealAnswer && option === question.correctAnswer}
+                    wrong={
+                      attemptMode && selectedAnswer === option && option !== question.correctAnswer
+                    }
+                    interactive={attemptMode}
+                    selected={attemptMode && selectedAnswer === option}
+                    onSelect={() =>
+                      setAttemptAnswers((previous) => ({
+                        ...previous,
+                        [attemptId]: previous[attemptId] === option ? null : option,
+                      }))
+                    }
                   />
                 ))}
               </div>
-              {question.explanation && (
+              {question.explanation && revealAnswer && (
                 <div className="mt-4 rounded-lg border border-primary/25 bg-primary/10 p-3 text-sm leading-6 text-zinc-200">
                   <span className="font-semibold">Explanation: </span>
                   {question.explanation}
@@ -145,16 +200,35 @@ function QuestionViewer() {
           </div>
         )}
       </div>
-      <AlertDialog open={deleting !== null} onOpenChange={(open) => { if (!open) setDeleting(null); }}>
-        <AlertDialogContent aria-describedby={undefined} className="max-w-sm border-white/10 bg-[#202020] text-zinc-100">
-          <AlertDialogHeader><AlertDialogTitle>Delete question?</AlertDialogTitle></AlertDialogHeader>
+      <AlertDialog
+        open={deleting !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleting(null);
+        }}
+      >
+        <AlertDialogContent
+          aria-describedby={undefined}
+          className="max-w-sm border-white/10 bg-[#202020] text-zinc-100"
+        >
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete question?</AlertDialogTitle>
+          </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="border-white/15 bg-transparent text-zinc-300 hover:bg-white/10 hover:text-white">Cancel</AlertDialogCancel>
-            <AlertDialogAction className="bg-red-500 text-white hover:bg-red-600" onClick={() => {
-              if (!deleting) return;
-              setSubjects(deleteBankQuestion(deleting.subjectId, deleting.exerciseId, deleting.questionId));
-              setDeleting(null);
-            }}>Delete</AlertDialogAction>
+            <AlertDialogCancel className="border-white/15 bg-transparent text-zinc-300 hover:bg-white/10 hover:text-white">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-500 text-white hover:bg-red-600"
+              onClick={() => {
+                if (!deleting) return;
+                setSubjects(
+                  deleteBankQuestion(deleting.subjectId, deleting.exerciseId, deleting.questionId),
+                );
+                setDeleting(null);
+              }}
+            >
+              Delete
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -166,18 +240,36 @@ function AnswerOption({
   option,
   text,
   correct,
+  wrong,
+  interactive,
+  selected,
+  onSelect,
 }: {
   option: string;
   text: string;
   correct: boolean;
+  wrong: boolean;
+  interactive: boolean;
+  selected: boolean;
+  onSelect: () => void;
 }) {
   return (
-    <div
+    <button
+      type="button"
+      disabled={!interactive}
+      aria-pressed={interactive ? selected : undefined}
+      onClick={onSelect}
       className={cn(
-        "flex w-full items-center gap-3 rounded-lg border px-4 py-4 text-left text-sm",
+        "flex w-full items-center gap-3 rounded-lg border px-4 py-4 text-left text-sm transition-all",
+        interactive &&
+          "active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
         correct
           ? "border-answered bg-answered/15 font-semibold ring-1 ring-answered/45"
-          : "border-white/10 bg-black/10 text-zinc-300",
+          : wrong
+            ? "border-destructive bg-destructive/10 font-semibold ring-1 ring-destructive/45"
+            : interactive
+              ? "border-white/10 bg-black/10 text-zinc-300 hover:border-primary/40 hover:bg-white/5"
+              : "border-white/10 bg-black/10 text-zinc-300",
       )}
     >
       <span
@@ -185,7 +277,9 @@ function AnswerOption({
           "flex h-8 w-8 items-center justify-center rounded-full border text-sm font-semibold",
           correct
             ? "border-answered bg-answered text-answered-foreground"
-            : "border-white/10 text-zinc-400",
+            : wrong
+              ? "border-destructive bg-destructive text-destructive-foreground"
+              : "border-white/10 text-zinc-400",
         )}
       >
         {option}
@@ -196,7 +290,12 @@ function AnswerOption({
           Correct
         </span>
       )}
-    </div>
+      {wrong && (
+        <span className="ml-auto rounded-full bg-destructive/15 px-2 py-0.5 text-[10px] font-medium text-destructive">
+          Incorrect
+        </span>
+      )}
+    </button>
   );
 }
 
@@ -223,24 +322,28 @@ function QuestionPalette({
       <p className="mt-1 text-xs text-zinc-500">Gold = favourite</p>
       <div className="mt-4 grid max-h-[420px] grid-cols-5 gap-2 overflow-y-auto pt-2 pr-1 pb-2 pl-2">
         {questions.map((question, index) => {
-          const isFavorite = favoriteIds.has(questionFavoriteId(subjectName, chapterName, exerciseName, question, index));
-          return <button
-            key={`${question.number ?? index}-${index}`}
-            type="button"
-            className={cn(
-              "relative flex h-10 w-10 items-center justify-center rounded-md border text-xs font-semibold transition-all hover:scale-105",
-              index === current
-                ? isFavorite
-                  ? "border-amber-300 bg-amber-400 text-amber-950 ring-2 ring-amber-300 ring-offset-2 ring-offset-[#1b1b1b]"
-                  : "border-primary bg-primary text-primary-foreground ring-2 ring-primary ring-offset-2 ring-offset-[#1b1b1b]"
-                : isFavorite
-                  ? "border-amber-400/45 bg-amber-400/10 text-amber-300 hover:bg-amber-400/20"
-                : "border-white/10 bg-white/[0.03] text-zinc-400 hover:bg-white/10",
-            )}
-            onClick={() => onSelect(index)}
-          >
-            {question.number ?? index + 1}
-          </button>
+          const isFavorite = favoriteIds.has(
+            questionFavoriteId(subjectName, chapterName, exerciseName, question, index),
+          );
+          return (
+            <button
+              key={`${question.number ?? index}-${index}`}
+              type="button"
+              className={cn(
+                "relative flex h-10 w-10 items-center justify-center rounded-md border text-xs font-semibold transition-all hover:scale-105",
+                index === current
+                  ? isFavorite
+                    ? "border-amber-300 bg-amber-400 text-amber-950 ring-2 ring-amber-300 ring-offset-2 ring-offset-[#1b1b1b]"
+                    : "border-primary bg-primary text-primary-foreground ring-2 ring-primary ring-offset-2 ring-offset-[#1b1b1b]"
+                  : isFavorite
+                    ? "border-amber-400/45 bg-amber-400/10 text-amber-300 hover:bg-amber-400/20"
+                    : "border-white/10 bg-white/[0.03] text-zinc-400 hover:bg-white/10",
+              )}
+              onClick={() => onSelect(index)}
+            >
+              {question.number ?? index + 1}
+            </button>
+          );
         })}
       </div>
     </aside>

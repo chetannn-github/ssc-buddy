@@ -1,0 +1,50 @@
+.music-ring-liquid {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  background: linear-gradient(135deg, #ff7180, #ef4444 50%, #be123c);
+}
+.music-ring-liquid::before,
+.music-ring-liquid::after {
+  content: "";
+  position: absolute;
+  inset: -50%;
+  border-radius: 50%;
+  animation: music-liquid-flow 2.8s linear infinite;
+}
+.music-ring-liquid::before {
+  background: conic-gradient(
+    transparent 0deg 50deg,
+    #ffd1d4b3 65deg,
+    transparent 85deg 230deg,
+    #fff1f266 245deg,
+    transparent 265deg
+  );
+}
+.music-ring-liquid::after {
+  background: repeating-conic-gradient(
+    transparent 0deg 28deg,
+    #fff1f280 29deg,
+    transparent 31deg 65deg
+  );
+  animation-duration: 4.2s;
+  animation-direction: reverse;
+  opacity: 0.55;
+}
+.music-ring-liquid-paused::before,
+.music-ring-liquid-paused::after {
+  animation-play-state: paused;
+}
+@keyframes music-liquid-flow {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .music-ring-liquid::before,
+  .music-ring-liquid::after {
+    animation: none;
+  }
+}

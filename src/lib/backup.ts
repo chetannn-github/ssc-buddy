@@ -63,16 +63,20 @@ function snapshotLocalStorage(): Record<string, string> {
   const storage: Record<string, string> = {};
   for (let index = 0; index < localStorage.length; index += 1) {
     const key = localStorage.key(index);
-    if (key !== null && key !== JSONBIN_CONFIG_KEY) storage[key] = localStorage.getItem(key) ?? "";
+    if (key !== null && key !== JSONBIN_CONFIG_KEY && key !== "ssc-buddy:active-test:v1") storage[key] = localStorage.getItem(key) ?? "";
   }
   return storage;
 }
 
 function restoreStorageSnapshot(storage: Record<string, string>) {
   const config = localStorage.getItem(JSONBIN_CONFIG_KEY);
+  const activeTest = localStorage.getItem("ssc-buddy:active-test:v1");
   localStorage.clear();
   if (config) localStorage.setItem(JSONBIN_CONFIG_KEY, config);
-  Object.entries(storage).forEach(([key, value]) => localStorage.setItem(key, value));
+  if (activeTest) localStorage.setItem("ssc-buddy:active-test:v1", activeTest);
+  Object.entries(storage).forEach(([key, value]) => {
+    if (key !== "ssc-buddy:active-test:v1") localStorage.setItem(key, value);
+  });
   window.dispatchEvent(new Event("cbt-backup-restored"));
 }
 

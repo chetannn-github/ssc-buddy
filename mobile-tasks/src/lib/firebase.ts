@@ -1,7 +1,8 @@
 import { mergeQuestionDeletions } from "../domain/question-deletion";
+import { appendRecallQuestionSnapshots, type RecallQuestionInput } from "../domain/quick-recall-solutions";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getApp, getApps, initializeApp } from "firebase/app";
-import { collection, deleteDoc, doc, getDoc, getDocs, getFirestore, onSnapshot, runTransaction, serverTimestamp, setDoc, writeBatch, type Firestore } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDoc, getDocs, getFirestore, initializeFirestore, onSnapshot, runTransaction, serverTimestamp, setDoc, writeBatch, type Firestore } from "firebase/firestore";
 import * as FirebaseAuth from "firebase/auth";
 import {
   createUserWithEmailAndPassword,
@@ -69,7 +70,26 @@ export function getFirebaseAuth() {
 }
 
 export function getFirebaseFirestore() {
-  if (!firestore) firestore = getFirestore(getFirebaseApp());
+  if (firestore) return firestore;
+  const app = getFirebaseApp();
+  if (Platform.OS === "web") {
+    firestore = getFirestore(app);
+  } else {
+    try {
+      // Avoid buffered streaming responses on React Native/mobile connections.
+      // Set transport options before any reads/listeners/writes create the client.
+      firestore = initializeFirestore(app, {
+        experimentalForceLongPolling: true,
+        experimentalAutoDetectLongPolling: false,
+      });
+    } catch (error) {
+      if ((error as { code?: string }).code !== "failed-precondition") throw error;
+      // Fast Refresh can retain the previous SDK instance and pending writes.
+      // Reuse it until a full reload, rather than terminating an active client.
+      firestore = getFirestore(app);
+      console.warn("[SSC Buddy] Fully reload the app to apply the Firestore connection update.");
+    }
+  }
   return firestore;
 }
 
@@ -511,7 +531,7 @@ type QuickRecallAttemptInput = {
   date: string;
   startedAt: string;
   subject: string;
-  questions: Array<{ id: string; subjectId: string; correctAnswer: string }>;
+  questions: Array<RecallQuestionInput & { subjectId: string }>;
   answers: string[];
 };
 
@@ -555,6 +575,7 @@ export async function recordQuickRecallPractice(user: User, input: QuickRecallAt
       durationMinutes: null,
       timeTakenSeconds: Math.max(0, Number(current.timeTakenSeconds) || 0),
       answers: [...priorAnswers, ...answers],
+      quickRecallQuestions: appendRecallQuestionSnapshots(current, questions),
       questionIds: [...priorIds, ...questions.map((question) => question.id)],
       answerKey: [...priorKey, ...questions.map((question) => question.correctAnswer)],
       correct: nextCorrect,

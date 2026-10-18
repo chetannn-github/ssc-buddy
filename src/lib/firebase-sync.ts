@@ -1,4 +1,5 @@
 import { initializeApp, type FirebaseApp } from "firebase/app";
+import { appendRecallQuestionSnapshots, type RecallQuestionInput } from "../../mobile-tasks/src/domain/quick-recall-solutions";
 import {
   getAuth,
   onAuthStateChanged,
@@ -40,7 +41,7 @@ const FIREBASE_CONFIG = {
   appId: import.meta.env["VITE_FIREBASE_APP_ID"],
 };
 
-const FIREBASE_LOCAL_KEYS = new Set(["ssc-buddy-firebase-client-id", "ssc-buddy-firebase-last-sync", "ssc-buddy-firebase-sync-enabled"]);
+const FIREBASE_LOCAL_KEYS = new Set(["ssc-buddy:active-test:v1", "ssc-buddy-firebase-client-id", "ssc-buddy-firebase-last-sync", "ssc-buddy-firebase-sync-enabled"]);
 const CHUNK_LIMIT = 450_000;
 
 type StorageEntry = { key: string; value: string; part?: number; total?: number };
@@ -206,7 +207,7 @@ export async function recordQuickRecallAnswer(user: User, question: { id: string
 }
 
 /** One daily practice-attempt document, deduplicated by run ID, matching Android/widget behavior. */
-export async function recordQuickRecallPractice(user: User, input: { runId: string; date: string; startedAt: string; questions: Array<{ id: string; correctAnswer: string }>; answers: string[] }) {
+export async function recordQuickRecallPractice(user: User, input: { runId: string; date: string; startedAt: string; questions: RecallQuestionInput[]; answers: string[] }) {
   const database = getFirebaseFirestore();
   const reference = doc(database, "users", user.uid, "practiceAttempts", `quick-recall:${input.date}`);
   await runTransaction(database, async (transaction) => {
@@ -232,6 +233,7 @@ export async function recordQuickRecallPractice(user: User, input: { runId: stri
       durationMinutes: null,
       timeTakenSeconds: Number(current["timeTakenSeconds"] ?? 0),
       answers: [...(Array.isArray(current["answers"]) ? current["answers"] : []), ...answers],
+      quickRecallQuestions: appendRecallQuestionSnapshots(current, questions),
       questionIds: [...(Array.isArray(current["questionIds"]) ? current["questionIds"] : []), ...questions.map((question) => question.id)],
       answerKey: [...(Array.isArray(current["answerKey"]) ? current["answerKey"] : []), ...questions.map((question) => question.correctAnswer)],
       correct: Number(current["correct"] ?? 0) + correct,
@@ -300,7 +302,9 @@ function restoreSnapshot(snapshot: Record<string, string>) {
   retained.forEach(([key, value]) => {
     if (value) localStorage.setItem(key, value);
   });
-  Object.entries(snapshot).forEach(([key, value]) => localStorage.setItem(key, value));
+  Object.entries(snapshot).forEach(([key, value]) => {
+    if (key !== "ssc-buddy:active-test:v1") localStorage.setItem(key, value);
+  });
   window.dispatchEvent(new Event("cbt-backup-restored"));
   window.dispatchEvent(new Event("cbt-profile-updated"));
   window.dispatchEvent(new Event("cbt-tracker-updated"));

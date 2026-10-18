@@ -12,7 +12,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { attemptKey, deleteRecord, loadHistory, onPracticePersist, type TestRecord } from "@/lib/exam";
+import {
+  attemptKey,
+  deleteRecord,
+  loadHistory,
+  onPracticePersist,
+  type TestRecord,
+} from "@/lib/exam";
+import { isQuickRecallRecord } from "../../mobile-tasks/src/domain/quick-recall-history";
 
 function friendlyDate(timestamp: string, fallbackDate?: string) {
   // Android records use `date` as a local calendar key (YYYY-MM-DD) and keep
@@ -68,23 +75,15 @@ function HistoryPage() {
     const timer = window.setTimeout(() => setIsLoading(false), 700);
     return () => window.clearTimeout(timer);
   }, [isLoading]);
-  useEffect(() => onPracticePersist((key) => {
-    if (key === "cbt-history") setRecords(loadHistory());
-  }), []);
-
-  // Quick Recall is counted in daily activity, not as a user-started test.
-  // Keep it out of the Practice history even though it shares the canonical
-  // practiceAttempts Firestore collection for sync and deduplication.
-  const sessionRecords = useMemo(
+  useEffect(
     () =>
-      records.filter(
-        (record) =>
-          record.testMode !== "quick-recall" &&
-          record.subject !== "Quick Recall" &&
-          !record.id.startsWith("quick-recall:"),
-      ),
-    [records],
+      onPracticePersist((key) => {
+        if (key === "cbt-history") setRecords(loadHistory());
+      }),
+    [],
   );
+
+  const sessionRecords = records;
 
   const subjects = useMemo(
     () => Array.from(new Set(sessionRecords.map((r) => r.subject))).sort(),
@@ -96,7 +95,8 @@ function HistoryPage() {
         new Set(
           sessionRecords
             .filter((r) => subject === ALL || r.subject === subject)
-            .map((r) => r.chapter),
+            .map((r) => r.chapter)
+            .filter(Boolean),
         ),
       ).sort(),
     [sessionRecords, subject],
@@ -183,7 +183,8 @@ function HistoryPage() {
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {visible.map((g) => {
                   const r = g.latest;
-                  const isReattempt = g.attempts.length > 1;
+                  const isRecall = isQuickRecallRecord(r);
+                  const isReattempt = !isRecall && g.attempts.length > 1;
                   const correct = r.correct ?? 0;
                   const wrong = r.wrong ?? 0;
                   const unattempted = r.answers.filter((a) => !a).length;
@@ -228,14 +229,18 @@ function HistoryPage() {
                               </span>
                             )}
                           </div>
-                          <p className="truncate text-xs text-muted-foreground">{r.chapter}</p>
-                          {r.exercise && (
+                          <p className="truncate text-xs text-muted-foreground">
+                            {isRecall ? `Daily summary · ${r.answers.length} questions` : r.chapter}
+                          </p>
+                          {!isRecall && r.exercise && (
                             <p className="truncate text-xs font-medium text-primary">
                               {r.exercise}
                             </p>
                           )}
                           <p className="mt-1 text-xs text-muted-foreground">
-                            {friendlyDate(r.createdAt ?? r.date, r.date)}
+                            {isRecall
+                              ? friendlyDate(r.date)
+                              : friendlyDate(r.createdAt ?? r.date, r.date)}
                           </p>
                         </div>
                       </div>
@@ -247,6 +252,10 @@ function HistoryPage() {
                           className="h-7 text-xs"
                           onClick={(e) => {
                             e.stopPropagation();
+                            if (isRecall) {
+                              void navigate({ to: "/quick-recall" });
+                              return;
+                            }
                             navigate({
                               to: "/test",
                               search: {
@@ -260,7 +269,7 @@ function HistoryPage() {
                             });
                           }}
                         >
-                          Reattempt
+                          {isRecall ? "Practice again" : "Reattempt"}
                         </Button>
                         <Button
                           variant="ghost"

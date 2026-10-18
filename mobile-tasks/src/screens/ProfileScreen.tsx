@@ -22,6 +22,9 @@ import type { User } from "firebase/auth";
 
 import { dateKey, formatMinutes, summarizeTasks, type Task } from "../domain/tasks";
 import { LiquidProgressBar, ProfileXpBar } from "../components/ProfileXpBar";
+import { LiquidHeatmapCell } from "../components/LiquidHeatmapCell";
+import { nextProfileColorTheme, type HeatmapColorCycle } from "../domain/heatmap-colors";
+import { useHeatmapLiquidMotion } from "../hooks/use-heatmap-liquid-motion";
 import { colors } from "../theme";
 import { getXpSummary, levelName, xpForLevel, xpSegmentProgress } from "../domain/xp";
 import { reportVerticalScroll } from "../navigation/bottomNavigationVisibility";
@@ -211,6 +214,7 @@ export function ProfileScreen({
   publicActivity,
   publicRank,
 }: Props) {
+  const [colorTheme] = useState(() => nextProfileColorTheme());
   const [profileName, setProfileName] = useState(profileSettings?.name ?? "");
   const [username, setUsername] = useState(profileSettings?.username ?? "");
   const [usernameTouched, setUsernameTouched] = useState(false);
@@ -551,8 +555,8 @@ export function ProfileScreen({
             <ProfileNumber value={streak} style={[styles.profileStreakText, streak > 0 && styles.profileStreakTextActive]} />
           </View>
           <View style={[styles.avatar, { width: 70, height: 70, borderRadius: 35 }]}>
-            <Pressable onPress={() => setViewingAvatar(true)}>
-              <Image source={avatarImage} style={[styles.avatarImage, { borderRadius: 35 }]} />
+            <Pressable style={{ width: 67, height: 67, margin: 0.5 }} onPress={() => setViewingAvatar(true)}>
+              <Image source={avatarImage} style={[styles.avatarImage, { borderRadius: 33.5 }]} />
             </Pressable>
             {!readOnly && <Pressable
               style={[styles.avatarBadge, { width: 25, height: 25, borderRadius: 13 }]}
@@ -727,6 +731,7 @@ export function ProfileScreen({
           </View>
         </View>
         <ActivityHeatmap
+          colorTheme={colorTheme}
           user={user}
           mockTests={mockTests}
           practiceRecords={practiceRecords}
@@ -1047,6 +1052,7 @@ const heatmapActivityFromTracker = (tracker?: Record<string, any>): HeatmapTrack
     }));
 
 function ActivityHeatmap({
+  colorTheme,
   user,
   mockTests,
   practiceRecords,
@@ -1056,6 +1062,7 @@ function ActivityHeatmap({
   dataReady = true,
   sharedActivity,
 }: {
+  colorTheme: HeatmapColorCycle;
   user: User | null;
   mockTests: MockTestLog[];
   practiceRecords: Array<{
@@ -1199,6 +1206,7 @@ function ActivityHeatmap({
     };
   }, [mockTests, mode, practiceRecords, tasks, trackerActivity, sharedActivity]);
   const max = Math.max(1, ...[...activity.values()]);
+  const liquidMotion = useHeatmapLiquidMotion(colorTheme, 1200, mode);
   const selected = activity.get(selectedDay) ?? 0;
   const activityRows = useMemo(() => {
     if (mode === "tasks") return tasks.filter((task) => task.completed && task.date === selectedDay).map((task) => ({ id: task.id, label: task.type, detail: [task.subject, task.name, task.minutesSpent ? `${task.minutesSpent}m` : ""].filter(Boolean).join(" · "), count: 1 }));
@@ -1366,13 +1374,13 @@ function ActivityHeatmap({
                       {
                         width: 9,
                         height: 9,
-                        backgroundColor: ["#45454f", "#a7f3d0", "#6ee7b7", "#34d399", "#10b981"][
-                          level
-                        ],
+                        backgroundColor: "#45454f",
                       },
                       selectedDay === day.key && styles.heatSelected,
                     ]}
-                  />
+                  >
+                    <LiquidHeatmapCell level={level} dayKey={day.key} motion={liquidMotion} mode={mode} />
+                  </Pressable>
                 );
               })}
             </View>

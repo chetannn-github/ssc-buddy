@@ -14,6 +14,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
+  AppState,
   ActivityIndicator,
   Animated,
   Easing,
@@ -25,6 +26,7 @@ import {
   StyleSheet as NativeStyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
 
@@ -33,6 +35,9 @@ import { ALL_PRACTICE_EXERCISES, ALL_PRACTICE_EXERCISES_LABEL, combineQuestionEx
 import { QuestionPalette } from "../components/QuestionNavigation";
 import { useQuestionSwipe } from "../hooks/use-question-swipe";
 import { colors } from "../theme";
+import { isQuickRecallRecord, quickRecallHistoryKey } from "../domain/quick-recall-history";
+import { resolveRecallQuestions, type RecallQuestionSnapshot } from "../domain/quick-recall-solutions";
+import { clearActiveTest, loadActiveTest, saveActiveTest } from "../lib/active-test";
 import { dateKey } from "../domain/tasks";
 import { reportVerticalScroll } from "../navigation/bottomNavigationVisibility";
 import { deletePracticeEntity, migratePracticeEntities, patchPracticeSettings, readPracticeSettings, syncPracticeEntities, watchPracticeEntities, watchPracticeSettings } from "../lib/firebase";
@@ -107,6 +112,7 @@ type Record = {
   duration?: number;
   marking?: { positive: number; negative: number };
   questions?: Question[];
+  quickRecallQuestions?: { [index: string]: RecallQuestionSnapshot };
 };
 type Bank = { subjects: Subject[]; marking: { positive: number; negative: number } };
 type Phase = "setup" | "key" | "instructions" | "test" | "history" | "bank";
@@ -157,6 +163,7 @@ const toCloudRecord = (record: Record) => ({
   ...(record.questionIds ? { questionIds: record.questionIds } : {}),
   answerKey: record.answerKey ?? record.key,
   ...(record.questions ? { questions: record.questions } : {}),
+  ...(record.quickRecallQuestions ? { quickRecallQuestions: record.quickRecallQuestions } : {}),
   correct: record.correct,
   wrong: record.wrong,
   marking: record.marking,
@@ -225,6 +232,8 @@ export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQ
   const [answers, setAnswers] = useState<Array<Option | null>>([]);
   const [current, setCurrent] = useState(0);
   const [remaining, setRemaining] = useState(0);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const submitting = useRef(false);
   const [dialog, setDialog] = useState<"subject" | "chapter" | "exercise" | null>(null);
   const [editingExerciseId, setEditingExerciseId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
@@ -257,12 +266,43 @@ export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQ
       try { if (markingRaw) { const marking = normaliseMarking(JSON.parse(markingRaw)); bankRef.current = { ...bankRef.current, marking }; setBank(bankRef.current); } } catch {}
       try { const candidate = historyRaw ?? legacyHistoryRaw; if (candidate) { const next = JSON.parse(candidate) as Record[]; historyRef.current = next; setHistory(next); await AsyncStorage.setItem(HISTORY, JSON.stringify(next)); if (!historyRaw && legacyHistoryRaw) await AsyncStorage.removeItem(LEGACY_HISTORY); } } catch {}
       try { const candidate = favouritesRaw ?? legacyFavouritesRaw; if (candidate) { const next = JSON.parse(candidate) as string[]; favouritesRef.current = next; setFavourites(next); await AsyncStorage.setItem(FAVOURITES, JSON.stringify(next)); if (!favouritesRaw && legacyFavouritesRaw) await AsyncStorage.removeItem(LEGACY_FAVOURITES); } } catch {}
+      try {
+        const saved = await loadActiveTest();
+        if (saved && !historyRef.current.some((record) => record.id === saved.id)) {
+          setSessionId(saved.id);
+          setActiveTest(saved.payload.activeTest);
+          setAnswerKey(saved.payload.answerKey);
+          setReattemptOf(saved.payload.reattemptOf ?? null);
+          setAnswers(saved.states.map((state) => state.answer));
+          setCurrent(saved.current);
+          setRemaining(saved.remaining);
+          setPhase("test");
+        } else if (saved) await clearActiveTest();
+      } catch (error) { console.warn("Could not restore active test", error); }
       setPracticeLoaded(true);
     })();
     return () => {
       if (timer.current) clearInterval(timer.current);
     };
   }, []);
+  useEffect(() => {
+    if (phase !== "test") return;
+    timer.current = setInterval(() => {
+      if (AppState.currentState !== "active" || submitting.current) return;
+      if (Platform.OS === "web" && typeof document !== "undefined" && document.hidden) return;
+      setRemaining((value) => Math.max(0, value - 1));
+    }, 1000);
+    return () => { if (timer.current) clearInterval(timer.current); };
+  }, [phase]);
+  useEffect(() => {
+    if (!practiceLoaded || phase !== "test" || !activeTest || !sessionId || submitting.current) return;
+    void saveActiveTest({
+      version: 1, platform: "mobile", id: sessionId,
+      payload: { activeTest, answerKey, reattemptOf, ownerId: user?.uid ?? null },
+      states: answers.map((answer, index) => ({ answer, marked: false, visited: index === current || answer !== null })),
+      current, remaining,
+    }).catch((error) => console.warn("Could not save active test", error));
+  }, [practiceLoaded, phase, activeTest, sessionId, answerKey, reattemptOf, answers, current, remaining, user?.uid]);
   const saveBank = (next: Bank) => {
     const previous = bankRef.current;
     next = { ...next, subjects: next.subjects.map(applyQuestionDeletions), marking: normaliseMarking(next.marking) };
@@ -441,27 +481,31 @@ export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQ
     setAnswerKey(key);
     setPhase("instructions");
   };
-  const startTest = () => {
-    setAnswers(Array(activeTest?.answerKey?.length ?? questionCount).fill(null));
+  const startTest = async () => {
+    if (!activeTest || submitting.current) return;
+    submitting.current = true;
+    const id = makeId();
+    const initialAnswers = Array(activeTest?.answerKey?.length ?? questionCount).fill(null);
+    try {
+      await saveActiveTest({ version: 1, platform: "mobile", id,
+        payload: { activeTest, answerKey, reattemptOf, ownerId: user?.uid ?? null },
+        states: initialAnswers.map((answer, index) => ({ answer, marked: false, visited: index === 0 })),
+        current: 0, remaining: (activeTest.duration ?? duration) * 60 });
+    } catch {
+      submitting.current = false;
+      Alert.alert("Could not save test", "Please free some device storage and try again.");
+      return;
+    }
+    submitting.current = false;
+    setSessionId(id);
+    setAnswers(initialAnswers);
     setCurrent(0);
     setRemaining((activeTest?.duration ?? duration) * 60);
     setPhase("test");
-    if (timer.current) clearInterval(timer.current);
-    timer.current = setInterval(
-      () =>
-        setRemaining((value) => {
-          if (value <= 1) {
-            if (timer.current) clearInterval(timer.current);
-            return 0;
-          }
-          return value - 1;
-        }),
-      1000,
-    );
   };
-  const submit = () => {
-    if (!activeTest) return;
-    if (timer.current) clearInterval(timer.current);
+  const submit = async () => {
+    if (!activeTest || submitting.current) return;
+    submitting.current = true;
     const correct = answers.filter(
       (answer, index) => answer && answerKey[index] && answer === answerKey[index],
     ).length;
@@ -470,7 +514,7 @@ export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQ
     ).length;
     const saved: Record = {
       ...activeTest,
-      id: makeId(),
+      id: sessionId ?? makeId(),
       createdAt: new Date().toISOString(),
       date: dateKey(),
       testMode: activeTest.testMode,
@@ -496,10 +540,21 @@ export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQ
       questions: activeTest.questions,
       attemptOf: reattemptOf ?? undefined,
     };
-    const next = [saved, ...history];
+    const next = [saved, ...historyRef.current.filter((record) => record.id !== saved.id)];
+    try {
+      await AsyncStorage.setItem(HISTORY, JSON.stringify(next));
+      await clearActiveTest();
+    } catch {
+      submitting.current = false;
+      Alert.alert("Could not save result", "Your test is still available. Please try submitting again.");
+      return;
+    }
+    if (timer.current) clearInterval(timer.current);
     saveHistory(next);
     setReattemptOf(null);
     setPhase("history");
+    setSessionId(null);
+    submitting.current = false;
   };
   const saveKey = async (nextPhase: "setup" | "instructions" = "instructions") => {
     if (!exercise || !subject || !chapter) return;
@@ -669,6 +724,7 @@ export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQ
           saveHistory(next);
         }}
         onReattempt={(record) => {
+          if (isQuickRecallRecord(record)) { onOpenQuickRecall(); return; }
           if (isQuestionAttempt(record)) {
             if (!record.questions?.length || record.questions.length !== record.answers.length) return Alert.alert("Paper unavailable", "This attempt does not contain a complete saved paper.");
             setActiveTest({ ...record, duration: record.durationMinutes ?? record.duration ?? 30, answerKey: record.answerKey ?? record.key, key: record.answerKey ?? record.key, marking: record.marking ?? bank.marking });
@@ -1333,20 +1389,13 @@ function History({
   const [chapter, setChapter] = useState("All chapters");
   const [filterMenu, setFilterMenu] = useState<"subject" | "chapter" | null>(null);
   const [selected, setSelected] = useState<{ record: Record; attempts: Record[] } | null>(null);
-  // Quick Recall contributes to Activity/Profile metrics, but it is not a
-  // manually started practice test and must not crowd Previous sessions.
-  const sessionRecords = records.filter(
-    (record) =>
-      record.testMode !== "quick-recall" &&
-      record.subject !== "Quick Recall" &&
-      !record.id.startsWith("quick-recall:"),
-  );
+  const sessionRecords = records;
   const subjects = Array.from(new Set(sessionRecords.map((record) => record.subject))).sort();
   const chapters = Array.from(
     new Set(
       sessionRecords
         .filter((record) => subject === "All subjects" || record.subject === subject)
-        .map((record) => record.chapter),
+        .map((record) => record.chapter).filter(Boolean),
     ),
   ).sort();
   const visible = sessionRecords.filter(
@@ -1358,9 +1407,9 @@ function History({
     visible.reduce((groups, record) => {
       // Same identity contract as the web: ordinary attempts are grouped by
       // their exact exercise/config; random tests use their persisted group ID.
-      const key = record.testMode === "random"
+      const key = quickRecallHistoryKey(record) ?? (record.testMode === "random"
         ? (record.attemptGroupId ?? record.id)
-        : `${record.subjectId || record.subject}||${record.chapterId || record.chapter}||${record.exerciseId || record.exercise}||${record.startNumber}||${record.answers.length}${record.questionIds?.length ? `||q:${JSON.stringify(record.questionIds)}` : ""}`;
+        : `${record.subjectId || record.subject}||${record.chapterId || record.chapter}||${record.exerciseId || record.exercise}||${record.startNumber}||${record.answers.length}${record.questionIds?.length ? `||q:${JSON.stringify(record.questionIds)}` : ""}`);
       groups.set(key, [...(groups.get(key) ?? []), record]);
       return groups;
     }, new Map<string, Record[]>()),
@@ -1368,13 +1417,13 @@ function History({
     .map(([id, attempts]) => ({
       id,
       attempts: [...attempts].sort(
-        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+        (a, b) => new Date(a.createdAt ?? a.date).getTime() - new Date(b.createdAt ?? b.date).getTime(),
       ),
     }))
     .sort(
       (a, b) =>
-        new Date(b.attempts[b.attempts.length - 1].createdAt).getTime() -
-        new Date(a.attempts[a.attempts.length - 1].createdAt).getTime(),
+        new Date(b.attempts[b.attempts.length - 1].createdAt ?? b.attempts[b.attempts.length - 1].date).getTime() -
+        new Date(a.attempts[a.attempts.length - 1].createdAt ?? a.attempts[a.attempts.length - 1].date).getTime(),
     );
   const reevaluate = (record: Record) => {
     if (isQuestionAttempt(record)) return;
@@ -1413,6 +1462,7 @@ function History({
   if (selected)
     return (
       <HistoryDetail
+        subjects={bankSubjects}
         record={selected.record}
         attempts={selected.attempts}
         onSelectAttempt={(record) => setSelected({ record, attempts: selected.attempts })}
@@ -1427,7 +1477,6 @@ function History({
     );
   return (
     <View style={s.page}>
-      {filterMenu ? <Pressable style={s.historyFilterDismiss} onPress={() => setFilterMenu(null)} /> : null}
       <View style={s.header}>
         <View>
           <Text style={s.eyebrow}>PRACTICE</Text>
@@ -1443,6 +1492,7 @@ function History({
             label={subject}
             open={filterMenu === "subject"}
             onPress={() => setFilterMenu(filterMenu === "subject" ? null : "subject")}
+            onClose={() => setFilterMenu(null)}
             options={["All subjects", ...subjects]}
             onSelect={(next) => { setSubject(next); setChapter("All chapters"); setFilterMenu(null); }}
           />
@@ -1450,6 +1500,7 @@ function History({
             label={chapter}
             open={filterMenu === "chapter"}
             onPress={() => setFilterMenu(filterMenu === "chapter" ? null : "chapter")}
+            onClose={() => setFilterMenu(null)}
             options={["All chapters", ...chapters]}
             onSelect={(next) => { setChapter(next); setFilterMenu(null); }}
           />
@@ -1472,13 +1523,13 @@ function History({
                     <Text numberOfLines={1} style={s.sessionTitle}>
                       {record.subject}
                     </Text>
-                    {group.attempts.length > 1 ? (
+                    {!isQuickRecallRecord(record) && group.attempts.length > 1 ? (
                       <Text style={s.attemptBadge}>{group.attempts.length} attempts</Text>
                     ) : null}
                     <Text numberOfLines={1} style={s.historyChapter}>
-                      {record.chapter} · {record.exercise}
+                      {isQuickRecallRecord(record) ? `Daily summary · ${record.answers.length} questions` : `${record.chapter} · ${record.exercise}`}
                     </Text>
-                    <Text style={s.historyDate}>{friendlyRecordDate(record.createdAt)}</Text>
+                    <Text style={s.historyDate}>{friendlyRecordDate(isQuickRecallRecord(record) ? record.date?.slice(0, 10) : record.createdAt, record.date ?? record.createdAt)}</Text>
                   </View>
                   <MaterialCommunityIcons name="chevron-right" size={20} color={colors.subdued} />
                 </View>
@@ -1505,7 +1556,10 @@ function History({
     </View>
   );
 }
-function HistoryFilter({ label, open, onPress, options, onSelect }: { label: string; open: boolean; onPress: () => void; options: string[]; onSelect: (value: string) => void }) {
+function HistoryFilter({ label, open, onPress, onClose, options, onSelect }: { label: string; open: boolean; onPress: () => void; onClose: () => void; options: string[]; onSelect: (value: string) => void }) {
+  const trigger = useRef<View>(null);
+  const window = useWindowDimensions();
+  const [anchor, setAnchor] = useState({ x: 14, y: 80, width: 160, height: 42 });
   const visibility = useRef(new Animated.Value(open ? 1 : 0)).current;
   const [renderMenu, setRenderMenu] = useState(open);
 
@@ -1522,17 +1576,40 @@ function HistoryFilter({ label, open, onPress, options, onSelect }: { label: str
     });
   }, [open, renderMenu, visibility]);
 
+  const menuHeight = Math.min(210, Math.max(42, options.length * 42), window.height - 32);
+  const menuTop = anchor.y + anchor.height + 5 + menuHeight <= window.height - 16
+    ? anchor.y + anchor.height + 5
+    : Math.max(16, anchor.y - menuHeight - 5);
+  const toggle = () => {
+    if (open) { onClose(); return; }
+    trigger.current?.measureInWindow((x, y, width, height) => {
+      setAnchor({ x, y, width, height });
+      onPress();
+    });
+  };
   return (
     <View style={s.historyFilterWrap}>
-      <Pressable onPress={onPress} style={s.historyFilterButton}>
+      <View ref={trigger} collapsable={false}>
+      <Pressable onPress={toggle} accessibilityRole="button" accessibilityState={{ expanded: open }} style={s.historyFilterButton}>
         <Text numberOfLines={1} style={s.historyFilterText}>{label}</Text>
         <MaterialCommunityIcons name={open ? "chevron-up" : "chevron-down"} size={17} color={colors.muted} />
       </Pressable>
-      {renderMenu ? <Animated.View pointerEvents={open ? "auto" : "none"} style={[s.historyFilterMenu, { opacity: visibility, transform: [{ translateY: visibility.interpolate({ inputRange: [0, 1], outputRange: [-6, 0] }) }, { scale: visibility.interpolate({ inputRange: [0, 1], outputRange: [0.98, 1] }) }] }]}>{options.map((option) => { const selected = option === label; return <Pressable key={option} onPress={() => onSelect(option)} style={[s.historyFilterOption, selected && s.historyFilterOptionActive]}><Text numberOfLines={1} style={[s.historyFilterOptionText, selected && s.historyFilterOptionTextActive]}>{option}</Text>{selected && <MaterialCommunityIcons name="check" size={16} color="#171717" />}</Pressable>; })}</Animated.View> : null}
+      </View>
+      <Modal transparent visible={renderMenu} statusBarTranslucent onRequestClose={onClose}>
+        <View style={{ flex: 1 }}>
+          <Pressable accessibilityLabel="Close history filter" style={NativeStyleSheet.absoluteFill} onPress={onClose} />
+          <Animated.View pointerEvents={open ? "auto" : "none"} style={[s.historyFilterMenu, { top: menuTop, left: Math.max(8, Math.min(anchor.x, window.width - anchor.width - 8)), right: undefined, width: anchor.width, maxHeight: menuHeight, opacity: visibility, transform: [{ translateY: visibility.interpolate({ inputRange: [0, 1], outputRange: [-6, 0] }) }, { scale: visibility.interpolate({ inputRange: [0, 1], outputRange: [0.98, 1] }) }] }]}>
+            <NativeScrollView nestedScrollEnabled keyboardShouldPersistTaps="always" style={{ maxHeight: menuHeight }}>
+              {options.map((option) => { const selected = option === label; return <Pressable key={option} accessibilityRole="button" accessibilityState={{ selected }} onPress={() => onSelect(option)} style={[s.historyFilterOption, selected && s.historyFilterOptionActive]}><Text numberOfLines={1} style={[s.historyFilterOptionText, selected && s.historyFilterOptionTextActive]}>{option}</Text>{selected && <MaterialCommunityIcons name="check" size={16} color="#171717" />}</Pressable>; })}
+            </NativeScrollView>
+          </Animated.View>
+        </View>
+      </Modal>
     </View>
   );
 }
 function HistoryDetail({
+  subjects,
   record,
   attempts,
   onSelectAttempt,
@@ -1541,6 +1618,7 @@ function HistoryDetail({
   onReattempt,
   onReevaluate,
 }: {
+  subjects: Subject[];
   record: Record;
   attempts: Record[];
   onSelectAttempt: (record: Record) => void;
@@ -1551,7 +1629,8 @@ function HistoryDetail({
 }) {
   const marking = record.marking ?? { positive: 2, negative: 0.5 };
   const [solution, setSolution] = useState(false);
-  if (solution) return <SolutionView record={record} onBack={() => setSolution(false)} />;
+  const solutionQuestions = useMemo(() => isQuickRecallRecord(record) ? resolveRecallQuestions(record, subjects) : record.questions, [record, subjects]);
+  if (solution) return <SolutionView record={record} subjects={subjects} onBack={() => setSolution(false)} />;
   return (
     <View style={s.page}>
       <View style={s.header}>
@@ -1590,7 +1669,7 @@ function HistoryDetail({
             {record.subject} · {record.chapter}
           </Text>
           <Text numberOfLines={1} style={s.detailTitle}>{record.exercise}</Text>
-          <Text style={s.detailDate}>{friendlyRecordDate(record.createdAt)}</Text>
+          <Text style={s.detailDate}>{friendlyRecordDate(record.createdAt, record.date)}</Text>
           <View style={s.detailScore}>
             <Text style={s.detailScoreValue}>{record.score}</Text>
             <Text style={s.detailScoreLabel}>
@@ -1612,19 +1691,19 @@ function HistoryDetail({
             />
             <Text style={s.detailActionText}>Solution</Text>
           </Pressable>
-          {!isQuestionAttempt(record) && <Pressable onPress={onReevaluate} style={s.detailAction}>
+          {!isQuestionAttempt(record) && !isQuickRecallRecord(record) && <Pressable onPress={onReevaluate} style={s.detailAction}>
             <MaterialCommunityIcons name="refresh" size={15} color={colors.text} />
             <Text style={s.detailActionText}>Recheck</Text>
           </Pressable>}
           <Pressable onPress={onReattempt} style={s.detailPrimaryAction}>
             <MaterialCommunityIcons name="reload" size={15} color={examAccentDeep} />
-            <Text style={s.detailPrimaryText}>Reattempt</Text>
+            <Text style={s.detailPrimaryText}>{isQuickRecallRecord(record) ? "Practice again" : "Reattempt"}</Text>
           </Pressable>
         </View>
         <Text style={s.sectionTitle}>ANSWER REVIEW</Text>
         {record.answers.map((answer, index) => {
           const key = record.key[index];
-          const question = record.questions?.[index];
+          const question = solutionQuestions?.[index];
           return (
             <View key={index} style={s.reviewRow}>
               <Text style={s.reviewNumber}>Q{index + 1}</Text>
@@ -1652,8 +1731,8 @@ function HistoryDetail({
     </View>
   );
 }
-function SolutionView({ record, onBack }: { record: Record; onBack: () => void }) {
-  const questions = record.questions ?? [];
+function SolutionView({ record, subjects, onBack }: { record: Record; subjects: Subject[]; onBack: () => void }) {
+  const questions = useMemo(() => isQuickRecallRecord(record) ? resolveRecallQuestions(record, subjects) : record.questions ?? [], [record, subjects]);
   const questionCount = Math.max(record.answers.length, record.key.length, questions.length);
   const [current, setCurrent] = useState(0);
   const [reattemptMode, setReattemptMode] = useState(false);
@@ -1709,6 +1788,7 @@ function SolutionView({ record, onBack }: { record: Record; onBack: () => void }
                 Q. {record.questionNumbers?.[current] ?? current + 1}
                 {question?.question ? ` · ${question.question}` : ""}
               </Text>
+              {!question && isQuickRecallRecord(record) && <Text style={s.muted}>Question text is unavailable for this older answer.</Text>}
               {(question?.options ?? choices.map((option) => `Option ${option}`)).map((optionText, optionIndex) => {
                 const optionKey = choices[optionIndex];
                 const isCorrect = answerKey === optionKey;
@@ -1836,15 +1916,20 @@ function SolutionView({ record, onBack }: { record: Record; onBack: () => void }
     </View>
   );
 }
-function friendlyRecordDate(iso: string) {
-  const date = new Date(iso);
+function friendlyRecordDate(timestamp?: string | null, fallbackDate?: string | null) {
+  const isValidDate = (value: unknown): value is string =>
+    typeof value === "string" && value.trim().length > 0 && Number.isFinite(new Date(value).getTime());
+  const iso = isValidDate(timestamp) ? timestamp : isValidDate(fallbackDate) ? fallbackDate : null;
+  if (!iso) return "Date unavailable";
+  const hasClock = iso.includes("T");
+  const date = new Date(hasClock ? iso : `${iso}T00:00:00`);
   const today = new Date();
   const day = (value: Date) =>
     new Date(value.getFullYear(), value.getMonth(), value.getDate()).getTime();
   const difference = Math.round((day(today) - day(date)) / 86_400_000);
   const time = date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-  if (difference === 0) return `Today, ${time}`;
-  if (difference === 1) return `Yesterday, ${time}`;
+  if (difference === 0) return hasClock ? `Today, ${time}` : "Today";
+  if (difference === 1) return hasClock ? `Yesterday, ${time}` : "Yesterday";
   return date.toLocaleDateString([], {
     day: "numeric",
     month: "short",
@@ -2667,7 +2752,6 @@ const s = StyleSheet.create({
   },
   outlineText: { color: colors.text, fontWeight: "700", fontSize: 13 },
   resultRow: { flexDirection: "row", marginTop: 17 },
-  historyFilterDismiss: { position: "absolute", zIndex: 10, top: 0, right: 0, bottom: 0, left: 0 },
   historyFilters: { zIndex: 20, flexDirection: "row", gap: 8 },
   historyFilterWrap: { flex: 1, position: "relative", zIndex: 20 },
   historyFilterButton: { height: 42, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 6, borderRadius: 12, paddingHorizontal: 12, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },

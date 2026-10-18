@@ -6,8 +6,11 @@ import { useVideoPlayer, VideoView } from "expo-video";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Animated, AppState, Easing, FlatList, Image, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import Svg, { Circle } from "react-native-svg";
+import { MusicLiquidRing } from "../components/MusicLiquidRing";
 import { musicCover, musicSource, musicTracks, trackTitle, videoSource, videoTracks } from "../lib/media";
 import { colors } from "../theme";
+import { FloatingMusicPlayer } from "../components/FloatingMusicPlayer";
+import type { PlayerCorner } from "../domain/floating-player";
 import { subscribeBottomNavigation } from "../navigation/bottomNavigationVisibility";
 import { patchCloudPreferences, watchCloudPreferences } from "../lib/firebase";
 
@@ -173,6 +176,7 @@ function MusicPlayer({ user, onClose, openRequest }: { user: User | null; onClos
   const [repeat, setRepeat] = useState(false);
   const [selectedPlaylist, setSelectedPlaylist] = useState(() => playlistName(musicTracks[0] ?? ""));
   const [minimized, setMinimized] = useState(false);
+  const [miniCorner, setMiniCorner] = useState<PlayerCorner>("bottom-right");
   const [bottomNavVisible, setBottomNavVisible] = useState(true);
   const [dragProgress, setDragProgress] = useState<number | null>(null);
   const [audioModeReady, setAudioModeReady] = useState(false);
@@ -182,7 +186,6 @@ function MusicPlayer({ user, onClose, openRequest }: { user: User | null; onClos
   const [isForeground, setIsForeground] = useState(AppState.currentState === "active");
   const advancedTrackRef = useRef<string | null>(null);
   const artworkSpin = useRef(new Animated.Value(0)).current;
-  const miniLift = useRef(new Animated.Value(0)).current;
   const artworkAnimation = useRef<Animated.CompositeAnimation | null>(null);
   const shouldSpin = useRef(false);
   const activeTrack = musicTracks[index] ?? musicTracks[0];
@@ -222,9 +225,6 @@ function MusicPlayer({ user, onClose, openRequest }: { user: User | null; onClos
     const subscription = AppState.addEventListener("change", (nextState) => setIsForeground(nextState === "active"));
     return () => subscription.remove();
   }, []);
-  useEffect(() => {
-    Animated.timing(miniLift, { toValue: bottomNavVisible ? -64 : 0, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
-  }, [bottomNavVisible, miniLift]);
   useEffect(() => {
     try { player.replace(source); player.play(); } catch {}
   }, [player, source]);
@@ -318,25 +318,25 @@ function MusicPlayer({ user, onClose, openRequest }: { user: User | null; onClos
     },
   });
   if (minimized) {
-    return <Animated.View pointerEvents="box-none" style={[styles.miniLayer, { paddingBottom: 12, transform: [{ translateY: miniLift }] }]}>
-      <View style={styles.miniPlayer}>
-        <Pressable style={styles.miniDisc} onPress={() => status.playing ? player.pause() : player.play()}><ProgressRing size={38} progress={progress} /><Animated.View style={[styles.miniArtwork, { transform: [{ rotate: rotation }] }]}>{cover ? <Image source={cover} style={styles.coverImage} /> : <MaterialCommunityIcons name="music" size={16} color={colors.accent} />}</Animated.View></Pressable>
-        <Pressable style={styles.miniText} onPress={() => setMinimized(false)}><Text numberOfLines={1} style={styles.miniTitle}>{trackTitle(musicTracks[index] ?? "")}</Text><Text style={styles.miniStatus}>{status.playing ? "Playing" : "Paused"}</Text></Pressable>
-        <Pressable hitSlop={8} onPress={() => status.playing ? player.pause() : player.play()}><MaterialCommunityIcons name={status.playing ? "pause" : "play"} size={22} color={colors.text} /></Pressable>
-        <Pressable hitSlop={8} onPress={onClose}><MaterialCommunityIcons name="close" size={18} color={colors.muted} /></Pressable>
-      </View>
-    </Animated.View>;
+    return <FloatingMusicPlayer corner={miniCorner} onCornerChange={setMiniCorner} bottomNavVisible={bottomNavVisible} style={styles.miniPlayer}>
+        <Pressable accessibilityRole="button" accessibilityLabel={status.playing ? "Pause music" : "Play music"} style={styles.miniDisc} onPress={() => status.playing ? player.pause() : player.play()}>
+          <View style={styles.miniArtwork}>{cover ? <Image source={cover} style={styles.coverImage} /> : <MaterialCommunityIcons name={status.playing ? "pause" : "play"} size={16} color={colors.text} />}</View>
+          <MusicLiquidRing size={32} progress={progress} active={status.playing && isForeground} stroke={2} />
+        </Pressable>        <Pressable accessibilityRole="button" accessibilityLabel="Expand music player" style={styles.miniText} onPress={() => setMinimized(false)}><Text numberOfLines={1} style={styles.miniTitle}>{trackTitle(musicTracks[index] ?? "")}</Text></Pressable>
+
+        <Pressable accessibilityRole="button" accessibilityLabel="Close music player" style={styles.miniClose} onPress={onClose}><MaterialCommunityIcons name="close" size={16} color={colors.muted} /></Pressable>
+    </FloatingMusicPlayer>;
   }
   return <Modal transparent visible animationType="fade" onRequestClose={() => setMinimized(true)}><Pressable style={[styles.backdrop, { padding: 16 }]} onPress={() => setMinimized(true)}><Pressable style={[styles.musicCard, { height: "63%", maxHeight: "63%", padding: 15 }]} onPress={() => undefined}>
     <View style={styles.musicHead}><View /><View style={styles.musicHeaderActions}><Pressable onPress={() => setMinimized(true)} hitSlop={9}><MaterialCommunityIcons name="arrow-collapse" size={20} color={colors.muted} /></Pressable><Pressable onPress={onClose} hitSlop={9}><MaterialCommunityIcons name="close" size={21} color={colors.muted} /></Pressable></View></View>
-    <View style={[styles.disc, { width: discSize, height: discSize, marginTop: 3 }]} {...discPan.panHandlers}><Animated.View style={[styles.artwork, { width: 90, height: 90, borderRadius: 45, transform: [{ rotate: rotation }] }]}>{cover ? <Image source={cover} style={styles.coverImage} /> : <MaterialCommunityIcons name="music" size={34} color={colors.accent} />}</Animated.View><ProgressRing size={discSize} progress={progress} /></View>
+    <View style={[styles.disc, { width: discSize, height: discSize, marginTop: 3 }]} {...discPan.panHandlers}><Animated.View style={[styles.artwork, { width: 90, height: 90, borderRadius: 45, transform: [{ rotate: rotation }] }]}>{cover ? <Image source={cover} style={styles.coverImage} /> : <MaterialCommunityIcons name="music" size={34} color={colors.accent} />}</Animated.View><ProgressRing size={discSize} progress={progress} active={status.playing && isForeground} /></View>
     <Text style={styles.songTitle} numberOfLines={1}>{trackTitle(musicTracks[index] ?? "")}</Text>
     <View style={styles.controls}><Pressable style={styles.round} onPress={() => toggleLike(activeTrack)}><MaterialCommunityIcons name={liked ? "heart" : "heart-outline"} size={21} color={liked ? "#fb7185" : colors.text} /></Pressable><Pressable style={[styles.round, repeat && { backgroundColor: "#284d7f" }]} onPress={() => setRepeat((value) => !value)}><MaterialCommunityIcons name="repeat" size={20} color={colors.text} /></Pressable><Pressable style={styles.round} onPress={() => shift(-1)}><MaterialCommunityIcons name="chevron-left" size={28} color={colors.text} /></Pressable><Pressable style={styles.round} onPress={() => shift(1)}><MaterialCommunityIcons name="chevron-right" size={28} color={colors.text} /></Pressable></View>
     <View style={styles.playlistHeader}><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.playlistChips}>{playlists.map((playlist) => <Pressable key={playlist} onPress={() => setSelectedPlaylist(playlist)} style={[styles.playlistChip, playlist === selectedPlaylist && styles.playlistChipActive]}><Text numberOfLines={1} style={[styles.playlistChipText, playlist === selectedPlaylist && styles.playlistChipTextActive]}>{playlist}</Text></Pressable>)}</ScrollView></View><ScrollView nestedScrollEnabled showsVerticalScrollIndicator style={[styles.playlist, { marginTop: 5 }]} contentContainerStyle={styles.playlistContent}>{visibleTracks.map((track) => { const trackIndex = musicTracks.indexOf(track); return <Pressable key={track} onPress={() => setIndex(trackIndex)} style={[styles.track, { paddingVertical: 5 }, trackIndex === index && styles.trackActive]}><Text numberOfLines={1} style={[styles.trackText, trackIndex === index && styles.trackTextActive]}>{trackTitle(track)}</Text></Pressable>; })}</ScrollView>
   </Pressable></Pressable></Modal>;
 }
 
-function ProgressRing({ size, progress }: { size: number; progress: number }) {
+function ProgressRing({ size, progress, active = true }: { size: number; progress: number; active?: boolean }) {
   const stroke = size < 60 ? 2.5 : 4;
   const dotRadius = size < 60 ? 3.5 : 6;
   const radius = (size - stroke) / 2 - dotRadius - 1;
@@ -344,11 +344,11 @@ function ProgressRing({ size, progress }: { size: number; progress: number }) {
   const angle = progress * Math.PI * 2 - Math.PI / 2;
   const dotX = size / 2 + radius * Math.cos(angle);
   const dotY = size / 2 + radius * Math.sin(angle);
-  return <Svg pointerEvents="none" width={size} height={size} style={styles.progressRing}>
-    <Circle cx={size / 2} cy={size / 2} r={radius} stroke="#3d3d3d" strokeWidth={stroke} fill="transparent" />
-    <Circle cx={size / 2} cy={size / 2} r={radius} stroke="#fb4f5a" strokeWidth={stroke} fill="transparent" strokeLinecap="round" strokeDasharray={circumference} strokeDashoffset={circumference * (1 - progress)} rotation="-90" origin={`${size / 2}, ${size / 2}`} />
+  return <>
+    <MusicLiquidRing size={size} progress={progress} active={active} radius={radius} stroke={stroke} />
+    <Svg pointerEvents="none" width={size} height={size} style={styles.progressRing}>
     <Circle cx={dotX} cy={dotY} r={dotRadius} fill="#fb4f5a" stroke="#ffd1d4" strokeWidth={size < 60 ? 0.75 : 1} />
-  </Svg>;
+  </Svg></>;
 }
 
 /** Uses the same preferences document and field names as the web media overlays. */
@@ -380,5 +380,5 @@ const styles = StyleSheet.create({
   backdrop: { flex: 1, justifyContent: "center", padding: 18, backgroundColor: "rgba(0,0,0,.82)" }, musicCard: { maxHeight: "82%", borderRadius: 20, padding: 15, backgroundColor: "#1b1b1b", borderWidth: 1, borderColor: colors.border }, musicHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }, musicHeaderActions: { flexDirection: "row", alignItems: "center", gap: 12 }, musicKicker: { color: colors.muted, fontSize: 10, letterSpacing: 1.5, fontWeight: "800" }, disc: { width: 112, height: 112, alignSelf: "center", alignItems: "center", justifyContent: "center", marginTop: 4 }, progressRing: { position: "absolute" }, artwork: { alignItems: "center", justifyContent: "center", width: 90, height: 90, borderRadius: 45, overflow: "hidden", backgroundColor: "#292929" }, songTitle: { color: colors.text, textAlign: "center", marginTop: 7, fontSize: 14, fontWeight: "700" }, controls: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 8, marginTop: 9 }, round: { width: 36, height: 36, alignItems: "center", justifyContent: "center", borderRadius: 18, backgroundColor: "#292929" }, play: { backgroundColor: colors.accent }, playlistLabel: { color: colors.muted, fontSize: 10, letterSpacing: 1.5, fontWeight: "800", marginTop: 23 }, playlist: { height: 160, flexGrow: 0, gap: 0 }, track: { borderRadius: 8, paddingHorizontal: 9, paddingVertical: 4 }, trackActive: { backgroundColor: "#303030" }, trackText: { color: colors.muted, fontSize: 11 }, trackTextActive: { color: colors.text, fontWeight: "700" },
   playlistHeader: { flexDirection: "row", alignItems: "center", marginTop: 15 }, playlistChips: { gap: 5, paddingRight: 7 }, playlistChip: { maxWidth: 105, borderRadius: 7, paddingHorizontal: 8, paddingVertical: 3, backgroundColor: "#292929" }, playlistChipActive: { backgroundColor: "#e4e4e7" }, playlistChipText: { color: colors.muted, fontSize: 10, fontWeight: "700" }, playlistChipTextActive: { color: "#171717" }, playlistContent: { gap: 0, paddingBottom: 2 },
   coverImage: { width: "100%", height: "100%", borderRadius: 999 },
-  miniLayer: { ...StyleSheet.absoluteFill, justifyContent: "flex-end", alignItems: "flex-end", paddingHorizontal: 11 }, miniPlayer: { width: 214, minHeight: 54, flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 15, paddingHorizontal: 9, backgroundColor: "#202020", borderWidth: 1, borderColor: colors.border, shadowColor: "#000", shadowOpacity: 0.45, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 10 }, miniDisc: { width: 38, height: 38, alignItems: "center", justifyContent: "center" }, miniArtwork: { width: 31, height: 31, alignItems: "center", justifyContent: "center", borderRadius: 16, overflow: "hidden", backgroundColor: "#292929" }, miniText: { flex: 1, minWidth: 0 }, miniTitle: { color: colors.text, fontSize: 11, fontWeight: "700" }, miniStatus: { color: colors.muted, fontSize: 9, marginTop: 2 },
+  miniPlayer: { width: 160, minHeight: 48, flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 12, paddingLeft: 12, paddingRight: 8, paddingVertical: 8, backgroundColor: "#1b1b1b", borderWidth: 1, borderColor: colors.border, shadowColor: "#000", shadowOpacity: 0.45, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 10 }, miniDisc: { width: 32, height: 32, alignItems: "center", justifyContent: "center", borderRadius: 16, overflow: "hidden" }, miniArtwork: { width: 26, height: 26, alignItems: "center", justifyContent: "center", borderRadius: 13, overflow: "hidden", backgroundColor: "#292929" }, miniText: { flex: 1, minWidth: 0 }, miniTitle: { color: colors.text, fontSize: 12, fontWeight: "500" }, miniClose: { width: 32, height: 32, alignItems: "center", justifyContent: "center", borderRadius: 8 },
 });

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Upload } from "lucide-react";
+import { parseQuestionsJson as parseQuestionExerciseJson } from "../../../mobile-tasks/src/domain/question-import";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,7 +37,12 @@ import {
   type Subject,
 } from "@/lib/exam";
 
-import { ALL_PRACTICE_EXERCISES, ALL_PRACTICE_EXERCISES_LABEL, combineQuestionExercises, samplePracticeQuestions } from "../../../mobile-tasks/src/domain/practice-exercises";
+import {
+  ALL_PRACTICE_EXERCISES,
+  ALL_PRACTICE_EXERCISES_LABEL,
+  combineQuestionExercises,
+  samplePracticeQuestions,
+} from "../../../mobile-tasks/src/domain/practice-exercises";
 
 export type TestConfig = {
   minutes: number;
@@ -63,47 +69,8 @@ const MAX_DURATION_MINUTES = 300;
 
 const optionLetters: Option[] = ["A", "B", "C", "D"];
 
-function parseQuestionsJson(raw: string): McqQuestion[] {
-  const value: unknown = JSON.parse(raw);
-  if (!Array.isArray(value) || value.length === 0)
-    throw new Error("Use a JSON array with at least one question.");
-  if (value.length > 500) throw new Error("An exercise can contain at most 500 questions.");
-  const questions = value.map((item, index) => {
-    if (!item || typeof item !== "object") throw new Error(`Question ${index + 1} is invalid.`);
-    const q = item as Record<string, unknown>;
-    const options = q["options"];
-    const correct = q["correctAnswer"];
-    if (typeof q["question"] !== "string" || !q["question"].trim())
-      throw new Error(`Question ${index + 1} needs question text.`);
-    if (
-      !Array.isArray(options) ||
-      options.length !== 4 ||
-      options.some((option) => typeof option !== "string" || !option.trim())
-    )
-      throw new Error(`Question ${index + 1} needs exactly four non-empty options.`);
-    const optionIndex = typeof correct === "number" ? correct : -1;
-    if (!Number.isInteger(optionIndex) || optionIndex < 0 || optionIndex > 3)
-      throw new Error(`Question ${index + 1}: correctAnswer must be 0, 1, 2, or 3.`);
-    if (q["explanation"] !== undefined && typeof q["explanation"] !== "string")
-      throw new Error(`Question ${index + 1}: explanation must be text.`);
-    return {
-      id: typeof q["id"] === "string" && q["id"].trim() ? q["id"] : newDocumentId("question"),
-      number: index + 1,
-      question: q["question"].trim(),
-      options: [
-        options[0] as string,
-        options[1] as string,
-        options[2] as string,
-        options[3] as string,
-      ] as [string, string, string, string],
-      correctAnswer: optionLetters[optionIndex]!,
-      ...(typeof q["explanation"] === "string" && q["explanation"].trim()
-        ? { explanation: q["explanation"].trim() }
-        : {}),
-    };
-  });
-  return questions;
-}
+const parseQuestionsJson = (raw: string): McqQuestion[] =>
+  parseQuestionExerciseJson(raw, () => newDocumentId("question"));
 
 export type SetupPrefill = {
   subject?: string | undefined;
@@ -124,7 +91,11 @@ export function SetupScreen({
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [subject, setSubject] = useState(prefill?.subject ?? "");
   const [chapter, setChapter] = useState(prefill?.chapter ?? "");
-  const [exercise, setExercise] = useState(prefill?.exercise === ALL_PRACTICE_EXERCISES_LABEL ? ALL_PRACTICE_EXERCISES : (prefill?.exercise ?? ""));
+  const [exercise, setExercise] = useState(
+    prefill?.exercise === ALL_PRACTICE_EXERCISES_LABEL
+      ? ALL_PRACTICE_EXERCISES
+      : (prefill?.exercise ?? ""),
+  );
   const [newSubject, setNewSubject] = useState("");
   const [newChapter, setNewChapter] = useState("");
   const [chapterDraft, setChapterDraft] = useState<string | null>(null);
@@ -135,6 +106,7 @@ export function SetupScreen({
   const [isEditing, setIsEditing] = useState(false);
   const [jsonDialogOpen, setJsonDialogOpen] = useState(false);
   const [jsonExerciseName, setJsonExerciseName] = useState("");
+  const [jsonEditingExerciseId, setJsonEditingExerciseId] = useState<string | null>(null);
   const [jsonText, setJsonText] = useState("");
   const [jsonError, setJsonError] = useState("");
   const [jsonFileName, setJsonFileName] = useState("");
@@ -173,28 +145,36 @@ export function SetupScreen({
     return () => window.clearTimeout(timer);
   }, [isLoading]);
 
-  useEffect(() =>
-    onPracticePersist((key) => {
-      if (key === "cbt-subjects") {
-        const next = loadSubjects();
-        setSubjects(next);
-        setSubject((current) => next.some((item) => item.name === current) ? current : (next[0]?.name ?? ""));
-      }
-      if (key === "cbt-marking") {
-        const next = loadMarking();
-        if (!next) return;
-        setMarking(next);
-        setPositive(String(next.positive));
-        setNegative(String(next.negative));
-      }
-    }),
-  []);
+  useEffect(
+    () =>
+      onPracticePersist((key) => {
+        if (key === "cbt-subjects") {
+          const next = loadSubjects();
+          setSubjects(next);
+          setSubject((current) =>
+            next.some((item) => item.name === current) ? current : (next[0]?.name ?? ""),
+          );
+        }
+        if (key === "cbt-marking") {
+          const next = loadMarking();
+          if (!next) return;
+          setMarking(next);
+          setPositive(String(next.positive));
+          setNegative(String(next.negative));
+        }
+      }),
+    [],
+  );
 
   const chapters = subjects.find((s) => s.name === subject)?.chapters ?? [];
   const exercises = chapters.find((c) => c.name === chapter)?.exercises ?? [];
   const isAllExercises = exercise === ALL_PRACTICE_EXERCISES;
   const combinedExercise = combineQuestionExercises(exercises);
-  const activeExercise = isAllExercises ? combinedExercise : (chapter ? getExercise(subject, chapter, exercise || null) : null);
+  const activeExercise = isAllExercises
+    ? combinedExercise
+    : chapter
+      ? getExercise(subject, chapter, exercise || null)
+      : null;
   const activeExerciseName = activeExercise?.name ?? exercise;
   const isJsonExercise = Array.isArray(activeExercise?.questions);
   const parsedStart = isAllExercises ? 1 : Math.max(1, Number(startNumber) || 1);
@@ -232,10 +212,17 @@ export function SetupScreen({
     !editingMarking &&
     !startTooHigh &&
     !countTooHigh &&
-    (isAllExercises ? Boolean(combinedExercise) && Number(questionCount) >= 1 && Number(questionCount) <= maxQuestionCount : (countMode === "unlimited" || Number(questionCount) >= 1));
+    (isAllExercises
+      ? Boolean(combinedExercise) &&
+        Number(questionCount) >= 1 &&
+        Number(questionCount) <= maxQuestionCount
+      : countMode === "unlimited" || Number(questionCount) >= 1);
 
   const buildRandomQuestions = () => {
-    if (isAllExercises) return samplePracticeQuestions(orderedJsonQuestions ?? [], parsedCount).map((question, index) => ({ question, index }));
+    if (isAllExercises)
+      return samplePracticeQuestions(orderedJsonQuestions ?? [], parsedCount).map(
+        (question, index) => ({ question, index }),
+      );
     const favorites = new Set(loadFavoriteQuestionIds());
     const shuffle = <T,>(items: T[]) => [...items].sort(() => Math.random() - 0.5);
     const all = (orderedJsonQuestions ?? []).map((question, index) => ({ question, index }));
@@ -262,7 +249,10 @@ export function SetupScreen({
   const selectChapter = (name: string, exerciseName?: string) => {
     setChapter(name);
     if (exerciseName === ALL_PRACTICE_EXERCISES || exerciseName === ALL_PRACTICE_EXERCISES_LABEL) {
-      const combined = combineQuestionExercises(subjects.find((item) => item.name === subject)?.chapters.find((item) => item.name === name)?.exercises ?? []);
+      const combined = combineQuestionExercises(
+        subjects.find((item) => item.name === subject)?.chapters.find((item) => item.name === name)
+          ?.exercises ?? [],
+      );
       setExercise(ALL_PRACTICE_EXERCISES);
       setCountMode("fixed");
       setStartNumber("1");
@@ -322,6 +312,7 @@ export function SetupScreen({
     if (!subject || !chapter) return;
     const stored = getExercise(subject, chapter, exercise || null);
     if (Array.isArray(stored?.questions)) {
+      setJsonEditingExerciseId(stored.id);
       setJsonExerciseName(stored.name);
       setJsonText(
         JSON.stringify(
@@ -329,7 +320,7 @@ export function SetupScreen({
             id: question.id,
             question: question.question,
             options: question.options,
-            correctAnswer: optionLetters.indexOf(question.correctAnswer),
+            correctAnswer: question.correctAnswer,
             ...(question.explanation ? { explanation: question.explanation } : {}),
           })),
           null,
@@ -368,6 +359,7 @@ export function SetupScreen({
 
   const openJsonExercise = () => {
     if (!subject || !chapter) return;
+    setJsonEditingExerciseId(null);
     setJsonExerciseName(`Practice Set ${exercises.length + 1}`);
     setJsonText("");
     setJsonError("");
@@ -388,6 +380,7 @@ export function SetupScreen({
           questions.length,
           questions.map((q) => q.correctAnswer),
           questions,
+          jsonEditingExerciseId,
         ),
       );
       setExercise(name);
@@ -527,7 +520,16 @@ export function SetupScreen({
                 Question-based exercises
               </p>
               <div className="flex flex-wrap gap-1.5">
-                {combinedExercise && <Button type="button" size="sm" variant={isAllExercises ? "default" : "outline"} onClick={() => selectChapter(chapter, ALL_PRACTICE_EXERCISES)}>All exercises · {combinedExercise?.questionCount}Q</Button>}
+                {combinedExercise && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={isAllExercises ? "default" : "outline"}
+                    onClick={() => selectChapter(chapter, ALL_PRACTICE_EXERCISES)}
+                  >
+                    All exercises · {combinedExercise?.questionCount}Q
+                  </Button>
+                )}
                 {questionExercises.map((ex) => (
                   <Button
                     key={ex.name}
@@ -545,14 +547,16 @@ export function SetupScreen({
                 </Button>
               </div>
             </div>
-            {!isAllExercises && <button
-              type="button"
-              onClick={editChapter}
-              className="text-xs font-medium text-primary underline-offset-2 hover:underline"
-            >
-              {isJsonExercise ? "Edit questions of" : "Edit questions & answer key of"} “
-              {activeExerciseName || chapter}”
-            </button>}
+            {!isAllExercises && (
+              <button
+                type="button"
+                onClick={editChapter}
+                className="text-xs font-medium text-primary underline-offset-2 hover:underline"
+              >
+                {isJsonExercise ? "Edit questions of" : "Edit questions & answer key of"} “
+                {activeExerciseName || chapter}”
+              </button>
+            )}
             {isJsonExercise && !isAllExercises && (
               <button
                 type="button"
@@ -601,46 +605,51 @@ export function SetupScreen({
             </div>
           </div>
 
-          {!isAllExercises && <div className="space-y-1.5">
-            <Input
-              inputMode="numeric"
-              min={1}
-              max={maxStartNumber ?? undefined}
-              value={startNumber}
-              disabled={isJsonExercise && questionOrder === "random"}
-              onChange={(e) => {
-                const next = e.target.value.replace(/\D/g, "");
-                const capped = maxStartNumber
-                  ? Math.max(1, Math.min(Number(next) || 1, maxStartNumber))
-                  : next;
-                setStartNumber(next === "" ? "" : String(capped));
-                const nextStart = Number(capped) || 1;
-                const nextAvailable = isJsonExercise
-                  ? Math.max(0, (orderedJsonQuestions?.length ?? 0) - nextStart + 1)
-                  : chapterTotal
-                    ? Math.max(0, chapterTotal - nextStart + 1)
-                    : 500;
-                setQuestionCount((current) =>
-                  current === ""
-                    ? current
-                    : String(
-                        Math.max(1, Math.min(Number(current) || 1, Math.min(500, nextAvailable))),
-                      ),
-                );
-              }}
-              placeholder="Start question no. e.g. 151"
-            />
-            <p
-              className={cn("text-xs", startTooHigh ? "text-destructive" : "text-muted-foreground")}
-            >
-              {startTooHigh
-                ? `This chapter has only ${chapterTotal} questions.`
-                : isJsonExercise && questionOrder === "random"
-                  ? "Random test selects questions from the entire exercise."
-                : `Numbering begins at Q${parsedStart}.` +
-                  (chapterTotal ? ` Chapter total ${chapterTotal}.` : "")}
-            </p>
-          </div>}
+          {!isAllExercises && (
+            <div className="space-y-1.5">
+              <Input
+                inputMode="numeric"
+                min={1}
+                max={maxStartNumber ?? undefined}
+                value={startNumber}
+                disabled={isJsonExercise && questionOrder === "random"}
+                onChange={(e) => {
+                  const next = e.target.value.replace(/\D/g, "");
+                  const capped = maxStartNumber
+                    ? Math.max(1, Math.min(Number(next) || 1, maxStartNumber))
+                    : next;
+                  setStartNumber(next === "" ? "" : String(capped));
+                  const nextStart = Number(capped) || 1;
+                  const nextAvailable = isJsonExercise
+                    ? Math.max(0, (orderedJsonQuestions?.length ?? 0) - nextStart + 1)
+                    : chapterTotal
+                      ? Math.max(0, chapterTotal - nextStart + 1)
+                      : 500;
+                  setQuestionCount((current) =>
+                    current === ""
+                      ? current
+                      : String(
+                          Math.max(1, Math.min(Number(current) || 1, Math.min(500, nextAvailable))),
+                        ),
+                  );
+                }}
+                placeholder="Start question no. e.g. 151"
+              />
+              <p
+                className={cn(
+                  "text-xs",
+                  startTooHigh ? "text-destructive" : "text-muted-foreground",
+                )}
+              >
+                {startTooHigh
+                  ? `This chapter has only ${chapterTotal} questions.`
+                  : isJsonExercise && questionOrder === "random"
+                    ? "Random test selects questions from the entire exercise."
+                    : `Numbering begins at Q${parsedStart}.` +
+                      (chapterTotal ? ` Chapter total ${chapterTotal}.` : "")}
+              </p>
+            </div>
+          )}
         </div>
       </section>
 
@@ -649,52 +658,54 @@ export function SetupScreen({
         <Label className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">
           Questions
         </Label>
-        {!isAllExercises && <div className="flex flex-wrap gap-2">
-          {isJsonExercise && (
-            <>
-              <Button
-                type="button"
-                size="sm"
-                variant={questionOrder === "sequential" ? "default" : "outline"}
-                onClick={() => setQuestionOrder("sequential")}
-              >
-                Sequential
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={questionOrder === "random" ? "default" : "outline"}
-                onClick={() => {
-                  setQuestionOrder("random");
-                  setCountMode("fixed");
-                  setStartNumber("1");
-                  setQuestionCount((current) =>
-                    String(Math.min(Number(current) || 1, orderedJsonQuestions?.length ?? 1)),
-                  );
-                }}
-              >
-                Random
-              </Button>
-            </>
-          )}
-          <Button
-            type="button"
-            size="sm"
-            variant={countMode === "unlimited" ? "default" : "outline"}
-            onClick={() => setCountMode("unlimited")}
-            disabled={isJsonExercise && questionOrder === "random"}
-          >
-            Unlimited
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant={countMode === "fixed" ? "default" : "outline"}
-            onClick={() => setCountMode("fixed")}
-          >
-            Fixed count
-          </Button>
-        </div>}
+        {!isAllExercises && (
+          <div className="flex flex-wrap gap-2">
+            {isJsonExercise && (
+              <>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={questionOrder === "sequential" ? "default" : "outline"}
+                  onClick={() => setQuestionOrder("sequential")}
+                >
+                  Sequential
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={questionOrder === "random" ? "default" : "outline"}
+                  onClick={() => {
+                    setQuestionOrder("random");
+                    setCountMode("fixed");
+                    setStartNumber("1");
+                    setQuestionCount((current) =>
+                      String(Math.min(Number(current) || 1, orderedJsonQuestions?.length ?? 1)),
+                    );
+                  }}
+                >
+                  Random
+                </Button>
+              </>
+            )}
+            <Button
+              type="button"
+              size="sm"
+              variant={countMode === "unlimited" ? "default" : "outline"}
+              onClick={() => setCountMode("unlimited")}
+              disabled={isJsonExercise && questionOrder === "random"}
+            >
+              Unlimited
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={countMode === "fixed" ? "default" : "outline"}
+              onClick={() => setCountMode("fixed")}
+            >
+              Fixed count
+            </Button>
+          </div>
+        )}
         {isAllExercises || countMode === "fixed" ? (
           <div className="space-y-1">
             <Input
@@ -716,11 +727,13 @@ export function SetupScreen({
             <p
               className={cn("text-xs", countTooHigh ? "text-destructive" : "text-muted-foreground")}
             >
-              {isAllExercises ? `${parsedCount} questions mixed from all question-based exercises (${chapterTotal} available).` : countTooHigh
-                ? `Only ${available} questions remain (Q${parsedStart}–Q${chapterTotal}).`
-                : isJsonExercise && questionOrder === "random"
-                  ? `${parsedCount} random questions. Favourites are selected first, then ordinary questions fill remaining slots.`
-                : `Questions Q${parsedStart}–Q${parsedStart + parsedCount - 1}.`}
+              {isAllExercises
+                ? `${parsedCount} questions mixed from all question-based exercises (${chapterTotal} available).`
+                : countTooHigh
+                  ? `Only ${available} questions remain (Q${parsedStart}–Q${chapterTotal}).`
+                  : isJsonExercise && questionOrder === "random"
+                    ? `${parsedCount} random questions. Favourites are selected first, then ordinary questions fill remaining slots.`
+                    : `Questions Q${parsedStart}–Q${parsedStart + parsedCount - 1}.`}
             </p>
           </div>
         ) : (
@@ -772,13 +785,19 @@ export function SetupScreen({
         )}
       </section>
 
-      {isJsonExercise && !jsonQuestions?.length && <p className="text-sm text-muted-foreground">No questions left in this exercise. Add questions or select another exercise.</p>}
+      {isJsonExercise && !jsonQuestions?.length && (
+        <p className="text-sm text-muted-foreground">
+          No questions left in this exercise. Add questions or select another exercise.
+        </p>
+      )}
       <Button
         className="h-10 w-full sm:w-auto"
         disabled={!valid}
         onClick={() => {
           const randomSelection =
-            isJsonExercise && (isAllExercises || questionOrder === "random") ? buildRandomQuestions() : null;
+            isJsonExercise && (isAllExercises || questionOrder === "random")
+              ? buildRandomQuestions()
+              : null;
           const selectedQuestions = randomSelection
             ? randomSelection.map((item) => item.question)
             : isJsonExercise
@@ -800,7 +819,8 @@ export function SetupScreen({
             questionCount: isAllExercises || countMode === "fixed" ? parsedCount : null,
             maxQuestions: available,
             answerKey: (() => {
-              if (randomSelection) return randomSelection.map((item) => item.question.correctAnswer);
+              if (randomSelection)
+                return randomSelection.map((item) => item.question.correctAnswer);
               if (isJsonExercise) {
                 const selected =
                   countMode === "fixed"
@@ -814,14 +834,18 @@ export function SetupScreen({
               return full.slice(parsedStart - 1, parsedStart - 1 + len);
             })(),
             questions: selectedQuestions,
-            questionNumbers: isAllExercises ? selectedQuestions?.map((_, index) => index + 1) ?? null : randomSelection
-              ? randomSelection.map((item) => item.question.number ?? item.index + 1)
-              : isJsonExercise
-                ? selectedQuestions?.map((question, index) => question.number ?? parsedStart + index) ?? null
-                : null,
+            questionNumbers: isAllExercises
+              ? (selectedQuestions?.map((_, index) => index + 1) ?? null)
+              : randomSelection
+                ? randomSelection.map((item) => item.question.number ?? item.index + 1)
+                : isJsonExercise
+                  ? (selectedQuestions?.map(
+                      (question, index) => question.number ?? parsedStart + index,
+                    ) ?? null)
+                  : null,
             questionIds: selectedQuestions?.map((question) => question.id) ?? null,
             darkMode: null,
-          })
+          });
         }}
       >
         Continue to instructions
@@ -847,10 +871,7 @@ export function SetupScreen({
                 placeholder="e.g. 50"
               />
               <div className="flex gap-2">
-                <Button
-                  onClick={() => setDraftStep("key")}
-                  disabled={Number(draftCount) < 1}
-                >
+                <Button onClick={() => setDraftStep("key")} disabled={Number(draftCount) < 1}>
                   Next: answer key
                 </Button>
               </div>
@@ -875,7 +896,10 @@ export function SetupScreen({
       <Dialog open={jsonDialogOpen} onOpenChange={setJsonDialogOpen}>
         <DialogContent className="exam-dialog-content max-w-3xl">
           <DialogHeader className="flex-row items-center justify-between gap-3 space-y-0 pr-8">
-            <DialogTitle>Add question exercise to {chapter}</DialogTitle>
+            <DialogTitle>
+              {jsonEditingExerciseId ? "Update" : "Add"} question exercise{" "}
+              {jsonEditingExerciseId ? "in" : "to"} {chapter}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <Input
@@ -883,14 +907,30 @@ export function SetupScreen({
               onChange={(e) => setJsonExerciseName(e.target.value)}
               placeholder="Exercise name e.g. Practice Set 1"
             />
-            <input ref={questionFileInput} className="hidden" type="file" accept="application/json,.json" onChange={(event) => void chooseQuestionFile(event.target.files?.[0])} />
-            <button type="button" onClick={() => questionFileInput.current?.click()} className="flex min-h-28 w-full flex-col items-center justify-center rounded-xl border border-dashed border-white/15 bg-white/[.025] px-4 text-center transition hover:border-sky-400/50 hover:bg-sky-400/5">
+            <input
+              ref={questionFileInput}
+              className="hidden"
+              type="file"
+              accept="application/json,.json"
+              onChange={(event) => void chooseQuestionFile(event.target.files?.[0])}
+            />
+            <button
+              type="button"
+              onClick={() => questionFileInput.current?.click()}
+              className="flex min-h-28 w-full flex-col items-center justify-center rounded-xl border border-dashed border-white/15 bg-white/[.025] px-4 text-center transition hover:border-sky-400/50 hover:bg-sky-400/5"
+            >
               <Upload className="mb-2 h-5 w-5 text-sky-300" />
-              <span className="text-sm font-medium text-zinc-100">{jsonFileName || "Choose question JSON file"}</span>
-              <span className="mt-1 text-xs text-zinc-500">JSON array with question, four options and correctAnswer.</span>
+              <span className="text-sm font-medium text-zinc-100">
+                {jsonFileName || "Choose question JSON file"}
+              </span>
+              <span className="mt-1 text-xs text-zinc-500">
+                JSON array with question, four options and correctAnswer (A–D or 0–3).
+              </span>
             </button>
             {jsonError && <p className="text-sm text-destructive">{jsonError}</p>}
-            <Button onClick={saveJsonExercise}>Validate & save exercise</Button>
+            <Button onClick={saveJsonExercise}>
+              {jsonEditingExerciseId ? "Update exercise" : "Save exercise"}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

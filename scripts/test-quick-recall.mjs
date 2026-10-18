@@ -18,6 +18,66 @@ const {
 const now = Date.parse("2026-10-17T12:00:00Z");
 const question = (id, subjectId = "maths") => ({ id, subjectId });
 const bank = Array.from({ length: 6 }, (_, index) => question(String(index)));
+const solutionsSource = await readFile(
+  new URL("../mobile-tasks/src/domain/quick-recall-solutions.ts", import.meta.url),
+  "utf8",
+);
+const solutionsCode = ts.transpileModule(solutionsSource, {
+  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
+}).outputText;
+const { appendRecallQuestionSnapshots, resolveRecallQuestions } = await import(
+  `data:text/javascript;base64,${Buffer.from(solutionsCode).toString("base64")}`
+);
+const fullQuestion = (id, text = `Question ${id}`) => ({
+  id,
+  question: text,
+  options: ["One", "Two", "Three", "Four"],
+  correctAnswer: "B",
+  explanation: "Because two is correct.",
+});
+const subjectBank = (questions) => [{ chapters: [{ exercises: [{ questions }] }] }];
+
+test("Quick Recall snapshots preserve text, options and explanation after bank edits/deletion", () => {
+  const original = fullQuestion("q1");
+  const quickRecallQuestions = appendRecallQuestionSnapshots({}, [original]);
+  original.options[0] = "Edited";
+  const record = { answers: ["A"], questionIds: ["q1"], quickRecallQuestions };
+  assert.equal(
+    resolveRecallQuestions(record, subjectBank([fullQuestion("q1", "Changed text")]))[0].question,
+    "Question q1",
+  );
+  assert.equal(resolveRecallQuestions(record, [])[0].options[0], "One");
+  assert.equal(resolveRecallQuestions(record, [])[0].explanation, "Because two is correct.");
+});
+
+test("new snapshots stay aligned when a daily record already contains legacy answers", () => {
+  const old = { answers: ["A", "B"], questionIds: ["old", "missing"] };
+  const saved = appendRecallQuestionSnapshots(old, [fullQuestion("new")]);
+  const record = {
+    answers: [...old.answers, "C"],
+    questionIds: [...old.questionIds, "new"],
+    quickRecallQuestions: saved,
+  };
+  const resolved = resolveRecallQuestions(record, subjectBank([fullQuestion("old")]));
+  assert.equal(resolved[0].id, "old");
+  assert.equal(resolved[1], undefined);
+  assert.equal(resolved[2].id, "new");
+  const next = appendRecallQuestionSnapshots(record, [fullQuestion("new")]);
+  assert.equal(next["2"].id, "new");
+  assert.equal(next["3"].id, "new");
+  assert.deepEqual(Object.keys(saved), ["2"]);
+});
+
+test("legacy recovery avoids guessing when an imported ID belongs to multiple questions", () => {
+  const record = { answers: ["A"], questionIds: ["repeated"] };
+  assert.equal(
+    resolveRecallQuestions(
+      record,
+      subjectBank([fullQuestion("repeated"), fullQuestion("repeated", "Other exercise")]),
+    )[0],
+    undefined,
+  );
+});
 const stat = (minutesAgo, lastOutcome = "correct", count = 1) => ({
   askedCount: count,
   correctCount: lastOutcome === "correct" ? count : 0,
