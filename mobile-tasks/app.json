@@ -46,7 +46,7 @@
         "react-native-android-widget",
         {
           "widgets": [
-            { "name": "TimerWidget", "label": "Timer", "description": "Countdown for an important date", "minWidth": "160dp", "minHeight": "190dp", "targetCellWidth": 2, "targetCellHeight": 3, "resizeMode": "horizontal|vertical", "updatePeriodMillis": 1800000, "widgetFeatures": "reconfigurable" },
+            { "name": "TimerWidget", "label": "Timer", "description": "Countdown for an important date", "minWidth": "160dp", "minHeight": "150dp", "targetCellWidth": 2, "targetCellHeight": 2, "resizeMode": "horizontal|vertical", "updatePeriodMillis": 1800000, "widgetFeatures": "reconfigurable" },
             {
               "name": "DailyTasksWidget",
               "label": "Daily tasks",

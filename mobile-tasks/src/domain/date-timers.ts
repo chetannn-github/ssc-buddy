@@ -45,5 +45,5 @@ export function timerDial(timer: DateTimer, now = Date.now()) {
   };
 }
 
-export const TIMER_COLORS = ["#ff405b", "#ffe234", "#8ef000", "#b76aff", "#ff922e"] as const;
+export const TIMER_COLORS = ["#ef4444", "#ffe234", "#8ef000", "#b76aff", "#ff922e", "#60a5fa"] as const;
 

@@ -1,6 +1,6 @@
 import { registerRootComponent } from "expo";
 import Constants from "expo-constants";
-import { Platform } from "react-native";
+import { AppRegistry, Platform } from "react-native";
 
 import App from "./App";
 
@@ -13,7 +13,8 @@ const supportsAndroidWidgets = Platform.OS === "android" && Constants.appOwnersh
 if (supportsAndroidWidgets) {
   const AsyncStorage = require("@react-native-async-storage/async-storage").default;
   const { registerWidgetConfigurationScreen } = require("react-native-android-widget");
-  const { TimerWidgetConfiguration } = require("./src/widgets/TimerWidgetConfiguration");
+  const { TimerWidgetConfiguration, TimerWidgetShortcut } = require("./src/widgets/TimerWidgetConfiguration");
+  AppRegistry.registerComponent("TimerWidgetSetup", () => TimerWidgetShortcut);
   const { timerWidgetView, removeTimerWidget, bindPendingTimerWidget } = require("./src/widgets/timer-widget-store");
   registerWidgetConfigurationScreen(TimerWidgetConfiguration);
   const { registerWidgetTaskHandler } = require("react-native-android-widget");

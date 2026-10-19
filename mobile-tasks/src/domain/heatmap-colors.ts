@@ -1,11 +1,10 @@
 // Activity levels run from light to dark within each vibrant color family.
 const PALETTES = [
-  ["#ff4d68", "#ff1744", "#e60039", "#b8002e"],
-  ["#ffe136", "#f6c900", "#d7a600", "#b78300"],
-  ["#5592ff", "#2868f0", "#174bcc", "#123595"],
+  ["#e52e4d", "#c91638", "#a90e2e", "#870b26"],
+  ["#bccb20", "#9eae13", "#7e8f0c", "#606f08"],
+  ["#316ad6", "#2452b5", "#1b3f95", "#142f75"],
   ["#bbff35", "#91ee00", "#6fc800", "#509900"],
-  ["#cc70ff", "#b139ff", "#9714e8", "#730db7"],
-  ["#ffae38", "#ff8a00", "#e36b00", "#b84d00"],
+  ["#a345de", "#8a2bc2", "#701ba2", "#58127e"],
 ];
 export const HEATMAP_EMPTY_COLOR = "#202024";
 export type HeatmapColorCycle = { seed: number; previousShift: number; shift: number };
