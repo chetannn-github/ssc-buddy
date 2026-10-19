@@ -78,10 +78,12 @@ export function TaskRingFill({
   percent,
   size = 112,
   stroke = 10,
+  color = "#60a5fa",
 }: {
   percent: number;
   size?: number;
   stroke?: number;
+  color?: string;
 }) {
   const value = Math.max(0, Math.min(100, percent));
   const progress = useSharedValue(0);
@@ -157,7 +159,7 @@ export function TaskRingFill({
             cy={center}
             r={radius}
             fill="none"
-            stroke="#60a5fa"
+            stroke={color}
             strokeWidth={stroke}
           />
           {bubbling && (

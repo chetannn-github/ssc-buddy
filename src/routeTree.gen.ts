@@ -21,6 +21,7 @@ import { Route as QuestionViewRouteImport } from './routes/question-view'
 import { Route as QuickRecallRouteImport } from './routes/quick-recall'
 import { Route as TasksRouteImport } from './routes/tasks'
 import { Route as TestRouteImport } from './routes/test'
+import { Route as TimersRouteImport } from './routes/timers'
 import { Route as TrackRouteImport } from './routes/track'
 import { Route as HistoryIndexRouteImport } from './routes/history.index'
 import { Route as HistoryIdRouteImport } from './routes/history.$id'
@@ -86,6 +87,11 @@ const TestRoute = TestRouteImport.update({
   path: '/test',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TimersRoute = TimersRouteImport.update({
+  id: '/timers',
+  path: '/timers',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TrackRoute = TrackRouteImport.update({
   id: '/track',
   path: '/track',
@@ -120,6 +126,7 @@ export interface FileRoutesByFullPath {
   '/quick-recall': typeof QuickRecallRoute
   '/tasks': typeof TasksRoute
   '/test': typeof TestRoute
+  '/timers': typeof TimersRoute
   '/track': typeof TrackRoute
   '/history/$id': typeof HistoryIdRoute
   '/weekly-stats/$username': typeof WeeklyStatsUsernameRoute
@@ -138,6 +145,7 @@ export interface FileRoutesByTo {
   '/quick-recall': typeof QuickRecallRoute
   '/tasks': typeof TasksRoute
   '/test': typeof TestRoute
+  '/timers': typeof TimersRoute
   '/track': typeof TrackRoute
   '/history/$id': typeof HistoryIdRoute
   '/weekly-stats/$username': typeof WeeklyStatsUsernameRoute
@@ -157,6 +165,7 @@ export interface FileRoutesById {
   '/quick-recall': typeof QuickRecallRoute
   '/tasks': typeof TasksRoute
   '/test': typeof TestRoute
+  '/timers': typeof TimersRoute
   '/track': typeof TrackRoute
   '/history/$id': typeof HistoryIdRoute
   '/weekly-stats/$username': typeof WeeklyStatsUsernameRoute
@@ -177,6 +186,7 @@ export interface FileRouteTypes {
     | '/quick-recall'
     | '/tasks'
     | '/test'
+    | '/timers'
     | '/track'
     | '/history/$id'
     | '/weekly-stats/$username'
@@ -195,6 +205,7 @@ export interface FileRouteTypes {
     | '/quick-recall'
     | '/tasks'
     | '/test'
+    | '/timers'
     | '/track'
     | '/history/$id'
     | '/weekly-stats/$username'
@@ -213,6 +224,7 @@ export interface FileRouteTypes {
     | '/quick-recall'
     | '/tasks'
     | '/test'
+    | '/timers'
     | '/track'
     | '/history/$id'
     | '/weekly-stats/$username'
@@ -232,6 +244,7 @@ export interface RootRouteChildren {
   QuickRecallRoute: typeof QuickRecallRoute
   TasksRoute: typeof TasksRoute
   TestRoute: typeof TestRoute
+  TimersRoute: typeof TimersRoute
   TrackRoute: typeof TrackRoute
   HistoryIdRoute: typeof HistoryIdRoute
   WeeklyStatsUsernameRoute: typeof WeeklyStatsUsernameRoute
@@ -324,6 +337,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TestRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/timers': {
+      id: '/timers'
+      path: '/timers'
+      fullPath: '/timers'
+      preLoaderRoute: typeof TimersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/track': {
       id: '/track'
       path: '/track'
@@ -368,6 +388,7 @@ const rootRouteChildren: RootRouteChildren = {
   QuickRecallRoute: QuickRecallRoute,
   TasksRoute: TasksRoute,
   TestRoute: TestRoute,
+  TimersRoute: TimersRoute,
   TrackRoute: TrackRoute,
   HistoryIdRoute: HistoryIdRoute,
   WeeklyStatsUsernameRoute: WeeklyStatsUsernameRoute,

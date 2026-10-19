@@ -7,6 +7,8 @@
     "noEmit": true
   },
   "include": [
+    "date-timers.ts",
+    "water-motion.ts",
     "heatmap-layout.ts",
     "celebration-preview.ts",
     "weekly-results.ts",

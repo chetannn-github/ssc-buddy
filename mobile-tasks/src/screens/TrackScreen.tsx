@@ -78,7 +78,7 @@ function normalise(raw: unknown): Data {
 const pct = (done: number, total: number) => total ? Math.round(Math.min(done, total) / total * 100) : 0;
 const exactPct = (done: number, total: number) => total ? Math.min(done, total) / total * 100 : 0;
 
-export function TrackScreen({ initialTab, user, examName }: { initialTab?: Tab; user: any; examName?: string }) {
+export function TrackScreen({ initialTab, user, examName, onOpenAnalysis }: { initialTab?: Tab; user: any; examName?: string; onOpenAnalysis?: () => void }) {
   const [data, setData] = useState<Data>(defaults); const [mocks, setMocks] = useState<MockTestLog[]>([]); const [tab, setTabState] = useState<Tab>(initialTab ?? "Syllabus"); const [filter, setFilter] = useState("all"); const [openSubjects, setOpenSubjects] = useState<string[]>([]);
   const [trackerLoaded, setTrackerLoaded] = useState(false); const dataRef = useRef(data); const mocksRef = useRef(mocks);
   const [selected, setSelected] = useState<{ subjectId: string; chapterId: string } | null>(null); const [editingChapter, setEditingChapter] = useState(false); const [dialog, setDialog] = useState<"subject" | "chapter" | "revision" | null>(null); const [dialogSubjectId, setDialogSubjectId] = useState<string | null>(null); const [mockDialog, setMockDialog] = useState(false); const [deleteConfirm, setDeleteConfirm] = useState(false); const [name, setName] = useState(""); const [totalInput, setTotalInput] = useState("10"); const [reorderingSubjectId, setReorderingSubjectId] = useState("");
@@ -191,10 +191,16 @@ export function TrackScreen({ initialTab, user, examName }: { initialTab?: Tab; 
     {tab === "Mock Test" && <>
       <View style={s.row}>
         <Text style={s.cardTitle}>Test targets</Text>
+        <View style={s.mockActions}>
+        {onOpenAnalysis && <Pressable onPress={onOpenAnalysis} style={s.add}>
+          <MaterialCommunityIcons name="chart-line" color="#60a5fa" size={16} />
+          <Text style={s.addText}>Analysis</Text>
+        </Pressable>}
         <Pressable onPress={() => setMockDialog(true)} style={s.add}>
           <MaterialCommunityIcons name="clipboard-edit-outline" color="#60a5fa" size={16} />
           <Text style={s.addText}>Log test</Text>
         </Pressable>
+        </View>
       </View>
       <View style={[s.card, { backgroundColor: "transparent", borderWidth: 0, borderRadius: 0, paddingHorizontal: 0 }]}>
         <Text style={s.cardTitle}>Sectional tests</Text>

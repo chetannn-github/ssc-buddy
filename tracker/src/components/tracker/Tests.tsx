@@ -1,11 +1,12 @@
 import { RollingNumber } from "../../../../src/components/ui/rolling-number";
 import { useState } from "react";
+import { ChartNoAxesCombined, ClipboardPenLine } from "lucide-react";
 import { useTracker } from "@/lib/tracker-store";
 import { pct, testsDone } from "@/lib/tracker";
 import { Bar, Card, Label, Num } from "./ui";
 import { MockTestLogDialog } from "./MockTestLogDialog";
 
-export function Tests() {
+export function Tests({ onOpenAnalysis }: { onOpenAnalysis?: () => void } = {}) {
   const { data, update } = useTracker();
   const [adding, setAdding] = useState(false);
   const totalDone = data.tests.log.filter((test) => test.type === "Sectional").length;
@@ -17,6 +18,12 @@ export function Tests() {
 
   return (
     <div className="space-y-2">
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {onOpenAnalysis && <button type="button" onClick={onOpenAnalysis} className="inline-flex items-center gap-1.5 rounded-xl border border-border px-3 py-2 text-sm text-muted-foreground transition-colors hover:text-foreground"><ChartNoAxesCombined aria-hidden="true" className="h-4 w-4" />Analysis</button>}
+        <button type="button" onClick={() => setAdding(true)} className="inline-flex items-center gap-1.5 rounded-xl border border-dashed border-border px-3 py-2 text-sm text-muted-foreground transition-colors hover:text-foreground">
+          <ClipboardPenLine aria-hidden="true" className="h-4 w-4" />Log mock test
+        </button>
+      </div>
       <Card className="!p-2.5 sm:!p-3">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <Label>Sectional tests</Label>
@@ -80,14 +87,6 @@ export function Tests() {
           </div>
         </div>
       </Card>
-
-      <button
-        type="button"
-        onClick={() => setAdding(true)}
-        className="w-full rounded-xl border border-dashed border-border py-2.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-      >
-        + Log mock test
-      </button>
 
       <MockTestLogDialog
         open={adding}

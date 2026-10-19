@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Animated, Easing, Keyboard, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { colors } from "../theme";
+import { CalendarDatePicker } from "../components/CalendarDatePicker";
 import { dateKey } from "../domain/tasks";
 
 export type MockTestLog = {
@@ -76,7 +77,7 @@ export function MockTestLogDialog({ visible, subjects, onClose, onSave }: { visi
       <View style={styles.heading}><View><Text style={styles.kicker}>MOCK TEST</Text><Text style={styles.title}>Log mock test</Text></View><Pressable hitSlop={9} onPress={onClose}><MaterialCommunityIcons name="close" size={21} color={colors.muted} /></Pressable></View>
       <View style={[styles.row, styles.topRow]}>{select("type", type, ["Sectional", "Pre", "Mains"], (value) => { const next = value as MockTestLog["type"]; setType(next); setTotal(totals[next]); })}{select("subject", type === "Sectional" ? (subject || "No subjects") : "All subjects", type === "Sectional" ? subjects : ["All subjects"], setSubject, type !== "Sectional" || subjects.length === 0)}</View>
       {type === "Sectional" && subjects.length === 0 ? <Text style={styles.helper}>Add a subject in Syllabus first.</Text> : null}
-      <View style={[styles.row, styles.lowerRow]}><Field label="Date" value={date} onChangeText={setDate} onFocus={closeMenu} /><Field label="Score" value={score} onChangeText={(value) => setScore(clampInput(value, Number(total) || 0))} onFocus={closeMenu} placeholder="0" numeric maxLength={String(Math.max(0, Number(total) || 0)).length} /></View>
+      <View style={[styles.row, styles.lowerRow]}><View style={{ flex: 1, minWidth: 0 }}><Text style={styles.label}>Date</Text><CalendarDatePicker value={date} onChange={setDate} onOpen={closeMenu} disabled={saving} /></View><Field label="Score" value={score} onChangeText={(value) => setScore(clampInput(value, Number(total) || 0))} onFocus={closeMenu} placeholder="0" numeric maxLength={String(Math.max(0, Number(total) || 0)).length} /></View>
       <View style={styles.row}><Field label="Total marks" value={total} onChangeText={(value) => { setTotal(value); if (score) setScore(clampInput(score, Number(value) || 0)); }} onFocus={closeMenu} numeric /><Field label="Accuracy %" value={accuracy} onChangeText={(value) => setAccuracy(clampInput(value, 100))} onFocus={closeMenu} placeholder="0" numeric maxLength={3} /></View>
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <View style={styles.actions}><Pressable disabled={saving} onPress={onClose}><Text style={[styles.cancel, saving && styles.disabled]}>Cancel</Text></Pressable><Pressable disabled={saving} style={[styles.save, saving && styles.disabled]} onPress={() => void save()}>{saving ? <ActivityIndicator size="small" color="#082f49" /> : <Text style={styles.saveText}>Save mock test</Text>}</Pressable></View>

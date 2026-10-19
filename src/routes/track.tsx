@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { TrackerProvider } from "@/lib/tracker-store";
@@ -25,6 +25,7 @@ export const Route = createFileRoute("/track")({
 });
 
 function TrackPage() {
+  const navigate = useNavigate();
   const search = Route.useSearch();
   const [tab, setTab] = useState<Tab>(search.tab ?? "Syllabus");
   return (
@@ -51,7 +52,7 @@ function TrackPage() {
           <div className="tracker-tab-panel mt-2">
             {tab === "Syllabus" && <Syllabus />}
             {tab === "Revision" && <Revision />}
-            {tab === "Mock Test" && <Tests />}
+            {tab === "Mock Test" && <Tests onOpenAnalysis={() => void navigate({ to: "/progress" })} />}
           </div>
         </main>
       </div>

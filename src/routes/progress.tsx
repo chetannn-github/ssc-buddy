@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Check, ChevronDown, FilePenLine } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, FilePenLine } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CartesianGrid,
@@ -28,7 +28,7 @@ type ChartPoint = {
 };
 
 export const Route = createFileRoute("/progress")({
-  head: () => ({ meta: [{ title: "Progress" }] }),
+  head: () => ({ meta: [{ title: "Analysis" }] }),
   component: Progress,
 });
 
@@ -294,15 +294,16 @@ function Progress() {
   }));
 
   return (
-    <AppShell title="Progress">
+    <AppShell title="Analysis">
       <div className="-mx-4 -my-6 min-h-[calc(100vh-4rem)] bg-[#121212] px-4 py-7 text-zinc-100 sm:-mx-6 sm:px-6">
         <main className="mx-auto max-w-4xl">
+          <Link to="/track" search={{ tab: "Mock Test" }} className="mb-3 inline-flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-100"><ArrowLeft className="h-4 w-4" />Back to Mock Test</Link>
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <p className="text-[11px] font-semibold tracking-[0.16em] text-zinc-500 uppercase">
                 Mock test analysis
               </p>
-              <h1 className="mt-1 text-2xl font-semibold">Progress</h1>
+              <h1 className="mt-1 text-2xl font-semibold">Analysis</h1>
             </div>
             <div className="flex flex-wrap justify-end gap-2">
               <button type="button" onClick={() => setLoggingMockTest(true)} className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-white/[.07] px-3 text-xs font-medium text-zinc-200 transition hover:bg-white/[.12] hover:text-white">

@@ -19,6 +19,9 @@
     "test:leaderboard-period": "node --test scripts/test-leaderboard-period.mjs",
     "test:weekly-results": "node --test scripts/test-weekly-results.mjs",
     "test:heatmap-layout": "node --test scripts/test-heatmap-layout.mjs",
+    "test:water-motion": "node --test scripts/test-water-motion.mjs",
+    "test:heatmap-colors": "node --test scripts/test-heatmap-colors.mjs",
+    "test:date-timers": "node --test scripts/test-date-timers.mjs",
     "format": "prettier --write ."
   },
   "dependencies": {

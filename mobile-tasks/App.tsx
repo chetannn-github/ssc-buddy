@@ -38,7 +38,8 @@ import {
   type TaskType,
 } from "./src/domain/tasks";
 import { LiquidProgressBar } from "./src/components/ProfileXpBar";
-import { TaskRingFill } from "./src/components/TaskRingFill";
+import { LiquidSpillCard } from "./src/components/LiquidSpillCard";
+import { TimerLiquidDial } from "./src/components/TimerLiquidDial";
 import { TaskRow } from "./src/components/TaskRow";
 import { WeeklyAwardCelebration } from "./src/components/WeeklyAwardCelebration";
 import { CelebrationFireworks } from "./src/components/CelebrationFireworks";
@@ -56,6 +57,7 @@ import { LeaderboardScreen } from "./src/screens/LeaderboardScreen";
 import { MediaOverlay, type MediaMode } from "./src/screens/MediaOverlay";
 import { PracticeScreen } from "./src/screens/PracticeScreen";
 import { TrackScreen } from "./src/screens/TrackScreen";
+import { TimersScreen } from "./src/screens/TimersScreen";
 import { ProgressScreen } from "./src/screens/ProgressScreen";
 import { QuickRecallScreen } from "./src/screens/QuickRecallScreen";
 import { reportVerticalTouch } from "./src/navigation/bottomNavigationVisibility";
@@ -110,12 +112,9 @@ const ScrollView = (props: any) => <NativeScrollView {...props} scrollEventThrot
 
 function CompletionRing({ percent }: { percent: number }) {
   const value = Math.max(0, Math.min(100, percent));
-  return (
-    <View style={styles.ring}>
-      <TaskRingFill percent={value} />
-      <RollingMetric value={value} suffix="%" color="#fafafa" fontSize={25} />
-    </View>
-  );
+  return <TimerLiquidDial dial={{ label: `${value}%`, status: "", progress: value / 100 }} color="#60a5fa" size={112}>
+    <RollingMetric value={value} suffix="%" color="#fafafa" fontSize={25} />
+  </TimerLiquidDial>;
 }
 
 function AnimatedMetric({ value, format = (next: number) => String(next) }: { value: number; format?: (value: number) => string }) {
@@ -235,6 +234,8 @@ export default function App() {
   const [celebratedLevel, setCelebratedLevel] = useState<number | null>(null);
   const [profileSettings, setProfileSettings] = useState<PracticeProfile | null>(null);
   const [appTab, setAppTab] = useState<TabKey>("tasks");
+  const [timerWidgetRequest, setTimerWidgetRequest] = useState(0);
+  const initialWidgetUrlRead = useRef(false);
   const [trackTab, setTrackTab] = useState<"Syllabus" | "Revision" | "Mock Test">("Syllabus");
   const [dailyManifestation, setDailyManifestation] = useState("");
   const [manifestationEntry, setManifestationEntry] = useState("");
@@ -479,6 +480,7 @@ export default function App() {
   useEffect(() => {
     if (profileSettings?.trackProgressEnabled === false && (appTab === "track" || appTab === "progress")) setAppTab("profile");
   }, [appTab, profileSettings?.trackProgressEnabled]);
+  useEffect(() => { if (profileSettings?.timersEnabled === false && appTab === "timers") setAppTab("profile"); }, [appTab, profileSettings?.timersEnabled]);
 
   useEffect(() => {
     void (async () => {
@@ -501,6 +503,11 @@ export default function App() {
   useEffect(() => {
     if (!tasksLoaded) return;
     const openCompletionFromWidget = (url: string | null) => {
+      if (url?.startsWith("sscbuddy://timers")) {
+        setAppTab("timers");
+        if (url.startsWith("sscbuddy://timers/widget")) setTimerWidgetRequest(value => value + 1);
+        return;
+      }
       if (!url?.startsWith("sscbuddy://tasks")) return;
       if (!url.startsWith("sscbuddy://tasks/complete")) {
         setAppTab("tasks");
@@ -517,7 +524,10 @@ export default function App() {
       setSpent(String(task.minutesSpent ?? 60));
       setCompletion(task);
     };
-    void Linking.getInitialURL().then(openCompletionFromWidget).catch(() => undefined);
+    if (!initialWidgetUrlRead.current) {
+      initialWidgetUrlRead.current = true;
+      void Linking.getInitialURL().then(openCompletionFromWidget).catch(() => undefined);
+    }
     const subscription = Linking.addEventListener("url", ({ url }) => openCompletionFromWidget(url));
     return () => subscription.remove();
   }, [tasks, tasksLoaded]);
@@ -862,11 +872,13 @@ export default function App() {
           }}
         />
       ) : appTab === "track" ? (
-        <TrackScreen initialTab={trackTab} user={user} examName={profileSettings?.examName} />
+        <TrackScreen initialTab={trackTab} user={user} examName={profileSettings?.examName} onOpenAnalysis={() => { setTrackTab("Mock Test"); setAppTab("progress"); }} />
       ) : appTab === "practice" ? (
         <PracticeScreen user={user} onOpenQuickRecall={() => setQuickRecallOpen(true)} />
+      ) : appTab === "timers" ? (
+        <TimersScreen user={user} widgetRequest={timerWidgetRequest} />
       ) : appTab === "progress" ? (
-        <ProgressScreen user={user} />
+        <ProgressScreen user={user} onBack={() => { setTrackTab("Mock Test"); setAppTab("track"); }} />
       ) : appTab === "tasks" ? (
         <>
       <View style={styles.header}>
@@ -897,7 +909,7 @@ export default function App() {
       <ScrollView stickyHeaderIndices={tab === "Tasks" ? [0] : undefined} contentContainerStyle={[styles.content, tab === "Tasks" && styles.tasksContent]} onTouchStart={(event: any) => { taskSwipeStartX.current = event.nativeEvent.pageX; }} onTouchEnd={(event: any) => handleTaskSwipeEnd(event.nativeEvent.pageX)}>
         {tab === "Tasks" ? [
             <View key="tasks-sticky" style={styles.tasksSticky}>
-            <View style={styles.hero}>
+            <LiquidSpillCard style={styles.hero}>
               <View style={styles.heroHeading}>
                 <Text style={styles.date}>{taskDay === "today" ? "Today’s tasks" : "Tomorrow’s tasks"}</Text>
                 <View style={styles.heroHeadingActions}><View style={styles.livePoints}><PointsSpark points={weeklyPoints} /><View style={styles.livePointsText}><RollingMetric value={weeklyPoints} prefix={weeklyPoints > 0 ? "+" : ""} suffix=" pts" color={weeklyPoints > 0 ? "#86efac" : weeklyPoints < 0 ? "#fca5a5" : "#a1a1aa"} /></View></View>{(tomorrowTaskCount > 0 || taskDay === "tomorrow") && <Pressable style={styles.dayToggle} onPress={() => setTaskDay((current) => current === "today" ? "tomorrow" : "today")}><Text style={styles.dayToggleText}>{taskDay === "today" ? `Tomorrow (${tomorrowTaskCount})` : "Today"}</Text><MaterialCommunityIcons name="chevron-right" size={14} color="#b4b4b8" /></Pressable>}</View>
@@ -911,7 +923,7 @@ export default function App() {
                   <View style={styles.statMetric}><RollingDuration minutes={todaySummary.minutes} /></View>
                 </View>
               </View>
-            </View>
+            </LiquidSpillCard>
             <Text style={styles.sectionTitle}>{taskDay === "today" ? "TODAY'S TASKS" : "TOMORROW'S TASKS"}</Text>
             </View>,
             <View key="tasks-list" style={styles.tasksList}>
@@ -1080,7 +1092,7 @@ export default function App() {
       ) : (
         <ComingSoonScreen title={activeAppTab.label} />
       )}
-      {!quickRecallOpen && <BottomNavigation activeTab={appTab} onChange={(tab) => { setLeaderboardOpen(false); setAppTab(tab); }} practiceSessionEnabled={profileSettings?.practiceSessionEnabled !== false} trackProgressEnabled={profileSettings?.trackProgressEnabled !== false} profileAvatar={profileSettings?.avatar ? avatarAssets[profileSettings.avatar] : undefined} />}
+      {!quickRecallOpen && <BottomNavigation activeTab={appTab === "progress" ? "track" : appTab} onChange={(tab) => { setLeaderboardOpen(false); setAppTab(tab); }} practiceSessionEnabled={profileSettings?.practiceSessionEnabled !== false} trackProgressEnabled={profileSettings?.trackProgressEnabled !== false} timersEnabled={profileSettings?.timersEnabled !== false} profileAvatar={profileSettings?.avatar ? avatarAssets[profileSettings.avatar] : undefined} />}
       <MediaOverlay user={user} mode={mediaMode} musicOpenRequest={musicOpenRequest} onClose={() => setMediaMode(null)} />
       {celebratedStreak !== null && <StreakCelebration streak={celebratedStreak} onClose={() => setCelebratedStreak(null)} />}
       {celebratedLevel !== null && <LevelCelebration level={celebratedLevel} onClose={() => setCelebratedLevel(null)} />}

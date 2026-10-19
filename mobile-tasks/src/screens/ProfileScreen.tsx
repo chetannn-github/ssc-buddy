@@ -24,7 +24,7 @@ import { dateKey, formatMinutes, summarizeTasks, type Task } from "../domain/tas
 import { LiquidProgressBar, ProfileXpBar } from "../components/ProfileXpBar";
 import { LiquidHeatmapCell } from "../components/LiquidHeatmapCell";
 import { HeatmapTooltip, type HeatmapTooltipData } from "../components/HeatmapTooltip";
-import { nextProfileColorTheme, type HeatmapColorCycle } from "../domain/heatmap-colors";
+import { HEATMAP_EMPTY_COLOR, nextProfileColorTheme, type HeatmapColorCycle } from "../domain/heatmap-colors";
 import { useHeatmapLiquidMotion } from "../hooks/use-heatmap-liquid-motion";
 import { useWeeklyMedalCounts } from "../hooks/use-weekly-results";
 import { layoutHeatmapMonths } from "../domain/heatmap-layout";
@@ -236,7 +236,8 @@ export function ProfileScreen({
   const [trackProgressEnabled, setTrackProgressEnabled] = useState(
     profileSettings?.trackProgressEnabled !== false,
   );
-  const [savingFeature, setSavingFeature] = useState<"practice" | "track" | null>(null);
+  const [timersEnabled, setTimersEnabled] = useState(profileSettings?.timersEnabled !== false);
+  const [savingFeature, setSavingFeature] = useState<"practice" | "track" | "timers" | null>(null);
   const [editing, setEditing] = useState(() => !profileSettings?.username);
   const [confirmLogout, setConfirmLogout] = useState(false);
   const name = profileReady
@@ -420,6 +421,7 @@ export function ProfileScreen({
     );
     setPracticeSessionEnabled(profileSettings.practiceSessionEnabled !== false);
     setTrackProgressEnabled(profileSettings.trackProgressEnabled !== false);
+    setTimersEnabled(profileSettings.timersEnabled !== false);
     setProfileReady(true);
   }, [profileSettings]);
   const filteredTasks = tasks.filter((task) => withinRange(task.date, range));
@@ -469,6 +471,7 @@ export function ProfileScreen({
         avatar: avatarFile,
         practiceSessionEnabled,
         trackProgressEnabled,
+        timersEnabled,
       });
       const newSubjects = !syllabusSubjects.length ? importedSubjects : [];
       if (user && newSubjects.length) {
@@ -504,14 +507,15 @@ export function ProfileScreen({
       setSavingProfile(false);
     }
   };
-  const saveFeature = async (feature: "practice" | "track") => {
+  const saveFeature = async (feature: "practice" | "track" | "timers") => {
     if (savingFeature) return;
     const nextPractice = feature === "practice" ? !practiceSessionEnabled : practiceSessionEnabled;
     const nextTrack = feature === "track" ? !trackProgressEnabled : trackProgressEnabled;
-    feature === "practice" ? setPracticeSessionEnabled(nextPractice) : setTrackProgressEnabled(nextTrack);
+    const nextTimers = feature === "timers" ? !timersEnabled : timersEnabled;
+    setPracticeSessionEnabled(nextPractice); setTrackProgressEnabled(nextTrack); setTimersEnabled(nextTimers);
     setSavingFeature(feature);
-    try { await onProfileSaved({ name: profileName, username: normalizeUsername(username), examName, questionGoal: Number(goal) || 100, manifestation, avatar: avatarFile, practiceSessionEnabled: nextPractice, trackProgressEnabled: nextTrack }); }
-    catch { feature === "practice" ? setPracticeSessionEnabled(practiceSessionEnabled) : setTrackProgressEnabled(trackProgressEnabled); }
+    try { await onProfileSaved({ name: profileName, username: normalizeUsername(username), examName, questionGoal: Number(goal) || 100, manifestation, avatar: avatarFile, practiceSessionEnabled: nextPractice, trackProgressEnabled: nextTrack, timersEnabled: nextTimers }); }
+    catch { setPracticeSessionEnabled(practiceSessionEnabled); setTrackProgressEnabled(trackProgressEnabled); setTimersEnabled(timersEnabled); }
     finally { setSavingFeature(null); }
   };
   useEffect(() => {
@@ -885,6 +889,10 @@ export function ProfileScreen({
                       <Text style={styles.featureToggleCopy}>Track syllabus, revision and mock test progress.</Text>
                     </View>
                     {savingFeature === "track" ? <ActivityIndicator size="small" color={colors.accent} /> : <View style={[styles.featureSwitch, trackProgressEnabled && styles.featureSwitchOn]}><View style={[styles.featureKnob, trackProgressEnabled && styles.featureKnobOn]} /></View>}
+                  </Pressable>
+                  <Pressable accessibilityRole="switch" accessibilityState={{ checked: timersEnabled }} disabled={savingFeature !== null} onPress={() => void saveFeature("timers")} style={[styles.featureToggle, styles.featureToggleSpacing]}>
+                    <View style={styles.featureToggleContent}><Text style={styles.featureToggleTitle}>Timers</Text><Text style={styles.featureToggleCopy}>Countdowns for important dates and deadlines.</Text></View>
+                    {savingFeature === "timers" ? <ActivityIndicator size="small" color={colors.accent} /> : <View style={[styles.featureSwitch, timersEnabled && styles.featureSwitchOn]}><View style={[styles.featureKnob, timersEnabled && styles.featureKnobOn]} /></View>}
                   </Pressable>
                 </View>
               )}
@@ -1365,7 +1373,7 @@ function ActivityHeatmap({
         scrollEventThrottle={16}
       >
         {months.map((month) => (
-          <View key={month.key} style={[styles.month, { width: month.columns * 9 + (month.columns - 1) * 3 }]}>
+          <View key={month.key} style={[styles.month, { width: month.columns * 11 + (month.columns - 1) * 3 }]}>
             <View style={styles.monthGrid}>
               {month.days.map((day) => {
                 const level = day.value === 0 ? 0 : Math.min(4, Math.ceil((day.value / max) * 4));
@@ -1381,18 +1389,18 @@ function ActivityHeatmap({
                       const date = day.date.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", year: "numeric" });
                       const count = mode === "tasks" ? `task${day.value === 1 ? "" : "s"} completed` : `activit${day.value === 1 ? "y" : "ies"}`;
                       heatmapSectionRef.current?.measureInWindow((x, y, width) => {
-                        if (tooltipRequest.current === request) setTooltip({ text: `${day.value} ${count} on ${date}`, x: pageX - locationX + 4.5 - x, y: pageY - locationY - y, containerWidth: width });
+                        if (tooltipRequest.current === request) setTooltip({ text: `${day.value} ${count} on ${date}`, x: pageX - locationX + 5.5 - x, y: pageY - locationY - y, containerWidth: width });
                       });
                     }}
                     style={[
                       styles.heatCell,
                       {
-                        width: 9,
-                        height: 9,
+                        width: 11,
+                        height: 11,
                         position: "absolute",
-                        left: day.column * 12,
-                        top: day.row * 12,
-                        backgroundColor: "#45454f",
+                        left: day.column * 14,
+                        top: day.row * 14,
+                        backgroundColor: HEATMAP_EMPTY_COLOR,
                       },
                       selectedDay === day.key && styles.heatSelected,
                     ]}
@@ -1822,10 +1830,10 @@ const styles: Record<string, any> = StyleSheet.create({
   months: { gap: 10, paddingBottom: 4 },
   month: { width: 58 },
   monthGrid: {
-    height: 81,
+    height: 95,
     position: "relative",
   },
-  heatCell: { width: 8, height: 8, borderRadius: 2 },
+  heatCell: { width: 11, height: 11, borderRadius: 2 },
   heatSelected: { borderWidth: 1, borderColor: "#fff", transform: [{ scale: 1.15 }] },
   monthLabel: { color: colors.muted, fontSize: 10, textAlign: "center", marginTop: 7 },
   heatScrollbar: {

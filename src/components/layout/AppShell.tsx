@@ -5,7 +5,6 @@ import { StreakLiquidFlame } from "@/components/profile/StreakLiquidFlame";
 import type { PlayerCorner } from "../../../mobile-tasks/src/domain/floating-player";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
-  BarChart3,
   ArrowLeft,
   ChevronLeft,
   ChevronRight,
@@ -24,6 +23,7 @@ import {
   Route as RouteIcon,
   Settings,
   Trophy,
+  Timer,
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -54,7 +54,7 @@ const nav = [
   { title: "Daily tasks", url: "/tasks", icon: ListTodo },
   { title: "Track", url: "/track", icon: RouteIcon },
   { title: "Practice session", url: "/test", icon: FilePenLine },
-  { title: "Progress", url: "/progress", icon: BarChart3 },
+  { title: "Timers", url: "/timers", icon: Timer },
 ] as const;
 
 const MANIFESTATION_COMPLETION_KEY = "ssc-buddy-manifestation-completed";
@@ -100,6 +100,7 @@ function cloudPracticeProfile(value: Record<string, unknown> | null): PracticePr
     ...(typeof value["examName"] === "string" && value["examName"].trim() ? { examName: value["examName"].trim() } : {}),
     ...(typeof value["practiceSessionEnabled"] === "boolean" ? { practiceSessionEnabled: value["practiceSessionEnabled"] } : {}),
     ...(typeof value["trackProgressEnabled"] === "boolean" ? { trackProgressEnabled: value["trackProgressEnabled"] } : {}),
+    ...(typeof value["timersEnabled"] === "boolean" ? { timersEnabled: value["timersEnabled"] } : {}),
   };
 }
 
@@ -132,6 +133,7 @@ function ProfileOnboarding({ onComplete, user, existingProfile }: { onComplete: 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [practiceSessionEnabled, setPracticeSessionEnabled] = useState(existingProfile?.practiceSessionEnabled !== false);
   const [trackProgressEnabled, setTrackProgressEnabled] = useState(existingProfile?.trackProgressEnabled !== false);
+  const [timersEnabled, setTimersEnabled] = useState(existingProfile?.timersEnabled !== false);
   const parsedGoal = Math.max(1, Math.min(100000, Number(goal) || 0));
   const canContinue = name.trim().length > 0 && Number(goal) >= 1 && usernameStatus === "available";
 
@@ -161,6 +163,7 @@ function ProfileOnboarding({ onComplete, user, existingProfile }: { onComplete: 
       ...(examName.trim() ? { examName: examName.trim() } : {}),
       practiceSessionEnabled,
       trackProgressEnabled,
+      timersEnabled,
     };
     try {
       await saveProfileWithUsername(user, profile);
@@ -242,7 +245,7 @@ function ProfileOnboarding({ onComplete, user, existingProfile }: { onComplete: 
             />
           </label>
         </div>
-        {settingsOpen && <div className="absolute inset-0 z-10 rounded-2xl bg-[#1e1e1e] p-6 sm:p-8"><div className="flex items-center gap-2"><button type="button" aria-label="Back to profile form" onClick={() => setSettingsOpen(false)} className="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 hover:bg-white/10 hover:text-white"><ArrowLeft className="h-4 w-4" /></button><h3 className="text-lg font-semibold">Settings</h3></div><div className="mt-6 space-y-3"><button type="button" onClick={() => setPracticeSessionEnabled((value) => !value)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#151515] px-3 py-3 text-left"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Practice session</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Take practice tests, review answers and track your results.</span></span><span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", practiceSessionEnabled ? "border-zinc-100 bg-zinc-100" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", practiceSessionEnabled ? "translate-x-5 bg-zinc-900" : "translate-x-1 bg-zinc-400")} /></span></button><button type="button" onClick={() => setTrackProgressEnabled((value) => !value)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#151515] px-3 py-3 text-left"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Track</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Track syllabus, revision and mock test progress.</span></span><span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", trackProgressEnabled ? "border-zinc-100 bg-zinc-100" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", trackProgressEnabled ? "translate-x-5 bg-zinc-900" : "translate-x-1 bg-zinc-400")} /></span></button></div></div>}
+        {settingsOpen && <div className="absolute inset-0 z-10 rounded-2xl bg-[#1e1e1e] p-6 sm:p-8"><div className="flex items-center gap-2"><button type="button" aria-label="Back to profile form" onClick={() => setSettingsOpen(false)} className="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 hover:bg-white/10 hover:text-white"><ArrowLeft className="h-4 w-4" /></button><h3 className="text-lg font-semibold">Settings</h3></div><div className="mt-6 space-y-3"><button type="button" onClick={() => setPracticeSessionEnabled((value) => !value)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#151515] px-3 py-3 text-left"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Practice session</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Take practice tests, review answers and track your results.</span></span><span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", practiceSessionEnabled ? "border-zinc-100 bg-zinc-100" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", practiceSessionEnabled ? "translate-x-5 bg-zinc-900" : "translate-x-1 bg-zinc-400")} /></span></button><button type="button" onClick={() => setTrackProgressEnabled((value) => !value)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#151515] px-3 py-3 text-left"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Track</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Track syllabus, revision and mock test progress.</span></span><span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", trackProgressEnabled ? "border-zinc-100 bg-zinc-100" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", trackProgressEnabled ? "translate-x-5 bg-zinc-900" : "translate-x-1 bg-zinc-400")} /></span></button><button type="button" role="switch" aria-checked={timersEnabled} onClick={() => setTimersEnabled((value) => !value)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#151515] px-3 py-3 text-left"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Timers</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Countdowns for important dates and deadlines.</span></span><span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", timersEnabled ? "border-zinc-100 bg-zinc-100" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", timersEnabled ? "translate-x-5 bg-zinc-900" : "translate-x-1 bg-zinc-400")} /></span></button></div></div>}
         <Button
           className="mt-4 h-10 w-full bg-sky-500 text-sky-950 hover:bg-sky-400"
           disabled={!canContinue || isSaving}
@@ -1174,9 +1177,10 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
   const visibleNav = nav.filter(
     (item) =>
       (item.url !== "/test" || profile?.practiceSessionEnabled !== false) &&
+      (item.url !== "/timers" || profile?.timersEnabled !== false) &&
       (!(["/track", "/progress"] as string[]).includes(item.url) || profile?.trackProgressEnabled !== false),
   );
-  const activeNavUrl = visibleNav.find((item) => path.startsWith(item.url))?.url;
+  const activeNavUrl = visibleNav.find((item) => (path === "/progress" ? "/track" : path).startsWith(item.url))?.url;
   const navIndicatorUrl = navTarget ?? activeNavUrl;
 
   useEffect(() => {
@@ -1190,7 +1194,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
       cancelAnimationFrame(frame);
       window.removeEventListener("resize", updateIndicator);
     };
-  }, [navIndicatorUrl, profile?.practiceSessionEnabled, profile?.trackProgressEnabled]);
+  }, [navIndicatorUrl, profile?.practiceSessionEnabled, profile?.trackProgressEnabled, profile?.timersEnabled]);
 
   useEffect(() => {
     if (navTarget && navTarget === activeNavUrl) setNavTarget(null);

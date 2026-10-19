@@ -1,15 +1,17 @@
+// Activity levels run from light to dark within each vibrant color family.
 const PALETTES = [
-  ["#a7f3d0", "#6ee7b7", "#10b981", "#047857"],
-  ["#bfdbfe", "#60a5fa", "#2563eb", "#1e40af"],
-  ["#fecaca", "#f87171", "#ef4444", "#991b1b"],
-  ["#e9d5ff", "#c084fc", "#9333ea", "#6b21a8"],
-  ["#a5f3fc", "#22d3ee", "#0891b2", "#155e75"],
-  ["#fed7aa", "#fb923c", "#ea580c", "#9a3412"],
-  ["#fbcfe8", "#f472b6", "#db2777", "#9d174d"],
+  ["#ffc4cc", "#ff97a7", "#ff6c81", "#ff405b"],
+  ["#fff6c2", "#fff09a", "#ffe967", "#ffe234"],
+  ["#e3ffb3", "#c8ff77", "#acfa3b", "#8ef000"],
+  ["#ead2ff", "#d9afff", "#c88cff", "#b76aff"],
+  ["#ffe0c0", "#ffc88f", "#ffad5d", "#ff922e"],
 ];
+export const HEATMAP_EMPTY_COLOR = "#2c2c30";
 export type HeatmapColorCycle = { seed: number; previousShift: number; shift: number };
-export function fixedHeatmapColor(level: number, mode: "activity" | "tasks") {
-  return PALETTES[mode === "tasks" ? 3 : 0]![Math.max(0, Math.min(3, level - 1))]!;
+export function heatmapPaletteColor(level: number, cycle: HeatmapColorCycle, mode: "activity" | "tasks") {
+  if (level <= 0) return HEATMAP_EMPTY_COLOR;
+  const palette = (cycle.shift + (mode === "tasks" ? 4 : 0)) % PALETTES.length;
+  return PALETTES[palette]![Math.max(0, Math.min(3, level - 1))]!;
 }
 let lastVisit: HeatmapColorCycle | undefined;
 export function nextProfileColorTheme() {
@@ -25,7 +27,9 @@ export function nextHeatmapColorCycle(
     seed: (previous?.seed ?? 0) + 1,
     previousShift,
     shift:
-      ((previous?.shift ?? 0) + 1 + Math.floor(random() * (PALETTES.length - 1))) % PALETTES.length,
+      previous
+        ? (previous.shift + 1 + Math.floor(random() * (PALETTES.length - 1))) % PALETTES.length
+        : Math.floor(random() * PALETTES.length),
   };
 }
 function hash(key: string) {

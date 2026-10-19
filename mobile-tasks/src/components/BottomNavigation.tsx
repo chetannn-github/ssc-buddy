@@ -45,6 +45,7 @@ type Props = {
   onChange: (tab: TabKey) => void;
   practiceSessionEnabled?: boolean;
   trackProgressEnabled?: boolean;
+  timersEnabled?: boolean;
   profileAvatar?: ImageSourcePropType;
 };
 
@@ -53,6 +54,7 @@ export function BottomNavigation({
   onChange,
   practiceSessionEnabled = true,
   trackProgressEnabled = true,
+  timersEnabled = true,
   profileAvatar,
 }: Props) {
   const [visible, setVisible] = useState(true);
@@ -61,6 +63,7 @@ export function BottomNavigation({
   const visibleTabs = tabs.filter(
     (tab) =>
       (tab.key !== "practice" || practiceSessionEnabled) &&
+      (tab.key !== "timers" || timersEnabled) &&
       (!(["track", "progress"] as TabKey[]).includes(tab.key) || trackProgressEnabled),
   );
 

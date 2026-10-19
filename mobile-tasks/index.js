@@ -12,6 +12,10 @@ const supportsAndroidWidgets = Platform.OS === "android" && Constants.appOwnersh
 
 if (supportsAndroidWidgets) {
   const AsyncStorage = require("@react-native-async-storage/async-storage").default;
+  const { registerWidgetConfigurationScreen } = require("react-native-android-widget");
+  const { TimerWidgetConfiguration } = require("./src/widgets/TimerWidgetConfiguration");
+  const { timerWidgetView, removeTimerWidget, bindPendingTimerWidget } = require("./src/widgets/timer-widget-store");
+  registerWidgetConfigurationScreen(TimerWidgetConfiguration);
   const { registerWidgetTaskHandler } = require("react-native-android-widget");
   const { renderDailyTasksWidget } = require("./src/widgets/DailyTasksWidget");
   const { renderQuickRecallWidget } = require("./src/widgets/QuickRecallWidget");
@@ -55,6 +59,13 @@ if (supportsAndroidWidgets) {
   };
 
   registerWidgetTaskHandler(async ({ widgetInfo, widgetAction, clickAction, clickActionData, renderWidget }) => {
+    if (widgetInfo.widgetName === "TimerWidget") {
+      if (widgetAction === "WIDGET_DELETED") { await removeTimerWidget(widgetInfo.widgetId); return; }
+      const widgetUser = await getWidgetUser();
+      if (widgetAction === "WIDGET_ADDED") await bindPendingTimerWidget(widgetInfo.widgetId, widgetUser?.uid);
+      renderWidget(await timerWidgetView(widgetInfo.widgetId, widgetUser?.uid));
+      return;
+    }
     if (!["DailyTasksWidget", "QuickRecallWidget"].includes(widgetInfo.widgetName)) return;
     const raw = await AsyncStorage.getItem("ssc-buddy:tasks:v2");
     let tasks = [];
