@@ -79,11 +79,13 @@ export function TaskRingFill({
   size = 112,
   stroke = 10,
   color = "#60a5fa",
+  liquidBoost = false,
 }: {
   percent: number;
   size?: number;
   stroke?: number;
   color?: string;
+  liquidBoost?: boolean;
 }) {
   const value = Math.max(0, Math.min(100, percent));
   const progress = useSharedValue(0);
@@ -170,15 +172,15 @@ export function TaskRingFill({
                 r={radius}
                 fill="none"
                 stroke="#e0f2fe"
-                opacity={0.38}
-                strokeWidth={stroke * 0.6}
+                opacity={liquidBoost ? 0.62 : 0.38}
+                strokeWidth={stroke * (liquidBoost ? 0.72 : 0.6)}
                 strokeLinecap="round"
-                strokeDasharray={[16, circumference - 16]}
+                strokeDasharray={[liquidBoost ? 24 : 16, circumference - (liquidBoost ? 24 : 16)]}
                 animatedProps={shineProps}
                 rotation="-90"
                 origin={`${center}, ${center}`}
               />
-              {Array.from({ length: 7 }, (_, index) => (
+              {Array.from({ length: liquidBoost ? 10 : 7 }, (_, index) => (
                 <RingBubble key={index} progress={progress} center={center} radius={radius} />
               ))}
             </>

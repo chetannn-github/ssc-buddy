@@ -8,6 +8,7 @@
   },
   "include": [
     "date-timers.ts",
+    "music-seek.ts",
     "water-motion.ts",
     "heatmap-layout.ts",
     "celebration-preview.ts",

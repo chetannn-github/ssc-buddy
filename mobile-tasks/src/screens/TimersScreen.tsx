@@ -5,7 +5,7 @@ import { LiquidSpillCard } from "../components/LiquidSpillCard";
 import { TimerLiquidDial } from "../components/TimerLiquidDial";
 import type { User } from "firebase/auth";
 import { useDateTimers } from "../hooks/use-date-timers";
-import { dateCountdown, timerDial, timerReferenceDays, TIMER_COLORS, makeDateTimer, timerInputFields, type DateTimer } from "../domain/date-timers";
+import { dateCountdown, timerDial, TIMER_COLORS, makeDateTimer, timerInputFields, type DateTimer } from "../domain/date-timers";
 import { reportVerticalScroll } from "../navigation/bottomNavigationVisibility";
 import { colors } from "../theme";
 import { cacheWidgetTimers, pinTimerWidget } from "../widgets/timer-widget-store";
@@ -17,6 +17,8 @@ export function TimersScreen({ user, widgetRequest = 0 }: { user: User | null; w
   useEffect(() => { if (widgetRequest > 0) setWidgetPicker(true); }, [widgetRequest]);
   const [gridWidth, setGridWidth] = useState(0);
   const ringSize = gridWidth ? Math.min(136, Math.max(80, (gridWidth - 12) / 2 - 22)) : 112;
+  const [editMode, setEditMode] = useState(false);
+  useEffect(() => setEditMode(false), [user?.uid]);
   const [now, setNow] = useState(Date.now);
   const [editing, setEditing] = useState<DateTimer | "new" | null>(null);
   const [deleting, setDeleting] = useState<DateTimer | null>(null);
@@ -57,18 +59,18 @@ export function TimersScreen({ user, widgetRequest = 0 }: { user: User | null; w
     try { await cacheWidgetTimers(user.uid, timers); await pinTimerWidget(user.uid, timer.id, color); setWidgetPicker(false); }
     catch (error) { Alert.alert("Timer widget", error instanceof Error ? error.message : "Could not add widget. Try again."); }
   };
-  const referenceDays = timerReferenceDays(timers, now);
   const timerColors = new Map([...timers].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)).map((timer, index) => [timer.id, TIMER_COLORS[index % TIMER_COLORS.length]!]));
   const sorted = [...timers].sort((a, b) => Number(dateCountdown(a.targetAt, now).reached) - Number(dateCountdown(b.targetAt, now).reached) || Date.parse(a.targetAt) - Date.parse(b.targetAt));
   return <View style={s.page}>
     <View style={s.header}><View style={{ flex: 1 }}><Text style={s.eyebrow}>IMPORTANT DATES</Text><Text style={s.title}>Timers</Text></View><Pressable accessibilityRole="button" disabled={!user || busy} onPress={() => open()} style={s.add}><MaterialCommunityIcons name="plus" size={18} color="#081a31" /><Text style={s.addText}>Add timer</Text></Pressable></View>
+    {!!user && timers.length > 0 && <View style={{ alignItems: "flex-end", paddingHorizontal: 18, paddingBottom: 6 }}><Pressable accessibilityRole="button" accessibilityState={{ selected: editMode }} disabled={busy} onPress={() => setEditMode(value => !value)} style={{ flexDirection: "row", alignItems: "center", gap: 5, padding: 8 }}><MaterialCommunityIcons name={editMode ? "check" : "pencil-outline"} size={15} color="#93c5fd" /><Text style={{ color: "#93c5fd", fontSize: 12, fontWeight: "700" }}>{editMode ? "Done" : "Edit tasks"}</Text></Pressable></View>}
     <ScrollView contentContainerStyle={s.content} scrollEventThrottle={16} onScroll={(event) => reportVerticalScroll(event.nativeEvent.contentOffset.y)}>
       {!user ? <Text style={s.emptyCopy}>Sign in to save your important dates.</Text> : loading ? <ActivityIndicator style={{ marginTop: 50 }} color={colors.accent} /> : error ? <View style={s.empty}><Text style={s.error}>{error}</Text><Pressable style={s.add} onPress={retry}><Text style={s.addText}>Try again</Text></Pressable></View> : sorted.length ? <View style={s.cardGrid} onLayout={event => setGridWidth(event.nativeEvent.layout.width)}>{sorted.map((timer) => {
-        const dial = timerDial(timer, now, referenceDays);
+        const dial = timerDial(timer, now);
       const color = timerColors.get(timer.id)!;
         return <LiquidSpillCard key={timer.id} style={[s.card, { width: gridWidth ? (gridWidth - 12) / 2 : "48%" }]} onLongPress={() => void pin(timer, color)}>
-          <Pressable accessibilityRole="button" accessibilityLabel={`Edit ${timer.title}`} disabled={busy} onPress={() => open(timer)} style={s.cardEdit}><MaterialCommunityIcons name="pencil-outline" size={18} color={colors.muted} /></Pressable>
-          <TimerLiquidDial dial={dial} color={color} size={ringSize} onLongPress={() => void pin(timer, color)} />
+          {editMode && <Pressable accessibilityRole="button" accessibilityLabel={`Edit ${timer.title}`} disabled={busy} onPress={() => open(timer)} style={s.cardEdit}><MaterialCommunityIcons name="pencil-outline" size={18} color={colors.muted} /></Pressable>}
+          <TimerLiquidDial liquidProgress={0.18} dial={dial} color={color} size={ringSize} onLongPress={() => void pin(timer, color)} />
           <Text style={s.cardName}>{timer.title}</Text>
           <Text style={s.cardDate}>{new Date(timer.targetAt).toLocaleDateString(undefined, { dateStyle: "medium" })}</Text>
         </LiquidSpillCard>;

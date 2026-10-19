@@ -5,7 +5,7 @@ import ts from "typescript";
 
 const compile = source => ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
 const moduleUrl = source => `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`;
-const { parseTimerTarget, timerInputFields, makeDateTimer, normalizeDateTimer, dateCountdown, timerDial, timerReferenceDays } = await import(moduleUrl(compile(await readFile(new URL("../mobile-tasks/src/domain/date-timers.ts", import.meta.url), "utf8"))));
+const { parseTimerTarget, timerInputFields, makeDateTimer, normalizeDateTimer, dateCountdown, timerDial } = await import(moduleUrl(compile(await readFile(new URL("../mobile-tasks/src/domain/date-timers.ts", import.meta.url), "utf8"))));
 
 test("timer dates round-trip as local calendar dates, including leap day", () => {
   for (const date of ["2027-06-15", "2028-02-29", "2026-12-31"]) {
@@ -91,35 +91,34 @@ test("timer dial shows minus for future dates, plus for past dates and zero toda
   const after = timerDial(timer, Date.parse(parseTimerTarget("2026-10-23")));
   assert.equal(after.label, "+3");
   assert.equal(after.status, "DAYS AGO");
-  assert.equal(after.progress, 0);
+  assert.equal(after.progress, 1);
   const today = timerDial(timer, Date.parse(timer.targetAt));
   assert.equal(today.label, "0");
   assert.equal(today.status, "TODAY");
 });
 
-test("liquid drains in proportion to calendar days remaining and stays empty after the date", () => {
+test("liquid fills as the goal approaches and stays full on and after the date", () => {
   const timer = { id: "exam", title: "Exam", targetAt: parseTimerTarget("2026-10-20"), createdAt: parseTimerTarget("2026-10-10") };
-  for (const [date, expected] of [["2026-10-09", 1], ["2026-10-10", 1], ["2026-10-15", 0.5], ["2026-10-19", 0.1], ["2026-10-20", 0], ["2026-10-25", 0]]) {
+  for (const [date, expected] of [["2026-10-09", 0], ["2026-10-10", 0], ["2026-10-15", 0.5], ["2026-10-19", 0.9], ["2026-10-20", 1], ["2026-10-25", 1]]) {
     assert.equal(timerDial(timer, Date.parse(parseTimerTarget(date))).progress, expected);
   }
 });
 
-test("multiple timers compare remaining days against the longest remaining timer", () => {
-  const now = Date.parse(parseTimerTarget("2026-10-10"));
-  const make = (id, date) => ({ id, title: id, targetAt: parseTimerTarget(date), createdAt: parseTimerTarget("2026-10-01") });
-  const long = make("long", "2026-10-30");
-  const short = make("short", "2026-10-20");
-  const past = make("past", "2026-10-05");
-  const timers = [long, short, past];
-  const reference = timerReferenceDays(timers, now);
-  assert.equal(reference, 20);
-  assert.equal(timerDial(long, now, reference).progress, 1);
-  assert.equal(timerDial(short, now, reference).progress, 0.5);
-  assert.equal(timerDial(past, now, reference).progress, 0);
-  const later = Date.parse(parseTimerTarget("2026-10-15"));
-  assert.equal(timerDial(short, later, timerReferenceDays(timers, later)).progress, 1 / 3);
-  assert.equal(timerReferenceDays([short], now), undefined);
-  assert.equal(timerDial(short, now, timerReferenceDays([short], now)).progress, 10 / 19);
-  assert.equal(timerReferenceDays([], now), undefined);
-  assert.equal(timerReferenceDays([past, make("older", "2026-10-02")], now), 0);
+test("each timer uses its own creation day and editing retains that reference", () => {
+  const now = Date.parse(parseTimerTarget("2026-10-20"));
+  const first = { id: "first", title: "Exam", targetAt: parseTimerTarget("2026-10-30"), createdAt: parseTimerTarget("2026-10-10") };
+  const second = { ...first, id: "second", createdAt: parseTimerTarget("2026-10-15") };
+  assert.equal(timerDial(first, now).progress, 0.5);
+  assert.equal(timerDial(second, now).progress, 5 / 15);
+  const edited = makeDateTimer(first.id, "Updated", "2026-11-09", first);
+  assert.equal(edited.createdAt, first.createdAt);
+  assert.equal(timerDial(edited, now).progress, 10 / 30);
+});
+
+test("goals created for today or a past date are full without division by zero", () => {
+  const now = Date.parse(parseTimerTarget("2026-10-20"));
+  for (const target of ["2026-10-19", "2026-10-20"]) {
+    const timer = { id: target, title: "Goal", targetAt: parseTimerTarget(target), createdAt: new Date(now).toISOString() };
+    assert.equal(timerDial(timer, now).progress, 1);
+  }
 });

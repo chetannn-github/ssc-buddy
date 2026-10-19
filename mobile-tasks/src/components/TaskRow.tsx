@@ -11,12 +11,13 @@ type Props = {
   onReopen: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  editable?: boolean;
   compact?: boolean;
   grouped?: boolean;
   last?: boolean;
 };
 
-export function TaskRow({ task, points, onDone, onReopen, onEdit, onDelete, compact = false, grouped = false, last = false }: Props) {
+export function TaskRow({ task, points, onDone, onReopen, onEdit, onDelete, editable = false, compact = false, grouped = false, last = false }: Props) {
   return (
     <View>
       <View style={[styles.task, task.completed && styles.completed, compact && styles.compact, grouped && styles.grouped, grouped && !compact && task.completed && styles.groupedCompleted, grouped && last && styles.groupedLast]}>
@@ -35,13 +36,14 @@ export function TaskRow({ task, points, onDone, onReopen, onEdit, onDelete, comp
             <Text style={styles.checkText}>{task.completed ? "✓" : ""}</Text>
           </Pressable>
         )}
-        <Pressable accessibilityRole="button" disabled={compact} style={styles.main} onPress={onEdit}>
+        <Pressable accessibilityRole="button" disabled={compact || !editable} style={styles.main} onPress={onEdit}>
           <View style={styles.nameLine}><Text style={[styles.name, task.completed && styles.strike]} numberOfLines={1}>{task.name}</Text><Text style={[styles.points, points < 0 ? styles.penalty : points === 0 ? styles.neutral : undefined]}>{points > 0 ? `+${points}` : points < 0 ? `−${Math.abs(points)}` : "0"} pts</Text></View>
           <Text style={styles.meta} numberOfLines={1}>
             {task.subject} · {task.type}
             {task.completed ? ` · ${formatMinutes(task.minutesSpent ?? 0)} completed` : ""}
           </Text>
         </Pressable>
+        {!compact && editable && <Pressable accessibilityRole="button" accessibilityLabel={`Edit ${task.name}`} onPress={onEdit} style={styles.iconAction}><MaterialCommunityIcons name="pencil-outline" size={18} color={colors.muted} /></Pressable>}
         {!compact && task.date !== dateKey() ? (
           <View style={styles.actions}>
             <Pressable accessibilityLabel="Delete task" onPress={onDelete} hitSlop={9} style={styles.iconAction}><MaterialCommunityIcons name="close" size={18} color={colors.muted} /></Pressable>

@@ -30,7 +30,7 @@ export function LiquidHeatmapCell({
               {
                 translateY: reveal.interpolate({
                   inputRange: [0, 1],
-                  outputRange: [11, 0],
+                  outputRange: [13, 0],
                   extrapolate: "clamp",
                 }),
               },
@@ -43,12 +43,12 @@ export function LiquidHeatmapCell({
             styles.wave,
             {
               transform: [
-                { translateX: phase.interpolate({ inputRange: [0, 1], outputRange: [-11, 0] }) },
+                { translateX: phase.interpolate({ inputRange: [0, 1], outputRange: [-13, 0] }) },
               ],
             },
           ]}
         >
-          <Svg width={33} height={5} viewBox="0 0 60 12">
+          <Svg width={39} height={5} viewBox="0 0 60 12">
             <Path d="M0 4 Q5 0 10 4 T20 4 T30 4 T40 4 T50 4 T60 4 V12 H0Z" fill={color} />
           </Svg>
         </Animated.View>
@@ -61,7 +61,7 @@ export function LiquidHeatmapCell({
               style={[
                 styles.bubble,
                 {
-                  left: index === 0 ? 2 : 8,
+                  left: index === 0 ? 3 : 9,
                   opacity: phase.interpolate({
                     inputRange: [0, start, start + 0.06, end - 0.06, end, 1],
                     outputRange: [0, 0, 0.7, 0.45, 0, 0],
@@ -70,7 +70,7 @@ export function LiquidHeatmapCell({
                     {
                       translateY: phase.interpolate({
                         inputRange: [start, end],
-                        outputRange: [12, -3],
+                        outputRange: [14, -3],
                         extrapolate: "clamp",
                       }),
                     },
@@ -102,7 +102,7 @@ export function LiquidHeatmapCell({
 const styles = StyleSheet.create({
   clip: { ...StyleSheet.absoluteFill, borderRadius: 2, overflow: "hidden" },
   fill: { position: "absolute", left: 0, right: 0, bottom: 0 },
-  wave: { position: "absolute", left: 0, top: -2, width: 33, height: 5 },
+  wave: { position: "absolute", left: 0, top: -2, width: 39, height: 5 },
 
   bubble: {
     position: "absolute",

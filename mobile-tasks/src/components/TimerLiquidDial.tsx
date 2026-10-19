@@ -1,36 +1,41 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { AccessibilityInfo, Animated, AppState, Easing, Pressable, StyleSheet, Text, View } from "react-native";
-import Svg, { Path } from "react-native-svg";
+import Svg, { Defs, LinearGradient, Path, Rect, Stop } from "react-native-svg";
 import { GravityWaterLayer } from "./GravityWaterLayer";
 import { TaskRingFill } from "./TaskRingFill";
 import type { timerDial } from "../domain/date-timers";
 
-export function TimerLiquidDial({ dial, color, size = 160, children, title, onEdit, onLongPress }: { dial: ReturnType<typeof timerDial>; color: string; size?: number; children?: ReactNode; title?: string; onEdit?: () => void; onLongPress?: () => void }) {
+export function TimerLiquidDial({ dial, color, size = 160, children, title, onEdit, onLongPress, fillColor, showLiquid = true, liquidProgress, animateOnMount = false }: { dial: ReturnType<typeof timerDial>; color: string; size?: number; children?: ReactNode; title?: string; onEdit?: () => void; onLongPress?: () => void; fillColor?: string; showLiquid?: boolean; liquidProgress?: number; animateOnMount?: boolean }) {
+  const gradientId = `task-water-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
+  const liquidColor = fillColor ?? color + (size < 160 ? "b3" : "80");
   const scale = size / 160;
   const tankSize = 118 * scale;
   const fill = Math.max(0, Math.min(1, dial.progress));
-  const level = useRef(new Animated.Value(fill)).current;
+  const liquidFill = Math.max(0, Math.min(1, liquidProgress ?? fill));
+  const level = useRef(new Animated.Value(animateOnMount ? 0 : liquidFill)).current;
   const phase = useRef(new Animated.Value(0)).current;
   const splash = useRef(new Animated.Value(0)).current;
   const lift = useRef(new Animated.Value(0)).current;
   const impulse = useRef({ target: 0, time: 0, revision: 0 });
+  const [motionReady, setMotionReady] = useState(false);
   const [reduced, setReduced] = useState(true);
   const [active, setActive] = useState(AppState.currentState === "active");
   useEffect(() => {
     let mounted = true;
-    void AccessibilityInfo.isReduceMotionEnabled().then(value => { if (mounted) setReduced(value); }).catch(() => undefined);
+    void AccessibilityInfo.isReduceMotionEnabled().then(value => { if (mounted) { setReduced(value); setMotionReady(true); } }).catch(() => { if (mounted) setMotionReady(true); });
     const motion = AccessibilityInfo.addEventListener("reduceMotionChanged", setReduced);
     const state = AppState.addEventListener("change", value => setActive(value === "active"));
     return () => { mounted = false; motion.remove(); state.remove(); };
   }, []);
   useEffect(() => {
+    if (!motionReady) return;
     level.stopAnimation();
-    if (reduced || !active) { level.setValue(fill); return; }
-    const animation = Animated.timing(level, { toValue: fill, duration: 1000, easing: Easing.out(Easing.cubic), useNativeDriver: false });
+    if (reduced || !active) { level.setValue(liquidFill); return; }
+    const animation = Animated.timing(level, { toValue: liquidFill, duration: 1000, easing: Easing.out(Easing.cubic), useNativeDriver: false });
     animation.start();
     return () => animation.stop();
-  }, [level, fill, reduced, active]);
-  const bubbling = !reduced && active && fill > 0;
+  }, [level, liquidFill, reduced, active, motionReady]);
+  const bubbling = showLiquid && !reduced && active && liquidFill > 0;
   useEffect(() => {
     if (!bubbling) return;
     const animation = Animated.loop(Animated.timing(phase, { toValue: 1, duration: 3600, easing: Easing.linear, useNativeDriver: true }));
@@ -39,17 +44,17 @@ export function TimerLiquidDial({ dial, color, size = 160, children, title, onEd
     return () => animation.stop();
   }, [phase, bubbling]);
   useEffect(() => {
-    if (reduced || !active || fill === 0) {
+    if (reduced || !active || liquidFill === 0) {
       impulse.current.revision += 1;
       impulse.current.target = 0;
       lift.stopAnimation();
       lift.setValue(0);
     }
     return () => { impulse.current.revision += 1; lift.stopAnimation(); };
-  }, [lift, reduced, active, fill === 0]);
+  }, [lift, reduced, active, liquidFill === 0]);
   useEffect(() => () => splash.stopAnimation(), [splash]);
   const play = () => {
-    if (reduced || !active || dial.progress === 0) return;
+    if (!showLiquid || reduced || !active || liquidFill === 0) return;
     const now = Date.now();
     const previous = impulse.current;
     const revision = previous.revision + 1;
@@ -71,13 +76,14 @@ export function TimerLiquidDial({ dial, color, size = 160, children, title, onEd
   };
   const WaterPlane = active && !reduced ? GravityWaterLayer : StillWaterLayer;
   return <View style={[s.section, { width: size, height: size }]}>
-    <Pressable accessibilityRole="button" accessibilityLabel={`${dial.label} ${dial.status.toLowerCase()}, play with water`} onPress={play} onLongPress={onLongPress} style={[s.dial, { width: size, height: size }]}>
-      <View pointerEvents="none" style={[s.tank, { top: 21 * scale, left: 21 * scale, width: tankSize, height: tankSize, borderRadius: tankSize / 2, backgroundColor: color + "0d" }]}>
+    <Pressable accessibilityRole="button" accessibilityLabel={`${dial.label} ${dial.status.toLowerCase()}${showLiquid ? ", play with water" : ""}`} onPress={play} onLongPress={onLongPress} style={[s.dial, { width: size, height: size }]}>
+      {showLiquid && <View pointerEvents="none" style={[s.tank, { top: 21 * scale, left: 21 * scale, width: tankSize, height: tankSize, borderRadius: tankSize / 2, backgroundColor: color + "0d" }]}>
         <WaterPlane>
         <Animated.View style={[s.fill, { height: level.interpolate({ inputRange: [0, 1], outputRange: [0, tankSize], extrapolate: "clamp" }), opacity: level.interpolate({ inputRange: [0, 0.002, 1], outputRange: [0, 1, 1], extrapolate: "clamp" }) }]}>
-          <Animated.View style={[s.liquidBody, { bottom: -tankSize, backgroundColor: color + (size < 160 ? "b3" : "80"), transform: [{ translateY: lift.interpolate({ inputRange: [-tankSize, 0, tankSize], outputRange: [3 * scale, 0, -tankSize], extrapolate: "clamp" }) }] }]}>
+          <Animated.View style={[s.liquidBody, { bottom: -tankSize, backgroundColor: liquidColor, transform: [{ translateY: lift.interpolate({ inputRange: [-tankSize, 0, tankSize], outputRange: [3 * scale, 0, -tankSize], extrapolate: "clamp" }) }] }]}>
+          {fillColor && <Svg pointerEvents="none" width="100%" height={tankSize * 2} style={{ position: "absolute", top: 0, left: 0 }}><Defs><LinearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1"><Stop offset="0" stopColor="#3b82f6" /><Stop offset="0.35" stopColor={fillColor} /><Stop offset="1" stopColor="#0c2460" /></LinearGradient></Defs><Rect width="100%" height="100%" fill={`url(#${gradientId})`} /></Svg>}
           <Animated.View style={[s.wave, { transform: [{ translateX: phase.interpolate({ inputRange: [0, 1], outputRange: [-116, 0] }) }] }]}>
-            <Svg width={348} height={14} viewBox="0 0 348 14"><Path d="M0 7 Q14.5 0 29 7 T58 7 T87 7 T116 7 T145 7 T174 7 T203 7 T232 7 T261 7 T290 7 T319 7 T348 7 V14 H0Z" fill={color} /></Svg>
+            <Svg width={348} height={14} viewBox="0 0 348 14"><Path d="M0 7 Q14.5 0 29 7 T58 7 T87 7 T116 7 T145 7 T174 7 T203 7 T232 7 T261 7 T290 7 T319 7 T348 7 V14 H0Z" fill={fillColor ? "#3b82f6" : color} /></Svg>
           </Animated.View>
           <Animated.View style={[s.ripple, { left: (tankSize - 64) / 2, top: 6 * scale, opacity: splash.interpolate({ inputRange: [0, 0.08, 1], outputRange: [0, 0.8, 0] }), transform: [{ scale: splash.interpolate({ inputRange: [0, 1], outputRange: [0.3, 2.4] }) }] }]} />
           {!reduced && [0, 1, 2].map(index => <Animated.View key={index} style={[s.bubble, { left: `${25 + index * 25}%`, bottom: tankSize, opacity: phase.interpolate({ inputRange: [0, 0.2, 0.8, 1], outputRange: [0, 0.65, 0.4, 0] }), transform: [{ translateY: phase.interpolate({ inputRange: [0, 1], outputRange: [index * 20, -116 + index * 20] }) }] }]} />)}
@@ -85,7 +91,7 @@ export function TimerLiquidDial({ dial, color, size = 160, children, title, onEd
         </Animated.View>
         </WaterPlane>
         <View pointerEvents="none" style={[s.glass, { borderRadius: tankSize / 2 }]} />
-      </View>
+      </View>}
       <View pointerEvents="none" style={{ position: "absolute", left: 12.5 * scale, top: 12.5 * scale, width: 135 * scale, height: 135 * scale }}><TaskRingFill percent={fill * 100} size={135 * scale} stroke={9 * scale} color={color} /></View>
       <View pointerEvents="none" style={[s.text, { paddingHorizontal: 26 * scale, paddingBottom: title ? 22 * scale : 0 }]}>{children ?? <><Text adjustsFontSizeToFit numberOfLines={1} style={[s.number, { fontSize: 32 * scale }]}>{dial.label}</Text>{dial.status ? <Text style={[s.unit, { fontSize: 10 * scale }]}>{dial.status}</Text> : null}</>}</View>
     </Pressable>

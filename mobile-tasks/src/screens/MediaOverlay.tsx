@@ -1,3 +1,4 @@
+import { musicRingProgress, continueMusicSeek } from "../domain/music-seek";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { User } from "firebase/auth";
 import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
@@ -179,6 +180,12 @@ function MusicPlayer({ user, onClose, openRequest }: { user: User | null; onClos
   const [miniCorner, setMiniCorner] = useState<PlayerCorner>("bottom-right");
   const [bottomNavVisible, setBottomNavVisible] = useState(true);
   const [dragProgress, setDragProgress] = useState<number | null>(null);
+  const discRef = useRef<View>(null);
+  const discOrigin = useRef<{ x: number; y: number } | null>(null);
+  const seekGesture = useRef({ active: false, ready: false, x: 0, y: 0, pageX: 0, pageY: 0, moved: false, ring: false, progress: 0 });
+  const pendingSeek = useRef<number | null>(null);
+  const seekRevision = useRef(0);
+  const seekTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [audioModeReady, setAudioModeReady] = useState(false);
   const source = musicSource(musicTracks[index] ?? musicTracks[0]);
   const player = useAudioPlayer(null, { updateInterval: 500 });
@@ -288,35 +295,86 @@ function MusicPlayer({ user, onClose, openRequest }: { user: User | null; onClos
   const rotation = artworkSpin.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
   const playbackProgress = status.duration > 0 ? Math.max(0, Math.min(1, status.currentTime / status.duration)) : 0;
   const progress = dragProgress ?? playbackProgress;
-  const progressFromPoint = (x: number, y: number, size: number) => {
-    const angle = (Math.atan2(y - size / 2, x - size / 2) + Math.PI / 2 + Math.PI * 2) % (Math.PI * 2);
-    return angle / (Math.PI * 2);
+  useEffect(() => {
+    if (pendingSeek.current !== null && status.duration > 0 && Math.abs(status.currentTime / status.duration - pendingSeek.current) < 0.015) {
+      pendingSeek.current = null;
+      if (seekTimeout.current) clearTimeout(seekTimeout.current);
+      setDragProgress(null);
+    }
+  }, [status.currentTime, status.duration]);
+  useEffect(() => {
+    seekRevision.current += 1;
+    seekGesture.current.ready = false;
+    pendingSeek.current = null;
+    setDragProgress(null);
+    if (seekTimeout.current) clearTimeout(seekTimeout.current);
+    return () => { seekRevision.current += 1; if (seekTimeout.current) clearTimeout(seekTimeout.current); };
+  }, [activeTrack]);
+  const previewSeek = () => {
+    const gesture = seekGesture.current;
+    if (!gesture.active || !gesture.ready || !status.duration) return;
+    const x = gesture.pageX - gesture.x, y = gesture.pageY - gesture.y;
+    if (Math.hypot(x - discSize / 2, y - discSize / 2) < discSize * 0.14) return;
+    const next = musicRingProgress(x, y, discSize);
+    gesture.progress = gesture.moved ? continueMusicSeek(gesture.progress, next) : next;
+    gesture.moved = true;
+    setDragProgress(gesture.progress);
   };
-  const seekFromPoint = (x: number, y: number, size: number) => {
+  const commitSeek = () => {
+    const next = seekGesture.current.progress;
     if (!status.duration) return;
-    const nextProgress = progressFromPoint(x, y, size);
-    setDragProgress(nextProgress);
-    void player.seekTo(nextProgress * status.duration);
+    const revision = ++seekRevision.current;
+    pendingSeek.current = next;
+    setDragProgress(next);
+    if (seekTimeout.current) clearTimeout(seekTimeout.current);
+    seekTimeout.current = setTimeout(() => { if (revision === seekRevision.current) { pendingSeek.current = null; setDragProgress(null); } }, 1500);
+    void player.seekTo(next * status.duration).catch(() => {
+      if (revision === seekRevision.current) { pendingSeek.current = null; setDragProgress(null); }
+    });
   };
-  const discPan = PanResponder.create({
+  const seekHandlers = useRef({
+    grant: (_x: number, _y: number) => {}, move: (_x: number, _y: number) => {}, release: (_x: number, _y: number, _distance: number) => {}, cancel: () => {},
+  });
+  seekHandlers.current = {
+    grant: (pageX, pageY) => {
+      pendingSeek.current = null;
+      seekRevision.current += 1;
+      if (seekTimeout.current) clearTimeout(seekTimeout.current);
+      const origin = discOrigin.current;
+      seekGesture.current = { active: true, ready: Boolean(origin), x: origin?.x ?? 0, y: origin?.y ?? 0, pageX, pageY, moved: false, ring: false, progress };
+      const gesture = seekGesture.current;
+      if (origin) {
+        gesture.ring = Math.hypot(pageX - origin.x - discSize / 2, pageY - origin.y - discSize / 2) > discSize * 0.39;
+        if (gesture.ring) previewSeek();
+      }
+      discRef.current?.measureInWindow((x, y) => {
+        if (gesture !== seekGesture.current || !gesture.active) return;
+        discOrigin.current = { x, y };
+        gesture.x = x; gesture.y = y; gesture.ready = true;
+        gesture.ring = Math.hypot(pageX - x - discSize / 2, pageY - y - discSize / 2) > discSize * 0.39;
+        if (gesture.ring) previewSeek();
+      });
+    },
+    move: (pageX, pageY) => { seekGesture.current.pageX = pageX; seekGesture.current.pageY = pageY; previewSeek(); },
+    release: (pageX, pageY, distance) => {
+      const gesture = seekGesture.current;
+      if (!gesture.ready) { gesture.active = false; return; }
+      gesture.pageX = pageX; gesture.pageY = pageY;
+      if (distance < 6 && !gesture.ring) { setDragProgress(null); status.playing ? player.pause() : player.play(); }
+      else { previewSeek(); commitSeek(); }
+      gesture.ready = false; gesture.active = false;
+    },
+    cancel: () => { seekGesture.current.active = false; seekGesture.current.ready = false; pendingSeek.current = null; setDragProgress(null); },
+  };
+  const discPan = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder: () => true,
-    onPanResponderMove: (event) => seekFromPoint(event.nativeEvent.locationX, event.nativeEvent.locationY, discSize),
-    onPanResponderRelease: (event, gesture) => {
-      if (Math.hypot(gesture.dx, gesture.dy) < 6) {
-        const x = event.nativeEvent.locationX, y = event.nativeEvent.locationY;
-        const distance = Math.hypot(x - discSize / 2, y - discSize / 2);
-        if (distance > discSize / 2 - 13) {
-          seekFromPoint(x, y, discSize);
-        } else {
-          status.playing ? player.pause() : player.play();
-        }
-      } else {
-        seekFromPoint(event.nativeEvent.locationX, event.nativeEvent.locationY, discSize);
-      }
-      setDragProgress(null);
-    },
-  });
+    onPanResponderGrant: event => seekHandlers.current.grant(event.nativeEvent.pageX, event.nativeEvent.pageY),
+    onPanResponderMove: event => seekHandlers.current.move(event.nativeEvent.pageX, event.nativeEvent.pageY),
+    onPanResponderRelease: (event, gesture) => seekHandlers.current.release(event.nativeEvent.pageX, event.nativeEvent.pageY, Math.hypot(gesture.dx, gesture.dy)),
+    onPanResponderTerminate: () => seekHandlers.current.cancel(),
+    onPanResponderTerminationRequest: () => false,
+  })).current;
   if (minimized) {
     return <FloatingMusicPlayer corner={miniCorner} onCornerChange={setMiniCorner} bottomNavVisible={bottomNavVisible} style={styles.miniPlayer}>
         <Pressable accessibilityRole="button" accessibilityLabel={status.playing ? "Pause music" : "Play music"} style={styles.miniDisc} onPress={() => status.playing ? player.pause() : player.play()}>
@@ -329,7 +387,7 @@ function MusicPlayer({ user, onClose, openRequest }: { user: User | null; onClos
   }
   return <Modal transparent visible animationType="fade" onRequestClose={() => setMinimized(true)}><Pressable style={[styles.backdrop, { padding: 16 }]} onPress={() => setMinimized(true)}><Pressable style={[styles.musicCard, { height: "63%", maxHeight: "63%", padding: 15 }]} onPress={() => undefined}>
     <View style={styles.musicHead}><View /><View style={styles.musicHeaderActions}><Pressable onPress={() => setMinimized(true)} hitSlop={9}><MaterialCommunityIcons name="arrow-collapse" size={20} color={colors.muted} /></Pressable><Pressable onPress={onClose} hitSlop={9}><MaterialCommunityIcons name="close" size={21} color={colors.muted} /></Pressable></View></View>
-    <View style={[styles.disc, { width: discSize, height: discSize, marginTop: 3 }]} {...discPan.panHandlers}><Animated.View style={[styles.artwork, { width: 90, height: 90, borderRadius: 45, transform: [{ rotate: rotation }] }]}>{cover ? <Image source={cover} style={styles.coverImage} /> : <MaterialCommunityIcons name="music" size={34} color={colors.accent} />}</Animated.View><ProgressRing size={discSize} progress={progress} active={status.playing && isForeground} /></View>
+    <View ref={discRef} collapsable={false} onLayout={() => discRef.current?.measureInWindow((x, y) => { discOrigin.current = { x, y }; })} style={[styles.disc, { width: discSize, height: discSize, marginTop: 3 }]} {...discPan.panHandlers}><Animated.View style={[styles.artwork, { width: 90, height: 90, borderRadius: 45, transform: [{ rotate: rotation }] }]}>{cover ? <Image source={cover} style={styles.coverImage} /> : <MaterialCommunityIcons name="music" size={34} color={colors.accent} />}</Animated.View><ProgressRing size={discSize} progress={progress} active={status.playing && isForeground} /></View>
     <Text style={styles.songTitle} numberOfLines={1}>{trackTitle(musicTracks[index] ?? "")}</Text>
     <View style={styles.controls}><Pressable style={styles.round} onPress={() => toggleLike(activeTrack)}><MaterialCommunityIcons name={liked ? "heart" : "heart-outline"} size={21} color={liked ? "#fb7185" : colors.text} /></Pressable><Pressable style={[styles.round, repeat && { backgroundColor: "#284d7f" }]} onPress={() => setRepeat((value) => !value)}><MaterialCommunityIcons name="repeat" size={20} color={colors.text} /></Pressable><Pressable style={styles.round} onPress={() => shift(-1)}><MaterialCommunityIcons name="chevron-left" size={28} color={colors.text} /></Pressable><Pressable style={styles.round} onPress={() => shift(1)}><MaterialCommunityIcons name="chevron-right" size={28} color={colors.text} /></Pressable></View>
     <View style={styles.playlistHeader}><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.playlistChips}>{playlists.map((playlist) => <Pressable key={playlist} onPress={() => setSelectedPlaylist(playlist)} style={[styles.playlistChip, playlist === selectedPlaylist && styles.playlistChipActive]}><Text numberOfLines={1} style={[styles.playlistChipText, playlist === selectedPlaylist && styles.playlistChipTextActive]}>{playlist}</Text></Pressable>)}</ScrollView></View><ScrollView nestedScrollEnabled showsVerticalScrollIndicator style={[styles.playlist, { marginTop: 5 }]} contentContainerStyle={styles.playlistContent}>{visibleTracks.map((track) => { const trackIndex = musicTracks.indexOf(track); return <Pressable key={track} onPress={() => setIndex(trackIndex)} style={[styles.track, { paddingVertical: 5 }, trackIndex === index && styles.trackActive]}><Text numberOfLines={1} style={[styles.trackText, trackIndex === index && styles.trackTextActive]}>{trackTitle(track)}</Text></Pressable>; })}</ScrollView>

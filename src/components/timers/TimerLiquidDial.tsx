@@ -2,8 +2,9 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { timerDial } from "../../../mobile-tasks/src/domain/date-timers";
 import "./timer-liquid.css";
 
-export function TimerLiquidDial({ dial, color, size = 160, title, onEdit }: { dial: ReturnType<typeof timerDial>; color: string; size?: number; title?: string; onEdit?: () => void }) {
+export function TimerLiquidDial({ dial, color, size = 160, title, onEdit, showLiquid = true, liquidProgress }: { dial: ReturnType<typeof timerDial>; color: string; size?: number; title?: string; onEdit?: () => void; showLiquid?: boolean; liquidProgress?: number }) {
   const progress = Math.max(0, Math.min(1, dial.progress));
+  const liquidFill = Math.max(0, Math.min(1, liquidProgress ?? progress));
   const borderId = `timer-border-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
   const [splash, setSplash] = useState(0);
   const [lift, setLift] = useState(0);
@@ -28,7 +29,7 @@ export function TimerLiquidDial({ dial, color, size = 160, title, onEdit }: { di
     }
   }, [progress]);
   const play = () => {
-    if (progress <= 0 || reduced.current) return;
+    if (!showLiquid || liquidFill <= 0 || reduced.current) return;
     setSplash(value => value + 1);
     const state = motion.current;
     state.velocity = Math.min(4, state.velocity + 1.7);
@@ -48,14 +49,14 @@ export function TimerLiquidDial({ dial, color, size = 160, title, onEdit }: { di
     state.frame = requestAnimationFrame(step);
   };
   return <div className="relative mx-auto mt-1 shrink-0" style={{ width: size, height: size }}>
-    <button type="button" style={{ position: "absolute", left: (size - 160) / 2, top: (size - 160) / 2, transform: `scale(${size / 160})` }} className="relative h-40 w-40 rounded-full focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-sky-400" aria-label={`${dial.label} ${dial.status.toLowerCase()}, play with water`} onClick={play}>
-      <div className="timer-liquid-tank" aria-hidden="true" style={{ backgroundColor: color + "0d" }}>
-        <div className="timer-liquid-fill" style={{ transition: lift !== 0 ? "none" : undefined, height: `${Math.max(0, Math.min(1, progress + lift)) * 100}%`, opacity: progress > 0 ? 1 : 0, background: `linear-gradient(to bottom, ${color}a0, ${color}45)` }}>
+    <button type="button" style={{ position: "absolute", left: (size - 160) / 2, top: (size - 160) / 2, transform: `scale(${size / 160})` }} className="relative h-40 w-40 rounded-full focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-sky-400" aria-label={`${dial.label} ${dial.status.toLowerCase()}${showLiquid ? ", play with water" : ""}`} onClick={play}>
+      {showLiquid && <div className="timer-liquid-tank" aria-hidden="true" style={{ backgroundColor: color + "0d" }}>
+        <div className="timer-liquid-fill" style={{ transition: lift !== 0 ? "none" : undefined, height: `${Math.max(0, Math.min(1, liquidFill + lift)) * 100}%`, opacity: liquidFill > 0 ? 1 : 0, background: `linear-gradient(to bottom, ${color}a0, ${color}45)` }}>
           <svg className="timer-liquid-wave" width="348" height="14" viewBox="0 0 348 14"><path d="M0 7 Q14.5 0 29 7 T58 7 T87 7 T116 7 T145 7 T174 7 T203 7 T232 7 T261 7 T290 7 T319 7 T348 7 V14 H0Z" fill={color} /></svg>
           {splash > 0 && <span key={splash} className="timer-liquid-ripple" />}
           {[0, 1, 2].map(index => <i key={index} className="timer-liquid-bubble" style={{ left: `${25 + index * 25}%`, animationDelay: `${index * -1.1}s` }} />)}
         </div>
-      </div>
+      </div>}
       <svg viewBox="0 0 160 160" className="absolute inset-0 h-full w-full" aria-hidden="true">
         <defs><mask id={borderId} maskUnits="userSpaceOnUse" x="0" y="0" width="160" height="160" style={{ maskType: "luminance" }}><rect x="0" y="0" width="160" height="160" fill="black" /><circle cx="80" cy="80" r="63" fill="none" stroke="white" strokeWidth="9" strokeLinecap="round" strokeDasharray={2 * Math.PI * 63} strokeDashoffset={2 * Math.PI * 63 * (1 - progress)} opacity={progress > 0 ? 1 : 0} transform="rotate(-90 80 80)" /></mask></defs>
         <circle cx="80" cy="80" r="63" fill="none" stroke="#343434" strokeWidth="9" />

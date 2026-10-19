@@ -1373,7 +1373,7 @@ function ActivityHeatmap({
         scrollEventThrottle={16}
       >
         {months.map((month) => (
-          <View key={month.key} style={[styles.month, { width: month.columns * 11 + (month.columns - 1) * 3 }]}>
+          <View key={month.key} style={[styles.month, { width: month.columns * 13 + (month.columns - 1) * 3 }]}>
             <View style={styles.monthGrid}>
               {month.days.map((day) => {
                 const level = day.value === 0 ? 0 : Math.min(4, Math.ceil((day.value / max) * 4));
@@ -1389,17 +1389,17 @@ function ActivityHeatmap({
                       const date = day.date.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", year: "numeric" });
                       const count = mode === "tasks" ? `task${day.value === 1 ? "" : "s"} completed` : `activit${day.value === 1 ? "y" : "ies"}`;
                       heatmapSectionRef.current?.measureInWindow((x, y, width) => {
-                        if (tooltipRequest.current === request) setTooltip({ text: `${day.value} ${count} on ${date}`, x: pageX - locationX + 5.5 - x, y: pageY - locationY - y, containerWidth: width });
+                        if (tooltipRequest.current === request) setTooltip({ text: `${day.value} ${count} on ${date}`, x: pageX - locationX + 6.5 - x, y: pageY - locationY - y, containerWidth: width });
                       });
                     }}
                     style={[
                       styles.heatCell,
                       {
-                        width: 11,
-                        height: 11,
+                        width: 13,
+                        height: 13,
                         position: "absolute",
-                        left: day.column * 14,
-                        top: day.row * 14,
+                        left: day.column * 16,
+                        top: day.row * 16,
                         backgroundColor: HEATMAP_EMPTY_COLOR,
                       },
                       selectedDay === day.key && styles.heatSelected,
@@ -1826,14 +1826,14 @@ const styles: Record<string, any> = StyleSheet.create({
   heatmapToggleOption: { zIndex: 1, flex: 1, paddingHorizontal: 6, paddingVertical: 3, alignItems: "center" },
   heatmapToggleText: { color: colors.muted, fontSize: 8, fontWeight: "700" },
   heatmapToggleTextActive: { color: "#171717" },
-  heatmapScroll: { marginTop: 9 },
-  months: { gap: 10, paddingBottom: 4 },
+  heatmapScroll: { marginTop: 9, marginRight: 6 },
+  months: { gap: 10, paddingBottom: 4, paddingRight: 18 },
   month: { width: 58 },
   monthGrid: {
-    height: 95,
+    height: 109,
     position: "relative",
   },
-  heatCell: { width: 11, height: 11, borderRadius: 2 },
+  heatCell: { width: 13, height: 13, borderRadius: 2 },
   heatSelected: { borderWidth: 1, borderColor: "#fff", transform: [{ scale: 1.15 }] },
   monthLabel: { color: colors.muted, fontSize: 10, textAlign: "center", marginTop: 7 },
   heatScrollbar: {

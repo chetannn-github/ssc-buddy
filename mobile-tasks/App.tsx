@@ -112,7 +112,7 @@ const ScrollView = (props: any) => <NativeScrollView {...props} scrollEventThrot
 
 function CompletionRing({ percent }: { percent: number }) {
   const value = Math.max(0, Math.min(100, percent));
-  return <TimerLiquidDial dial={{ label: `${value}%`, status: "", progress: value / 100 }} color="#60a5fa" size={112}>
+  return <TimerLiquidDial dial={{ label: `${value}%`, status: "", progress: value / 100 }} color="#60a5fa" fillColor="#1d4ea6" animateOnMount size={112}>
     <RollingMetric value={value} suffix="%" color="#fafafa" fontSize={25} />
   </TimerLiquidDial>;
 }
@@ -251,7 +251,9 @@ export default function App() {
   const [taskTabsWidth, setTaskTabsWidth] = useState(0);
   const taskTabIndicator = useRef(new Animated.Value(0)).current;
   const taskSwipeStartX = useRef<number | null>(null);
+  const [editingTasks, setEditingTasks] = useState(false);
   const [taskDay, setTaskDay] = useState<"today" | "tomorrow">("today");
+  useEffect(() => setEditingTasks(false), [taskDay, tab]);
   const [analyticsRange, setAnalyticsRange] = useState<TaskRange>("week");
   const [analyticsSubject, setAnalyticsSubject] = useState("All subjects");
   const [historyRange, setHistoryRange] = useState<TaskRange>("week");
@@ -924,7 +926,7 @@ export default function App() {
                 </View>
               </View>
             </LiquidSpillCard>
-            <Text style={styles.sectionTitle}>{taskDay === "today" ? "TODAY'S TASKS" : "TOMORROW'S TASKS"}</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}><Text style={styles.sectionTitle}>{taskDay === "today" ? "TODAY'S TASKS" : "TOMORROW'S TASKS"}</Text><Pressable accessibilityRole="button" accessibilityState={{ selected: editingTasks }} onPress={() => setEditingTasks(value => !value)} style={{ flexDirection: "row", alignItems: "center", gap: 5, padding: 8 }}><MaterialCommunityIcons name={editingTasks ? "check" : "pencil-outline"} size={15} color="#93c5fd" /><Text style={{ color: "#93c5fd", fontSize: 12, fontWeight: "700" }}>{editingTasks ? "Done" : "Edit tasks"}</Text></Pressable></View>
             </View>,
             <View key="tasks-list" style={styles.tasksList}>
             {todayTasks.length === 0 ? (
@@ -935,6 +937,7 @@ export default function App() {
                   key={task.id}
                   task={task}
                   grouped
+                  editable={editingTasks}
                   last={index === todayTasks.length - 1}
                   points={taskPoints.get(task.id) ?? 0}
                   onDone={() => {

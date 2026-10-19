@@ -6,10 +6,10 @@ import ts from "typescript";
 const source = await readFile(new URL("../mobile-tasks/src/domain/heatmap-colors.ts", import.meta.url), "utf8");
 const compiled = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
 const { HEATMAP_EMPTY_COLOR, heatmapPaletteColor, nextHeatmapColorCycle } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}`);
-const cycles = Array.from({ length: 5 }, (_, index) => nextHeatmapColorCycle(undefined, () => (index + 0.5) / 5));
+const cycles = Array.from({ length: 6 }, (_, index) => nextHeatmapColorCycle(undefined, () => (index + 0.5) / 6));
 
 test("new visits can choose all reference-inspired color families", () => {
-  assert.equal(new Set(cycles.map(cycle => heatmapPaletteColor(4, cycle, "activity"))).size, 5);
+  assert.equal(new Set(cycles.map(cycle => heatmapPaletteColor(4, cycle, "activity"))).size, 6);
 });
 
 test("a return visit changes each heatmap's palette without repeating the previous one", () => {

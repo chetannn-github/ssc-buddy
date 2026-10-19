@@ -35,19 +35,15 @@ export function dateCountdown(targetAt: string, now = Date.now()) {
   return { days, reached: days >= 0 };
 }
 
-export function timerReferenceDays(timers: DateTimer[], now = Date.now()): number | undefined {
-  if (timers.length <= 1) return undefined;
-  return Math.max(0, ...timers.map(timer => -dateCountdown(timer.targetAt, now).days));
-}
-
-export function timerDial(timer: DateTimer, now = Date.now(), referenceDays?: number) {
+export function timerDial(timer: DateTimer, now = Date.now()) {
   const { days } = dateCountdown(timer.targetAt, now);
   const originalDays = Math.abs(dateCountdown(timer.targetAt, Date.parse(timer.createdAt)).days);
   return {
     label: `${days > 0 ? "+" : days < 0 ? "−" : ""}${Math.abs(days)}`,
     status: days > 0 ? "DAYS AGO" : days < 0 ? "DAYS LEFT" : "TODAY",
-    progress: days >= 0 ? 0 : Math.min(1, Math.abs(days) / Math.max(1, referenceDays ?? originalDays)),
+    progress: days >= 0 ? 1 : Math.max(0, Math.min(1, (originalDays - Math.abs(days)) / Math.max(1, originalDays))),
   };
 }
 
 export const TIMER_COLORS = ["#ff405b", "#ffe234", "#8ef000", "#b76aff", "#ff922e"] as const;
+
