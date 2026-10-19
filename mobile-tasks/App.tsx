@@ -40,6 +40,8 @@ import {
 import { LiquidProgressBar } from "./src/components/ProfileXpBar";
 import { TaskRingFill } from "./src/components/TaskRingFill";
 import { TaskRow } from "./src/components/TaskRow";
+import { WeeklyAwardCelebration } from "./src/components/WeeklyAwardCelebration";
+import { CelebrationFireworks } from "./src/components/CelebrationFireworks";
 import { BottomNavigation } from "./src/components/BottomNavigation";
 import { type TabKey, tabs } from "./src/navigation/tabs";
 import { ComingSoonScreen } from "./src/screens/ComingSoonScreen";
@@ -166,6 +168,7 @@ function StreakCelebration({ streak, onClose }: { streak: number; onClose: () =>
   return (
     <Modal transparent visible animationType="fade" statusBarTranslucent onRequestClose={onClose}>
       <Pressable style={styles.streakCelebrationBackdrop} onPress={onClose}>
+        <CelebrationFireworks />
         <Pressable style={styles.streakCelebrationDialog} onPress={() => undefined}>
           <Pressable accessibilityLabel="Close streak celebration" hitSlop={10} onPress={onClose} style={styles.streakCelebrationClose}>
             <MaterialCommunityIcons name="close" size={19} color="#a1a1aa" />
@@ -1081,6 +1084,7 @@ export default function App() {
       <MediaOverlay user={user} mode={mediaMode} musicOpenRequest={musicOpenRequest} onClose={() => setMediaMode(null)} />
       {celebratedStreak !== null && <StreakCelebration streak={celebratedStreak} onClose={() => setCelebratedStreak(null)} />}
       {celebratedLevel !== null && <LevelCelebration level={celebratedLevel} onClose={() => setCelebratedLevel(null)} />}
+      {user && <WeeklyAwardCelebration uid={user.uid} enabled={!dailyManifestation && celebratedStreak === null && celebratedLevel === null} />}
       <DailyManifestationDialog
         phrase={dailyManifestation}
         entry={manifestationEntry}

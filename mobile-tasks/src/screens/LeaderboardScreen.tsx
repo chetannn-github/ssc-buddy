@@ -19,22 +19,18 @@ import { colors } from "../theme";
 import { avatarAssets, ProfileScreen } from "./ProfileScreen";
 
 import { ALL_LEADERBOARD_DAYS, leaderboardPeriodStats, leaderboardPeriodTasks } from "../domain/leaderboard-period";
+import { leaderboardWeekLabel, shiftLeaderboardWeek, resolveWeeklyResults } from "../domain/weekly-results";
+import { useLeaderboardWeek } from "../hooks/use-weekly-results";
 
 const dayKey = (date = new Date()) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-const week = () => {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
-  return dayKey(d);
-};
 const medalAssets = [
   require("../../assets/gold-medal.png"),
   require("../../assets/silver-medal.png"),
   require("../../assets/bronze-medal.png"),
 ];
 const dateLabel = (date: string) =>
-  date === ALL_LEADERBOARD_DAYS ? "This week" : date === dayKey()
+  date === ALL_LEADERBOARD_DAYS ? "Full week" : date === dayKey()
     ? "Today"
     : new Date(`${date}T00:00:00`).toLocaleDateString(undefined, {
         weekday: "short",
@@ -176,7 +172,7 @@ function PublicProfileView({ entry, onBack, onOpenWeeklyStats, viewerUser, viewe
   });
   let streak = 0;
   for (let cursor = new Date(), index = 0; ; index += 1) { const key = dayKey(cursor); if (!activeDates.has(key)) { if (index === 0) { cursor.setDate(cursor.getDate() - 1); continue; } break; } streak += 1; cursor.setDate(cursor.getDate() - 1); }
-  return <ProfileScreen user={isOwnProfile ? viewerUser : null} tasks={(isOwnProfile ? viewerTasks : profile?.dashboard?.dailyTasks ?? []) as any} profileSettings={{ name: shown.name, username: shown.username, questionGoal: shown.questionGoal, avatar: shown.avatar, examName: shown.examName, practiceSessionEnabled: shown.practiceSessionEnabled !== false, trackProgressEnabled: shown.trackProgressEnabled !== false } as any} onProfileSaved={() => undefined} onLogout={() => undefined} onOpenVideo={() => undefined} onOpenMusic={() => undefined} onOpenTracker={() => undefined} onOpenLeaderboard={onOpenWeeklyStats} streak={streak} readOnly onBack={onBack} publicDashboard={profile?.dashboard} publicActivity={isOwnProfile || profile?.dashboard ? undefined : profile?.activity} publicRank={entry.leaderboardRank} />;
+  return <ProfileScreen user={isOwnProfile ? viewerUser : null} tasks={(isOwnProfile ? viewerTasks : profile?.dashboard?.dailyTasks ?? []) as any} profileSettings={{ name: shown.name, username: shown.username, questionGoal: shown.questionGoal, avatar: shown.avatar, examName: shown.examName, practiceSessionEnabled: shown.practiceSessionEnabled !== false, trackProgressEnabled: shown.trackProgressEnabled !== false } as any} onProfileSaved={() => undefined} onLogout={() => undefined} onOpenVideo={() => undefined} onOpenMusic={() => undefined} onOpenTracker={() => undefined} onOpenLeaderboard={onOpenWeeklyStats} streak={streak} readOnly onBack={onBack} publicDashboard={profile?.dashboard} publicActivity={isOwnProfile || profile?.dashboard ? undefined : profile?.activity} publicUid={String(entry.uid ?? "")} publicRank={entry.leaderboardRank} />;
 }
 
 export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { onClose: () => void; user: User | null; tasks?: any[] }) {
@@ -187,41 +183,49 @@ export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { 
   const [publicEntry, setPublicEntry] = useState<any>(null);
   const [isSyncing, setIsSyncing] = useState(true);
   const [dayFilterOpen, setDayFilterOpen] = useState(false);
+  const currentWeek = useLeaderboardWeek();
+  const [historyWeek, setHistoryWeek] = useState<string | null>(null);
+  const selectedWeek = historyWeek ?? currentWeek;
+  const changeWeek = (next: string) => { setSelected(null); setPublicEntry(null); setRows([]); setHistoryWeek(next === currentWeek ? null : next); setSelectedDate(next === currentWeek ? dayKey() : ALL_LEADERBOARD_DAYS); };
+  useEffect(() => {
+    setSelected(null);
+    setPublicEntry(null);
+    setSelectedDate(selectedWeek === currentWeek ? dayKey() : ALL_LEADERBOARD_DAYS);
+  }, [selectedWeek, currentWeek]);
   useEffect(() => {
     setIsSyncing(true);
+    setRows([]);
     return onSnapshot(
-      collection(getFirebaseFirestore(), "leaderboards", week(), "entries"),
+      collection(getFirebaseFirestore(), "leaderboards", selectedWeek, "entries"),
       (snapshot) => {
         setRows(
-          snapshot.docs
-            .map((doc) => doc.data())
-            .sort((a, b) => b.points - a.points || b.studyMinutes - a.studyMinutes),
+          resolveWeeklyResults(snapshot.docs.map((doc) => ({ ...doc.data(), uid: doc.id })), selectedWeek),
         );
         setIsSyncing(false);
       },
       () => setIsSyncing(false),
     );
-  }, []);
+  }, [selectedWeek, currentWeek]);
   const tasks = useMemo(
     () =>
       selected?.leaderboardTasks ??
       (selected?.completedTasks ?? []).map((task: any) => ({
         ...task,
         completed: true,
-        date: dayKey(),
+        date: selectedWeek === currentWeek ? dayKey() : selectedWeek,
         points: 10,
       })),
-    [selected],
+    [selected, selectedWeek, currentWeek],
   );
   const inactiveDates = useMemo(() => Array.isArray(selected?.inactiveDates) ? selected.inactiveDates : [], [selected]);
   const dates = useMemo(
     () =>
-      [ALL_LEADERBOARD_DAYS, ...Array.from(new Set([dayKey(), ...inactiveDates, ...tasks.map((task: any) => task.date).filter(Boolean)]))
+      [ALL_LEADERBOARD_DAYS, ...Array.from(new Set([...(selectedWeek === currentWeek ? [dayKey()] : []), ...inactiveDates, ...tasks.map((task: any) => task.date).filter(Boolean)]))
         .sort()
         .reverse()],
-    [inactiveDates, tasks],
+    [inactiveDates, tasks, selectedWeek, currentWeek],
   );
-  if (publicEntry) return <PublicProfileView entry={publicEntry} viewerUser={user} viewerTasks={viewerTasks} onBack={() => setPublicEntry(null)} onOpenWeeklyStats={() => { setSelected(publicEntry); setSelectedDate(dayKey()); setPublicEntry(null); }} />;
+  if (publicEntry) return <PublicProfileView entry={publicEntry} viewerUser={user} viewerTasks={viewerTasks} onBack={() => setPublicEntry(null)} onOpenWeeklyStats={() => { setSelected(publicEntry); setSelectedDate(selectedWeek === currentWeek ? dayKey() : ALL_LEADERBOARD_DAYS); setPublicEntry(null); }} />;
   if (selected) {
     const stats = leaderboardPeriodStats(selected, tasks, selectedDate);
     const rank = rows.findIndex((row) => row.uid === selected.uid) + 1;
@@ -332,6 +336,11 @@ export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { 
         <Text style={s.title}>Weekly leaderboard</Text>
         <View style={{ width: 24 }} />
       </View>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 18, paddingVertical: 12 }}>
+        <Pressable accessibilityLabel="Previous week" onPress={() => changeWeek(shiftLeaderboardWeek(selectedWeek, -1))} style={{ padding: 8 }}><MaterialCommunityIcons name="chevron-left" size={24} color={colors.text} /></Pressable>
+        <View style={{ alignItems: "center", flex: 1 }}><Text style={s.name}>{selectedWeek === currentWeek ? "This week · Live" : "Weekly results"}</Text><Text style={[s.sub, { fontSize: 10 }]}>{leaderboardWeekLabel(selectedWeek)}</Text>{selectedWeek !== currentWeek && <Pressable onPress={() => changeWeek(currentWeek)}><Text style={{ color: "#86efac", fontSize: 11, marginTop: 4 }}>Back to this week</Text></Pressable>}</View>
+        <Pressable accessibilityLabel="Next week" disabled={selectedWeek >= currentWeek} onPress={() => changeWeek(shiftLeaderboardWeek(selectedWeek, 1))} style={{ padding: 8, opacity: selectedWeek >= currentWeek ? 0.3 : 1 }}><MaterialCommunityIcons name="chevron-right" size={24} color={colors.text} /></Pressable>
+      </View>
       {isSyncing ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 10 }}>
           <ActivityIndicator size="small" color="#86efac" />
@@ -341,8 +350,8 @@ export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.body}>
           {rows.map((row, index) => (
             <View key={row.uid} style={s.row}>
-              <Pressable onPress={() => { setSelected(row); setSelectedDate(dayKey()); }} style={s.rankPress}>{index < 3 ? <Image source={medalAssets[index]} style={s.medal} /> : <Text style={s.rank}>#{index + 1}</Text>}</Pressable>
-              <Pressable style={s.publicIdentity} onPress={() => { setSelected(row); setSelectedDate(dayKey()); }}><View style={s.avatar}>
+              <Pressable onPress={() => { setSelected(row); setSelectedDate(selectedWeek === currentWeek ? dayKey() : ALL_LEADERBOARD_DAYS); }} style={s.rankPress}>{index < 3 ? <Image source={medalAssets[index]} style={s.medal} /> : <Text style={s.rank}>#{index + 1}</Text>}</Pressable>
+              <Pressable style={s.publicIdentity} onPress={() => { setSelected(row); setSelectedDate(selectedWeek === currentWeek ? dayKey() : ALL_LEADERBOARD_DAYS); }}><View style={s.avatar}>
                 {row.avatar && avatarAssets[row.avatar] ? (
                   <Image source={avatarAssets[row.avatar]} style={s.avatarImage} />
                 ) : (
@@ -359,10 +368,10 @@ export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { 
                 </Text>}
                 <Text style={s.xpMeta} numberOfLines={1}>Lv. {xpMeta(row).level} · {xpMeta(row).xp > 0 ? "+" : ""}{xpMeta(row).xp} XP</Text>
               </View></Pressable>
-              <Pressable onPress={() => { setSelected(row); setSelectedDate(dayKey()); }}><RollingLeaderboardNumber value={Number(row.points) || 0} prefix={Number(row.points) > 0 ? "+" : ""} suffix=" pts" fontSize={16} color={pointsColor(Number(row.points) || 0)} /></Pressable>
+              <Pressable onPress={() => { setSelected(row); setSelectedDate(selectedWeek === currentWeek ? dayKey() : ALL_LEADERBOARD_DAYS); }}><RollingLeaderboardNumber value={Number(row.points) || 0} prefix={Number(row.points) > 0 ? "+" : ""} suffix=" pts" fontSize={16} color={pointsColor(Number(row.points) || 0)} /></Pressable>
             </View>
           ))}
-          {!rows.length && <Text style={s.empty}>No activity this week yet.</Text>}
+          {!rows.length && <Text style={s.empty}>{selectedWeek === currentWeek ? "No activity this week yet." : "No saved results for this week."}</Text>}
         </ScrollView>
       )}
     </View>

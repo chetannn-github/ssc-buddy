@@ -7,6 +7,9 @@
     "noEmit": true
   },
   "include": [
+    "heatmap-layout.ts",
+    "celebration-preview.ts",
+    "weekly-results.ts",
     "active-test-session.ts",
     "floating-player.ts",
     "heatmap-colors.ts",

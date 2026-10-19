@@ -1,0 +1,25 @@
+.celebration-fireworks {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.celebration-firework { position: absolute; }
+.celebration-firework-spark {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  opacity: 0;
+  box-shadow: 0 0 7px currentColor;
+  animation: celebration-firework-burst 2.8s ease-out infinite;
+}
+@keyframes celebration-firework-burst {
+  0% { opacity: 0; transform: translate(0, 18px) scale(0.2); }
+  12% { opacity: 1; transform: translate(0, 0) scale(1.2); }
+  60% { opacity: 0.8; transform: translate(var(--spark-x), var(--spark-y)) scale(0.7); }
+  85%, 100% { opacity: 0; transform: translate(var(--spark-x), calc(var(--spark-y) + 28px)) scale(0.1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .celebration-fireworks { display: none; }
+}

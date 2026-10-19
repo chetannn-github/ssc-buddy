@@ -40,6 +40,8 @@ import { checkUsernameAvailability, normalizeUsername, readCloudProfile, savePro
 import type { User } from "firebase/auth";
 import { useAuthUser } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
+import { WeeklyAwardCelebration } from "@/components/WeeklyAwardCelebration";
+import { CelebrationFireworks } from "@/components/CelebrationFireworks";
 
 type Props = {
   title: string;
@@ -256,6 +258,7 @@ function ProfileOnboarding({ onComplete, user, existingProfile }: { onComplete: 
 function StreakCelebration({ streak, onClose }: { streak: number; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-[80] grid place-items-center bg-black/80 p-4 backdrop-blur-sm">
+      <CelebrationFireworks />
       <section className="streak-celebration relative w-full max-w-sm rounded-2xl border border-white/10 bg-[#171717] p-6 text-center text-zinc-100 shadow-[0_24px_80px_-24px_black] sm:p-7">
         <button
           type="button"
@@ -1389,6 +1392,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
         <StreakCelebration streak={celebratedStreak} onClose={() => setCelebratedStreak(null)} />
       )}
       {celebratedLevel !== null && <LevelCelebration level={celebratedLevel} onClose={() => setCelebratedLevel(null)} />}
+      {authUser && !manifestationOpen && celebratedStreak === null && celebratedLevel === null && <WeeklyAwardCelebration uid={authUser.uid} />}
     </div>
   );
 }

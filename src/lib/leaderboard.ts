@@ -4,11 +4,12 @@ import { getFirebaseFirestore } from "@/lib/firebase-sync";
 import type { DailyTask } from "@/lib/daily-tasks";
 import type { PracticeProfile } from "@/lib/profile";
 import { getXpSummary } from "@/lib/xp";
+import { leaderboardWeek, resolveWeeklyResults } from "../../mobile-tasks/src/domain/weekly-results";
 
 export type LeaderboardTask = { name: string; subject?: string; type?: string; minutesSpent?: number; completed: boolean; date: string; points: number };
 export type LeaderboardEntry = { uid: string; username: string; name: string; avatar?: string; points: number; xp?: number; level?: number; completed: number; overdue: number; inactiveDays: number; inactiveDates?: string[]; studyMinutes: number; week: string; leaderboardTasks?: LeaderboardTask[]; completedTasks?: Array<{ name: string; subject?: string }> };
 const day = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-export function currentWeekKey(now = new Date()) { const start = new Date(now); start.setHours(0, 0, 0, 0); start.setDate(start.getDate() - ((start.getDay() + 6) % 7)); return day(start); }
+export const currentWeekKey = leaderboardWeek;
 export function weeklyScore(tasks: DailyTask[], week = currentWeekKey()) {
   const start = new Date(`${week}T00:00:00`); const end = new Date(start); end.setDate(end.getDate() + 6); const today = day(new Date());
   const scoped = tasks.filter((task) => task.date >= week && task.date <= day(end));
@@ -16,7 +17,7 @@ export function weeklyScore(tasks: DailyTask[], week = currentWeekKey()) {
   const overdue = scoped.filter((task) => !task.completed && task.date < today).length;
   const firstTrackedDay = scoped.filter((task) => task.date < today).map((task) => task.date).sort()[0];
   const inactiveDates: string[] = [];
-  for (const cursor = new Date(`${firstTrackedDay ?? today}T00:00:00`); day(cursor) < today; cursor.setDate(cursor.getDate() + 1)) {
+  for (const cursor = new Date(`${firstTrackedDay ?? today}T00:00:00`); day(cursor) < today && cursor <= end; cursor.setDate(cursor.getDate() + 1)) {
     if (!scoped.some((task) => task.date === day(cursor) && task.completed)) inactiveDates.push(day(cursor));
   }
   const inactiveDays = inactiveDates.length;
@@ -43,5 +44,5 @@ export async function publishLeaderboardEntry(user: User, profile: PracticeProfi
   await setDoc(doc(getFirebaseFirestore(), "leaderboards", week, "entries", user.uid), { uid: user.uid, username: profile.username, name: profile.name, ...(profile.avatar ? { avatar: profile.avatar } : {}), week, xp, level, ...score, leaderboardTasks, updatedAt: serverTimestamp() }, { merge: true });
 }
 export function watchLeaderboard(week: string, callback: (entries: LeaderboardEntry[]) => void): Unsubscribe {
-  return onSnapshot(collection(getFirebaseFirestore(), "leaderboards", week, "entries"), (snapshot) => callback(snapshot.docs.map((item) => item.data() as LeaderboardEntry).sort((a,b) => b.points-a.points || b.studyMinutes-a.studyMinutes || b.completed-a.completed)));
+  return onSnapshot(collection(getFirebaseFirestore(), "leaderboards", week, "entries"), (snapshot) => callback(resolveWeeklyResults(snapshot.docs.map((item) => ({ ...item.data(), uid: item.id }) as LeaderboardEntry), week)), () => callback([]));
 }

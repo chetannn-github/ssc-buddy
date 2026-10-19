@@ -17,6 +17,8 @@
     "test:active-test": "node --test scripts/test-active-test-session.mjs",
     "test:floating-player": "node --test scripts/test-floating-player.mjs",
     "test:leaderboard-period": "node --test scripts/test-leaderboard-period.mjs",
+    "test:weekly-results": "node --test scripts/test-weekly-results.mjs",
+    "test:heatmap-layout": "node --test scripts/test-heatmap-layout.mjs",
     "format": "prettier --write ."
   },
   "dependencies": {

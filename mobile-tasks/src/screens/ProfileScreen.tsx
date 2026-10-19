@@ -23,8 +23,11 @@ import type { User } from "firebase/auth";
 import { dateKey, formatMinutes, summarizeTasks, type Task } from "../domain/tasks";
 import { LiquidProgressBar, ProfileXpBar } from "../components/ProfileXpBar";
 import { LiquidHeatmapCell } from "../components/LiquidHeatmapCell";
+import { HeatmapTooltip, type HeatmapTooltipData } from "../components/HeatmapTooltip";
 import { nextProfileColorTheme, type HeatmapColorCycle } from "../domain/heatmap-colors";
 import { useHeatmapLiquidMotion } from "../hooks/use-heatmap-liquid-motion";
+import { useWeeklyMedalCounts } from "../hooks/use-weekly-results";
+import { layoutHeatmapMonths } from "../domain/heatmap-layout";
 import { colors } from "../theme";
 import { getXpSummary, levelName, xpForLevel, xpSegmentProgress } from "../domain/xp";
 import { reportVerticalScroll } from "../navigation/bottomNavigationVisibility";
@@ -131,6 +134,7 @@ type Props = {
   sharedRank?: number | null;
   /** Reuses this exact screen for another user's shared, read-only profile. */
   readOnly?: boolean;
+  publicUid?: string;
   onBack?: () => void;
   publicDashboard?: { records?: Record<string, unknown>[]; dailyTasks?: Record<string, unknown>[]; tracker?: Record<string, any> | null };
   publicActivity?: Record<string, number>;
@@ -207,12 +211,11 @@ export function ProfileScreen({
   sharedTracker,
   sharedMockTests = [],
   sharedActivityReady = true,
-  sharedRank = null,
   readOnly = false,
+  publicUid,
   onBack,
   publicDashboard,
   publicActivity,
-  publicRank,
 }: Props) {
   const [colorTheme] = useState(() => nextProfileColorTheme());
   const [profileName, setProfileName] = useState(profileSettings?.name ?? "");
@@ -293,10 +296,7 @@ export function ProfileScreen({
   const [subjectImportError, setSubjectImportError] = useState("");
   const rangeMenuProgress = useRef(new Animated.Value(0)).current;
   const avatarImage = avatarAssets[avatarFile] ?? avatarAssets[avatarFiles[0]];
-  const [leaderboardRank, setLeaderboardRank] = useState<number | null>(() => readOnly ? publicRank ?? null : sharedRank);
-  useEffect(() => {
-    setLeaderboardRank(readOnly ? publicRank ?? null : sharedRank);
-  }, [readOnly, publicRank, sharedRank]);
+  const medalCounts = useWeeklyMedalCounts(readOnly ? publicUid : user?.uid, tasks.map((task) => task.date));
   const rotate = spin.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
   const changeAvatar = () => {
     spin.setValue(0);
@@ -570,11 +570,12 @@ export function ProfileScreen({
           </View>
           <View style={[styles.identity, { marginTop: 9 }]}>
             <Text style={styles.exam}>{examName}</Text>
+
             <View style={styles.nameLine}>
               <Text style={styles.name} numberOfLines={1}>
                 {name}
               </Text>
-              {leaderboardRank !== null && <View style={styles.weeklyRank}>{leaderboardRank <= 3 ? <Image source={rankMedals[leaderboardRank - 1]} style={styles.weeklyRankMedal} /> : <MaterialCommunityIcons name="trophy-outline" size={12} color="#fcd34d" />}<ProfileNumber value={leaderboardRank} prefix="#" style={styles.weeklyRankText} /></View>}
+
               {!readOnly && <View style={styles.profileActions}>
                 <Pressable
                   accessibilityLabel="Edit profile"
@@ -590,8 +591,16 @@ export function ProfileScreen({
                 </Pressable>
               </View>}
             </View>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginVertical: 4 }}>
+              {(["gold", "silver", "bronze"] as const).map((medal, index) => (
+                <View key={medal} accessibilityLabel={`${medal} medals: ${medalCounts[medal]}`} style={{ flexDirection: "row", alignItems: "center", gap: 3, borderRadius: 12, borderWidth: 1, borderColor: "#383838", backgroundColor: "#242424", paddingHorizontal: 6, paddingVertical: 3 }}>
+                  <Image source={rankMedals[index]} style={{ width: 17, height: 17, resizeMode: "contain" }} />
+                  <ProfileNumber value={medalCounts[medal]} prefix="×" style={{ color: "#e4e4e7", fontSize: 10, fontWeight: "800" }} />
+                </View>
+              ))}
+            </View>
             <Pressable accessibilityRole="button" accessibilityLabel="View XP level roadmap" style={styles.xpBlock} onPress={() => setXpTimelineOpen(true)}>
-              <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 3 }}><Text style={styles.xpText}>Lv.</Text><ProfileNumber value={xpSummary.level} style={styles.xpText} /><Text style={styles.xpText}>· {levelName(xpSummary.level)} ·</Text><ProfileNumber value={xpSummary.xp} prefix={xpSummary.xp > 0 ? "+" : ""} suffix=" XP" style={[styles.xpText, xpSummary.xp < 0 && styles.xpNegative]} /></View>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", flexWrap: "wrap", gap: 3 }}><Text style={styles.xpText}>Lv.</Text><ProfileNumber value={xpSummary.level} style={styles.xpText} /><Text style={styles.xpText}>· {levelName(xpSummary.level)} ·</Text><ProfileNumber value={xpSummary.xp} prefix={xpSummary.xp > 0 ? "+" : ""} suffix=" XP" style={[styles.xpText, xpSummary.xp < 0 && styles.xpNegative]} /></View>
               {xpSummary.level > 0 && <ProfileXpBar progress={xpSummary.progress} />}
             </Pressable>
           </View>
@@ -1111,6 +1120,16 @@ function ActivityHeatmap({
     }).start();
   }, [mode, toggleIndicator]);
   const [selectedDay, setSelectedDay] = useState<string>(() => localDayKey(new Date()));
+  const heatmapSectionRef = useRef<View>(null);
+  const tooltipRequest = useRef(0);
+  const [tooltip, setTooltip] = useState<HeatmapTooltipData | null>(null);
+  const dismissTooltip = () => { tooltipRequest.current += 1; setTooltip(null); };
+  useEffect(() => { dismissTooltip(); }, [mode]);
+  useEffect(() => {
+    if (!tooltip) return;
+    const timer = setTimeout(dismissTooltip, 3000);
+    return () => clearTimeout(timer);
+  }, [tooltip]);
   const [trackerActivity, setTrackerActivity] = useState<HeatmapTrackerActivity[]>(
     () => heatmapActivityFromTracker(sharedTracker),
   );
@@ -1181,21 +1200,7 @@ function ActivityHeatmap({
       longest = Math.max(longest, run);
     });
     const maximum = Math.max(1, ...days.map((day) => day.value));
-    const grouped = days.reduce<Array<{ label: string; key: string; days: typeof days }>>(
-      (result, day) => {
-        const monthKey = `${day.date.getFullYear()}-${day.date.getMonth()}`;
-        const last = result.at(-1);
-        if (last?.key === monthKey) last.days.push(day);
-        else
-          result.push({
-            key: monthKey,
-            label: day.date.toLocaleDateString(undefined, { month: "short" }),
-            days: [day],
-          });
-        return result;
-      },
-      [],
-    );
+    const grouped = layoutHeatmapMonths(days);
     return {
       months: grouped,
       total: [...(mode === "tasks" ? taskCounts : counts).values()].reduce((sum, count) => sum + count, 0),
@@ -1317,7 +1322,7 @@ function ActivityHeatmap({
     }, 900);
   };
   return (
-    <View style={styles.heatmapSection}>
+    <View ref={heatmapSectionRef} collapsable={false} style={styles.heatmapSection} onTouchStart={dismissTooltip}>
       <View style={styles.heatmapHeading}>
         {activityEnabled ? <>
           <View style={styles.heatmapFacts}>
@@ -1351,7 +1356,7 @@ function ActivityHeatmap({
         style={styles.heatmapScroll}
         onLayout={(event) => setViewportWidth(event.nativeEvent.layout.width)}
         onContentSizeChange={(width) => setContentWidth(width)}
-        onScrollBeginDrag={revealScrollbar}
+        onScrollBeginDrag={() => { dismissTooltip(); revealScrollbar(); }}
         onScrollEndDrag={hideScrollbarSoon}
         onMomentumScrollEnd={hideScrollbarSoon}
         onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], {
@@ -1360,20 +1365,33 @@ function ActivityHeatmap({
         scrollEventThrottle={16}
       >
         {months.map((month) => (
-          <View key={month.key} style={[styles.month, { width: 76 }]}>
-            <View style={[styles.monthGrid, { height: 74 }]}>
+          <View key={month.key} style={[styles.month, { width: month.columns * 9 + (month.columns - 1) * 3 }]}>
+            <View style={styles.monthGrid}>
               {month.days.map((day) => {
                 const level = day.value === 0 ? 0 : Math.min(4, Math.ceil((day.value / max) * 4));
                 return (
                   <Pressable
                     key={day.key}
+                    accessibilityRole="button"
                     accessibilityLabel={`${day.key}: ${day.value} ${mode === "tasks" ? "tasks completed" : "activities"}`}
-                    onPress={() => setSelectedDay(day.key)}
+                    onPress={(event) => {
+                      setSelectedDay(day.key);
+                      const { pageX, pageY, locationX, locationY } = event.nativeEvent;
+                      const request = ++tooltipRequest.current;
+                      const date = day.date.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+                      const count = mode === "tasks" ? `task${day.value === 1 ? "" : "s"} completed` : `activit${day.value === 1 ? "y" : "ies"}`;
+                      heatmapSectionRef.current?.measureInWindow((x, y, width) => {
+                        if (tooltipRequest.current === request) setTooltip({ text: `${day.value} ${count} on ${date}`, x: pageX - locationX + 4.5 - x, y: pageY - locationY - y, containerWidth: width });
+                      });
+                    }}
                     style={[
                       styles.heatCell,
                       {
                         width: 9,
                         height: 9,
+                        position: "absolute",
+                        left: day.column * 12,
+                        top: day.row * 12,
                         backgroundColor: "#45454f",
                       },
                       selectedDay === day.key && styles.heatSelected,
@@ -1428,6 +1446,7 @@ function ActivityHeatmap({
           <Text style={styles.noActivity}>No activity recorded on this day.</Text>
         )}
       </NativeScrollView>
+      {tooltip && <HeatmapTooltip tooltip={tooltip} />}
     </View>
   );
 }
@@ -1803,11 +1822,8 @@ const styles: Record<string, any> = StyleSheet.create({
   months: { gap: 10, paddingBottom: 4 },
   month: { width: 58 },
   monthGrid: {
-    height: 63,
-    flexDirection: "column",
-    flexWrap: "wrap",
-    alignContent: "flex-start",
-    gap: 3,
+    height: 81,
+    position: "relative",
   },
   heatCell: { width: 8, height: 8, borderRadius: 2 },
   heatSelected: { borderWidth: 1, borderColor: "#fff", transform: [{ scale: 1.15 }] },
@@ -2068,7 +2084,7 @@ const styles: Record<string, any> = StyleSheet.create({
   weeklyRank: { flexDirection: "row", alignItems: "center", gap: 3, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 3, backgroundColor: "rgba(255,255,255,.10)" },
   weeklyRankText: { color: "#d4d4d8", fontSize: 10, fontWeight: "800" },
   weeklyRankMedal: { width: 12, height: 12, resizeMode: "contain" },
-  xpBlock: { marginTop: 4, gap: 4, maxWidth: 190 },
+  xpBlock: { marginTop: 4, gap: 4, width: 240, maxWidth: "100%" },
   xpText: { color: "#a1a1aa", fontSize: 10, fontWeight: "700" },
   xpNegative: { color: "#fca5a5" },
   xpTrack: { height: 4, overflow: "hidden", borderRadius: 4, backgroundColor: "#303030" },

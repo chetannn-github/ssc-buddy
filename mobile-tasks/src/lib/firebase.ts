@@ -18,6 +18,7 @@ import {
 } from "firebase/auth";
 import { Platform } from "react-native";
 import { getXpSummary } from "../domain/xp";
+import { rankWeeklyEntries } from "../domain/weekly-results";
 
 const config = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
@@ -132,7 +133,7 @@ export function watchWeeklyLeaderboardRank(user: User, callback: (rank: number |
   now.setDate(now.getDate() - ((now.getDay() + 6) % 7));
   const week = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   return onSnapshot(collection(getFirebaseFirestore(), "leaderboards", week, "entries"), (snapshot) => {
-    const entries = snapshot.docs.map((item) => item.data()).sort((a: any, b: any) => Number(b.points) - Number(a.points) || Number(b.studyMinutes) - Number(a.studyMinutes) || Number(b.completed) - Number(a.completed));
+    const entries = rankWeeklyEntries(snapshot.docs.map((item) => ({ ...item.data(), uid: item.id })));
     const index = entries.findIndex((entry: any) => entry.uid === user.uid);
     callback(index < 0 ? null : index + 1);
   }, () => callback(null));

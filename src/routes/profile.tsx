@@ -24,6 +24,7 @@ import { StreakLiquidFlame } from "@/components/profile/StreakLiquidFlame";
 import "@/components/profile/liquid-heatmap.css";
 import { useRandomHeatmapFill } from "@/components/profile/use-random-heatmap-fill";
 import { fixedHeatmapColor, heatmapCellColors, nextProfileColorTheme, type HeatmapColorCycle } from "../../mobile-tasks/src/domain/heatmap-colors";
+import { layoutHeatmapMonths } from "../../mobile-tasks/src/domain/heatmap-layout";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -56,7 +57,7 @@ import { useAuthUser } from "@/lib/auth-context";
 import { checkUsernameAvailability, normalizeUsername, saveProfileWithUsername, usernameValidationMessage } from "@/lib/firebase-sync";
 import type { PublicProfile } from "@/lib/firebase-sync";
 import { formatDuration, loadDailyTasks, type DailyTask } from "@/lib/daily-tasks";
-import { currentWeekKey, watchLeaderboard } from "@/lib/leaderboard";
+import { useWeeklyMedalCounts } from "@/lib/weekly-results";
 import { getXpSummary, levelName, xpForLevel, xpSegmentProgress } from "@/lib/xp";
 
 const title = "Profile";
@@ -348,21 +349,7 @@ function ActivityHeatmap({
       maximum,
       details: sourceDetails.get(localDay(date)) ?? [],
     }));
-    const monthGroups = mappedDays.reduce<
-      { key: string; label: string; days: typeof mappedDays }[]
-    >((groups, day) => {
-      const key = `${day.date.getFullYear()}-${day.date.getMonth()}`;
-      const lastGroup = groups.at(-1);
-      if (lastGroup?.key === key) lastGroup.days.push(day);
-      else {
-        groups.push({
-          key,
-          label: day.date.toLocaleDateString(undefined, { month: "short" }),
-          days: [day],
-        });
-      }
-      return groups;
-    }, []);
+    const monthGroups = layoutHeatmapMonths(mappedDays);
 
     return {
       days: mappedDays,
@@ -423,12 +410,12 @@ function ActivityHeatmap({
           >
             <div className="flex w-max items-start gap-2.5 sm:w-full">
               {months.map((month) => (
-                <div key={month.key} className="w-[76px] shrink-0 sm:min-w-0 sm:flex-1 sm:w-auto">
+                <div key={month.key} className="shrink-0 sm:min-w-0 sm:basis-0" style={{ width: month.columns * 13 + (month.columns - 1) * 3, flexGrow: month.columns }}>
                   <div
                     className="grid grid-flow-col grid-rows-7 gap-[3px]"
-                    style={{ gridTemplateColumns: "repeat(5, minmax(0, 1fr))" }}
+                    style={{ gridTemplateColumns: `repeat(${month.columns}, minmax(0, 1fr))` }}
                   >
-                    {month.days.map(({ date, value, maximum }) => {
+                    {month.days.map(({ date, value, maximum, row, column }) => {
                       const intensity =
                         value === 0 ? 0 : Math.min(4, Math.ceil((value / maximum) * 4));
                       const liquidColors = heatmapCellColors(localDay(date), intensity, liquidCycle);
@@ -437,6 +424,7 @@ function ActivityHeatmap({
                         <button
                           type="button"
                           key={localDay(date)}
+                          style={{ gridRow: row + 1, gridColumn: column + 1 }}
                           onClick={() => setSelectedDay(localDay(date))}
                           onMouseEnter={(event) => {
                             const box = event.currentTarget.getBoundingClientRect();
@@ -870,20 +858,12 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
   const [profileSettingsOpen, setProfileSettingsOpen] = useState(false);
   const [importMessage, setImportMessage] = useState("");
   const [promptCopied, setPromptCopied] = useState(false);
-  const [leaderboardRank, setLeaderboardRank] = useState<number | null>(null);
   const [xpTimelineOpen, setXpTimelineOpen] = useState(false);
   const importFileRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const authUser = useAuthUser();
-
-  useEffect(() => {
-    const uid = readOnly ? publicProfile?.uid : authUser?.uid;
-    if (!uid) { setLeaderboardRank(null); return; }
-    return watchLeaderboard(currentWeekKey(), (entries) => {
-      const index = entries.findIndex((entry) => entry.uid === uid);
-      setLeaderboardRank(index >= 0 ? index + 1 : null);
-    });
-  }, [authUser?.uid, publicProfile?.uid, readOnly]);
+  const resultUid = readOnly ? publicProfile?.uid : authUser?.uid;
+  const medalCounts = useWeeklyMedalCounts(resultUid, dailyTasks.map((task) => task.date));
 
   useEffect(() => {
     if (readOnly) {
@@ -1187,8 +1167,9 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
                   {tracker.meta.examName}
                 </p>
               )}
+
               <div className="mt-0.5 flex items-center justify-center gap-1 sm:justify-start">
-                <h2 className="truncate text-xl font-semibold text-zinc-50">{displayName}</h2>{leaderboardRank !== null && <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-zinc-300">{leaderboardRank <= 3 ? <img src={["/gold-medal.png", "/silver-medal.png", "/bronze-medal.png"][leaderboardRank - 1]} alt="" className="h-3 w-3 object-contain" /> : <Trophy className="h-3 w-3 text-amber-300" />}#{leaderboardRank}</span>}
+                <h2 className="truncate text-xl font-semibold text-zinc-50">{displayName}</h2>
                 {readOnly && (
                   <span
                     title={`${consistencyStreak}-day consistency streak`}
@@ -1208,6 +1189,14 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
                 >
                   <Pencil className="h-3.5 w-3.5" />
                 </Button>}
+              </div>
+              <div className="my-1 flex items-center justify-center gap-1.5 sm:justify-start" aria-label="Weekly medals">
+                {(["gold", "silver", "bronze"] as const).map((medal) => (
+                  <span key={medal} title={`${medal}: ${medalCounts[medal]} weekly medals`} aria-label={`${medal} medals: ${medalCounts[medal]}`} className="inline-flex items-center gap-0.5 rounded-full border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-zinc-200">
+                    <img src={`/${medal}-medal.png`} alt="" className="h-4 w-4 object-contain" />
+                    <RollingNumber value={medalCounts[medal]} prefix="×" />
+                  </span>
+                ))}
               </div>
               <button type="button" onClick={() => setXpTimelineOpen(true)} className="mt-1 w-full max-w-52 text-center outline-none sm:text-left">
                 <span className={`text-xs font-semibold ${xpSummary.xp > 0 ? "text-emerald-300" : xpSummary.xp < 0 ? "text-red-300" : "text-zinc-400"}`}>Lv. <RollingNumber value={xpSummary.level} /> · {levelName(xpSummary.level)} · <RollingNumber value={xpSummary.xp} prefix={xpSummary.xp > 0 ? "+" : ""} suffix=" XP" /></span>

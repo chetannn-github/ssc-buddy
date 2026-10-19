@@ -4,11 +4,19 @@ import { useEffect, useState } from "react";
 import { RollingNumber } from "@/components/ui/rolling-number";
 import { AppShell } from "@/components/layout/AppShell";
 import { useAuthUser } from "@/lib/auth-context";
-import { currentWeekKey, publishLeaderboardEntry, watchLeaderboard, type LeaderboardEntry } from "@/lib/leaderboard";
+import { publishLeaderboardEntry, watchLeaderboard, type LeaderboardEntry } from "@/lib/leaderboard";
 import { loadDailyTasks } from "@/lib/daily-tasks";
 import { loadPracticeProfile } from "@/lib/profile";
+import { useLeaderboardWeek, validLeaderboardWeek } from "@/lib/weekly-results";
+import { WeeklyResultControls } from "@/components/WeeklyResultControls";
 
-export const Route = createFileRoute("/leaderboard")({ component: Leaderboard });
+export const Route = createFileRoute("/leaderboard")({
+  validateSearch: (search: Record<string, unknown>): { week?: string } => {
+    const week = validLeaderboardWeek(search["week"]);
+    return week ? { week } : {};
+  },
+  component: Leaderboard,
+});
 
 function xpMeta(entry: LeaderboardEntry) {
   const xp = Number(entry.xp) || 0;
@@ -21,29 +29,33 @@ function Leaderboard() {
   const navigate = useNavigate();
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [isSyncing, setIsSyncing] = useState(true);
-  const week = currentWeekKey();
+  const currentWeek = useLeaderboardWeek();
+  const search = Route.useSearch();
+  const week = search.week ?? currentWeek;
 
   useEffect(() => {
     if (!user) return;
     const profile = loadPracticeProfile();
     if (profile?.username) void publishLeaderboardEntry(user, profile, loadDailyTasks()).catch(() => undefined);
-  }, [user]);
+  }, [user, currentWeek]);
   useEffect(() => {
     setIsSyncing(true);
+    setEntries([]);
     return watchLeaderboard(week, (nextEntries) => { setEntries(nextEntries); setIsSyncing(false); });
-  }, [week]);
+  }, [week, currentWeek]);
 
   return <AppShell title="Weekly leaderboard"><div className="leaderboard-page profile-dark -mx-4 -my-6 min-h-[calc(100vh-4rem)] bg-[#121212] px-4 py-6 text-zinc-100 sm:-mx-6 sm:px-6"><div className="mx-auto max-w-3xl space-y-2">
+    <WeeklyResultControls week={week} currentWeek={currentWeek} onChange={(week) => void navigate({ to: "/leaderboard", search: week === currentWeek ? {} : { week } })} />
     {isSyncing ? <div className="flex min-h-48 flex-col items-center justify-center gap-3 text-sm text-zinc-500"><LoaderCircle className="h-5 w-5 animate-spin text-emerald-400" /><span>Syncing leaderboard...</span></div> : <>{entries.map((entry, index) => {
       const medal = ["/gold-medal.png", "/silver-medal.png", "/bronze-medal.png"][index];
       const points = Number(entry.points) || 0;
       const { xp, level } = xpMeta(entry);
-      return <button key={entry.uid} onClick={() => void navigate({ to: "/weekly-stats/$username", params: { username: entry.username } })} className="flex w-full items-center gap-3 rounded-xl border border-white/10 bg-white/[0.025] px-4 py-3 text-left transition-colors hover:bg-white/[0.07]">
+      return <button key={entry.uid} onClick={() => void navigate({ to: "/weekly-stats/$username", params: { username: entry.username }, search: { week } })} className="flex w-full items-center gap-3 rounded-xl border border-white/10 bg-white/[0.025] px-4 py-3 text-left transition-colors hover:bg-white/[0.07]">
         <span className="grid w-7 place-items-center">{medal ? <img src={medal} alt={`Rank ${index + 1}`} className="h-6 w-6 object-contain" /> : <span className="font-mono text-sm text-zinc-500"><RollingNumber value={index + 1} prefix="#" /></span>}</span>
         <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full bg-white/10 text-xs font-semibold text-zinc-300">{entry.avatar ? <img src={`/avatars/${encodeURIComponent(entry.avatar)}`} className="h-full w-full object-cover" /> : entry.name.slice(0, 1).toUpperCase()}</span>
         <div className="min-w-0 flex-1"><p className="truncate font-medium">{entry.uid === user?.uid ? "You" : entry.name}</p><p className="truncate text-xs text-zinc-500">Lv. <RollingNumber value={level} /> · <RollingNumber value={xp} prefix={xp > 0 ? "+" : ""} suffix=" XP" /></p></div>
         <strong className={`font-mono ${points > 0 ? "text-emerald-300" : points < 0 ? "text-red-300" : "text-zinc-500"}`}><RollingNumber value={points} prefix={points > 0 ? "+" : ""} suffix=" pts" /></strong>
       </button>;
-    })}{!entries.length && <p className="py-12 text-center text-sm text-zinc-500">No activity this week yet.</p>}</>}
+    })}{!entries.length && <p className="py-12 text-center text-sm text-zinc-500">{week === currentWeek ? "No activity this week yet." : "No saved results for this week."}</p>}</>}
   </div></div></AppShell>;
 }
