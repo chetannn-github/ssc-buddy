@@ -1,3 +1,5 @@
+import { musicPlaylistName as playlistName, musicQueueFor, initialMusicSelection } from "../domain/music-queue";
+import { nativeMusic, useNativeMusic, musicCommand } from "../lib/native-music";
 import { musicRingProgress, continueMusicSeek } from "../domain/music-seek";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { User } from "firebase/auth";
@@ -16,7 +18,6 @@ import { subscribeBottomNavigation } from "../navigation/bottomNavigationVisibil
 import { patchCloudPreferences, watchCloudPreferences } from "../lib/firebase";
 
 export type MediaMode = "video" | "music" | null;
-const playlistName = (track: string) => decodeURIComponent(track).split("/").slice(0, -1).join(" / ") || "Music";
 /** Keep liked media first, while preserving the source order inside each group. */
 const prioritizeLikes = (items: string[], likes: Set<string>) => {
   return [...items].sort((left, right) => Number(likes.has(right)) - Number(likes.has(left)));
@@ -174,7 +175,9 @@ function MusicPlayer({ user, onClose, openRequest }: { user: User | null; onClos
   const [likes, toggleLike, likesReady] = useCloudLikes(user, "ssc-buddy-liked-music");
   const initialPickApplied = useRef(false);
   const likedOrderApplied = useRef(false);
-  const [repeat, setRepeat] = useState(false);
+  const [fallbackRepeat, setRepeat] = useState(false);
+  const native = useNativeMusic();
+  const repeat = nativeMusic ? native.status.repeat : fallbackRepeat;
   const [selectedPlaylist, setSelectedPlaylist] = useState(() => playlistName(musicTracks[0] ?? ""));
   const [minimized, setMinimized] = useState(false);
   const [miniCorner, setMiniCorner] = useState<PlayerCorner>("bottom-right");
@@ -188,8 +191,14 @@ function MusicPlayer({ user, onClose, openRequest }: { user: User | null; onClos
   const seekTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [audioModeReady, setAudioModeReady] = useState(false);
   const source = musicSource(musicTracks[index] ?? musicTracks[0]);
-  const player = useAudioPlayer(null, { updateInterval: 500 });
-  const status = useAudioPlayerStatus(player);
+  const fallbackPlayer = useAudioPlayer(null, { updateInterval: 500 });
+  const fallbackStatus = useAudioPlayerStatus(fallbackPlayer);
+  const player = useMemo(() => nativeMusic ? {
+    play: () => musicCommand(nativeMusic!.play()),
+    pause: () => musicCommand(nativeMusic!.pause()),
+    seekTo: (seconds: number) => nativeMusic!.seekTo(seconds),
+  } : fallbackPlayer, [fallbackPlayer]);
+  const status = nativeMusic ? native.status : fallbackStatus;
   const [isForeground, setIsForeground] = useState(AppState.currentState === "active");
   const advancedTrackRef = useRef<string | null>(null);
   const artworkSpin = useRef(new Animated.Value(0)).current;
@@ -207,7 +216,7 @@ function MusicPlayer({ user, onClose, openRequest }: { user: User | null; onClos
   const discSize = 112;
   const cover = musicCover(activeTrack);
   // Expo Go cannot include this project's custom foreground media service.
-  // A development/standalone build receives the service from the expo-audio plugin.
+  // A development/standalone build links the local BuddyMusic Android module.
   const supportsBackgroundControls = Constants.appOwnership !== AppOwnership.Expo;
   useEffect(() => {
     if (!likesReady || likedOrderApplied.current) return;
@@ -216,27 +225,37 @@ function MusicPlayer({ user, onClose, openRequest }: { user: User | null; onClos
     setOrderReady(true);
   }, [likes, likesReady]);
   useEffect(() => {
-    if (!orderReady || initialPickApplied.current) return;
+    if (!orderReady || initialPickApplied.current || (nativeMusic && !native.ready)) return;
     initialPickApplied.current = true;
-    const initial = orderedTracks[0];
+    const selection = initialMusicSelection(orderedTracks, nativeMusic ? native.status.trackId : null);
+    const initial = selection.track;
     if (!initial) return;
     const nextIndex = musicTracks.indexOf(initial);
     if (nextIndex >= 0) {
-      setIndex(nextIndex);
+      if (nativeMusic && !selection.restore) chooseTrack(nextIndex);
+      else setIndex(nextIndex);
       setSelectedPlaylist(playlistName(initial));
     }
-  }, [orderReady, orderedTracks]);
+  }, [orderReady, orderedTracks, native.ready]);
+  useEffect(() => {
+    if (!nativeMusic || !native.status.trackId) return;
+    const next = musicTracks.indexOf(native.status.trackId);
+    if (next >= 0) setIndex(next);
+  }, [native.status.trackId]);
   useEffect(() => { if (openRequest) setMinimized(false); }, [openRequest]);
+  useEffect(() => () => { if (nativeMusic) void nativeMusic.pause().catch(() => undefined); }, []);
   useEffect(() => subscribeBottomNavigation(setBottomNavVisible), []);
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (nextState) => setIsForeground(nextState === "active"));
     return () => subscription.remove();
   }, []);
   useEffect(() => {
-    try { player.replace(source); player.play(); } catch {}
-  }, [player, source]);
-  useEffect(() => { player.loop = repeat; }, [player, repeat]);
+    if (nativeMusic) return;
+    try { fallbackPlayer.replace(source); fallbackPlayer.play(); } catch {}
+  }, [fallbackPlayer, source]);
+  useEffect(() => { if (!nativeMusic) fallbackPlayer.loop = repeat; }, [fallbackPlayer, repeat]);
   useEffect(() => {
+    if (nativeMusic) return;
     let active = true;
     void setAudioModeAsync({ playsInSilentMode: true, interruptionMode: "doNotMix", shouldPlayInBackground: supportsBackgroundControls })
       .then(() => { if (active) setAudioModeReady(true); })
@@ -250,7 +269,7 @@ function MusicPlayer({ user, onClose, openRequest }: { user: User | null; onClos
     // but skip this unstable Android media-session path.
     if (Platform.OS === "android" || !supportsBackgroundControls || !audioModeReady) return;
     try {
-      player.setActiveForLockScreen(true, {
+      fallbackPlayer.setActiveForLockScreen(true, {
         title: trackTitle(activeTrack), artist: "SSC Buddy", albumTitle: "Motivation", artworkUrl: cover ? Image.resolveAssetSource(cover).uri : undefined,
       }, { showSeekBackward: true, showSeekForward: true });
     } catch {}
@@ -276,17 +295,29 @@ function MusicPlayer({ user, onClose, openRequest }: { user: User | null; onClos
     spinOnce();
     return () => { artworkAnimation.current?.stop(); };
   }, [artworkSpin, status.playing]);
+  function chooseTrack(nextIndex: number) {
+    const track = musicTracks[nextIndex];
+    if (!track) return;
+    if (nativeMusic) {
+      if (!native.ready) return;
+      const queue = musicQueueFor(orderedTracks, track);
+      if (!queue) return;
+      musicCommand(nativeMusic.setQueue(JSON.stringify(queue.tracks.map((item) => ({ id: item, url: musicSource(item), title: trackTitle(item), album: playlistName(item), artwork: musicCover(item)?.uri }))), queue.index));
+    }
+    setIndex(nextIndex);
+  }
+  const closePlayer = () => { if (nativeMusic) musicCommand(nativeMusic.stop()); onClose(); };
   const shift = (amount: number) => {
+    if (nativeMusic) { musicCommand(amount > 0 ? nativeMusic.next() : nativeMusic.previous()); return; }
     const currentTrackIndex = playingPlaylistTracks.indexOf(activeTrack);
     if (currentTrackIndex < 0 || !playingPlaylistTracks.length) return;
     const nextTrack = playingPlaylistTracks[(currentTrackIndex + amount + playingPlaylistTracks.length) % playingPlaylistTracks.length];
     const nextIndex = musicTracks.indexOf(nextTrack);
     if (nextIndex >= 0) setIndex(nextIndex);
   };
-  // Keep this intentionally foreground-only. The Expo Audio fallback owns no
-  // Android media queue, so background progression belongs to a future native
-  // implementation rather than risking another app-start dependency crash.
+  // Native Android playback advances inside the service, even with JS suspended.
   useEffect(() => {
+    if (nativeMusic) return;
     if (!status.didJustFinish) { advancedTrackRef.current = null; return; }
     if (!isForeground || repeat || advancedTrackRef.current === activeTrack) return;
     advancedTrackRef.current = activeTrack;
@@ -382,15 +413,16 @@ function MusicPlayer({ user, onClose, openRequest }: { user: User | null; onClos
           <MusicLiquidRing size={32} progress={progress} active={status.playing && isForeground} stroke={2} />
         </Pressable>        <Pressable accessibilityRole="button" accessibilityLabel="Expand music player" style={styles.miniText} onPress={() => setMinimized(false)}><Text numberOfLines={1} style={styles.miniTitle}>{trackTitle(musicTracks[index] ?? "")}</Text></Pressable>
 
-        <Pressable accessibilityRole="button" accessibilityLabel="Close music player" style={styles.miniClose} onPress={onClose}><MaterialCommunityIcons name="close" size={16} color={colors.muted} /></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="Close music player" style={styles.miniClose} onPress={closePlayer}><MaterialCommunityIcons name="close" size={16} color={colors.muted} /></Pressable>
     </FloatingMusicPlayer>;
   }
   return <Modal transparent visible animationType="fade" onRequestClose={() => setMinimized(true)}><Pressable style={[styles.backdrop, { padding: 16 }]} onPress={() => setMinimized(true)}><Pressable style={[styles.musicCard, { height: "63%", maxHeight: "63%", padding: 15 }]} onPress={() => undefined}>
-    <View style={styles.musicHead}><View /><View style={styles.musicHeaderActions}><Pressable onPress={() => setMinimized(true)} hitSlop={9}><MaterialCommunityIcons name="arrow-collapse" size={20} color={colors.muted} /></Pressable><Pressable onPress={onClose} hitSlop={9}><MaterialCommunityIcons name="close" size={21} color={colors.muted} /></Pressable></View></View>
+    <View style={styles.musicHead}><View /><View style={styles.musicHeaderActions}><Pressable onPress={() => setMinimized(true)} hitSlop={9}><MaterialCommunityIcons name="arrow-collapse" size={20} color={colors.muted} /></Pressable><Pressable onPress={closePlayer} hitSlop={9}><MaterialCommunityIcons name="close" size={21} color={colors.muted} /></Pressable></View></View>
     <View ref={discRef} collapsable={false} onLayout={() => discRef.current?.measureInWindow((x, y) => { discOrigin.current = { x, y }; })} style={[styles.disc, { width: discSize, height: discSize, marginTop: 3 }]} {...discPan.panHandlers}><Animated.View style={[styles.artwork, { width: 90, height: 90, borderRadius: 45, transform: [{ rotate: rotation }] }]}>{cover ? <Image source={cover} style={styles.coverImage} /> : <MaterialCommunityIcons name="music" size={34} color={colors.accent} />}</Animated.View><ProgressRing size={discSize} progress={progress} active={status.playing && isForeground} /></View>
     <Text style={styles.songTitle} numberOfLines={1}>{trackTitle(musicTracks[index] ?? "")}</Text>
-    <View style={styles.controls}><Pressable style={styles.round} onPress={() => toggleLike(activeTrack)}><MaterialCommunityIcons name={liked ? "heart" : "heart-outline"} size={21} color={liked ? "#fb7185" : colors.text} /></Pressable><Pressable style={[styles.round, repeat && { backgroundColor: "#284d7f" }]} onPress={() => setRepeat((value) => !value)}><MaterialCommunityIcons name="repeat" size={20} color={colors.text} /></Pressable><Pressable style={styles.round} onPress={() => shift(-1)}><MaterialCommunityIcons name="chevron-left" size={28} color={colors.text} /></Pressable><Pressable style={styles.round} onPress={() => shift(1)}><MaterialCommunityIcons name="chevron-right" size={28} color={colors.text} /></Pressable></View>
-    <View style={styles.playlistHeader}><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.playlistChips}>{playlists.map((playlist) => <Pressable key={playlist} onPress={() => setSelectedPlaylist(playlist)} style={[styles.playlistChip, playlist === selectedPlaylist && styles.playlistChipActive]}><Text numberOfLines={1} style={[styles.playlistChipText, playlist === selectedPlaylist && styles.playlistChipTextActive]}>{playlist}</Text></Pressable>)}</ScrollView></View><ScrollView nestedScrollEnabled showsVerticalScrollIndicator style={[styles.playlist, { marginTop: 5 }]} contentContainerStyle={styles.playlistContent}>{visibleTracks.map((track) => { const trackIndex = musicTracks.indexOf(track); return <Pressable key={track} onPress={() => setIndex(trackIndex)} style={[styles.track, { paddingVertical: 5 }, trackIndex === index && styles.trackActive]}><Text numberOfLines={1} style={[styles.trackText, trackIndex === index && styles.trackTextActive]}>{trackTitle(track)}</Text></Pressable>; })}</ScrollView>
+    {nativeMusic && native.status.error && <Text style={{ color: "#fb7185", textAlign: "center" }}>Playback failed. Select a song to retry.</Text>}
+    <View style={styles.controls}><Pressable style={styles.round} onPress={() => toggleLike(activeTrack)}><MaterialCommunityIcons name={liked ? "heart" : "heart-outline"} size={21} color={liked ? "#fb7185" : colors.text} /></Pressable><Pressable style={[styles.round, repeat && { backgroundColor: "#284d7f" }]} onPress={() => nativeMusic ? musicCommand(nativeMusic.setRepeat(!repeat)) : setRepeat((value) => !value)}><MaterialCommunityIcons name={repeat ? "repeat-once" : "repeat"} size={20} color={colors.text} /></Pressable><Pressable style={styles.round} onPress={() => shift(-1)}><MaterialCommunityIcons name="chevron-left" size={28} color={colors.text} /></Pressable><Pressable style={styles.round} onPress={() => shift(1)}><MaterialCommunityIcons name="chevron-right" size={28} color={colors.text} /></Pressable></View>
+    <View style={styles.playlistHeader}><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.playlistChips}>{playlists.map((playlist) => <Pressable key={playlist} onPress={() => setSelectedPlaylist(playlist)} style={[styles.playlistChip, playlist === selectedPlaylist && styles.playlistChipActive]}><Text numberOfLines={1} style={[styles.playlistChipText, playlist === selectedPlaylist && styles.playlistChipTextActive]}>{playlist}</Text></Pressable>)}</ScrollView></View><ScrollView nestedScrollEnabled showsVerticalScrollIndicator style={[styles.playlist, { marginTop: 5 }]} contentContainerStyle={styles.playlistContent}>{visibleTracks.map((track) => { const trackIndex = musicTracks.indexOf(track); return <Pressable key={track} onPress={() => chooseTrack(trackIndex)} style={[styles.track, { paddingVertical: 5 }, trackIndex === index && styles.trackActive]}><Text numberOfLines={1} style={[styles.trackText, trackIndex === index && styles.trackTextActive]}>{trackTitle(track)}</Text></Pressable>; })}</ScrollView>
   </Pressable></Pressable></Modal>;
 }
 

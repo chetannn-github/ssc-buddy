@@ -18,8 +18,6 @@ function Timers() {
   const user = useAuthUser();
   const { timers, loading, error, retry, save, remove } = useDateTimers(user?.uid);
   const [enabled, setEnabled] = useState(() => loadPracticeProfile()?.timersEnabled !== false);
-  const [editMode, setEditMode] = useState(false);
-  useEffect(() => setEditMode(false), [user?.uid]);
   const [now, setNow] = useState(Date.now);
   const [editing, setEditing] = useState<DateTimer | "new" | null>(null);
   const [deleting, setDeleting] = useState<DateTimer | null>(null);
@@ -48,12 +46,11 @@ function Timers() {
   const sorted = [...timers].sort((a, b) => Number(dateCountdown(a.targetAt, now).reached) - Number(dateCountdown(b.targetAt, now).reached) || Date.parse(a.targetAt) - Date.parse(b.targetAt));
   return <AppShell title="Timers"><div className="-mx-4 -my-6 min-h-[calc(100vh-4rem)] bg-[#121212] px-4 py-6 text-zinc-100 sm:-mx-6 sm:px-6"><main className="mx-auto max-w-4xl">
     <div className="mb-6 flex items-center justify-between gap-3"><div><p className="text-xs font-semibold tracking-widest text-zinc-500 uppercase">Important dates</p><h1 className="mt-1 text-2xl font-semibold">Timers</h1></div>{enabled && <Button className="bg-[#60a5fa] text-[#081a31] hover:bg-[#93c5fd]" onClick={() => open()} disabled={!user}><Plus className="h-4 w-4" />Add timer</Button>}</div>
-    {enabled && user && timers.length > 0 && <div className="mb-3 flex justify-end"><Button variant="ghost" size="sm" disabled={busy} aria-pressed={editMode} onClick={() => setEditMode(value => !value)}><Pencil className="h-4 w-4" />{editMode ? "Done" : "Edit tasks"}</Button></div>}
     {!enabled ? <div className="rounded-xl border border-white/10 bg-white/[.025] p-6 text-center"><p className="text-zinc-300">Timers are turned off.</p><Link to="/profile" className="mt-2 inline-block text-sm text-sky-300">Enable Timers in Edit Profile → Settings</Link></div> : !user ? <p className="py-12 text-center text-zinc-400">Sign in to save your important dates.</p> : loading ? <div className="flex justify-center py-16"><LoaderCircle className="h-6 w-6 animate-spin text-sky-300" /></div> : error ? <div className="text-center"><p className="text-red-300">{error}</p><Button variant="outline" className="mt-3" onClick={retry}>Try again</Button></div> : sorted.length ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{sorted.map((timer) => {
       const dial = timerDial(timer, now);
       const color = timerColors.get(timer.id)!;
       return <article key={timer.id} className="rounded-2xl border border-white/10 bg-[#151515] p-2.5 relative">
-        {editMode && <button type="button" disabled={busy} aria-label={`Edit ${timer.title}`} onClick={() => open(timer)} className="absolute right-2 top-2 z-10 rounded-lg p-2 text-zinc-400 hover:bg-white/10 hover:text-white"><Pencil className="h-4 w-4" /></button>}
+        <button type="button" disabled={busy} aria-label={`Edit ${timer.title}`} onClick={() => open(timer)} className="absolute right-2 top-2 z-10 rounded-lg p-2 text-zinc-400 hover:bg-white/10 hover:text-white"><Pencil className="h-4 w-4" /></button>
         <TimerLiquidDial liquidProgress={0.18} dial={dial} color={color} size={136} />
         <h2 className="mt-1 break-words text-center text-sm font-semibold">{timer.title}</h2>
         <p className="mt-1 text-center text-xs text-zinc-400">{new Date(timer.targetAt).toLocaleDateString(undefined, { dateStyle: "medium" })}</p>

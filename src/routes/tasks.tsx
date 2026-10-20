@@ -55,10 +55,10 @@ function DailyTasks() {
   const [tasks, setTasks] = useState<DailyTask[]>(() => loadDailyTasks());
   const [calendarDay, setCalendarDay] = useState(() => todayKey());
   const [syncUser, setSyncUser] = useState<User | null>(null);
-  const [editingTasks, setEditingTasks] = useState(false);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("tasks");
   const [taskDay, setTaskDay] = useState<"today" | "tomorrow">("today");
-  useEffect(() => setEditingTasks(false), [taskDay, activeTab]);
+  useEffect(() => setSelectedTaskId(null), [taskDay, activeTab]);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<DailyTask | null>(null);
   const [completing, setCompleting] = useState<DailyTask | null>(null);
@@ -242,7 +242,6 @@ function DailyTasks() {
             <Plus /> Add task
           </Button>
         </div>
-        {activeTab === "tasks" && <div className="mt-3 flex justify-end"><Button variant="ghost" size="sm" aria-pressed={editingTasks} onClick={() => setEditingTasks(value => !value)}>{editingTasks ? <Check /> : <Pencil />}{editingTasks ? "Done" : "Edit tasks"}</Button></div>}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-7">
           <div className="flex flex-wrap items-center gap-3">
             <TabsList className="relative grid h-auto grid-cols-3 bg-white/5 p-1">
@@ -399,7 +398,8 @@ function DailyTasks() {
                     key={task.id}
                     task={task}
                     grouped
-                    editable={editingTasks}
+                    editable={selectedTaskId === task.id}
+                    onSelect={() => setSelectedTaskId(value => value === task.id ? null : task.id)}
                     points={taskPoints.get(task.id) ?? 0}
                     onComplete={setCompleting}
                     onReopen={reopen}
@@ -626,6 +626,7 @@ function TaskRow({
   onDelete,
   readOnly = false,
   editable = false,
+  onSelect,
   grouped = false,
 }: {
   task: DailyTask;
@@ -636,24 +637,26 @@ function TaskRow({
   onDelete: () => void;
   readOnly?: boolean;
   editable?: boolean;
+  onSelect?: () => void;
   grouped?: boolean;
 }) {
   return (
     <div
-      role={readOnly || !editable ? undefined : "button"}
-      tabIndex={readOnly || !editable ? undefined : 0}
-      onClick={readOnly || !editable ? undefined : onEdit}
+      role={readOnly ? undefined : "button"}
+      tabIndex={readOnly ? undefined : 0}
+      aria-expanded={readOnly ? undefined : editable}
+      onClick={readOnly ? undefined : onSelect}
       onKeyDown={
-        readOnly || !editable
+        readOnly
           ? undefined
           : (event) => {
-              if (event.key === "Enter" || event.key === " ") {
+              if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
                 event.preventDefault();
-                onEdit();
+                onSelect?.();
               }
             }
       }
-      className={`flex items-center gap-3 py-2.5 ${grouped ? "px-0" : "rounded-lg border border-white/10 bg-[#1b1b1b] px-3"} ${readOnly || !editable ? "" : "cursor-pointer transition-colors hover:bg-white/[0.035] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-400/60"}`}
+      className={`flex items-center gap-3 py-2.5 ${grouped ? "px-0" : "rounded-lg border border-white/10 bg-[#1b1b1b] px-3"} ${readOnly ? "" : "cursor-pointer transition-colors hover:bg-white/[0.035] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-400/60"}`}
     >
       <button
         type="button"

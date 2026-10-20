@@ -508,6 +508,7 @@ export default function App() {
   useEffect(() => {
     if (!tasksLoaded) return;
     const openCompletionFromWidget = (url: string | null) => {
+      if (url?.startsWith("sscbuddy://music")) { setMediaMode("music"); setMusicOpenRequest((value) => value + 1); return; }
       if (url?.startsWith("sscbuddy://timers")) {
         setAppTab("timers");
         if (url.startsWith("sscbuddy://timers/widget")) setTimerWidgetRequest(value => value + 1);
