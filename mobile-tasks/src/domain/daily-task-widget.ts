@@ -11,3 +11,8 @@ export function dailyTaskWidgetModel(tasks: Task[], options: DailyTaskWidgetOpti
   return { today, selected, dates, dailyTasks, due, summary: summarizeTasks(dailyTasks),
     visibleTasks: options.dueOnly ? due : dailyTasks, readOnly: selected !== today };
 }
+
+/** A delayed launcher retry must not complete a task or edit a previous day. */
+export function canReopenDailyWidgetTask(task: { date?: unknown; completed?: unknown }, today = dateKey()) {
+  return task.date === today && task.completed === true;
+}

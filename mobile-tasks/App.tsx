@@ -232,6 +232,8 @@ export default function App() {
   const [celebratedStreak, setCelebratedStreak] = useState<number | null>(null);
   const [celebratedLevel, setCelebratedLevel] = useState<number | null>(null);
   const [profileSettings, setProfileSettings] = useState<PracticeProfile | null>(null);
+  const widgetAppearance = useRef({ rank: widgetRank, accent: profileSettings?.accentColor });
+  widgetAppearance.current = { rank: widgetRank, accent: profileSettings?.accentColor };
   useAppAccent();
   useEffect(() => { setAppAccent(profileSettings?.accentColor); }, [profileSettings?.accentColor]);
   const [appTab, setAppTab] = useState<TabKey>("tasks");
@@ -305,7 +307,7 @@ export default function App() {
       const { loadDailyTaskWidgetOptions } = require("./src/widgets/daily-task-widget-store");
       void requestWidgetUpdate({
         widgetName: "DailyTasksWidget",
-        renderWidget: async (info: { widgetId: number; height: number }) => renderDailyTasksWidget(next, widgetRank, profileSettings?.accentColor, { ...await loadDailyTaskWidgetOptions(info.widgetId, user?.uid), height: info.height }),
+        renderWidget: async (info: { widgetId: number; height: number }) => renderDailyTasksWidget(next, widgetAppearance.current.rank, widgetAppearance.current.accent, { ...await loadDailyTaskWidgetOptions(info.widgetId, user?.uid), height: info.height }),
       });
       const { renderQuickRecallWidget } = require("./src/widgets/QuickRecallWidget");
       void requestWidgetUpdate({
@@ -499,7 +501,7 @@ export default function App() {
         const requestedDate = /[?&]date=(\d{4}-\d{2}-\d{2})(?:&|$)/.exec(url)?.[1];
         if (requestedDate && requestedDate < dateKey()) setTaskHistoryDate(requestedDate);
         else if (requestedDate === dateKeyFromOffset(1)) setTaskDay("tomorrow");
-        if (url.startsWith("sscbuddy://tasks/new")) openNew();
+        if (url.startsWith("sscbuddy://tasks/new")) { openNew(); setSchedule("today"); }
         return;
       }
       const taskId = /[?&]taskId=([^&]+)/.exec(url)?.[1];

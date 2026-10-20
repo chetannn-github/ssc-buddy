@@ -1,3 +1,4 @@
+import { canReopenDailyWidgetTask } from "../domain/daily-task-widget";
 import { mergeQuestionDeletions } from "../domain/question-deletion";
 import { appendRecallQuestionSnapshots, type RecallQuestionInput } from "../domain/quick-recall-solutions";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -298,7 +299,8 @@ export async function toggleTaskFromWidget(user: User, taskId: string): Promise<
     const snapshot = await transaction.get(reference);
     if (!snapshot.exists()) return null;
     const current = { id: snapshot.id, ...snapshot.data() } as CloudTask;
-    const completed = !Boolean(current.completed);
+    if (!canReopenDailyWidgetTask(current)) return null;
+    const completed = false;
     const update = {
       completed,
       completedAt: completed ? new Date().toISOString() : null,
