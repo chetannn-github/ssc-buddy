@@ -1,3 +1,4 @@
+import { createThemedStyles } from "../theme";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Google from "expo-auth-session/providers/google";
 import { ActivityIndicator, Image, ImageBackground, Platform, Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
@@ -193,7 +194,7 @@ function Brand() {
   return <View style={styles.brand}><Image source={authImage} style={styles.brandIcon} /><Text style={styles.brandText}>SSC Buddy</Text></View>;
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles({
   page: { flex: 1, backgroundColor: colors.background }, pageWide: { flexDirection: "row" },
   mobileBackground: { ...StyleSheet.absoluteFill, width: "100%", height: "100%", opacity: 0.13 },
   mobileScrim: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(16,16,16,0.73)" },

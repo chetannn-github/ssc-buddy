@@ -1,3 +1,4 @@
+import { createThemedStyles } from "../theme";
 import { useEffect, useId, useState } from "react";
 import { AccessibilityInfo, StyleSheet } from "react-native";
 import Svg, { Circle, Defs, G, LinearGradient, Mask, Rect, Stop } from "react-native-svg";
@@ -117,4 +118,4 @@ export function MusicLiquidRing({
   );
 }
 
-const styles = StyleSheet.create({ ring: { position: "absolute", top: 0, left: 0 } });
+const styles = createThemedStyles({ ring: { position: "absolute", top: 0, left: 0 } });

@@ -1,3 +1,5 @@
+import { useHabits } from "@/lib/habits";
+import { useHabitReminders } from "@/lib/habit-reminders";
 import type { PointerEvent, ReactNode } from "react";
 import { FloatingMusicPlayer } from "@/components/layout/FloatingMusicPlayer";
 import { MusicRingLiquid } from "@/components/layout/MusicRingLiquid";
@@ -54,6 +56,7 @@ const nav = [
   { title: "Daily tasks", url: "/tasks", icon: ListTodo },
   { title: "Track", url: "/track", icon: RouteIcon },
   { title: "Practice session", url: "/test", icon: FilePenLine },
+  { title: "Habits", url: "/habits", icon: Flame },
   { title: "Timers", url: "/timers", icon: Timer },
 ] as const;
 
@@ -101,6 +104,7 @@ function cloudPracticeProfile(value: Record<string, unknown> | null): PracticePr
     ...(typeof value["practiceSessionEnabled"] === "boolean" ? { practiceSessionEnabled: value["practiceSessionEnabled"] } : {}),
     ...(typeof value["trackProgressEnabled"] === "boolean" ? { trackProgressEnabled: value["trackProgressEnabled"] } : {}),
     ...(typeof value["timersEnabled"] === "boolean" ? { timersEnabled: value["timersEnabled"] } : {}),
+    ...(typeof value["habitsEnabled"] === "boolean" ? { habitsEnabled: value["habitsEnabled"] } : {}),
   };
 }
 
@@ -134,6 +138,7 @@ function ProfileOnboarding({ onComplete, user, existingProfile }: { onComplete: 
   const [practiceSessionEnabled, setPracticeSessionEnabled] = useState(existingProfile?.practiceSessionEnabled !== false);
   const [trackProgressEnabled, setTrackProgressEnabled] = useState(existingProfile?.trackProgressEnabled !== false);
   const [timersEnabled, setTimersEnabled] = useState(existingProfile?.timersEnabled !== false);
+  const [habitsEnabled, setHabitsEnabled] = useState(existingProfile?.habitsEnabled !== false);
   const parsedGoal = Math.max(1, Math.min(100000, Number(goal) || 0));
   const canContinue = name.trim().length > 0 && Number(goal) >= 1 && usernameStatus === "available";
 
@@ -164,6 +169,7 @@ function ProfileOnboarding({ onComplete, user, existingProfile }: { onComplete: 
       practiceSessionEnabled,
       trackProgressEnabled,
       timersEnabled,
+      habitsEnabled,
     };
     try {
       await saveProfileWithUsername(user, profile);
@@ -245,7 +251,7 @@ function ProfileOnboarding({ onComplete, user, existingProfile }: { onComplete: 
             />
           </label>
         </div>
-        {settingsOpen && <div className="absolute inset-0 z-10 rounded-2xl bg-[#1e1e1e] p-6 sm:p-8"><div className="flex items-center gap-2"><button type="button" aria-label="Back to profile form" onClick={() => setSettingsOpen(false)} className="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 hover:bg-white/10 hover:text-white"><ArrowLeft className="h-4 w-4" /></button><h3 className="text-lg font-semibold">Settings</h3></div><div className="mt-6 space-y-3"><button type="button" onClick={() => setPracticeSessionEnabled((value) => !value)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#151515] px-3 py-3 text-left"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Practice session</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Take practice tests, review answers and track your results.</span></span><span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", practiceSessionEnabled ? "border-zinc-100 bg-zinc-100" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", practiceSessionEnabled ? "translate-x-5 bg-zinc-900" : "translate-x-1 bg-zinc-400")} /></span></button><button type="button" onClick={() => setTrackProgressEnabled((value) => !value)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#151515] px-3 py-3 text-left"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Track</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Track syllabus, revision and mock test progress.</span></span><span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", trackProgressEnabled ? "border-zinc-100 bg-zinc-100" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", trackProgressEnabled ? "translate-x-5 bg-zinc-900" : "translate-x-1 bg-zinc-400")} /></span></button><button type="button" role="switch" aria-checked={timersEnabled} onClick={() => setTimersEnabled((value) => !value)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#151515] px-3 py-3 text-left"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Timers</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Countdowns for important dates and deadlines.</span></span><span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", timersEnabled ? "border-zinc-100 bg-zinc-100" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", timersEnabled ? "translate-x-5 bg-zinc-900" : "translate-x-1 bg-zinc-400")} /></span></button></div></div>}
+        {settingsOpen && <div className="absolute inset-0 z-10 rounded-2xl bg-[#1e1e1e] p-6 sm:p-8"><div className="flex items-center gap-2"><button type="button" aria-label="Back to profile form" onClick={() => setSettingsOpen(false)} className="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 hover:bg-white/10 hover:text-white"><ArrowLeft className="h-4 w-4" /></button><h3 className="text-lg font-semibold">Settings</h3></div><div className="mt-6 space-y-3"><button type="button" onClick={() => setPracticeSessionEnabled((value) => !value)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#151515] px-3 py-3 text-left"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Practice session</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Take practice tests, review answers and track your results.</span></span><span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", practiceSessionEnabled ? "border-zinc-100 bg-zinc-100" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", practiceSessionEnabled ? "translate-x-5 bg-zinc-900" : "translate-x-1 bg-zinc-400")} /></span></button><button type="button" onClick={() => setTrackProgressEnabled((value) => !value)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#151515] px-3 py-3 text-left"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Track</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Track syllabus, revision and mock test progress.</span></span><span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", trackProgressEnabled ? "border-zinc-100 bg-zinc-100" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", trackProgressEnabled ? "translate-x-5 bg-zinc-900" : "translate-x-1 bg-zinc-400")} /></span></button><button type="button" role="switch" aria-checked={timersEnabled} onClick={() => setTimersEnabled((value) => !value)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#151515] px-3 py-3 text-left"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Timers</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Countdowns for important dates and deadlines.</span></span><span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", timersEnabled ? "border-zinc-100 bg-zinc-100" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", timersEnabled ? "translate-x-5 bg-zinc-900" : "translate-x-1 bg-zinc-400")} /></span></button><button type="button" role="switch" aria-checked={habitsEnabled} onClick={() => setHabitsEnabled((value) => !value)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#151515] px-3 py-3 text-left"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Habits</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Daily heatmaps, streaks and personal challenges.</span></span><span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", habitsEnabled ? "border-zinc-100 bg-zinc-100" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", habitsEnabled ? "translate-x-5 bg-zinc-900" : "translate-x-1 bg-zinc-400")} /></span></button></div></div>}
         <Button
           className="mt-4 h-10 w-full bg-sky-500 text-sky-950 hover:bg-sky-400"
           disabled={!canContinue || isSaving}
@@ -1168,6 +1174,8 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
   const [streakReady, setStreakReady] = useState(false);
   const [manifestationOpen, setManifestationOpen] = useState(false);
   const authUser = useAuthUser();
+  const habitReminderData = useHabits(authUser?.uid);
+  useHabitReminders(habitReminderData.habits, authUser?.uid, profile?.habitsEnabled !== false);
   const previousStreak = useRef<number | null>(null);
   const previousXpLevel = useRef<number | null>(null);
   const navLinks = useRef(new Map<string, HTMLAnchorElement>());
@@ -1178,6 +1186,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
     (item) =>
       (item.url !== "/test" || profile?.practiceSessionEnabled !== false) &&
       (item.url !== "/timers" || profile?.timersEnabled !== false) &&
+      (item.url !== "/habits" || profile?.habitsEnabled !== false) &&
       (!(["/track", "/progress"] as string[]).includes(item.url) || profile?.trackProgressEnabled !== false),
   );
   const activeNavUrl = visibleNav.find((item) => (path === "/progress" ? "/track" : path).startsWith(item.url))?.url;
@@ -1194,7 +1203,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
       cancelAnimationFrame(frame);
       window.removeEventListener("resize", updateIndicator);
     };
-  }, [navIndicatorUrl, profile?.practiceSessionEnabled, profile?.trackProgressEnabled, profile?.timersEnabled]);
+  }, [navIndicatorUrl, profile?.practiceSessionEnabled, profile?.trackProgressEnabled, profile?.timersEnabled, profile?.habitsEnabled]);
 
   useEffect(() => {
     if (navTarget && navTarget === activeNavUrl) setNavTarget(null);

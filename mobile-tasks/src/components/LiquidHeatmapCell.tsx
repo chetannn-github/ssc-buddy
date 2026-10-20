@@ -1,3 +1,4 @@
+import { createThemedStyles } from "../theme";
 import { Animated, StyleSheet, View } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import { HEATMAP_EMPTY_COLOR, heatmapPaletteColor, heatmapCellColors } from "../domain/heatmap-colors";
@@ -99,7 +100,7 @@ export function LiquidHeatmapCell({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles({
   clip: { ...StyleSheet.absoluteFill, borderRadius: 2, overflow: "hidden" },
   fill: { position: "absolute", left: 0, right: 0, bottom: 0 },
   wave: { position: "absolute", left: 0, top: -2, width: 39, height: 5 },

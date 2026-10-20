@@ -1,3 +1,4 @@
+import { createThemedStyles } from "../theme";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { Image as ExpoImage } from "expo-image";
@@ -46,6 +47,7 @@ type Props = {
   practiceSessionEnabled?: boolean;
   trackProgressEnabled?: boolean;
   timersEnabled?: boolean;
+  habitsEnabled?: boolean;
   profileAvatar?: ImageSourcePropType;
 };
 
@@ -55,6 +57,7 @@ export function BottomNavigation({
   practiceSessionEnabled = true,
   trackProgressEnabled = true,
   timersEnabled = true,
+  habitsEnabled = true,
   profileAvatar,
 }: Props) {
   const [visible, setVisible] = useState(true);
@@ -64,6 +67,7 @@ export function BottomNavigation({
     (tab) =>
       (tab.key !== "practice" || practiceSessionEnabled) &&
       (tab.key !== "timers" || timersEnabled) &&
+      (tab.key !== "habits") &&
       (!(["track", "progress"] as TabKey[]).includes(tab.key) || trackProgressEnabled),
   );
 
@@ -199,7 +203,7 @@ function NavigationItem({ tab, active, onPress, profileAvatar, trackFramesReady 
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles({
   container: { overflow: "hidden", backgroundColor: "transparent" },
   wrap: { flex: 1, paddingHorizontal: 14, paddingVertical: 9 },
   glass: {

@@ -1,3 +1,4 @@
+import { createThemedStyles } from "../theme";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { AccessibilityInfo, Animated, AppState, Easing, Pressable, StyleSheet, Text, View, type GestureResponderEvent } from "react-native";
 import Svg, { Defs, LinearGradient, Path, Rect, Stop } from "react-native-svg";
@@ -103,7 +104,7 @@ function StillWaterLayer({ children }: { children: ReactNode }) {
   return <View pointerEvents="none" style={s.waterPlane}>{children}</View>;
 }
 
-const s = StyleSheet.create({
+const s = createThemedStyles({
   waterPlane: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
   section: { alignSelf: "center", alignItems: "center", marginTop: 4, gap: 12 }, dial: { width: 160, height: 160 },
   tank: { position: "absolute", top: 21, left: 21, width: 118, height: 118, borderRadius: 59, overflow: "hidden" },

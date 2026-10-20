@@ -1,3 +1,5 @@
+import { colors } from "../theme";
+import { createThemedStyles } from "../theme";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { AccessibilityInfo, StyleSheet } from "react-native";
 import Svg, { Circle, Defs, G, Mask } from "react-native-svg";
@@ -78,7 +80,7 @@ export function TaskRingFill({
   percent,
   size = 112,
   stroke = 10,
-  color = "#60a5fa",
+  color = colors.accent,
   liquidBoost = false,
 }: {
   percent: number;
@@ -190,4 +192,4 @@ export function TaskRingFill({
   );
 }
 
-const styles = StyleSheet.create({ svg: { position: "absolute", top: 0, left: 0 } });
+const styles = createThemedStyles({ svg: { position: "absolute", top: 0, left: 0 } });

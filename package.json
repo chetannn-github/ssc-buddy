@@ -21,6 +21,7 @@
     "test:heatmap-layout": "node --test scripts/test-heatmap-layout.mjs",
     "test:water-motion": "node --test scripts/test-water-motion.mjs",
     "test:heatmap-colors": "node --test scripts/test-heatmap-colors.mjs",
+    "test:habits": "node --test scripts/test-habits.mjs",
     "test:date-timers": "node --test scripts/test-date-timers.mjs",
     "format": "prettier --write ."
   },

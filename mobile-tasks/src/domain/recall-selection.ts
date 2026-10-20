@@ -11,6 +11,8 @@ type Performance = Pick<RecallLearning, "askedCount" | "correctCount" | "wrongCo
 type Question = { id: string; subjectId: string };
 
 export const ALL_RECALL_EXERCISES = "all";
+export const RECALL_QUESTION_COUNTS = [3, 5, 10] as const;
+export type RecallQuestionCount = typeof RECALL_QUESTION_COUNTS[number];
 export type RecallFilterScope = { subjectId: string; chapter: string; exerciseId?: string };
 
 /** An omitted exercise keeps older widgets/saved scopes on all exercises. */
@@ -52,7 +54,7 @@ export function mergeRecallLearning(
 }
 
 /**
- * Pick up to three distinct questions from one subject. Recent answers rank
+ * Pick the requested number of distinct questions from one subject. Recent answers rank
  * behind every ready question: correct answers rest 30 minutes, mistakes 5.
  * When a small bank needs repeats, reuse the oldest answers first.
  */
@@ -63,7 +65,9 @@ export function selectRecallQuestions<T extends Question>(
   practice: ReadonlyMap<string, Performance>,
   now = Date.now(),
   random: () => number = Math.random,
+  questionCount: RecallQuestionCount = 3,
 ): T[] {
+  const limit = RECALL_QUESTION_COUNTS.includes(questionCount) ? questionCount : 3;
   const unique = new Map(
     questions.map((question) => [`${question.subjectId}:${question.id}`, question]),
   );
@@ -100,11 +104,11 @@ export function selectRecallQuestions<T extends Question>(
   const subjects = [...grouped.values()].map((items) => {
     items.sort(order);
     const ready = items.filter((item) => !item.recent);
-    const top = items.slice(0, 3);
+    const top = items.slice(0, limit);
     return {
       items,
-      ready: Math.min(3, ready.length),
-      size: Math.min(3, items.length),
+      ready: Math.min(limit, ready.length),
+      size: Math.min(limit, items.length),
       oldest: Math.min(...top.map((item) => item.lastAsked)),
       score: top.reduce((sum, item) => sum + item.score, 0) / top.length,
     };
@@ -116,5 +120,5 @@ export function selectRecallQuestions<T extends Question>(
       (a.ready === 0 && b.ready === 0 ? a.oldest - b.oldest : 0) ||
       b.score - a.score,
   );
-  return subjects[0]?.items.slice(0, 3).map((item) => item.question) ?? [];
+  return subjects[0]?.items.slice(0, limit).map((item) => item.question) ?? [];
 }

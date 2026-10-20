@@ -1,7 +1,7 @@
 import { applyQuestionDeletions, pruneDeletedRecall } from "./question-deletion";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getFirebaseAuth, loadQuickRecallSeed } from "../lib/firebase";
-import { mergeRecallLearning, filterRecallScope, selectRecallQuestions } from "./recall-selection";
+import { mergeRecallLearning, filterRecallScope, selectRecallQuestions, type RecallQuestionCount } from "./recall-selection";
 
 export type QuizChoice = "A" | "B" | "C" | "D";
 export type UnlockQuestion = {
@@ -22,7 +22,7 @@ export const RANDOM_RECALL_SCOPE = "random";
 type LearningStat = { askedCount: number; correctCount: number; wrongCount: number; lastAskedAt: string; lastOutcome: "correct" | "wrong" };
 type PracticePerformance = { askedCount: number; correctCount: number; wrongCount: number };
 export type UnlockQuizState = {
-  /** Stable for one three-question sprint; used to make its cloud write idempotent. */
+  /** Stable for one recall sprint; used to make its cloud write idempotent. */
   runId: string;
   startedAt: string;
   status: "active" | "correction" | "review" | "complete";
@@ -103,7 +103,7 @@ export async function loadUnlockQuiz(): Promise<UnlockQuizState | null> {
 async function save(state: UnlockQuizState) { await AsyncStorage.setItem(STORE, JSON.stringify(state)); return state; }
 
 /** Builds a balanced same-subject session, cooling down recent answers. */
-export async function startUnlockQuiz(scope: QuickRecallScope = { subjectId: RANDOM_RECALL_SCOPE, chapter: RANDOM_RECALL_SCOPE }): Promise<UnlockQuizState | null> {
+export async function startUnlockQuiz(scope: QuickRecallScope = { subjectId: RANDOM_RECALL_SCOPE, chapter: RANDOM_RECALL_SCOPE }, questionCount: RecallQuestionCount = 3): Promise<UnlockQuizState | null> {
   return serializeQuizState(async () => {
     const local = await asQuestions();
     const user = getFirebaseAuth().currentUser;
@@ -115,7 +115,7 @@ export async function startUnlockQuiz(scope: QuickRecallScope = { subjectId: RAN
     const stats = mergeRecallLearning((remote?.stats ?? {}) as Record<string, LearningStat>, old?.stats ?? {});
     const scopedQuestions = filterRecallScope(questions, scope);
     if (!scopedQuestions.length) return null;
-    const selected = selectRecallQuestions(scopedQuestions, favourites, stats, practice);
+    const selected = selectRecallQuestions(scopedQuestions, favourites, stats, practice, Date.now(), Math.random, questionCount);
     return save({ runId: makeRunId(), startedAt: new Date().toISOString(), status: "active", subject: selected[0]?.subject ?? "General", questions: selected, index: 0, correct: 0, answers: [], stats });
   });
 }

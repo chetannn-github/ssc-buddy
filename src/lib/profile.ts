@@ -9,6 +9,7 @@ export type PracticeProfile = {
   practiceSessionEnabled?: boolean;
   trackProgressEnabled?: boolean;
   timersEnabled?: boolean;
+  habitsEnabled?: boolean;
 };
 
 export const PROFILE_KEY = "cbt-practice-profile";
@@ -42,6 +43,7 @@ export function loadPracticeProfile(): PracticeProfile | null {
       ...(typeof profile.practiceSessionEnabled === "boolean" ? { practiceSessionEnabled: profile.practiceSessionEnabled } : {}),
       ...(typeof profile.trackProgressEnabled === "boolean" ? { trackProgressEnabled: profile.trackProgressEnabled } : {}),
       ...(typeof profile.timersEnabled === "boolean" ? { timersEnabled: profile.timersEnabled } : {}),
+      ...(typeof profile.habitsEnabled === "boolean" ? { habitsEnabled: profile.habitsEnabled } : {}),
     };
   } catch {
     return null;
@@ -63,6 +65,7 @@ export function savePracticeProfile(profile: PracticeProfile) {
       ...(profile.practiceSessionEnabled === false ? { practiceSessionEnabled: false } : {}),
       ...(profile.trackProgressEnabled === false ? { trackProgressEnabled: false } : {}),
       ...(profile.timersEnabled === false ? { timersEnabled: false } : {}),
+      ...(profile.habitsEnabled === false ? { habitsEnabled: false } : {}),
     }),
   );
   window.dispatchEvent(new Event("cbt-profile-updated"));

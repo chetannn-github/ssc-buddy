@@ -1,3 +1,4 @@
+import { createThemedStyles } from "../theme";
 import { StyleSheet, Text, View } from "react-native";
 
 import { colors } from "../theme";
@@ -17,7 +18,7 @@ export function ComingSoonScreen({ title }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles({
   container: { flex: 1, padding: 20, backgroundColor: colors.background },
   eyebrow: { color: "#818cf8", fontSize: 10, fontWeight: "700", letterSpacing: 2 },
   title: { color: colors.text, fontSize: 26, fontWeight: "700", marginTop: 4 },

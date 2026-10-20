@@ -1,3 +1,4 @@
+import { createThemedStyles } from "../theme";
 import { DropdownChevron } from "../components/DropdownChevron";
 import { NumberFlow } from "number-flow-react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -16,7 +17,7 @@ import {
 import { collection, doc, onSnapshot } from "firebase/firestore";
 import type { User } from "firebase/auth";
 import { getFirebaseFirestore, readPublicProfile, type PublicProfile } from "../lib/firebase";
-import { colors } from "../theme";
+import { colors, dailyTaskColors } from "../theme";
 import { avatarAssets, ProfileScreen } from "./ProfileScreen";
 
 import { ALL_LEADERBOARD_DAYS, leaderboardPeriodStats, leaderboardPeriodTasks } from "../domain/leaderboard-period";
@@ -273,14 +274,16 @@ export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { 
           .join(" · ");
         return (
           <View key={`${task.name}-${index}`} style={[s.task, index === tasksForDay.length - 1 && s.taskLast]}>
-            {task.completed ? <MaterialCommunityIcons name="check-circle" size={16} color="#86efac" /> : overdue ? <MaterialCommunityIcons name="close-circle" size={16} color="#fca5a5" /> : <View style={{ width: 16, height: 16, borderWidth: 1, borderColor: "#a1a1aa", borderRadius: 8 }} />}
+            <View style={[s.taskCheck, task.completed ? s.taskCheckDone : overdue ? s.taskCheckMissed : s.taskCheckPending]}>
+              {task.completed ? <MaterialCommunityIcons name="check-bold" size={14} color={dailyTaskColors.ink} /> : overdue ? <MaterialCommunityIcons name="close-thick" size={12} color="#f19a9f" /> : null}
+            </View>
             <View style={{ flex: 1 }}>
-              <Text style={s.name} numberOfLines={1}>
+              <Text style={[s.taskTitle, task.completed && s.taskTitleDone]} numberOfLines={2}>
                 {task.name}
               </Text>
-              {meta ? <Text style={s.sub}>{meta}</Text> : null}
+              {meta ? <Text style={s.taskMeta} numberOfLines={1}>{meta}</Text> : null}
             </View>
-            <Text
+            {task.points !== 0 && <Text
               style={[
                 s.taskPoints,
                 task.points < 0 ? s.taskPenalty : task.points === 0 ? s.taskNeutral : undefined,
@@ -292,7 +295,7 @@ export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { 
                   ? `−${Math.abs(task.points)}`
                   : "0"}{" "}
               pts
-            </Text>
+            </Text>}
           </View>
         );
       })
@@ -414,7 +417,7 @@ export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { 
   );
 }
 
-const s = StyleSheet.create({
+const s = createThemedStyles({
   page: { flex: 1, backgroundColor: colors.background },
   header: {
     height: 58,
@@ -506,16 +509,25 @@ const s = StyleSheet.create({
   tasks: { alignSelf: "stretch", marginTop: 30, gap: 9 },
   tasksScroll: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 36 },
   tasksTitle: { color: colors.subdued, fontSize: 10, fontWeight: "800", letterSpacing: 1.5 },
-  taskGroup: { borderRadius: 12, backgroundColor: colors.surface, paddingHorizontal: 12, overflow: "hidden" },
+  taskGroup: { borderRadius: 14, backgroundColor: "#141414", borderWidth: 1, borderColor: "#292929", overflow: "hidden" },
   taskLast: { borderBottomWidth: 0 },
   task: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 9,
-    paddingVertical: 12,
+    gap: 10,
+    minHeight: 58,
+    paddingHorizontal: 11,
+    paddingVertical: 9,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: "#292929",
   },
+  taskCheck: { width: 25, height: 25, borderRadius: 13, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  taskCheckDone: { backgroundColor: dailyTaskColors.accent, borderColor: dailyTaskColors.accent },
+  taskCheckMissed: { backgroundColor: "#27191d", borderColor: "#64363c" },
+  taskCheckPending: { backgroundColor: "transparent", borderColor: colors.accent + "99", borderWidth: 1.5 },
+  taskTitle: { color: colors.text, fontSize: 13, lineHeight: 18, fontWeight: "600" },
+  taskTitleDone: { color: colors.muted, textDecorationLine: "line-through" },
+  taskMeta: { color: "#909099", fontSize: 10, marginTop: 4 },
   taskNameLine: { flexDirection: "row", alignItems: "center", gap: 7 },
   taskPoints: { color: "#86efac", fontSize: 11, fontWeight: "800" },
   taskPenalty: { color: "#fca5a5" },
@@ -540,7 +552,7 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#414141",
   },
-  filterOpen: { borderColor: "#60a5fa", backgroundColor: "#22272a" },
+  filterOpen: { borderColor: colors.accent, backgroundColor: "#22272a" },
   filterText: { color: colors.text, fontSize: 12, fontWeight: "700" },
   menu: {
     position: "absolute",

@@ -1,4 +1,8 @@
 // @ts-nocheck
+import { UppercaseTextInput as TextInput } from "../components/UppercaseTextInput";
+import { useAndroidBack } from "../hooks/use-android-back";
+import { ReattemptModeButton } from "../components/ReattemptModeButton";
+import { createThemedStyles } from "../theme";
 import { DropdownChevron } from "../components/DropdownChevron";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -26,7 +30,6 @@ import {
   ScrollView as NativeScrollView,
   StyleSheet as NativeStyleSheet,
   Text,
-  TextInput,
   useWindowDimensions,
   View,
 } from "react-native";
@@ -59,7 +62,7 @@ const ScrollView = (props: any) => (
 const StyleSheet = {
   ...NativeStyleSheet,
   create: (styles: Record<string, unknown>) =>
-    new Proxy(NativeStyleSheet.create(styles), {
+    new Proxy(createThemedStyles(styles), {
       get: (target, key) =>
         typeof key === "string" && !(key in target)
           ? {}
@@ -172,10 +175,8 @@ const toCloudRecord = (record: Record) => ({
   score: record.score,
 });
 const choices: Option[] = ["A", "B", "C", "D"];
-const examAccent = "#60a5fa";
 const examAccentSurface = "#162c45";
 
-const examAccentDeep = "#081a31";
 const makeId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 const defaultMarking = { positive: 4, negative: 1 };
 const normaliseMarking = (value: unknown) => {
@@ -235,6 +236,14 @@ export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQ
   const [viewingQuestions, setViewingQuestions] = useState<Exercise | null>(null);
   const [favourites, setFavourites] = useState<string[]>([]);
   const [practiceLoaded, setPracticeLoaded] = useState(false);
+  useAndroidBack(() => {
+    if (menu) { setMenu(null); return; }
+    if (phase === "bank" && viewingQuestions) { setViewingQuestions(null); return; }
+    if (phase === "key") setSavingNewKey(false);
+    setReattemptOf(null);
+    setPhase("setup");
+  }, phase === "bank" || phase === "instructions" || (phase === "key" && !savingAnswerKey) || (phase === "setup" && menu !== null));
+
   const bankRef = useRef(bank); const historyRef = useRef(history); const favouritesRef = useRef(favourites);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   useEffect(() => {
@@ -694,7 +703,7 @@ export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQ
     setDialog(null);
     if (openKeyEditor) setPhase("key");
   };
-  if (!practiceLoaded) return <View style={s.page}><View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}><ActivityIndicator size="small" color="#60a5fa" /></View></View>;
+  if (!practiceLoaded) return <View style={s.page}><View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}><ActivityIndicator size="small" color={colors.accent} /></View></View>;
   if (phase === "history")
     return (
       <History
@@ -994,7 +1003,7 @@ export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQ
         <MarkingCard embedded marking={bank.marking} onSave={(marking) => saveBank({ ...bank, marking })} />
         <Pressable disabled={!canContinue} style={[s.primary, s.setupContinue, !canContinue && s.disabled]} onPress={begin}>
           <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72} style={[s.primaryText, s.primaryWideText]}>Continue to instructions</Text>
-          <MaterialCommunityIcons name="arrow-right" size={19} color={examAccentDeep} />
+          <MaterialCommunityIcons name="arrow-right" size={19} color={colors.accentDeep} />
         </Pressable>
         </View>
       </ScrollView>
@@ -1266,7 +1275,7 @@ function Instructions({
           </Text>
         </View>
         <Pressable style={s.primary} onPress={onStart}>
-          <MaterialCommunityIcons name="play" color={examAccentDeep} size={18} />
+          <MaterialCommunityIcons name="play" color={colors.accentDeep} size={18} />
           <Text style={s.primaryText}>Start test</Text>
         </Pressable>
       </ScrollView>
@@ -1377,6 +1386,11 @@ function History({
   const [chapter, setChapter] = useState("All chapters");
   const [filterMenu, setFilterMenu] = useState<"subject" | "chapter" | null>(null);
   const [selected, setSelected] = useState<{ record: Record; attempts: Record[] } | null>(null);
+  useAndroidBack(() => {
+    if (filterMenu) setFilterMenu(null);
+    else onBack();
+  }, selected === null);
+
   const sessionRecords = records;
   const subjects = Array.from(new Set(sessionRecords.map((record) => record.subject))).sort();
   const chapters = Array.from(
@@ -1617,12 +1631,12 @@ function HistoryDetail({
 }) {
   const marking = record.marking ?? { positive: 2, negative: 0.5 };
   const [solution, setSolution] = useState(false);
-  const solutionQuestions = useMemo(() => isQuickRecallRecord(record) ? resolveRecallQuestions(record, subjects) : record.questions, [record, subjects]);
+  useAndroidBack(onBack, !solution);
   if (solution) return <SolutionView record={record} subjects={subjects} onBack={() => setSolution(false)} />;
   return (
     <View style={s.page}>
       <View style={s.header}>
-        <Pressable onPress={onBack} style={s.backRow}>
+        <Pressable onPress={onBack} style={[s.backRow, { flex: 1, minWidth: 0, marginRight: 8 }]}>
           <MaterialCommunityIcons name="arrow-left" size={18} color={colors.muted} />
           <Text style={s.back}>History</Text>
         </Pressable>
@@ -1684,42 +1698,16 @@ function HistoryDetail({
             <Text style={s.detailActionText}>Recheck</Text>
           </Pressable>}
           <Pressable onPress={onReattempt} style={s.detailPrimaryAction}>
-            <MaterialCommunityIcons name="reload" size={15} color={examAccentDeep} />
+            <MaterialCommunityIcons name="reload" size={15} color={colors.accentDeep} />
             <Text style={s.detailPrimaryText}>{isQuickRecallRecord(record) ? "Practice again" : "Reattempt"}</Text>
           </Pressable>
         </View>
-        <Text style={s.sectionTitle}>ANSWER REVIEW</Text>
-        {record.answers.map((answer, index) => {
-          const key = record.key[index];
-          const question = solutionQuestions?.[index];
-          return (
-            <View key={index} style={s.reviewRow}>
-              <Text style={s.reviewNumber}>Q{index + 1}</Text>
-              <View style={{ flex: 1 }}>
-                <Text numberOfLines={2} style={s.reviewQuestion}>
-                  {question?.question ?? "Question response"}
-                </Text>
-                <Text
-                  style={[
-                    s.reviewAnswer,
-                    answer === key && answer
-                      ? s.reviewCorrect
-                      : answer
-                        ? s.reviewWrong
-                        : s.reviewSkipped,
-                  ]}
-                >
-                  Your answer: {answer ?? "Skipped"} · Key: {key ?? "—"}
-                </Text>
-              </View>
-            </View>
-          );
-        })}
       </ScrollView>
     </View>
   );
 }
 function SolutionView({ record, subjects, onBack }: { record: Record; subjects: Subject[]; onBack: () => void }) {
+  useAndroidBack(onBack);
   const questions = useMemo(() => isQuickRecallRecord(record) ? resolveRecallQuestions(record, subjects) : record.questions ?? [], [record, subjects]);
   const questionCount = Math.max(record.answers.length, record.key.length, questions.length);
   const [current, setCurrent] = useState(0);
@@ -1750,23 +1738,11 @@ function SolutionView({ record, subjects, onBack }: { record: Record; subjects: 
       <View style={s.header}>
         <Pressable onPress={onBack} style={s.backRow}>
           <MaterialCommunityIcons name="arrow-left" size={18} color={colors.muted} />
-          <Text style={s.back} numberOfLines={1}>
+          <Text style={[s.back, { flexShrink: 1 }]} numberOfLines={1}>
             {record.subject} · {record.chapter}
           </Text>
         </Pressable>
-        <Pressable
-          onPress={() => setReattemptMode((active) => !active)}
-          style={[s.solutionMode, reattemptMode && s.solutionModeActive]}
-        >
-          <MaterialCommunityIcons
-            name={reattemptMode ? "check-circle" : "reload"}
-            size={15}
-            color={reattemptMode ? examAccentDeep : colors.muted}
-          />
-          <Text style={[s.solutionModeText, reattemptMode && s.solutionModeTextActive]}>
-            Reattempt mode
-          </Text>
-        </Pressable>
+        <ReattemptModeButton active={reattemptMode} onChange={setReattemptMode} />
       </View>
       <ScrollView contentContainerStyle={s.content}>
         {questionCount ? (
@@ -2152,22 +2128,7 @@ function QuestionBank({
             </Text>
           </View>
           <View style={s.bankViewerActions}>
-            <Pressable
-              accessibilityRole="switch"
-              accessibilityLabel="Reattempt mode"
-              accessibilityState={{ checked: attemptMode }}
-              onPress={() => setAttemptMode((active) => !active)}
-              style={[s.solutionMode, attemptMode && s.solutionModeActive]}
-            >
-              <MaterialCommunityIcons
-                name={attemptMode ? "check-circle" : "reload"}
-                size={15}
-                color={attemptMode ? examAccentDeep : colors.muted}
-              />
-              <Text style={[s.solutionModeText, attemptMode && s.solutionModeTextActive]}>
-                Reattempt mode
-              </Text>
-            </Pressable>
+            <ReattemptModeButton active={attemptMode} onChange={setAttemptMode} />
             <Pressable onPress={() => onView(null)}>
               <Text style={s.back}>Back</Text>
             </Pressable>
@@ -2582,9 +2543,9 @@ const s = StyleSheet.create({
   // Flex items avoid Android's inconsistent percentage sizing inside this row.
   timingPreset: { flex: 1, minWidth: 0, paddingHorizontal: 2, paddingVertical: 7 },
   timingPresetText: { width: "100%", textAlign: "center", includeFontPadding: false },
-  presetActive: { backgroundColor: examAccent, borderColor: examAccent },
+  presetActive: { backgroundColor: colors.accent, borderColor: colors.accent },
   presetText: { color: colors.muted, fontFamily: "Manrope_700Bold", fontSize: 12 },
-  presetTextActive: { color: examAccentDeep },
+  presetTextActive: { color: colors.accentDeep },
   modeRow: { flexDirection: "row", gap: 7, marginBottom: 7 },
   mode: {
     flex: 1,
@@ -2597,9 +2558,9 @@ const s = StyleSheet.create({
     paddingVertical: 8,
     backgroundColor: "#151515",
   },
-  modeActive: { borderColor: examAccent, backgroundColor: examAccent },
+  modeActive: { borderColor: colors.accent, backgroundColor: colors.accent },
   modeText: { alignSelf: "stretch", color: colors.muted, fontFamily: "Manrope_700Bold", fontSize: 11, textAlign: "center" },
-  modeTextActive: { color: examAccentDeep },
+  modeTextActive: { color: colors.accentDeep },
   exerciseTypeLocked: {
     minHeight: 38,
     flexDirection: "row",
@@ -2642,7 +2603,7 @@ const s = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 14,
     borderRadius: 14,
-    backgroundColor: examAccent,
+    backgroundColor: colors.accent,
   },
   setupContinue: { minHeight: 46, marginTop: 13 },
   primarySmall: {
@@ -2651,9 +2612,9 @@ const s = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 15,
     paddingVertical: 11,
-    backgroundColor: examAccent,
+    backgroundColor: colors.accent,
   },
-  primaryText: { color: examAccentDeep, fontFamily: "Manrope_800ExtraBold", fontSize: 13 },
+  primaryText: { color: colors.accentDeep, fontFamily: "Manrope_800ExtraBold", fontSize: 13 },
   primaryWideText: { flexShrink: 1, textAlign: "center" },
   back: { color: colors.muted, fontFamily: "Manrope_700Bold", fontSize: 13 },
   keyRow: {
@@ -2681,7 +2642,7 @@ const s = StyleSheet.create({
   },
   optionActive: { backgroundColor: colors.accent, borderColor: colors.accent },
   optionText: { color: colors.muted, fontSize: 12, fontWeight: "800" },
-  optionTextActive: { color: examAccentDeep },
+  optionTextActive: { color: colors.accentDeep },
   sessionTitle: { color: colors.text, fontSize: 15, fontWeight: "800" },
   infoGrid: { flexDirection: "row", marginTop: 18 },
   info: { flex: 1, gap: 4 },
@@ -2725,7 +2686,7 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#353535",
   },
-  answerActive: { borderColor: examAccent, backgroundColor: examAccentSurface },
+  answerActive: { borderColor: colors.accent, backgroundColor: examAccentSurface },
   answerLetter: {
     width: 30,
     height: 30,
@@ -2739,7 +2700,7 @@ const s = StyleSheet.create({
     fontWeight: "800",
     marginTop: 1,
   },
-  answerLetterActive: { color: examAccentDeep, backgroundColor: examAccent },
+  answerLetterActive: { color: colors.accentDeep, backgroundColor: colors.accent },
   answerText: {
     flex: 1,
     flexShrink: 1,
@@ -2758,7 +2719,7 @@ const s = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "#2b2b2b",
   },
-  paletteCurrent: { borderWidth: 1, borderColor: examAccent },
+  paletteCurrent: { borderWidth: 1, borderColor: colors.accent },
   paletteAnswered: { backgroundColor: "#115e59" },
   solutionPaletteCorrect: { backgroundColor: "#166534" },
   solutionPaletteWrong: { backgroundColor: "#991b1b" },
@@ -2798,8 +2759,8 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: colors.accent,
-    backgroundColor: "#172b27",
+    borderColor: colors.accent + "66",
+    backgroundColor: colors.accent + "14",
   },
   scoreRingValue: { color: colors.text, fontSize: 14, fontWeight: "900" },
   scoreRingLabel: { color: colors.muted, fontSize: 7, marginTop: -1 },
@@ -2846,21 +2807,8 @@ const s = StyleSheet.create({
   detailActions: { flexDirection: "row", gap: 7 },
   detailAction: { flex: 1, minHeight: 38, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, borderRadius: 10, borderWidth: 1, borderColor: "#484848", backgroundColor: "rgba(255,255,255,.02)" },
   detailActionText: { color: colors.text, fontSize: 10, fontWeight: "800" },
-  detailPrimaryAction: { flex: 1.1, minHeight: 38, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, borderRadius: 10, backgroundColor: examAccent },
-  detailPrimaryText: { color: examAccentDeep, fontSize: 10, fontWeight: "900" },
-  reviewRow: {
-    flexDirection: "row",
-    gap: 10,
-    paddingVertical: 11,
-    borderBottomWidth: 1,
-    borderColor: "rgba(255,255,255,.07)",
-  },
-  reviewNumber: { width: 30, color: colors.muted, fontSize: 12, fontWeight: "800" },
-  reviewQuestion: { color: colors.text, fontSize: 13, fontWeight: "700", lineHeight: 18 },
-  reviewAnswer: { fontSize: 11, fontWeight: "700", marginTop: 5 },
-  reviewCorrect: { color: "#6ee7b7" },
-  reviewWrong: { color: "#fca5a5" },
-  reviewSkipped: { color: colors.muted },
+  detailPrimaryAction: { flex: 1.1, minHeight: 38, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, borderRadius: 10, backgroundColor: colors.accent },
+  detailPrimaryText: { color: colors.accentDeep, fontSize: 10, fontWeight: "900" },
   solutionMode: {
     flexDirection: "row",
     alignItems: "center",
@@ -3210,7 +3158,7 @@ const s = StyleSheet.create({
   },
   questionFileTitle: { color: colors.text, fontSize: 12, fontWeight: "700", marginTop: 6, maxWidth: "100%" },
   questionFileCopy: { color: colors.subdued, fontSize: 10, lineHeight: 14, textAlign: "center", marginTop: 3 },
-  copyPrompt: { height: 34, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, borderRadius: 10, paddingHorizontal: 9, backgroundColor: "#202c38", borderWidth: 1, borderColor: "#315878" },
+  copyPrompt: { height: 34, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, borderRadius: 10, paddingHorizontal: 9, backgroundColor: colors.accent + "14", borderWidth: 1, borderColor: colors.accent + "66" },
   copyPromptText: { color: colors.accent, fontSize: 11, fontWeight: "700", textAlign: "center" },
   copyPromptTextDone: { color: "#86efac" },
   error: { color: "#fca5a5", fontSize: 12, marginTop: 8 },

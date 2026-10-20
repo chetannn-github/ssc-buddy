@@ -1,4 +1,6 @@
 // @ts-nocheck
+import { createThemedStyles, setAppAccent, useAppAccent } from "../theme";
+import { APP_ACCENTS, accentInk, type AppAccent } from "../domain/app-accent";
 import { DropdownChevron } from "../components/DropdownChevron";
 import { NumberFlow } from "number-flow-react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -234,11 +236,15 @@ export function ProfileScreen({
     profileSettings?.practiceSessionEnabled !== false,
   );
   const [profileSettingsOpen, setProfileSettingsOpen] = useState(false);
+  const appAccent = useAppAccent();
+  const [savingAccent, setSavingAccent] = useState(false);
+  const [accentSaveError, setAccentSaveError] = useState("");
   const [trackProgressEnabled, setTrackProgressEnabled] = useState(
     profileSettings?.trackProgressEnabled !== false,
   );
   const [timersEnabled, setTimersEnabled] = useState(profileSettings?.timersEnabled !== false);
-  const [savingFeature, setSavingFeature] = useState<"practice" | "track" | "timers" | null>(null);
+  const [habitsEnabled, setHabitsEnabled] = useState(profileSettings?.habitsEnabled !== false);
+  const [savingFeature, setSavingFeature] = useState<"practice" | "track" | "timers" | "habits" | null>(null);
   const [editing, setEditing] = useState(() => !profileSettings?.username);
   const [confirmLogout, setConfirmLogout] = useState(false);
   const name = profileReady
@@ -307,6 +313,7 @@ export function ProfileScreen({
     const nextAvatar = options[Math.floor(Math.random() * options.length)] ?? avatarFile;
     setAvatarFile(nextAvatar);
     onProfileSaved({
+      ...profileSettings,
       name: profileName,
       examName,
       questionGoal: Number(goal) || 100,
@@ -423,8 +430,12 @@ export function ProfileScreen({
     setPracticeSessionEnabled(profileSettings.practiceSessionEnabled !== false);
     setTrackProgressEnabled(profileSettings.trackProgressEnabled !== false);
     setTimersEnabled(profileSettings.timersEnabled !== false);
+    setHabitsEnabled(profileSettings.habitsEnabled !== false);
     setProfileReady(true);
-  }, [profileSettings]);
+  }, [profileSettings?.name, profileSettings?.username, profileSettings?.examName,
+    profileSettings?.questionGoal, profileSettings?.manifestation, profileSettings?.avatar,
+    profileSettings?.practiceSessionEnabled, profileSettings?.trackProgressEnabled,
+    profileSettings?.timersEnabled, profileSettings?.habitsEnabled]);
   const filteredTasks = tasks.filter((task) => withinRange(task.date, range));
   const filteredSummary = summarizeTasks(filteredTasks);
   const filteredPracticeRecords = practiceRecords.filter((record) =>
@@ -464,6 +475,8 @@ export function ProfileScreen({
     setSavingProfile(true);
     try {
       await onProfileSaved({
+        ...profileSettings,
+        accentColor: appAccent,
         name: profileName,
         username: normalizeUsername(username),
         examName,
@@ -473,6 +486,7 @@ export function ProfileScreen({
         practiceSessionEnabled,
         trackProgressEnabled,
         timersEnabled,
+        habitsEnabled,
       });
       const newSubjects = !syllabusSubjects.length ? importedSubjects : [];
       if (user && newSubjects.length) {
@@ -508,15 +522,30 @@ export function ProfileScreen({
       setSavingProfile(false);
     }
   };
-  const saveFeature = async (feature: "practice" | "track" | "timers") => {
-    if (savingFeature) return;
+  const chooseAccent = async (next: AppAccent) => {
+    if (savingAccent || savingFeature || next === appAccent) return;
+    const previous = appAccent;
+    setSavingAccent(true);
+    setAccentSaveError("");
+    setAppAccent(next);
+    try {
+      await onProfileSaved({ ...profileSettings, name: profileSettings?.name ?? profileName,
+        questionGoal: profileSettings?.questionGoal ?? 100, accentColor: next });
+    } catch {
+      setAppAccent(previous);
+      setAccentSaveError("Could not save accent. Please try again.");
+    } finally { setSavingAccent(false); }
+  };
+  const saveFeature = async (feature: "practice" | "track" | "timers" | "habits") => {
+    if (savingFeature || savingAccent) return;
     const nextPractice = feature === "practice" ? !practiceSessionEnabled : practiceSessionEnabled;
     const nextTrack = feature === "track" ? !trackProgressEnabled : trackProgressEnabled;
+    const nextHabits = feature === "habits" ? !habitsEnabled : habitsEnabled;
     const nextTimers = feature === "timers" ? !timersEnabled : timersEnabled;
-    setPracticeSessionEnabled(nextPractice); setTrackProgressEnabled(nextTrack); setTimersEnabled(nextTimers);
+    setPracticeSessionEnabled(nextPractice); setTrackProgressEnabled(nextTrack); setTimersEnabled(nextTimers); setHabitsEnabled(nextHabits);
     setSavingFeature(feature);
-    try { await onProfileSaved({ name: profileName, username: normalizeUsername(username), examName, questionGoal: Number(goal) || 100, manifestation, avatar: avatarFile, practiceSessionEnabled: nextPractice, trackProgressEnabled: nextTrack, timersEnabled: nextTimers }); }
-    catch { setPracticeSessionEnabled(practiceSessionEnabled); setTrackProgressEnabled(trackProgressEnabled); setTimersEnabled(timersEnabled); }
+    try { await onProfileSaved({ ...profileSettings, accentColor: appAccent, name: profileName, username: normalizeUsername(username), examName, questionGoal: Number(goal) || 100, manifestation, avatar: avatarFile, practiceSessionEnabled: nextPractice, trackProgressEnabled: nextTrack, timersEnabled: nextTimers, habitsEnabled: nextHabits }); }
+    catch { setPracticeSessionEnabled(practiceSessionEnabled); setTrackProgressEnabled(trackProgressEnabled); setTimersEnabled(timersEnabled); setHabitsEnabled(habitsEnabled); }
     finally { setSavingFeature(null); }
   };
   useEffect(() => {
@@ -552,12 +581,26 @@ export function ProfileScreen({
       )}
       <View style={styles.profileTop}>
         <View style={styles.profileRow}>
+          <View style={styles.profileTopActions}>
+
           <View
             accessibilityLabel={`Practice streak: ${streak} days`}
-            style={[styles.profileStreak, streak > 0 && styles.profileStreakActive]}
+            style={[styles.profileStreak, { position: "relative", top: undefined, right: undefined }, streak > 0 && styles.profileStreakActive]}
           >
             {streak > 0 ? <StreakFlame streak={streak} /> : <MaterialCommunityIcons name="fire" size={15} color="#a1a1aa" />}
             <ProfileNumber value={streak} style={[styles.profileStreakText, streak > 0 && styles.profileStreakTextActive]} />
+          </View>
+          {!readOnly && <Pressable accessibilityRole="button" accessibilityLabel="Profile settings"
+            hitSlop={6} style={styles.profileSettingsAction}
+            onPress={() => {
+              setUsernameTouched(false);
+              setUsernameStatus(username ? "available" : "idle");
+              setUsernameMessage("");
+              setProfileSettingsOpen(false);
+              setEditing(true);
+            }}>
+            <MaterialCommunityIcons name="cog-outline" size={20} color={colors.text} />
+          </Pressable>}
           </View>
           <View style={[styles.avatar, { width: 70, height: 70, borderRadius: 35 }]}>
             <Pressable style={{ width: 67, height: 67, margin: 0.5 }} onPress={() => setViewingAvatar(true)}>
@@ -581,20 +624,6 @@ export function ProfileScreen({
                 {name}
               </Text>
 
-              {!readOnly && <View style={styles.profileActions}>
-                <Pressable
-                  accessibilityLabel="Edit profile"
-                  hitSlop={10}
-                  onPressIn={() => {
-                    setUsernameTouched(false);
-                    setUsernameStatus(username ? "available" : "idle");
-                    setUsernameMessage("");
-                    setEditing(true);
-                  }}
-                >
-                  <MaterialCommunityIcons name="pencil-outline" size={17} color={colors.muted} />
-                </Pressable>
-              </View>}
             </View>
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginVertical: 4 }}>
               {(["gold", "silver", "bronze"] as const).map((medal, index) => (
@@ -856,10 +885,13 @@ export function ProfileScreen({
                     </Pressable>
                     <Text style={styles.settingsTitle}>Settings</Text>
                   </View>
+                  <NativeScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 18, paddingBottom: 20 }}>
+                  <View style={styles.settingsToggleGroup}>
                   <Pressable
-                    disabled={savingFeature !== null}
+                    accessibilityRole="switch" accessibilityState={{ checked: practiceSessionEnabled }}
+                    disabled={savingFeature !== null || savingAccent}
                     onPress={() => void saveFeature("practice")}
-                    style={styles.featureToggle}
+                    style={[styles.featureToggle, styles.settingsToggleRow]}
                   >
                     <View style={styles.featureToggleContent}>
                       <Text style={styles.featureToggleTitle}>Practice session</Text>
@@ -877,9 +909,10 @@ export function ProfileScreen({
                     </View>}
                   </Pressable>
                   <Pressable
-                    disabled={savingFeature !== null}
+                    accessibilityRole="switch" accessibilityState={{ checked: trackProgressEnabled }}
+                    disabled={savingFeature !== null || savingAccent}
                     onPress={() => void saveFeature("track")}
-                    style={[styles.featureToggle, styles.featureToggleSpacing]}
+                    style={[styles.featureToggle, styles.settingsToggleRow, styles.settingsToggleDivider]}
                   >
                     <View style={styles.featureToggleContent}>
                       <Text style={styles.featureToggleTitle}>Track</Text>
@@ -887,10 +920,36 @@ export function ProfileScreen({
                     </View>
                     {savingFeature === "track" ? <ActivityIndicator size="small" color={colors.accent} /> : <View style={[styles.featureSwitch, trackProgressEnabled && styles.featureSwitchOn]}><View style={[styles.featureKnob, trackProgressEnabled && styles.featureKnobOn]} /></View>}
                   </Pressable>
-                  <Pressable accessibilityRole="switch" accessibilityState={{ checked: timersEnabled }} disabled={savingFeature !== null} onPress={() => void saveFeature("timers")} style={[styles.featureToggle, styles.featureToggleSpacing]}>
+                  <Pressable accessibilityRole="switch" accessibilityState={{ checked: timersEnabled }} disabled={savingFeature !== null || savingAccent} onPress={() => void saveFeature("timers")} style={[styles.featureToggle, styles.settingsToggleRow, styles.settingsToggleDivider]}>
                     <View style={styles.featureToggleContent}><Text style={styles.featureToggleTitle}>Timers</Text><Text style={styles.featureToggleCopy}>Countdowns for important dates and deadlines.</Text></View>
                     {savingFeature === "timers" ? <ActivityIndicator size="small" color={colors.accent} /> : <View style={[styles.featureSwitch, timersEnabled && styles.featureSwitchOn]}><View style={[styles.featureKnob, timersEnabled && styles.featureKnobOn]} /></View>}
                   </Pressable>
+                  <Pressable accessibilityRole="switch" accessibilityState={{ checked: habitsEnabled }} disabled={savingFeature !== null || savingAccent} onPress={() => void saveFeature("habits")} style={[styles.featureToggle, styles.settingsToggleRow, styles.settingsToggleDivider]}>
+                    <View style={styles.featureToggleContent}><Text style={styles.featureToggleTitle}>Habits</Text><Text style={styles.featureToggleCopy}>Daily heatmaps, streaks and personal challenges.</Text></View>
+                    {savingFeature === "habits" ? <ActivityIndicator size="small" color={colors.accent} /> : <View style={[styles.featureSwitch, habitsEnabled && styles.featureSwitchOn]}><View style={[styles.featureKnob, habitsEnabled && styles.featureKnobOn]} /></View>}
+                  </Pressable>
+                  </View>
+                  <View style={styles.accentPanel}>
+                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                      <Text style={styles.featureToggleTitle}>App accent</Text>
+                      {savingAccent && <ActivityIndicator size="small" color={colors.accent} />}
+                    </View>
+                    <Text style={styles.featureToggleCopy}>Choose a color for buttons and selected controls.</Text>
+                    <NativeScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator={false}
+                      style={{ marginTop: 14 }} contentContainerStyle={styles.accentChoices}>
+                      {APP_ACCENTS.map((option) => <Pressable key={option.color}
+                        accessibilityRole="radio" accessibilityLabel={option.name + " accent"}
+                        accessibilityState={{ selected: appAccent === option.color, disabled: savingAccent || savingFeature !== null }}
+                        disabled={savingAccent || savingFeature !== null} onPress={() => void chooseAccent(option.color)}
+                        style={[styles.accentChoice, appAccent === option.color && { borderColor: colors.text }]}>
+                        <View style={[styles.accentSwatch, { backgroundColor: option.color }]}>
+                          {appAccent === option.color && <MaterialCommunityIcons name="check-bold" size={16} color={accentInk(option.color)} />}
+                        </View>
+                      </Pressable>)}
+                    </NativeScrollView>
+                    {!!accentSaveError && <Text style={{ color: "#fca5a5", fontSize: 11 }}>{accentSaveError}</Text>}
+                  </View>
+                  </NativeScrollView>
                 </View>
               )}
               <EditField label="Your name" value={profileName} onChange={setProfileName} />
@@ -910,7 +969,7 @@ export function ProfileScreen({
                     style={styles.usernameInput}
                   />
                   {usernameStatus === "checking" && (
-                    <ActivityIndicator size="small" color="#60a5fa" />
+                    <ActivityIndicator size="small" color={colors.accent} />
                   )}
                   {usernameStatus === "available" && (
                     <MaterialCommunityIcons name="check-circle" size={18} color="#4ade80" />
@@ -1542,7 +1601,7 @@ function StudyTrackerOverview({
           title="Syllabus"
           subtitle={`${totalLectures ? Math.round((doneLectures / totalLectures) * 100) : 0}% complete`}
           rows={syllabus}
-          tone="#60a5fa"
+          tone={colors.accent}
           onPress={() => onOpen("Syllabus")}
         />
       )}
@@ -1641,7 +1700,8 @@ function EditField({
       <Text style={styles.editLabel}>{label.toUpperCase()}</Text>
       <TextInput
         value={value}
-        onChangeText={onChange}
+        autoCapitalize="characters"
+        onChangeText={(value) => onChange(numeric ? value : value.toUpperCase())}
         keyboardType={numeric ? "number-pad" : "default"}
         placeholderTextColor={colors.subdued}
         style={styles.editInput}
@@ -1650,7 +1710,7 @@ function EditField({
   );
 }
 
-const styles: Record<string, any> = StyleSheet.create({
+const styles: Record<string, any> = createThemedStyles({
   page: { flex: 1, backgroundColor: colors.background },
   publicBackRow: { height: 38, paddingHorizontal: 15, justifyContent: "flex-end" },
   profileTop: {
@@ -1662,6 +1722,8 @@ const styles: Record<string, any> = StyleSheet.create({
   },
   bodyScroll: { flex: 1 },
   content: { paddingHorizontal: 11, paddingTop: 10, paddingBottom: 112 },
+  profileTopActions: { position: "absolute", top: 0, right: 0, zIndex: 2, flexDirection: "row", alignItems: "center", gap: 7 },
+  profileSettingsAction: { width: 30, height: 30, alignItems: "center", justifyContent: "center" },
   profileRow: { alignItems: "center", position: "relative" },
   profileStreak: {
     position: "absolute",
@@ -1946,6 +2008,13 @@ const styles: Record<string, any> = StyleSheet.create({
     padding: 17,
     backgroundColor: "#202020",
   },
+  settingsToggleGroup: { borderRadius: 14, backgroundColor: "#151515", borderWidth: 1, borderColor: "#363636", overflow: "hidden" },
+  settingsToggleRow: { borderWidth: 0, borderRadius: 0, backgroundColor: "transparent", paddingVertical: 12 },
+  settingsToggleDivider: { borderTopWidth: 1, borderColor: "#303030" },
+  accentPanel: { borderRadius: 14, backgroundColor: "#151515", borderWidth: 1, borderColor: "#363636", padding: 12 },
+  accentChoices: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 3, paddingHorizontal: 2 },
+  accentChoice: { flexShrink: 0, width: 34, height: 34, borderRadius: 17, borderWidth: 2, borderColor: "transparent", alignItems: "center", justifyContent: "center" },
+  accentSwatch: { width: 26, height: 26, borderRadius: 13, alignItems: "center", justifyContent: "center" },
   settingsPanelHeader: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 18 },
   settingsBack: { color: colors.muted, fontSize: 13, fontWeight: "700" },
   settingsTitle: { color: colors.text, fontSize: 18, fontWeight: "800" },
@@ -2005,7 +2074,7 @@ const styles: Record<string, any> = StyleSheet.create({
     gap: 4,
     paddingVertical: 3,
   },
-  addSubjectsText: { color: "#60a5fa", fontSize: 12, fontWeight: "600" },
+  addSubjectsText: { color: colors.accent, fontSize: 12, fontWeight: "600" },
   subjectSetupLabel: { marginTop: 5, marginBottom: 3 },
   chooseSubjectFile: {
     height: 40,
@@ -2047,9 +2116,9 @@ const styles: Record<string, any> = StyleSheet.create({
     borderColor: "#71717a",
     backgroundColor: "transparent",
   },
-  featureSwitchOn: { borderColor: "#f4f4f5", backgroundColor: "#f4f4f5" },
+  featureSwitchOn: { borderColor: colors.accent, backgroundColor: colors.accent },
   featureKnob: { width: 12, height: 12, borderRadius: 6, backgroundColor: "#a1a1aa" },
-  featureKnobOn: { alignSelf: "flex-end", backgroundColor: "#111111" },
+  featureKnobOn: { alignSelf: "flex-end", backgroundColor: colors.accentDeep },
   manifestationLabel: { marginBottom: 2 },
   manifestationInput: {
     minHeight: 48,
@@ -2075,9 +2144,9 @@ const styles: Record<string, any> = StyleSheet.create({
     borderRadius: 11,
     paddingHorizontal: 13,
     paddingVertical: 9,
-    backgroundColor: "#8fc5f0",
+    backgroundColor: colors.accent,
   },
-  saveProfileText: { color: "#10243a", fontWeight: "600" },
+  saveProfileText: { color: colors.accentDeep, fontWeight: "600" },
   weeklyScore: { borderRadius: 8, paddingHorizontal: 6, paddingVertical: 3 },
   weeklyScorePositive: { backgroundColor: "rgba(74,222,128,.12)" },
   weeklyScoreNegative: { backgroundColor: "rgba(248,113,113,.12)" },

@@ -840,7 +840,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
   const [importingData, setImportingData] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
-  const [savingFeature, setSavingFeature] = useState<"practice" | "track" | "timers" | null>(null);
+  const [savingFeature, setSavingFeature] = useState<"practice" | "track" | "timers" | "habits" | null>(null);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [previewingAvatar, setPreviewingAvatar] = useState(false);
   const [isAvatarChanging, setIsAvatarChanging] = useState(false);
@@ -856,6 +856,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
   const [practiceSessionEnabledDraft, setPracticeSessionEnabledDraft] = useState(true);
   const [trackProgressEnabledDraft, setTrackProgressEnabledDraft] = useState(true);
   const [timersEnabledDraft, setTimersEnabledDraft] = useState(true);
+  const [habitsEnabledDraft, setHabitsEnabledDraft] = useState(true);
   const [profileSettingsOpen, setProfileSettingsOpen] = useState(false);
   const [importMessage, setImportMessage] = useState("");
   const [promptCopied, setPromptCopied] = useState(false);
@@ -905,6 +906,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
       setPracticeSessionEnabledDraft(saved?.practiceSessionEnabled !== false);
       setTrackProgressEnabledDraft(saved?.trackProgressEnabled !== false);
       setTimersEnabledDraft(saved?.timersEnabled !== false);
+      setHabitsEnabledDraft(saved?.habitsEnabled !== false);
       setProfile(saved);
       setNameDraft(saved?.name ?? "");
       setUsernameDraft(saved?.username ?? ""); setUsernameTouched(false);
@@ -1007,6 +1009,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
       practiceSessionEnabled: practiceSessionEnabledDraft,
       trackProgressEnabled: trackProgressEnabledDraft,
       timersEnabled: timersEnabledDraft,
+      habitsEnabled: habitsEnabledDraft,
     };
     try {
       if (authUser) await saveProfileWithUsername(authUser, next);
@@ -1034,10 +1037,12 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
       setIsSavingProfile(false);
     }
   };
-  const saveFeature = async (feature: "practice" | "track" | "timers") => {
+  const saveFeature = async (feature: "practice" | "track" | "timers" | "habits") => {
     if (savingFeature || isSavingProfile) return;
     const nextPractice = feature === "practice" ? !practiceSessionEnabledDraft : practiceSessionEnabledDraft;
     const nextTrack = feature === "track" ? !trackProgressEnabledDraft : trackProgressEnabledDraft;
+    const nextHabits = feature === "habits" ? !habitsEnabledDraft : habitsEnabledDraft;
+    const previousHabits = habitsEnabledDraft;
     const nextTimers = feature === "timers" ? !timersEnabledDraft : timersEnabledDraft;
     const previousTimers = timersEnabledDraft;
     const previousPractice = practiceSessionEnabledDraft;
@@ -1047,6 +1052,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
     setPracticeSessionEnabledDraft(nextPractice);
     setTrackProgressEnabledDraft(nextTrack);
     setTimersEnabledDraft(nextTimers);
+    setHabitsEnabledDraft(nextHabits);
     setSavingFeature(feature);
     const next = {
       name: nameDraft.trim() || profile?.name || "Student",
@@ -1060,6 +1066,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
       practiceSessionEnabled: nextPractice,
       trackProgressEnabled: nextTrack,
       timersEnabled: nextTimers,
+      habitsEnabled: nextHabits,
     };
     try {
       if (authUser && next.username) await saveProfileWithUsername(authUser, next);
@@ -1069,6 +1076,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
       setPracticeSessionEnabledDraft(previousPractice);
       setTrackProgressEnabledDraft(previousTrack);
       setTimersEnabledDraft(previousTimers);
+      setHabitsEnabledDraft(previousHabits);
       const message = error instanceof Error ? error.message : "Could not update this setting.";
       setUsernameMessage(message);
     } finally {
@@ -1101,6 +1109,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
       practiceSessionEnabled: profile?.practiceSessionEnabled !== false,
       trackProgressEnabled: profile?.trackProgressEnabled !== false,
       timersEnabled: profile?.timersEnabled !== false,
+      habitsEnabled: profile?.habitsEnabled !== false,
     };
     savePracticeProfile(next);
     if (authUser && next.username) void saveProfileWithUsername(authUser, next).catch(() => undefined);
@@ -1370,7 +1379,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
                 <span className={cn("relative h-5 w-9 rounded-full border transition-colors", practiceSessionEnabledDraft ? "border-zinc-100 bg-zinc-100" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", practiceSessionEnabledDraft ? "translate-x-5 bg-zinc-900" : "translate-x-1 bg-zinc-400")} /></span>
               </button>}
             </div>
-            {profileSettingsOpen && <div className="absolute inset-0 z-10 rounded-2xl bg-[#1e1e1e] p-6 sm:p-8"><div className="flex items-center gap-2"><button type="button" aria-label="Back to profile form" onClick={() => setProfileSettingsOpen(false)} className="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 hover:bg-white/10 hover:text-white"><ArrowLeft className="h-4 w-4" /></button><h3 className="text-lg font-semibold">Settings</h3></div><div className="mt-6 space-y-3"><button type="button" disabled={savingFeature !== null} onClick={() => void saveFeature("practice")} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#151515] px-3 py-3 text-left disabled:cursor-wait disabled:opacity-70"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Practice session</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Take practice tests, review answers and track your results.</span></span>{savingFeature === "practice" ? <LoaderCircle className="h-5 w-5 shrink-0 animate-spin text-sky-400" /> : <span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", practiceSessionEnabledDraft ? "border-zinc-100 bg-zinc-100" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", practiceSessionEnabledDraft ? "translate-x-5 bg-zinc-900" : "translate-x-1 bg-zinc-400")} /></span>}</button><button type="button" disabled={savingFeature !== null} onClick={() => void saveFeature("track")} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#151515] px-3 py-3 text-left disabled:cursor-wait disabled:opacity-70"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Track</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Track syllabus, revision and mock test progress.</span></span>{savingFeature === "track" ? <LoaderCircle className="h-5 w-5 shrink-0 animate-spin text-sky-400" /> : <span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", trackProgressEnabledDraft ? "border-zinc-100 bg-zinc-100" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", trackProgressEnabledDraft ? "translate-x-5 bg-zinc-900" : "translate-x-1 bg-zinc-400")} /></span>}</button><button type="button" role="switch" aria-checked={timersEnabledDraft} disabled={savingFeature !== null} onClick={() => void saveFeature("timers")} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#151515] px-3 py-3 text-left disabled:cursor-wait disabled:opacity-70"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Timers</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Countdowns for important dates and deadlines.</span></span>{savingFeature === "timers" ? <LoaderCircle className="h-5 w-5 shrink-0 animate-spin text-sky-400" /> : <span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", timersEnabledDraft ? "border-zinc-100 bg-zinc-100" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", timersEnabledDraft ? "translate-x-5 bg-zinc-900" : "translate-x-1 bg-zinc-400")} /></span>}</button></div></div>}
+            {profileSettingsOpen && <div className="absolute inset-0 z-10 rounded-2xl bg-[#1e1e1e] p-6 sm:p-8"><div className="flex items-center gap-2"><button type="button" aria-label="Back to profile form" onClick={() => setProfileSettingsOpen(false)} className="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 hover:bg-white/10 hover:text-white"><ArrowLeft className="h-4 w-4" /></button><h3 className="text-lg font-semibold">Settings</h3></div><div className="mt-6 space-y-3"><button type="button" disabled={savingFeature !== null} onClick={() => void saveFeature("practice")} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#151515] px-3 py-3 text-left disabled:cursor-wait disabled:opacity-70"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Practice session</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Take practice tests, review answers and track your results.</span></span>{savingFeature === "practice" ? <LoaderCircle className="h-5 w-5 shrink-0 animate-spin text-sky-400" /> : <span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", practiceSessionEnabledDraft ? "border-zinc-100 bg-zinc-100" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", practiceSessionEnabledDraft ? "translate-x-5 bg-zinc-900" : "translate-x-1 bg-zinc-400")} /></span>}</button><button type="button" disabled={savingFeature !== null} onClick={() => void saveFeature("track")} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#151515] px-3 py-3 text-left disabled:cursor-wait disabled:opacity-70"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Track</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Track syllabus, revision and mock test progress.</span></span>{savingFeature === "track" ? <LoaderCircle className="h-5 w-5 shrink-0 animate-spin text-sky-400" /> : <span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", trackProgressEnabledDraft ? "border-zinc-100 bg-zinc-100" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", trackProgressEnabledDraft ? "translate-x-5 bg-zinc-900" : "translate-x-1 bg-zinc-400")} /></span>}</button><button type="button" role="switch" aria-checked={timersEnabledDraft} disabled={savingFeature !== null} onClick={() => void saveFeature("timers")} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#151515] px-3 py-3 text-left disabled:cursor-wait disabled:opacity-70"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Timers</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Countdowns for important dates and deadlines.</span></span>{savingFeature === "timers" ? <LoaderCircle className="h-5 w-5 shrink-0 animate-spin text-sky-400" /> : <span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", timersEnabledDraft ? "border-zinc-100 bg-zinc-100" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", timersEnabledDraft ? "translate-x-5 bg-zinc-900" : "translate-x-1 bg-zinc-400")} /></span>}</button><button type="button" role="switch" aria-checked={habitsEnabledDraft} disabled={savingFeature !== null} onClick={() => void saveFeature("habits")} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#151515] px-3 py-3 text-left disabled:cursor-wait disabled:opacity-70"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Habits</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Daily heatmaps, streaks and personal challenges.</span></span>{savingFeature === "habits" ? <LoaderCircle className="h-5 w-5 shrink-0 animate-spin text-sky-400" /> : <span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", habitsEnabledDraft ? "border-zinc-100 bg-zinc-100" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", habitsEnabledDraft ? "translate-x-5 bg-zinc-900" : "translate-x-1 bg-zinc-400")} /></span>}</button></div></div>}
             <div className="mt-4 flex justify-end gap-2">
               <Button
                 variant="outline"

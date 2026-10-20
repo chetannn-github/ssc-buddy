@@ -1,3 +1,4 @@
+import { createThemedStyles } from "../theme";
 import { Animated, StyleSheet, View } from "react-native";
 import { heatmapCellColors } from "../domain/heatmap-colors";
 import type { HeatmapColorCycle } from "../domain/heatmap-colors";
@@ -45,7 +46,7 @@ export function ProfileAvatarLiquid({ size, theme }: { size: number; theme: Heat
     </View>
   );
 }
-const styles = StyleSheet.create({
+const styles = createThemedStyles({
   clip: { ...StyleSheet.absoluteFill, borderRadius: 999, overflow: "hidden" },
   shine: {
     position: "absolute",

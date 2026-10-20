@@ -1,3 +1,4 @@
+import { createThemedStyles } from "../theme";
 import { useEffect, useRef, useState } from "react";
 import {
   AccessibilityInfo,
@@ -183,7 +184,7 @@ export function LiquidProgressBar({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles({
   track: {
     height: 9,
     overflow: "hidden",

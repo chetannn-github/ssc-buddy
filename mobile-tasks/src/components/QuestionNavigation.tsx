@@ -1,3 +1,4 @@
+import { createThemedStyles } from "../theme";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Pressable,
@@ -70,7 +71,7 @@ export function QuestionPalette({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles({
   row: { flexDirection: "row", alignItems: "center", gap: QUESTION_PALETTE_GAP },
   item: {
     width: QUESTION_PALETTE_ITEM_WIDTH,

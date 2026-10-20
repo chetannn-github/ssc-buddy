@@ -197,3 +197,18 @@ test("pending local answers survive stale cloud learning snapshots", () => {
   assert.equal(merged["maths:0"].askedCount, 4);
   assert.ok(merged["maths:1"]);
 });
+
+test("3, 5 and 10 question sessions select distinct questions from one subject", () => {
+  const questions = [...Array.from({ length: 12 }, (_, index) => question(String(index))),
+    ...Array.from({ length: 12 }, (_, index) => question(String(index), "english"))];
+  for (const count of [3, 5, 10]) {
+    const result = select(questions, new Set(), {}, new Map(), now, () => 0.5, count);
+    assert.equal(result.length, count);
+    assert.equal(new Set(result.map((item) => item.subjectId)).size, 1);
+    assert.equal(new Set(result.map((item) => item.id)).size, count);
+  }
+});
+test("larger recall requests cap at available questions without duplicates", () => {
+  assert.equal(select(bank, new Set(), {}, new Map(), now, () => 0.5, 10).length, 6);
+  assert.equal(select(bank, new Set(), {}, new Map(), now, () => 0.5).length, 3);
+});

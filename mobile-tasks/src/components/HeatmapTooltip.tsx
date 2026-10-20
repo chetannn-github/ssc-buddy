@@ -1,3 +1,4 @@
+import { createThemedStyles } from "../theme";
 import { useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
@@ -18,7 +19,7 @@ export function HeatmapTooltip({ tooltip }: { tooltip: HeatmapTooltipData }) {
   ><Text accessibilityLiveRegion="polite" style={styles.text}>{tooltip.text}</Text></View>;
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles({
   tooltip: { position: "absolute", zIndex: 100, elevation: 20, borderWidth: 1, borderColor: "#3f3f46", backgroundColor: "#1d1d1d", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, shadowColor: "#000", shadowOpacity: 0.3, shadowRadius: 10, shadowOffset: { width: 0, height: 3 } },
   text: { color: "#e4e4e7", fontSize: 10, fontWeight: "500", textAlign: "center" },
 });

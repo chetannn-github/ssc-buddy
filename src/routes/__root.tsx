@@ -391,7 +391,7 @@ function RootComponent() {
     let stopProfileWatch: (() => void) | undefined;
     const clean = (profile: Record<string, unknown>) =>
       Object.fromEntries(
-        ["name", "username", "questionGoal", "examName", "manifestation", "avatar", "practiceSessionEnabled", "trackProgressEnabled", "timersEnabled"]
+        ["name", "username", "questionGoal", "examName", "manifestation", "avatar", "practiceSessionEnabled", "trackProgressEnabled", "timersEnabled", "habitsEnabled"]
           .filter((key) => profile[key] !== undefined)
           .map((key) => [key, profile[key]]),
       );

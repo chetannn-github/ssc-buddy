@@ -1,3 +1,4 @@
+import { normalizeAppAccent, type AppAccent } from "../domain/app-accent";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export const PROFILE_KEY = "cbt-practice-profile";
@@ -13,6 +14,8 @@ export type PracticeProfile = {
   practiceSessionEnabled?: boolean;
   trackProgressEnabled?: boolean;
   timersEnabled?: boolean;
+  habitsEnabled?: boolean;
+  accentColor?: AppAccent;
 };
 
 export const defaultProfile = (): PracticeProfile => ({ name: "", questionGoal: 100, manifestation: "" });
@@ -22,6 +25,7 @@ export function normalizeProfile(value: unknown): PracticeProfile {
   const legacyGoal = typeof profile.goal === "string" || typeof profile.goal === "number" ? Number(profile.goal) : 100;
   const questionGoal = typeof profile.questionGoal === "number" ? profile.questionGoal : legacyGoal;
   return {
+    accentColor: normalizeAppAccent(profile.accentColor),
     name: typeof profile.name === "string" ? profile.name.trim() : "",
     ...(typeof profile.username === "string" && profile.username.trim() ? { username: profile.username.trim().toLowerCase() } : {}),
     questionGoal: Math.max(1, Math.min(100000, Math.round(Number.isFinite(questionGoal) ? questionGoal : 100))),
@@ -31,6 +35,7 @@ export function normalizeProfile(value: unknown): PracticeProfile {
     ...(typeof profile.practiceSessionEnabled === "boolean" ? { practiceSessionEnabled: profile.practiceSessionEnabled } : {}),
     ...(typeof profile.trackProgressEnabled === "boolean" ? { trackProgressEnabled: profile.trackProgressEnabled } : {}),
     ...(typeof profile.timersEnabled === "boolean" ? { timersEnabled: profile.timersEnabled } : {}),
+    ...(typeof profile.habitsEnabled === "boolean" ? { habitsEnabled: profile.habitsEnabled } : {}),
   };
 }
 

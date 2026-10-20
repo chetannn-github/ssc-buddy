@@ -1,3 +1,4 @@
+import { createThemedStyles } from "../theme";
 import { useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Keyboard, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -18,7 +19,7 @@ export function CalendarDatePicker({ value, onChange, disabled = false, onOpen }
   const arrow = (direction: "chevron-left" | "chevron-right", label: string, amount: number) => <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={() => move(amount)} style={s.arrow}><MaterialCommunityIcons name={direction} size={23} color={colors.text} /></Pressable>;
   return <View style={{ minWidth: 0 }}>
     <Pressable accessibilityRole="button" accessibilityLabel="Choose date" accessibilityState={{ disabled, expanded: open }} disabled={disabled} onPress={() => { Keyboard.dismiss(); onOpen?.(); setMonth(valid ? new Date(selected.getFullYear(), selected.getMonth(), 1) : new Date()); setOpen(true); }} style={s.field}>
-      <Text numberOfLines={1} style={s.value}>{valid ? selected.toLocaleDateString(undefined, { dateStyle: "medium" }) : "Choose date"}</Text><MaterialCommunityIcons name="calendar-month-outline" size={19} color="#60a5fa" />
+      <Text numberOfLines={1} style={s.value}>{valid ? selected.toLocaleDateString(undefined, { dateStyle: "medium" }) : "Choose date"}</Text><MaterialCommunityIcons name="calendar-month-outline" size={19} color={colors.accent} />
     </Pressable>
     <Modal transparent visible={open} animationType="fade" onRequestClose={() => setOpen(false)}>
       <Pressable style={s.backdrop} onPress={() => setOpen(false)}>
@@ -44,7 +45,7 @@ export function CalendarDatePicker({ value, onChange, disabled = false, onOpen }
     </Modal>
   </View>;
 }
-const s = StyleSheet.create({
+const s = createThemedStyles({
   field: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, paddingHorizontal: 12, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: "#404040", backgroundColor: "#151515" },
   value: { color: colors.text, fontSize: 14, flex: 1 },
   backdrop: { flex: 1, alignItems: "center", justifyContent: "center", padding: 20, backgroundColor: "rgba(0,0,0,.78)" },
@@ -53,6 +54,6 @@ const s = StyleSheet.create({
   navigation: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, arrow: { padding: 10 }, year: { color: colors.muted, fontSize: 13, fontWeight: "600" }, month: { color: colors.text, fontSize: 16, fontWeight: "700" },
   grid: { flexDirection: "row", flexWrap: "wrap" }, weekday: { width: "14.285714%", alignItems: "center", paddingVertical: 8 }, weekdayText: { color: colors.muted, fontSize: 11 },
   cell: { width: "14.285714%", aspectRatio: 1, padding: 2 }, day: { flex: 1, alignItems: "center", justifyContent: "center", borderRadius: 10 }, dayText: { color: colors.text, fontSize: 14 },
-  today: { borderWidth: 1, borderColor: "#426eaa" }, selected: { backgroundColor: "#60a5fa", borderWidth: 0 }, selectedText: { color: "#081a31", fontWeight: "800" },
-  footer: { flexDirection: "row", justifyContent: "space-between", marginTop: 10 }, footerButton: { paddingHorizontal: 14, paddingVertical: 12 }, todayText: { color: "#60a5fa", fontWeight: "700" }, cancelText: { color: colors.muted, fontWeight: "700" },
+  today: { borderWidth: 1, borderColor: "#426eaa" }, selected: { backgroundColor: colors.accent, borderWidth: 0 }, selectedText: { color: colors.accentDeep, fontWeight: "800" },
+  footer: { flexDirection: "row", justifyContent: "space-between", marginTop: 10 }, footerButton: { paddingHorizontal: 14, paddingVertical: 12 }, todayText: { color: colors.accent, fontWeight: "700" }, cancelText: { color: colors.muted, fontWeight: "700" },
 });

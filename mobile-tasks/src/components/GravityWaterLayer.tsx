@@ -1,3 +1,4 @@
+import { createThemedStyles } from "../theme";
 import type { ReactNode } from "react";
 import { StyleSheet } from "react-native";
 import Reanimated, { SensorType, useAnimatedReaction, useAnimatedSensor, useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
@@ -34,4 +35,4 @@ export function GravityWaterLayer({ children }: { children: ReactNode }) {
   const tiltStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${angle.value}rad` }] }));
   return <Reanimated.View pointerEvents="none" style={[s.plane, tiltStyle]}>{children}</Reanimated.View>;
 }
-const s = StyleSheet.create({ plane: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 } });
+const s = createThemedStyles({ plane: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 } });

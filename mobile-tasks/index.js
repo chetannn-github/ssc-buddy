@@ -16,7 +16,10 @@ if (supportsAndroidWidgets) {
   const { TimerWidgetConfiguration, TimerWidgetShortcut } = require("./src/widgets/TimerWidgetConfiguration");
   AppRegistry.registerComponent("TimerWidgetSetup", () => TimerWidgetShortcut);
   const { timerWidgetView, removeTimerWidget, bindPendingTimerWidget } = require("./src/widgets/timer-widget-store");
-  registerWidgetConfigurationScreen(TimerWidgetConfiguration);
+  const { HabitWidgetConfiguration } = require("./src/widgets/HabitWidgetConfiguration");
+  const React = require("react");
+  registerWidgetConfigurationScreen((props) => React.createElement(props.widgetInfo.widgetName === "HabitWidget" ? HabitWidgetConfiguration : TimerWidgetConfiguration, props));
+  const { habitWidgetView, removeHabitWidget, bindPendingHabitWidget, actOnHabitWidget } = require("./src/widgets/habit-widget-store");
   const { registerWidgetTaskHandler } = require("react-native-android-widget");
   const { renderDailyTasksWidget } = require("./src/widgets/DailyTasksWidget");
   const { renderQuickRecallWidget } = require("./src/widgets/QuickRecallWidget");
@@ -60,6 +63,15 @@ if (supportsAndroidWidgets) {
   };
 
   registerWidgetTaskHandler(async ({ widgetInfo, widgetAction, clickAction, clickActionData, renderWidget }) => {
+    if (widgetInfo.widgetName === "HabitWidget") {
+      if (widgetAction === "WIDGET_DELETED") { await removeHabitWidget(widgetInfo.widgetId); return; }
+      const user = await getWidgetUser(); let error = "";
+      if (widgetAction === "WIDGET_ADDED") await bindPendingHabitWidget(widgetInfo.widgetId, user?.uid);
+      if (widgetAction === "WIDGET_CLICK" && user && clickAction?.startsWith("HABIT_")) {
+        try { await actOnHabitWidget(widgetInfo.widgetId, user.uid, clickAction); } catch { error = "Could not save. Tap to retry."; }
+      }
+      renderWidget(await habitWidgetView(widgetInfo.widgetId, user?.uid, error)); return;
+    }
     if (widgetInfo.widgetName === "TimerWidget") {
       if (widgetAction === "WIDGET_DELETED") { await removeTimerWidget(widgetInfo.widgetId); return; }
       const widgetUser = await getWidgetUser();

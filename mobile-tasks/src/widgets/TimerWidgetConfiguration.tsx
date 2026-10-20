@@ -1,5 +1,6 @@
+import { UppercaseTextInput as TextInput } from "../components/UppercaseTextInput";
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, BackHandler, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, BackHandler, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { WidgetConfigurationScreenProps } from "react-native-android-widget";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, doc, onSnapshot, setDoc } from "firebase/firestore";

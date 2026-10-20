@@ -8,7 +8,9 @@
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "androidStatusBar": {
-      "hidden": true
+      "hidden": true,
+      "backgroundColor": "#000000",
+      "barStyle": "light-content"
     },
     "android": {
       "package": "com.sscbuddy.tasks",
@@ -28,7 +30,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#101010",
+          "backgroundColor": "#000000",
           "image": "./assets/auth.jpg",
           "imageWidth": 200,
           "resizeMode": "contain"
@@ -46,6 +48,7 @@
         "react-native-android-widget",
         {
           "widgets": [
+            { "name": "HabitWidget", "label": "Habit", "description": "Track one habit, streak and daily progress", "minWidth": "180dp", "minHeight": "210dp", "targetCellWidth": 2, "targetCellHeight": 3, "resizeMode": "horizontal|vertical", "updatePeriodMillis": 1800000, "widgetFeatures": "reconfigurable" },
             { "name": "TimerWidget", "label": "Timer", "description": "Countdown for an important date", "minWidth": "160dp", "minHeight": "150dp", "targetCellWidth": 2, "targetCellHeight": 2, "resizeMode": "horizontal|vertical", "updatePeriodMillis": 1800000, "widgetFeatures": "reconfigurable" },
             {
               "name": "DailyTasksWidget",
@@ -72,7 +75,8 @@
           ]
         }
       ],
-      "expo-asset"
+      "expo-asset",
+      "expo-notifications"
     ],
     "extra": {
       "eas": {

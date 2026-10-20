@@ -1,3 +1,9 @@
+import { UppercaseTextInput as TextInput } from "./src/components/UppercaseTextInput";
+import { setAppAccent, useAppAccent } from "./src/theme";
+import { createThemedStyles } from "./src/theme";
+import { TaskOverview } from "./src/components/TaskOverview";
+import { DailySectionHeader } from "./src/components/DailySectionHeader";
+import { colors, dailyTaskColors } from "./src/theme";
 import { DropdownChevron } from "./src/components/DropdownChevron";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -23,7 +29,6 @@ import {
   ScrollView as NativeScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { NumberFlow } from "number-flow-react-native";
@@ -41,8 +46,6 @@ import {
   type TaskType,
 } from "./src/domain/tasks";
 import { LiquidProgressBar } from "./src/components/ProfileXpBar";
-import { LiquidSpillCard } from "./src/components/LiquidSpillCard";
-import { TimerLiquidDial } from "./src/components/TimerLiquidDial";
 import { TaskRow } from "./src/components/TaskRow";
 import { WeeklyAwardCelebration } from "./src/components/WeeklyAwardCelebration";
 import { CelebrationFireworks } from "./src/components/CelebrationFireworks";
@@ -60,6 +63,9 @@ import { LeaderboardScreen } from "./src/screens/LeaderboardScreen";
 import { MediaOverlay, type MediaMode } from "./src/screens/MediaOverlay";
 import { PracticeScreen } from "./src/screens/PracticeScreen";
 import { TrackScreen } from "./src/screens/TrackScreen";
+import { useHabitReminders } from "./src/hooks/use-habit-reminders";
+import { getNativeNotifications } from "./src/lib/native-notifications";
+import { HabitsScreen } from "./src/screens/HabitsScreen";
 import { TimersScreen } from "./src/screens/TimersScreen";
 import { ProgressScreen } from "./src/screens/ProgressScreen";
 import { QuickRecallScreen } from "./src/screens/QuickRecallScreen";
@@ -76,9 +82,6 @@ void ExpoSplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 const rankMedals = [require("./assets/gold-medal.png"), require("./assets/silver-medal.png"), require("./assets/bronze-medal.png")];
 
-type TaskRange = "today" | "week" | "month" | "3months" | "year";
-const TASK_RANGE_LABELS: Record<TaskRange, string> = { today: "Today", week: "This week", month: "This month", "3months": "Last 3 months", year: "This year" };
-const TASK_TABS = ["Tasks", "Analytics", "History"] as const;
 const MANIFESTATION_COMPLETION_PREFIX = "ssc-buddy:manifestation-completion";
 const WIDGET_META_STORAGE_KEY = "ssc-buddy:widget-meta:v1";
 const localDateKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -112,13 +115,6 @@ function manifestationCompletionKey(userId?: string) {
 }
 
 const ScrollView = (props: any) => <NativeScrollView {...props} scrollEventThrottle={16} onScroll={(event) => { if (!props.horizontal) reportVerticalScroll(event.nativeEvent.contentOffset.y); props.onScroll?.(event); }} />;
-
-function CompletionRing({ percent }: { percent: number }) {
-  const value = Math.max(0, Math.min(100, percent));
-  return <TimerLiquidDial dial={{ label: `${value}%`, status: "", progress: value / 100 }} color="#60a5fa" fillColor="#1d4ea6" animateOnMount size={112}>
-    <RollingMetric value={value} suffix="%" color="#fafafa" fontSize={25} />
-  </TimerLiquidDial>;
-}
 
 function AnimatedMetric({ value, format = (next: number) => String(next) }: { value: number; format?: (value: number) => string }) {
   const animated = useRef(new Animated.Value(0)).current;
@@ -236,7 +232,11 @@ export default function App() {
   const [celebratedStreak, setCelebratedStreak] = useState<number | null>(null);
   const [celebratedLevel, setCelebratedLevel] = useState<number | null>(null);
   const [profileSettings, setProfileSettings] = useState<PracticeProfile | null>(null);
+  useAppAccent();
+  useEffect(() => { setAppAccent(profileSettings?.accentColor); }, [profileSettings?.accentColor]);
   const [appTab, setAppTab] = useState<TabKey>("tasks");
+  const taskSection = useRef<"tasks" | "habits">("tasks");
+  useEffect(() => { if (appTab === "tasks" || appTab === "habits") taskSection.current = appTab; }, [appTab]);
   const [timerWidgetRequest, setTimerWidgetRequest] = useState(0);
   const initialWidgetUrlRead = useRef(false);
   const [trackTab, setTrackTab] = useState<"Syllabus" | "Revision" | "Mock Test">("Syllabus");
@@ -250,19 +250,12 @@ export default function App() {
   const profileCacheVersion = useRef(0);
   const previousStreak = useRef<number | null>(null);
   const previousXpLevel = useRef<number | null>(null);
-  const [tab, setTab] = useState<"Tasks" | "Analytics" | "History">("Tasks");
-  const [taskTabsWidth, setTaskTabsWidth] = useState(0);
-  const taskTabIndicator = useRef(new Animated.Value(0)).current;
-  const taskSwipeStartX = useRef<number | null>(null);
-  const [taskDay, setTaskDay] = useState<"today" | "tomorrow">("today");
-  const [analyticsRange, setAnalyticsRange] = useState<TaskRange>("week");
-  const [analyticsSubject, setAnalyticsSubject] = useState("All subjects");
-  const [historyRange, setHistoryRange] = useState<TaskRange>("week");
-  const [selectedHistoryDate, setSelectedHistoryDate] = useState<string | null>(null);
-  const [analyticsRangeOpen, setAnalyticsRangeOpen] = useState(false);
-  const [analyticsSubjectOpen, setAnalyticsSubjectOpen] = useState(false);
-  const [historyRangeOpen, setHistoryRangeOpen] = useState(false);
-  const [historyDateOpen, setHistoryDateOpen] = useState(false);
+  const [taskDay, setTaskDayMode] = useState<"today" | "tomorrow">("today");
+  const [taskDueOnly, setTaskDueOnly] = useState(false);
+  const [taskHistoryDate, setTaskHistoryDate] = useState<string | null>(null);
+  const [dailyWeekEnd, setDailyWeekEnd] = useState<string | undefined>();
+  const setTaskDay = (value: "today" | "tomorrow" | ((current: "today" | "tomorrow") => "today" | "tomorrow")) => { setTaskHistoryDate(null); setTaskDayMode(value); };
+  useEffect(() => {setTaskHistoryDate(null);setTaskDayMode("today");}, [user?.uid]);
   const [editor, setEditor] = useState<Task | "new" | null>(null);
   const [name, setName] = useState("");
   const [subject, setSubject] = useState("Other");
@@ -299,29 +292,11 @@ export default function App() {
     });
     return () => { if (midnightTimer) clearTimeout(midnightTimer); appStateSubscription.remove(); };
   }, []);
+  useHabitReminders(user?.uid, profileSettings?.habitsEnabled !== false);
   const activeAppTab = tabs.find((item) => item.key === appTab) ?? tabs[0];
-  const activeTaskTabIndex = TASK_TABS.indexOf(tab);
-  const handleTaskSwipeEnd = (endX: number) => {
-    const startX = taskSwipeStartX.current;
-    taskSwipeStartX.current = null;
-    if (startX === null || Math.abs(endX - startX) < 56) return;
-    const direction = endX < startX ? 1 : -1;
-    const nextIndex = (activeTaskTabIndex + direction + TASK_TABS.length) % TASK_TABS.length;
-    setTab(TASK_TABS[nextIndex]);
-  };
   // Task-only users can build their own subject list without creating a syllabus.
   const subjectOptions = [...new Set(tasks.map((task) => task.subject).filter(Boolean))];
   if (!subjectOptions.length) subjectOptions.push("Other");
-  useEffect(() => {
-    if (!taskTabsWidth) return;
-    Animated.spring(taskTabIndicator, {
-      toValue: activeTaskTabIndex * (taskTabsWidth / TASK_TABS.length),
-      damping: 18,
-      stiffness: 220,
-      mass: 0.65,
-      useNativeDriver: true,
-    }).start();
-  }, [activeTaskTabIndex, taskTabIndicator, taskTabsWidth]);
   const refreshDailyTasksWidget = (next: Task[]) => {
     if (Platform.OS !== "android") return;
     try {
@@ -485,6 +460,7 @@ export default function App() {
   useEffect(() => {
     if (profileSettings?.trackProgressEnabled === false && (appTab === "track" || appTab === "progress")) setAppTab("profile");
   }, [appTab, profileSettings?.trackProgressEnabled]);
+  useEffect(() => { if (profileSettings?.habitsEnabled === false && appTab === "habits") setAppTab("tasks"); }, [appTab, profileSettings?.habitsEnabled]);
   useEffect(() => { if (profileSettings?.timersEnabled === false && appTab === "timers") setAppTab("profile"); }, [appTab, profileSettings?.timersEnabled]);
 
   useEffect(() => {
@@ -508,6 +484,7 @@ export default function App() {
   useEffect(() => {
     if (!tasksLoaded) return;
     const openCompletionFromWidget = (url: string | null) => {
+      if (url?.startsWith("sscbuddy://habits")) { setAppTab("habits"); return; }
       if (url?.startsWith("sscbuddy://music")) { setMediaMode("music"); setMusicOpenRequest((value) => value + 1); return; }
       if (url?.startsWith("sscbuddy://timers")) {
         setAppTab("timers");
@@ -517,7 +494,6 @@ export default function App() {
       if (!url?.startsWith("sscbuddy://tasks")) return;
       if (!url.startsWith("sscbuddy://tasks/complete")) {
         setAppTab("tasks");
-        setTab("Tasks");
         setTaskDay("today");
         return;
       }
@@ -525,7 +501,6 @@ export default function App() {
       const task = taskId ? tasks.find((item) => item.id === decodeURIComponent(taskId)) : undefined;
       if (!task || task.completed) return;
       setAppTab("tasks");
-      setTab("Tasks");
       setTaskDay("today");
       setSpent(String(task.minutesSpent ?? 60));
       setCompletion(task);
@@ -534,8 +509,11 @@ export default function App() {
       initialWidgetUrlRead.current = true;
       void Linking.getInitialURL().then(openCompletionFromWidget).catch(() => undefined);
     }
+    const HabitNotifications = getNativeNotifications();
+    const notification = HabitNotifications?.addNotificationResponseReceivedListener(response => { const url = response.notification.request.content.data?.["url"]; if (typeof url === "string") { openCompletionFromWidget(url); void HabitNotifications?.clearLastNotificationResponseAsync().catch(() => undefined); } });
+    if (HabitNotifications) void HabitNotifications.getLastNotificationResponseAsync().then(response => { const url = response?.notification.request.content.data?.["url"]; if (typeof url === "string") { openCompletionFromWidget(url); void HabitNotifications.clearLastNotificationResponseAsync().catch(() => undefined); } }).catch(() => undefined);
     const subscription = Linking.addEventListener("url", ({ url }) => openCompletionFromWidget(url));
-    return () => subscription.remove();
+    return () => { subscription.remove(); notification?.remove(); };
   }, [tasks, tasksLoaded]);
   useEffect(() => {
     if (!authenticated || !user || !tasksLoaded) return;
@@ -624,44 +602,17 @@ export default function App() {
   }, [calendarDay, profileSettings?.username, tasksLoaded, user?.uid]);
   const today = calendarDay;
   const tomorrow = dateKeyFromOffset(1);
-  const inRange = (value: string, range: TaskRange) => { const days = range === "today" ? 1 : range === "week" ? 7 : range === "month" ? 31 : range === "3months" ? 92 : 366; const from = dateKeyFromOffset(-(days - 1)); return value >= from && value <= today; };
-  const todayTasks = tasks.filter((task) => task.date === (taskDay === "today" ? today : tomorrow));
+  const activeTaskDate = taskHistoryDate ?? (taskDay === "today" ? today : tomorrow);
+  const isTaskHistory = activeTaskDate < today;
+  const todayTasks = tasks.filter((task) => task.date === activeTaskDate);
   const todaySummary = summarizeTasks(todayTasks);
+  const dueTasks = todayTasks.filter((task) => !task.completed);
+  const visibleTasks = taskDueOnly ? dueTasks : todayTasks;
   const taskPoints = useMemo(() => weeklyTaskPointMap(tasks), [tasks, calendarDay]);
   const weeklyPoints = useMemo(() => [...taskPoints.values()].reduce((total, points) => total + points, 0) - weeklyInactivityPenalty(tasks), [taskPoints, tasks]);
   const tomorrowTaskCount = tasks.filter((task) => task.date === tomorrow).length;
   const thirty = tasksInLastDays(tasks, 30);
   const thirtySummary = summarizeTasks(thirty.flat());
-  const analyticsTasks = tasks.filter((task) => inRange(task.date, analyticsRange) && (analyticsSubject === "All subjects" || task.subject === analyticsSubject));
-  const analyticsSummary = summarizeTasks(analyticsTasks);
-  const historyDays = useMemo(() => {
-    const dates = new Set(tasks.filter((task) => task.date < today && inRange(task.date, historyRange)).map((task) => task.date));
-    const firstTaskDay = tasks.filter((task) => task.date < today).map((task) => task.date).sort()[0];
-    for (const cursor = new Date(`${firstTaskDay ?? today}T00:00:00`); localDateKey(cursor) < today; cursor.setDate(cursor.getDate() + 1)) {
-      const date = localDateKey(cursor);
-      if (inRange(date, historyRange) && !tasks.some((task) => task.date === date && task.completed)) dates.add(date);
-    }
-    return [...dates].sort().reverse();
-  }, [historyRange, tasks, today]);
-  const activeHistoryDate = historyDays.includes(selectedHistoryDate ?? "") ? selectedHistoryDate! : historyDays[0];
-  const historyTasks = activeHistoryDate ? tasks.filter((task) => task.date === activeHistoryDate).sort((a, b) => Number(a.completed) - Number(b.completed)) : [];
-  const historyInactive = Boolean(activeHistoryDate && !historyTasks.some((task) => task.completed));
-  const subjectBreakdown = useMemo(() => {
-    const totals = new Map<string, { count: number; minutes: number }>();
-    analyticsTasks.filter((task) => task.completed).forEach((task) => {
-      const current = totals.get(task.subject) ?? { count: 0, minutes: 0 };
-      totals.set(task.subject, { count: current.count + 1, minutes: current.minutes + (task.minutesSpent ?? 0) });
-    });
-    return [...totals.entries()].sort((left, right) => right[1].minutes - left[1].minutes);
-  }, [analyticsTasks]);
-  const typeBreakdown = useMemo(() => {
-    const totals = new Map<string, { count: number; minutes: number }>();
-    analyticsTasks.filter((task) => task.completed).forEach((task) => {
-      const current = totals.get(task.type) ?? { count: 0, minutes: 0 };
-      totals.set(task.type, { count: current.count + 1, minutes: current.minutes + (task.minutesSpent ?? 0) });
-    });
-    return [...totals.entries()].sort((left, right) => right[1].minutes - left[1].minutes);
-  }, [analyticsTasks]);
   const streak = useMemo(() => {
     const completedTaskDays = tasks.filter((task) => task.completed).map((task) => task.completedAt ?? task.date);
     const activeDays = new Set([...practiceActivityDates, ...trackerActivityDates, ...completedTaskDays].map((value) => localDateKey(new Date(value))));
@@ -729,7 +680,7 @@ export default function App() {
     setCustomSubject("");
     setAddSubjectDialog(false);
     setType("Practice Session");
-    setSchedule(taskDay);
+    setSchedule(isTaskHistory ? "today" : taskDay);
     setEditor("new");
   };
   const openEdit = (task: Task) => {
@@ -741,7 +692,7 @@ export default function App() {
     setEditor(task);
   };
   const saveTask = async () => {
-    if (!name.trim()) return;
+    if (!name.trim() || taskActionLoading) return;
     setTaskActionLoading(true);
     await new Promise((resolve) => setTimeout(resolve, 280));
     const draft = {
@@ -848,9 +799,11 @@ export default function App() {
     void ExpoSplashScreen.hideAsync().catch(() => undefined);
   }
 
+  const selectDailyDate = (day: string) => { if (day === tomorrow) setTaskDay("tomorrow"); else if (day === today) setTaskDay("today"); else setTaskHistoryDate(day); };
+  const dailyRankAction = widgetRank !== null && <Pressable accessibilityRole="button" accessibilityLabel="Open weekly leaderboard" onPress={() => setLeaderboardOpen(true)} style={styles.taskRank}>{widgetRank <= 3 ? <Image source={rankMedals[widgetRank - 1]} style={styles.taskRankMedal} /> : <MaterialCommunityIcons name="trophy" size={15} color="#fcd34d" />}<RollingMetric value={widgetRank} prefix="#" color="#e4e4e7" fontSize={12} /></Pressable>;
   return (
     <SafeAreaProvider>
-      <SafeAreaView style={styles.safe} edges={["top", "left", "right"]} onTouchStart={() => resetBottomNavigation()}>
+      <SafeAreaView style={[styles.safe, { backgroundColor: appTab === "habits" && !leaderboardOpen && !quickRecallOpen ? "#000000" : colors.background }]} edges={["top", "left", "right"]} onTouchStart={() => resetBottomNavigation()}>
       <StatusBar hidden />
       {leaderboardOpen ? <LeaderboardScreen user={user} tasks={tasks} onClose={() => setLeaderboardOpen(false)} /> : quickRecallOpen ? <QuickRecallScreen user={user} onClose={() => setQuickRecallOpen(false)} onGoProfile={() => { setQuickRecallOpen(false); setAppTab("profile"); }} /> : appTab === "profile" ? (
         <ProfileScreen
@@ -879,67 +832,41 @@ export default function App() {
         <TrackScreen initialTab={trackTab} user={user} examName={profileSettings?.examName} onOpenAnalysis={() => { setTrackTab("Mock Test"); setAppTab("progress"); }} />
       ) : appTab === "practice" ? (
         <PracticeScreen user={user} onOpenQuickRecall={() => setQuickRecallOpen(true)} />
+      ) : appTab === "habits" ? (
+        <HabitsScreen user={user} onSwitchToTasks={() => setAppTab("tasks")}
+          selectedDate={activeTaskDate} onSelectDate={selectDailyDate} dateTasks={tasks}
+          visibleWeekEnd={dailyWeekEnd} onWeekEndChange={setDailyWeekEnd} rankAction={dailyRankAction}
+          dueOnly={taskDueOnly} onFilterChange={setTaskDueOnly} />
       ) : appTab === "timers" ? (
         <TimersScreen user={user} widgetRequest={timerWidgetRequest} />
       ) : appTab === "progress" ? (
         <ProgressScreen user={user} onBack={() => { setTrackTab("Mock Test"); setAppTab("track"); }} />
       ) : appTab === "tasks" ? (
         <>
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.eyebrow}>STUDY PLANNER</Text>
-          <Text style={styles.title}>Daily Tasks</Text>
-          <Text style={styles.headerCopy}>Plan, track, and review.</Text>
-        </View>
-        <View style={styles.headerActions}>
-          <Pressable style={styles.add} onPress={openNew}>
-            <Text style={styles.addText}>＋ Add task</Text>
-          </Pressable>
-          {widgetRank !== null && <Pressable accessibilityRole="button" accessibilityLabel="Open weekly leaderboard" onPress={() => setLeaderboardOpen(true)} style={styles.taskRank}>{widgetRank <= 3 ? <Image source={rankMedals[widgetRank - 1]} style={styles.taskRankMedal} /> : <MaterialCommunityIcons name="trophy" size={15} color="#fcd34d" />}<RollingMetric value={widgetRank} prefix="#" color="#e4e4e7" fontSize={12} /></Pressable>}
-        </View>
-      </View>
-      <View style={styles.tabs} onLayout={(event) => setTaskTabsWidth(event.nativeEvent.layout.width - 8)}>
-        {taskTabsWidth > 0 && <Animated.View pointerEvents="none" style={[styles.tabIndicator, { width: taskTabsWidth / TASK_TABS.length, transform: [{ translateX: taskTabIndicator }] }]} />}
-        {TASK_TABS.map((item) => (
-          <Pressable
-            key={item}
-            onPress={() => setTab(item)}
-            style={styles.tab}
-          >
-            <Text style={[styles.tabText, tab === item && styles.tabTextActive]}>{item}</Text>
-          </Pressable>
-        ))}
-      </View>
-      <ScrollView stickyHeaderIndices={tab === "Tasks" ? [0] : undefined} contentContainerStyle={[styles.content, tab === "Tasks" && styles.tasksContent]} onTouchStart={(event: any) => { taskSwipeStartX.current = event.nativeEvent.pageX; }} onTouchEnd={(event: any) => handleTaskSwipeEnd(event.nativeEvent.pageX)}>
-        {tab === "Tasks" ? [
+      <ScrollView stickyHeaderIndices={[0]} contentContainerStyle={[styles.content, styles.tasksContent]}>
+        {[
             <View key="tasks-sticky" style={styles.tasksSticky}>
-            <LiquidSpillCard style={styles.hero}>
-              <View style={styles.heroHeading}>
-                <Text style={styles.date}>{taskDay === "today" ? "Today’s tasks" : "Tomorrow’s tasks"}</Text>
-                <View style={styles.heroHeadingActions}><View style={styles.livePoints}><PointsSpark points={weeklyPoints} /><View style={styles.livePointsText}><RollingMetric value={weeklyPoints} prefix={weeklyPoints > 0 ? "+" : ""} suffix=" pts" color={weeklyPoints > 0 ? "#86efac" : weeklyPoints < 0 ? "#fca5a5" : "#a1a1aa"} /></View></View>{(tomorrowTaskCount > 0 || taskDay === "tomorrow") && <Pressable style={styles.dayToggle} onPress={() => setTaskDay((current) => current === "today" ? "tomorrow" : "today")}><Text style={styles.dayToggleText}>{taskDay === "today" ? `Tomorrow (${tomorrowTaskCount})` : "Today"}</Text><MaterialCommunityIcons name="chevron-right" size={14} color="#b4b4b8" /></Pressable>}</View>
-              </View>
-              <View style={styles.progressRow}>
-                <CompletionRing percent={todaySummary.percent} />
-                <View style={styles.statColumn}>
-                  <Text style={styles.statLabel}>TASKS</Text>
-                  <View style={styles.statMetric}><RollingMetric value={todaySummary.done} color="#fafafa" fontSize={23} /><Text style={styles.statSlash}>/</Text><RollingMetric value={todaySummary.total} color="#fafafa" fontSize={23} /></View>
-                  <Text style={styles.statLabel}>COMPLETED TIME</Text>
-                  <View style={styles.statMetric}><RollingDuration minutes={todaySummary.minutes} /></View>
-                </View>
-              </View>
-            </LiquidSpillCard>
-            <Text style={styles.sectionTitle}>{taskDay === "today" ? "TODAY'S TASKS" : "TOMORROW'S TASKS"}</Text>
+            <View>
+            <DailySectionHeader section="tasks" today={today} selected={activeTaskDate} tasks={tasks}
+              weekEnd={dailyWeekEnd} onWeekEndChange={setDailyWeekEnd} onSelect={selectDailyDate}
+              onSwitch={profileSettings?.habitsEnabled !== false ? () => setAppTab("habits") : undefined}
+              onAdd={openNew} rankAction={dailyRankAction} />
+            </View>
+            <TaskOverview total={todaySummary.total} due={dueTasks.length} percent={todaySummary.percent}
+              dueOnly={taskDueOnly} onFilterChange={setTaskDueOnly}
+              studyTime={<RollingDuration minutes={todaySummary.minutes} fontSize={12} />} />
             </View>,
             <View key="tasks-list" style={styles.tasksList}>
-            {todayTasks.length === 0 ? (
-                <Empty onPress={openNew} />
+            {visibleTasks.length === 0 ? (
+                taskDueOnly && todayTasks.length > 0 ? <View style={{padding:22}}><Text style={styles.muted}>All tasks complete for this day.</Text></View> : isTaskHistory ? <View style={{padding:22}}><Text style={styles.muted}>No tasks recorded for this day.</Text></View> : <Empty onPress={openNew} />
             ) : (
-              todayTasks.map((task, index) => (
+              visibleTasks.map((task, index) => (
                 <TaskRow
                   key={task.id}
                   task={task}
-                  grouped
-                  last={index === todayTasks.length - 1}
+                  compact={isTaskHistory}
+                  yellow
+                  last={index === visibleTasks.length - 1}
                   points={taskPoints.get(task.id) ?? 0}
                   onDone={() => {
                     if (!canUseTaskRow()) return;
@@ -953,36 +880,7 @@ export default function App() {
               ))
             )}
             </View>,
-        ] : null}
-        {tab === "Analytics" && (
-          <>
-            {(analyticsRangeOpen || analyticsSubjectOpen) && <Pressable style={styles.dropdownDismiss} onPress={() => { setAnalyticsRangeOpen(false); setAnalyticsSubjectOpen(false); }} />}
-            <View style={styles.analyticsHeader}>
-              <Text style={styles.sectionTitle}>ANALYTICS</Text>
-            </View>
-            <View style={styles.analyticsFilters}><TaskDropdown label={TASK_RANGE_LABELS[analyticsRange]} open={analyticsRangeOpen} onToggle={() => { setAnalyticsRangeOpen((value) => !value); setAnalyticsSubjectOpen(false); }} options={(["today", "week", "month", "3months", "year"] as TaskRange[]).map((value) => ({ value, label: TASK_RANGE_LABELS[value] }))} onSelect={(value) => { setAnalyticsRange(value as TaskRange); setAnalyticsRangeOpen(false); }} /><TaskDropdown label={analyticsSubject} open={analyticsSubjectOpen} onToggle={() => { setAnalyticsSubjectOpen((value) => !value); setAnalyticsRangeOpen(false); }} options={["All subjects", ...subjectOptions.filter((item) => item !== "Other")].map((value) => ({ value, label: value }))} onSelect={(value) => { setAnalyticsSubject(value); setAnalyticsSubjectOpen(false); }} /></View>
-            <View style={styles.metricGrid}>
-              <Metric label="Time spent" value={<RollingDuration minutes={analyticsSummary.minutes} fontSize={20} />} note={TASK_RANGE_LABELS[analyticsRange]} />
-              <Metric label="Completed / pending" value={<View style={styles.analyticsNumbers}><RollingMetric value={analyticsSummary.done} fontSize={20} color="#fafafa" /><Text style={styles.analyticsSlash}> / </Text><RollingMetric value={analyticsSummary.total - analyticsSummary.done} fontSize={20} color="#fafafa" /></View>} note={<RollingMetric value={analyticsSummary.percent} suffix="% completion" fontSize={12} color="#a1a1aa" />} />
-            </View>
-            <Breakdown title="Subject-wise study time" items={subjectBreakdown} tone="mint" />
-            <Breakdown title="Task-type breakdown" items={typeBreakdown} tone="blue" />
-          </>
-        )}
-        {tab === "History" && (
-          <>
-            {(historyRangeOpen || historyDateOpen) && <Pressable style={styles.dropdownDismiss} onPress={() => { setHistoryRangeOpen(false); setHistoryDateOpen(false); }} />}
-            <TaskDropdown label={TASK_RANGE_LABELS[historyRange]} open={historyRangeOpen} onToggle={() => { setHistoryRangeOpen((value) => !value); setHistoryDateOpen(false); setAnalyticsRangeOpen(false); setAnalyticsSubjectOpen(false); }} options={(["week", "month", "3months", "year"] as TaskRange[]).map((value) => ({ value, label: TASK_RANGE_LABELS[value] }))} onSelect={(value) => { setHistoryRange(value as TaskRange); setSelectedHistoryDate(null); setHistoryRangeOpen(false); }} />
-            {historyDays.length ? <>
-              {!historyRangeOpen && <TaskDropdown label={new Date(`${activeHistoryDate}T00:00:00`).toLocaleDateString(undefined, { day: "numeric", month: "short" })} open={historyDateOpen} onToggle={() => { setHistoryDateOpen((value) => !value); setHistoryRangeOpen(false); setAnalyticsRangeOpen(false); setAnalyticsSubjectOpen(false); }} options={historyDays.map((value) => ({ value, label: new Date(`${value}T00:00:00`).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" }) }))} onSelect={(value) => { setSelectedHistoryDate(value); setHistoryDateOpen(false); }} />}
-              <View style={styles.history}>
-                <View style={styles.historyHeader}><Text style={styles.historyDate}>{new Date(`${activeHistoryDate}T00:00:00`).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })}</Text>{historyInactive && <Text style={styles.inactiveHistoryPoints}>Inactive day · −50 pts</Text>}</View>
-                <Text style={styles.muted}>{formatMinutes(summarizeTasks(historyTasks).minutes)} study time</Text>
-                <View style={styles.historyTaskList}>{historyTasks.map((task, index) => <TaskRow key={task.id} task={task} points={taskPoints.get(task.id) ?? 0} compact grouped last={index === historyTasks.length - 1} onDone={() => { setSpent(String(task.minutesSpent ?? 30)); setCompletion(task); }} onReopen={() => reopen(task.id)} onEdit={() => openEdit(task)} onDelete={() => remove(task.id)} />)}</View>
-              </View>
-            </> : <View style={styles.empty}><Text style={styles.muted}>No task history yet.</Text></View>}
-          </>
-        )}
+        ]}
       </ScrollView>
       <Modal transparent visible={editor !== null} animationType="fade" onRequestClose={() => { if (!taskActionLoading) { setSubjectMenuOpen(false); setTypeMenuOpen(false); setEditor(null); } }}>
         <KeyboardAvoidingView style={styles.backdrop} behavior={Platform.OS === "ios" ? "padding" : "height"}>
@@ -1023,11 +921,11 @@ export default function App() {
               </View>
             )}
             <View style={styles.sheetActions}>
-              <Pressable onPress={() => setEditor(null)}>
+              <Pressable disabled={taskActionLoading} onPress={() => setEditor(null)}>
                 <Text style={styles.cancel}>Cancel</Text>
               </Pressable>
-              <Pressable disabled={taskActionLoading} onPress={() => void saveTask()} style={[styles.primary, taskActionLoading && styles.actionDisabled]}>
-                {taskActionLoading ? <ActivityIndicator size="small" color="#081a31" /> : <Text style={styles.primaryText}>Save task</Text>}
+              <Pressable disabled={taskActionLoading || !name.trim()} onPress={() => void saveTask()} style={[styles.primary, (taskActionLoading || !name.trim()) && styles.actionDisabled]}>
+                {taskActionLoading ? <View style={{flexDirection: "row", alignItems: "center", gap: 8}}><ActivityIndicator size="small" color={dailyTaskColors.ink} /><Text style={styles.primaryText}>Saving…</Text></View> : <Text style={styles.primaryText}>Save task</Text>}
               </Pressable>
             </View>
           </ScrollView>
@@ -1070,7 +968,7 @@ export default function App() {
                 <Text style={styles.cancel}>Cancel</Text>
               </Pressable>
               <Pressable disabled={taskActionLoading} onPress={() => void markDone()} style={[styles.primary, taskActionLoading && styles.actionDisabled]}>
-                {taskActionLoading ? <ActivityIndicator size="small" color="#081a31" /> : <Text style={styles.primaryText}>Mark complete</Text>}
+                {taskActionLoading ? <ActivityIndicator size="small" color={dailyTaskColors.ink} /> : <Text style={styles.primaryText}>Mark complete</Text>}
               </Pressable>
             </View>
           </ScrollView>
@@ -1094,7 +992,7 @@ export default function App() {
       ) : (
         <ComingSoonScreen title={activeAppTab.label} />
       )}
-      {!quickRecallOpen && <BottomNavigation activeTab={appTab === "progress" ? "track" : appTab} onChange={(tab) => { setLeaderboardOpen(false); setAppTab(tab); }} practiceSessionEnabled={profileSettings?.practiceSessionEnabled !== false} trackProgressEnabled={profileSettings?.trackProgressEnabled !== false} timersEnabled={profileSettings?.timersEnabled !== false} profileAvatar={profileSettings?.avatar ? avatarAssets[profileSettings.avatar] : undefined} />}
+      {!quickRecallOpen && <BottomNavigation activeTab={appTab === "progress" ? "track" : appTab === "habits" ? "tasks" : appTab} onChange={(tab) => { setLeaderboardOpen(false); setAppTab(tab === "tasks" && profileSettings?.habitsEnabled !== false ? taskSection.current : tab); }} practiceSessionEnabled={profileSettings?.practiceSessionEnabled !== false} trackProgressEnabled={profileSettings?.trackProgressEnabled !== false} timersEnabled={profileSettings?.timersEnabled !== false} habitsEnabled={profileSettings?.habitsEnabled !== false} profileAvatar={profileSettings?.avatar ? avatarAssets[profileSettings.avatar] : undefined} />}
       <MediaOverlay user={user} mode={mediaMode} musicOpenRequest={musicOpenRequest} onClose={() => setMediaMode(null)} />
       {celebratedStreak !== null && <StreakCelebration streak={celebratedStreak} onClose={() => setCelebratedStreak(null)} />}
       {celebratedLevel !== null && <LevelCelebration level={celebratedLevel} onClose={() => setCelebratedLevel(null)} />}
@@ -1232,16 +1130,16 @@ function Breakdown({
       {items.length ? items.map(([name, data]) => (
         <View key={name} style={styles.breakdownRow}>
           <View style={styles.breakdownLabel}><Text style={styles.breakdownName}>{name}</Text><View style={styles.analyticsNumbers}><RollingMetric value={data.count} suffix=" tasks · " color="#a1a1aa" fontSize={12} /><RollingDuration minutes={data.minutes} color="#a1a1aa" fontSize={12} /></View></View>
-          <LiquidProgressBar progress={data.minutes > 0 ? Math.max(0.04, data.minutes / leadingMinutes) : 0} color={tone === "blue" ? "#60a5fa" : "#5eead4"} height={7} style={styles.breakdownTrack} label={`${title}: ${name}`} />
+          <LiquidProgressBar progress={data.minutes > 0 ? Math.max(0.04, data.minutes / leadingMinutes) : 0} color={tone === "blue" ? colors.accent : "#5eead4"} height={7} style={styles.breakdownTrack} label={`${title}: ${name}`} />
         </View>
       )) : <Text style={styles.emptyAnalytics}>Complete tasks to see analytics.</Text>}
     </View>
   );
 }
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#101010" },
-  authLoading: { flex: 1, backgroundColor: "#101010" },
-  splash: { flex: 1, backgroundColor: "#101010" },
+const styles = createThemedStyles({
+  safe: { flex: 1, backgroundColor: colors.background },
+  authLoading: { flex: 1, backgroundColor: "#000000" },
+  splash: { flex: 1, backgroundColor: "#000000" },
   splashImage: { opacity: 0.18 },
   splashOverlay: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(10,10,10,.78)" },
   splashMark: { width: 76, height: 76, borderRadius: 24, borderWidth: 1, borderColor: "rgba(255,255,255,.15)" },
@@ -1274,8 +1172,8 @@ const styles = StyleSheet.create({
   eyebrow: { color: "#818cf8", fontSize: 10, fontWeight: "700", letterSpacing: 2 },
   title: { color: "#fafafa", fontSize: 25, fontWeight: "700", marginTop: 3 },
   headerCopy: { color: "#a1a1aa", fontSize: 12, marginTop: 3 },
-  add: { backgroundColor: "#60a5fa", borderRadius: 16, paddingHorizontal: 14, paddingVertical: 10 },
-  addText: { color: "#081a31", fontWeight: "600" },
+  add: { backgroundColor: dailyTaskColors.accent, borderRadius: 10, width: 34, height: 34, alignItems: "center", justifyContent: "center" },
+  addText: { color: dailyTaskColors.ink, fontWeight: "600" },
   actionDisabled: { opacity: 0.68 },
   tabs: {
     position: "relative",
@@ -1291,22 +1189,22 @@ const styles = StyleSheet.create({
   tabTextActive: { color: "#fafafa" },
   content: { position: "relative", padding: 20, gap: 12, paddingBottom: 60 },
   tasksContent: { paddingTop: 0 },
-  tasksSticky: { backgroundColor: "#101010", paddingTop: 20, paddingBottom: 12 },
-  tasksList: { backgroundColor: "#1a1a1a", borderRadius: 13, paddingHorizontal: 10, overflow: "hidden" },
+  tasksSticky: { backgroundColor: "#000000", paddingTop: 16, paddingBottom: 12 },
+  tasksList: { backgroundColor: "#141414", borderWidth: 1, borderColor: "#292929", borderRadius: 14, overflow: "hidden" },
   heroHeadingActions: { flexDirection: "row", alignItems: "center", gap: 8 },
   livePoints: { flexDirection: "row", alignItems: "center", gap: 3 },
   pointsSpark: { width: 16, height: 16 },
   livePointsText: { minWidth: 38 },
   hero: {
-    borderRadius: 22,
-    padding: 18,
+    borderRadius: 17,
+    padding: 12,
     backgroundColor: "#1b1b1b",
     borderWidth: 1,
     borderColor: "#303030",
   },
   heroHeading: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
-  date: { color: "#fafafa", fontSize: 20, fontWeight: "700" },
-  progressRow: { flexDirection: "row", alignItems: "center", gap: 22, marginVertical: 20 },
+  date: { color: "#fafafa", fontSize: 16, fontWeight: "700" },
+  progressRow: { flexDirection: "row", alignItems: "center", gap: 16, marginTop: 10, marginBottom: 0 },
   ring: {
     height: 112,
     width: 112,
@@ -1317,9 +1215,9 @@ const styles = StyleSheet.create({
   },
   ringSvg: { position: "absolute", top: 0, left: 0 },
   ringText: { color: "#fafafa", fontSize: 25, fontWeight: "800" },
-  statColumn: { gap: 4 },
+  statColumn: { gap: 1 },
   statLabel: { color: "#a1a1aa", fontSize: 10, letterSpacing: 1.4 },
-  statMetric: { height: 27, flexDirection: "row", alignItems: "center", marginBottom: 6 },
+  statMetric: { height: 24, flexDirection: "row", alignItems: "center", marginBottom: 2 },
   statSlash: { color: "#fafafa", fontSize: 23, fontWeight: "700", marginHorizontal: 6 },
   muted: { color: "#a1a1aa", fontSize: 13, marginTop: 9 },
   sectionTitle: {
@@ -1352,8 +1250,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  checkDone: { borderColor: "#60a5fa", backgroundColor: "#60a5fa" },
-  checkText: { color: "#081a31", fontWeight: "900" },
+  checkDone: { borderColor: dailyTaskColors.accent, backgroundColor: dailyTaskColors.accent },
+  checkText: { color: dailyTaskColors.ink, fontWeight: "900" },
   taskMain: { flex: 1 },
   taskName: { color: "#fafafa", fontSize: 15, fontWeight: "700" },
   taskMeta: { color: "#a1a1aa", fontSize: 12, marginTop: 4 },
@@ -1367,7 +1265,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#303030",
   },
-  link: { color: "#60a5fa", fontWeight: "700", marginTop: 10 },
+  link: { color: dailyTaskColors.accent, fontWeight: "700", marginTop: 10 },
   metric: {
     width: "48.8%",
     minHeight: 92,
@@ -1386,12 +1284,12 @@ const styles = StyleSheet.create({
   rangeButton: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
   rangeButtonActive: { backgroundColor: "#303030" },
   rangeText: { color: "#71717a", fontSize: 11, fontWeight: "700" },
-  rangeTextActive: { color: "#60a5fa" },
+  rangeTextActive: { color: dailyTaskColors.accent },
   dayToggle: { flexDirection: "row", alignItems: "center", gap: 2, borderRadius: 11, borderWidth: 1, borderColor: "#414141", paddingLeft: 10, paddingRight: 7, paddingVertical: 7, backgroundColor: "#242424" },
   dayToggleText: { color: "#e4e4e7", fontSize: 12, fontWeight: "700" },
   subjectFilters: { gap: 7, paddingVertical: 2 },
   subjectFilter: { borderRadius: 11, borderWidth: 1, borderColor: "#3d3d3d", paddingHorizontal: 11, paddingVertical: 8, backgroundColor: "#1b1b1b" },
-  subjectFilterActive: { borderColor: "#60a5fa", backgroundColor: "#16345c" },
+  subjectFilterActive: { borderColor: dailyTaskColors.accent, backgroundColor: "#16345c" },
   subjectFilterText: { color: "#a1a1aa", fontSize: 11, fontWeight: "700" },
   subjectFilterTextActive: { color: "#dbeafe" },
   dropdownWrap: { position: "relative", zIndex: 900, elevation: 900, flex: 1, alignSelf: "stretch" },
@@ -1426,7 +1324,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#1b1b1b",
   },
   chartItem: { flex: 1, alignItems: "center", justifyContent: "flex-end", gap: 6 },
-  chartBar: { width: 16, maxHeight: 95, borderRadius: 6, backgroundColor: "#60a5fa" },
+  chartBar: { width: 16, maxHeight: 95, borderRadius: 6, backgroundColor: dailyTaskColors.accent },
   chartLabel: { color: "#71717a", fontSize: 10 },
   history: {
     borderRadius: 17,
@@ -1455,9 +1353,9 @@ const styles = StyleSheet.create({
   sheetTitle: { color: "#fafafa", fontSize: 21, fontWeight: "800" },
   timeChips: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: -5 },
   timeChip: { borderRadius: 10, borderWidth: 1, borderColor: "#303030", paddingHorizontal: 11, paddingVertical: 8, backgroundColor: "#151515" },
-  timeChipActive: { borderColor: "#60a5fa", backgroundColor: "#60a5fa" },
+  timeChipActive: { borderColor: dailyTaskColors.accent, backgroundColor: dailyTaskColors.accent },
   timeChipText: { color: "#a1a1aa", fontSize: 11, fontWeight: "800" },
-  timeChipTextActive: { color: "#081a31" },
+  timeChipTextActive: { color: dailyTaskColors.ink },
   fieldLabel: {
     color: "#a1a1aa",
     fontSize: 10,
@@ -1515,9 +1413,9 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 14,
   },
-  scheduleChipActive: { borderColor: "#60a5fa", backgroundColor: "#60a5fa" },
+  scheduleChipActive: { borderColor: dailyTaskColors.accent, backgroundColor: dailyTaskColors.accent },
   scheduleText: { color: "#a1a1aa", fontSize: 13, fontWeight: "600" },
-  scheduleTextActive: { color: "#081a31" },
+  scheduleTextActive: { color: dailyTaskColors.ink },
   subjectOption: { paddingHorizontal: 14, paddingVertical: 12 },
   subjectOptionActive: { backgroundColor: "#162c45" },
   subjectOptionText: { color: "#d4d4d8", fontSize: 15 },
@@ -1534,9 +1432,9 @@ const styles = StyleSheet.create({
     borderRadius: 13,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: "#60a5fa",
+    backgroundColor: dailyTaskColors.accent,
   },
-  primaryText: { color: "#081a31", fontWeight: "600" },
+  primaryText: { color: dailyTaskColors.ink, fontWeight: "600" },
   deleteBackdrop: { flex: 1, alignItems: "center", justifyContent: "center", padding: 26, backgroundColor: "rgba(0,0,0,.76)" },
   deleteDialog: { width: "100%", maxWidth: 370, borderRadius: 22, padding: 21, backgroundColor: "#1c1c1c", borderWidth: 1, borderColor: "#3a3a3a" },
   deleteIcon: { width: 43, height: 43, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(244,63,94,.14)", borderWidth: 1, borderColor: "rgba(253,164,175,.16)" },
@@ -1550,7 +1448,7 @@ const styles = StyleSheet.create({
   manifestationBackdrop: { flex: 1, justifyContent: "center", padding: 20, backgroundColor: "#000000" },
   manifestationDialog: { borderRadius: 22, padding: 21, backgroundColor: "#1d1d1d", borderWidth: 1, borderColor: "#383838" },
   manifestationIcon: { width: 49, height: 49, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: "#203040" },
-  manifestationIconText: { color: "#93c5fd", fontSize: 29, fontWeight: "800" },
+  manifestationIconText: { color: colors.accent, fontSize: 29, fontWeight: "800" },
   manifestationTitle: { color: "#fafafa", fontSize: 18, fontWeight: "700" },
   manifestationHeading: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
   manifestationCounter: { color: "#e4e4e7", fontSize: 14, fontWeight: "700", fontVariant: ["tabular-nums"], backgroundColor: "rgba(255,255,255,.10)", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4 },
