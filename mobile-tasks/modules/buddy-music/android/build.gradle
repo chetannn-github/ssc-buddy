@@ -4,7 +4,13 @@ plugins {
 }
 group = 'expo.modules.buddymusic'
 version = '1.0.0'
-android { namespace "expo.modules.buddymusic" }
+android {
+  namespace "expo.modules.buddymusic"
+  defaultConfig {
+    versionCode 1
+    versionName "1.0.0"
+  }
+}
 dependencies {
   implementation 'androidx.media3:media3-exoplayer:1.9.0'
   implementation 'androidx.media3:media3-session:1.9.0'
