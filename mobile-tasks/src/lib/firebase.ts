@@ -299,7 +299,7 @@ export async function toggleTaskFromWidget(user: User, taskId: string): Promise<
     const snapshot = await transaction.get(reference);
     if (!snapshot.exists()) return null;
     const current = { id: snapshot.id, ...snapshot.data() } as CloudTask;
-    if (!canReopenDailyWidgetTask(current)) return null;
+    if (!canReopenDailyWidgetTask({ date: current.date, completed: current.completed })) return null;
     const completed = false;
     const update = {
       completed,
