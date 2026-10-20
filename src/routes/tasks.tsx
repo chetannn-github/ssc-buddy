@@ -1,6 +1,7 @@
+import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem } from "@/components/ui/context-menu";
 import { createFileRoute } from "@tanstack/react-router";
-import { Check, LoaderCircle, Pencil, Plus, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Check, LoaderCircle, Pencil, Plus, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { User } from "firebase/auth";
 import { Button } from "@/components/ui/button";
 import {
@@ -55,10 +56,8 @@ function DailyTasks() {
   const [tasks, setTasks] = useState<DailyTask[]>(() => loadDailyTasks());
   const [calendarDay, setCalendarDay] = useState(() => todayKey());
   const [syncUser, setSyncUser] = useState<User | null>(null);
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("tasks");
   const [taskDay, setTaskDay] = useState<"today" | "tomorrow">("today");
-  useEffect(() => setSelectedTaskId(null), [taskDay, activeTab]);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<DailyTask | null>(null);
   const [completing, setCompleting] = useState<DailyTask | null>(null);
@@ -398,8 +397,6 @@ function DailyTasks() {
                     key={task.id}
                     task={task}
                     grouped
-                    editable={selectedTaskId === task.id}
-                    onSelect={() => setSelectedTaskId(value => value === task.id ? null : task.id)}
                     points={taskPoints.get(task.id) ?? 0}
                     onComplete={setCompleting}
                     onReopen={reopen}
@@ -625,8 +622,6 @@ function TaskRow({
   onEdit,
   onDelete,
   readOnly = false,
-  editable = false,
-  onSelect,
   grouped = false,
 }: {
   task: DailyTask;
@@ -636,27 +631,18 @@ function TaskRow({
   onEdit: () => void;
   onDelete: () => void;
   readOnly?: boolean;
-  editable?: boolean;
-  onSelect?: () => void;
   grouped?: boolean;
 }) {
+  const menuAction = useRef(false);
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const canDelete = !readOnly && task.date === todayKey(tomorrow);
   return (
-    <div
-      role={readOnly ? undefined : "button"}
+    <ContextMenu modal={false} onOpenChange={(open) => { if (open) menuAction.current = false; }}>
+    <ContextMenuTrigger asChild disabled={readOnly}><div
       tabIndex={readOnly ? undefined : 0}
-      aria-expanded={readOnly ? undefined : editable}
-      onClick={readOnly ? undefined : onSelect}
-      onKeyDown={
-        readOnly
-          ? undefined
-          : (event) => {
-              if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
-                event.preventDefault();
-                onSelect?.();
-              }
-            }
-      }
-      className={`flex items-center gap-3 py-2.5 ${grouped ? "px-0" : "rounded-lg border border-white/10 bg-[#1b1b1b] px-3"} ${readOnly ? "" : "cursor-pointer transition-colors hover:bg-white/[0.035] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-400/60"}`}
+      aria-label={readOnly ? undefined : `${task.name}; right-click for options`}
+      className={`flex items-center gap-3 py-2.5 ${grouped ? "px-0" : "rounded-lg border border-white/10 bg-[#1b1b1b] px-3"}`}
     >
       <button
         type="button"
@@ -677,14 +663,11 @@ function TaskRow({
           {task.completed && task.minutesSpent ? <> · <RollingDuration minutes={task.minutesSpent} /></> : ""}
         </p>
       </div>
-      {!readOnly && editable && <Button size="icon" variant="ghost" aria-label={`Edit ${task.name}`} onClick={event => { event.stopPropagation(); onEdit(); }}><Pencil className="h-4 w-4" /></Button>}
-      {!readOnly && task.date !== todayKey() && (
-        <>
-          <Button size="icon" variant="ghost" onClick={(event) => { event.stopPropagation(); onDelete(); }}>
-            <X className="h-4 w-4" />
-          </Button>
-        </>
-      )}
-    </div>
+    </div></ContextMenuTrigger>
+    {!readOnly && <ContextMenuContent className="w-44 rounded-xl border-white/10 bg-[#202020] p-1.5 text-zinc-100 shadow-xl" onCloseAutoFocus={(event) => { if (menuAction.current) event.preventDefault(); }}>
+      <ContextMenuItem className="gap-2 rounded-lg py-2.5 focus:bg-white/10 focus:text-white" onSelect={() => { menuAction.current = true; onEdit(); }}><Pencil className="h-4 w-4" />Edit Task</ContextMenuItem>
+      {canDelete && <ContextMenuItem className="gap-2 rounded-lg py-2.5 text-red-300 focus:bg-red-400/10 focus:text-red-300" onSelect={() => { menuAction.current = true; onDelete(); }}><Trash2 className="h-4 w-4" />Delete</ContextMenuItem>}
+    </ContextMenuContent>}
+    </ContextMenu>
   );
 }
