@@ -1,11 +1,11 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { AccessibilityInfo, Animated, AppState, Easing, Pressable, StyleSheet, Text, View } from "react-native";
+import { AccessibilityInfo, Animated, AppState, Easing, Pressable, StyleSheet, Text, View, type GestureResponderEvent } from "react-native";
 import Svg, { Defs, LinearGradient, Path, Rect, Stop } from "react-native-svg";
 import { GravityWaterLayer } from "./GravityWaterLayer";
 import { TaskRingFill } from "./TaskRingFill";
 import type { timerDial } from "../domain/date-timers";
 
-export function TimerLiquidDial({ dial, color, size = 160, children, title, onEdit, onLongPress, fillColor, showLiquid = true, liquidProgress, animateOnMount = false }: { dial: ReturnType<typeof timerDial>; color: string; size?: number; children?: ReactNode; title?: string; onEdit?: () => void; onLongPress?: () => void; fillColor?: string; showLiquid?: boolean; liquidProgress?: number; animateOnMount?: boolean }) {
+export function TimerLiquidDial({ dial, color, size = 160, children, title, onEdit, onLongPress, fillColor, showLiquid = true, liquidProgress, animateOnMount = false }: { dial: ReturnType<typeof timerDial>; color: string; size?: number; children?: ReactNode; title?: string; onEdit?: () => void; onLongPress?: (event: GestureResponderEvent) => void; fillColor?: string; showLiquid?: boolean; liquidProgress?: number; animateOnMount?: boolean }) {
   const gradientId = `task-water-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
   const liquidColor = fillColor ?? color + (size < 160 ? "b3" : "80");
   const scale = size / 160;

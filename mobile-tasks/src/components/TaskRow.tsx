@@ -1,57 +1,45 @@
+import { useRef, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { Pressable, StyleSheet, Text, View } from "react-native";
-
-import { dateKey, formatMinutes, type Task } from "../domain/tasks";
+import { Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { dateKeyFromOffset, formatMinutes, type Task } from "../domain/tasks";
 import { colors } from "../theme";
 
 type Props = {
-  task: Task;
-  points: number;
-  onDone: () => void;
-  onReopen: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
-  editable?: boolean;
-  compact?: boolean;
-  grouped?: boolean;
-  last?: boolean;
+  task: Task; points: number; onDone: () => void; onReopen: () => void;
+  onEdit: () => void; onDelete: () => void; compact?: boolean; grouped?: boolean; last?: boolean;
 };
-
-export function TaskRow({ task, points, onDone, onReopen, onEdit, onDelete, editable = false, compact = false, grouped = false, last = false }: Props) {
-  return (
-    <View>
-      <View style={[styles.task, task.completed && styles.completed, compact && styles.compact, grouped && styles.grouped, grouped && !compact && task.completed && styles.groupedCompleted, grouped && last && styles.groupedLast]}>
-        {compact ? (
-          <View style={[styles.check, task.completed ? styles.checkComplete : styles.checkIncompleteHistory]}>
-            <Text style={[styles.checkText, !task.completed && styles.incompleteHistoryText]}>
-              {task.completed ? "✓" : "×"}
-            </Text>
-          </View>
-        ) : (
-          <Pressable
-            accessibilityLabel={task.completed ? "Mark task incomplete" : "Mark task complete"}
-            onPress={task.completed ? onReopen : onDone}
-            style={[styles.check, task.completed && styles.checkComplete]}
-          >
-            <Text style={styles.checkText}>{task.completed ? "✓" : ""}</Text>
-          </Pressable>
-        )}
-        <Pressable accessibilityRole="button" disabled={compact || !editable} style={styles.main} onPress={onEdit}>
-          <View style={styles.nameLine}><Text style={[styles.name, task.completed && styles.strike]} numberOfLines={1}>{task.name}</Text><Text style={[styles.points, points < 0 ? styles.penalty : points === 0 ? styles.neutral : undefined]}>{points > 0 ? `+${points}` : points < 0 ? `−${Math.abs(points)}` : "0"} pts</Text></View>
-          <Text style={styles.meta} numberOfLines={1}>
-            {task.subject} · {task.type}
-            {task.completed ? ` · ${formatMinutes(task.minutesSpent ?? 0)} completed` : ""}
-          </Text>
-        </Pressable>
-        {!compact && editable && <Pressable accessibilityRole="button" accessibilityLabel={`Edit ${task.name}`} onPress={onEdit} style={styles.iconAction}><MaterialCommunityIcons name="pencil-outline" size={18} color={colors.muted} /></Pressable>}
-        {!compact && task.date !== dateKey() ? (
-          <View style={styles.actions}>
-            <Pressable accessibilityLabel="Delete task" onPress={onDelete} hitSlop={9} style={styles.iconAction}><MaterialCommunityIcons name="close" size={18} color={colors.muted} /></Pressable>
-          </View>
-        ) : null}
+export function TaskRow({ task, points, onDone, onReopen, onEdit, onDelete, compact = false, grouped = false, last = false }: Props) {
+  const row = useRef<View>(null);
+  const [menu, setMenu] = useState<{ top: number; left: number } | null>(null);
+  const { width, height } = useWindowDimensions();
+  const canDelete = task.date === dateKeyFromOffset(1);
+  const openMenu = () => {
+    if (compact) return;
+    row.current?.measureInWindow((x, y, rowWidth, rowHeight) => {
+      const menuHeight = canDelete ? 108 : 58;
+      setMenu({ left: Math.max(12, Math.min(width - 192, x + rowWidth - 180)), top: Math.max(12, Math.min(height - menuHeight - 24, y + rowHeight)) });
+    });
+  };
+  const act = (callback: () => void) => { setMenu(null); callback(); };
+  return <View>
+    <Pressable ref={row} disabled={compact} onLongPress={openMenu} delayLongPress={400} accessibilityHint={compact ? undefined : "Long press for task actions"} style={[styles.task, task.completed && styles.completed, compact && styles.compact, grouped && styles.grouped, grouped && !compact && task.completed && styles.groupedCompleted, grouped && last && styles.groupedLast]}>
+      {compact ? <View style={[styles.check, task.completed ? styles.checkComplete : styles.checkIncompleteHistory]}><Text style={[styles.checkText, !task.completed && styles.incompleteHistoryText]}>{task.completed ? "✓" : "×"}</Text></View> :
+        <Pressable accessibilityLabel={task.completed ? "Mark task incomplete" : "Mark task complete"} onPress={task.completed ? onReopen : onDone} onLongPress={openMenu} delayLongPress={400} style={[styles.check, task.completed && styles.checkComplete]}><Text style={styles.checkText}>{task.completed ? "✓" : ""}</Text></Pressable>}
+      <View style={styles.main}>
+        <View style={styles.nameLine}><Text style={[styles.name, task.completed && styles.strike]} numberOfLines={1}>{task.name}</Text><Text style={[styles.points, points < 0 ? styles.penalty : points === 0 ? styles.neutral : undefined]}>{points > 0 ? `+${points}` : points < 0 ? `−${Math.abs(points)}` : "0"} pts</Text></View>
+        <Text style={styles.meta} numberOfLines={1}>{task.subject} · {task.type}{task.completed ? ` · ${formatMinutes(task.minutesSpent ?? 0)} completed` : ""}</Text>
       </View>
-    </View>
-  );
+    </Pressable>
+    <Modal transparent visible={menu !== null} animationType="fade" onRequestClose={() => setMenu(null)}>
+      <View style={{ flex: 1 }}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Close task menu" style={styles.menuBackdrop} onPress={() => setMenu(null)} />
+      {menu && <View accessibilityViewIsModal style={[styles.menu, { top: menu.top, left: menu.left }]}>
+        <Pressable accessibilityRole="button" accessibilityLabel={`Edit ${task.name}`} onPress={() => act(onEdit)} style={styles.menuItem}><MaterialCommunityIcons name="pencil-outline" size={18} color={colors.text} /><Text style={styles.menuText}>Edit Task</Text></Pressable>
+        {canDelete && <Pressable accessibilityRole="button" accessibilityLabel={`Delete ${task.name}`} onPress={() => act(onDelete)} style={styles.menuItem}><MaterialCommunityIcons name="trash-can-outline" size={18} color="#fca5a5" /><Text style={[styles.menuText, { color: "#fca5a5" }]}>Delete</Text></Pressable>}
+      </View>}
+      </View>
+    </Modal>
+  </View>;
 }
 
 const styles = StyleSheet.create({
@@ -94,6 +82,8 @@ const styles = StyleSheet.create({
   neutral: { color: colors.subdued },
   meta: { color: colors.muted, fontSize: 10, marginTop: 2 },
   strike: { textDecorationLine: "line-through", color: colors.muted },
-  actions: { flexDirection: "row", alignItems: "center", gap: 2 },
-  iconAction: { width: 27, height: 27, alignItems: "center", justifyContent: "center", borderRadius: 9 },
+  menuBackdrop: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(0,0,0,.15)" },
+  menu: { position: "absolute", width: 180, borderRadius: 13, padding: 4, backgroundColor: "#242424", borderWidth: 1, borderColor: "#414141", elevation: 12 },
+  menuItem: { flexDirection: "row", alignItems: "center", gap: 11, paddingHorizontal: 12, paddingVertical: 13 },
+  menuText: { color: colors.text, fontSize: 14, fontWeight: "600" },
 });

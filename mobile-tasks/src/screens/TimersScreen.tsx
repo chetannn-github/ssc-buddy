@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, AppState, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, AppState, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View, type GestureResponderEvent } from "react-native";
 import { LiquidSpillCard } from "../components/LiquidSpillCard";
 import { TimerLiquidDial } from "../components/TimerLiquidDial";
 import type { User } from "firebase/auth";
@@ -17,8 +17,15 @@ export function TimersScreen({ user, widgetRequest = 0 }: { user: User | null; w
   useEffect(() => { if (widgetRequest > 0) setWidgetPicker(true); }, [widgetRequest]);
   const [gridWidth, setGridWidth] = useState(0);
   const ringSize = gridWidth ? Math.min(136, Math.max(80, (gridWidth - 12) / 2 - 22)) : 112;
-  const [editMode, setEditMode] = useState(false);
-  useEffect(() => setEditMode(false), [user?.uid]);
+  const [menu, setMenu] = useState<{ id: string; top: number; left: number } | null>(null);
+  const { width, height } = useWindowDimensions();
+  useEffect(() => setMenu(null), [user?.uid]);
+  const menuTimer = timers.find(timer => timer.id === menu?.id);
+  const openMenu = (timer: DateTimer, event: GestureResponderEvent) => {
+    if (busy) return;
+    const { pageX, pageY } = event.nativeEvent;
+    setMenu({ id: timer.id, left: Math.max(12, Math.min(width - 202, pageX - 95)), top: Math.max(12, Math.min(height - 180, pageY)) });
+  };
   const [now, setNow] = useState(Date.now);
   const [editing, setEditing] = useState<DateTimer | "new" | null>(null);
   const [deleting, setDeleting] = useState<DateTimer | null>(null);
@@ -63,19 +70,27 @@ export function TimersScreen({ user, widgetRequest = 0 }: { user: User | null; w
   const sorted = [...timers].sort((a, b) => Number(dateCountdown(a.targetAt, now).reached) - Number(dateCountdown(b.targetAt, now).reached) || Date.parse(a.targetAt) - Date.parse(b.targetAt));
   return <View style={s.page}>
     <View style={s.header}><View style={{ flex: 1 }}><Text style={s.eyebrow}>IMPORTANT DATES</Text><Text style={s.title}>Timers</Text></View><Pressable accessibilityRole="button" disabled={!user || busy} onPress={() => open()} style={s.add}><MaterialCommunityIcons name="plus" size={18} color="#081a31" /><Text style={s.addText}>Add timer</Text></Pressable></View>
-    {!!user && timers.length > 0 && <View style={{ alignItems: "flex-end", paddingHorizontal: 18, paddingBottom: 6 }}><Pressable accessibilityRole="button" accessibilityState={{ selected: editMode }} disabled={busy} onPress={() => setEditMode(value => !value)} style={{ flexDirection: "row", alignItems: "center", gap: 5, padding: 8 }}><MaterialCommunityIcons name={editMode ? "check" : "pencil-outline"} size={15} color="#93c5fd" /><Text style={{ color: "#93c5fd", fontSize: 12, fontWeight: "700" }}>{editMode ? "Done" : "Edit tasks"}</Text></Pressable></View>}
     <ScrollView contentContainerStyle={s.content} scrollEventThrottle={16} onScroll={(event) => reportVerticalScroll(event.nativeEvent.contentOffset.y)}>
       {!user ? <Text style={s.emptyCopy}>Sign in to save your important dates.</Text> : loading ? <ActivityIndicator style={{ marginTop: 50 }} color={colors.accent} /> : error ? <View style={s.empty}><Text style={s.error}>{error}</Text><Pressable style={s.add} onPress={retry}><Text style={s.addText}>Try again</Text></Pressable></View> : sorted.length ? <View style={s.cardGrid} onLayout={event => setGridWidth(event.nativeEvent.layout.width)}>{sorted.map((timer) => {
         const dial = timerDial(timer, now);
       const color = timerColors.get(timer.id)!;
-        return <LiquidSpillCard key={timer.id} style={[s.card, { width: gridWidth ? (gridWidth - 12) / 2 : "48%" }]} onLongPress={() => void pin(timer, color)}>
-          {editMode && <Pressable accessibilityRole="button" accessibilityLabel={`Edit ${timer.title}`} disabled={busy} onPress={() => open(timer)} style={s.cardEdit}><MaterialCommunityIcons name="pencil-outline" size={18} color={colors.muted} /></Pressable>}
-          <TimerLiquidDial liquidProgress={0.18} dial={dial} color={color} size={ringSize} onLongPress={() => void pin(timer, color)} />
+        return <LiquidSpillCard key={timer.id} style={[s.card, { width: gridWidth ? (gridWidth - 12) / 2 : "48%" }]} onLongPress={event => openMenu(timer, event)}>
+          <TimerLiquidDial liquidProgress={0.18} dial={dial} color={color} size={ringSize} onLongPress={event => openMenu(timer, event)} />
           <Text style={s.cardName}>{timer.title}</Text>
           <Text style={s.cardDate}>{new Date(timer.targetAt).toLocaleDateString(undefined, { dateStyle: "medium" })}</Text>
         </LiquidSpillCard>;
       })}</View> : <View style={s.empty}><MaterialCommunityIcons name="timer-sand" size={40} color="#93c5fd" /><Text style={s.emptyTitle}>Your next milestone starts here</Text><Text style={s.emptyCopy}>Add an important date to see your countdown.</Text><Pressable onPress={() => open()} style={[s.add, { marginTop: 12 }]}><MaterialCommunityIcons name="plus" size={18} color="#081a31" /><Text style={s.addText}>Add your first timer</Text></Pressable></View>}
     </ScrollView>
+    <Modal transparent visible={!!menu && !!menuTimer} animationType="fade" onRequestClose={() => setMenu(null)}>
+      <View style={{ flex: 1 }}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Close timer menu" style={s.menuBackdrop} onPress={() => setMenu(null)} />
+        {menu && menuTimer && <View accessibilityViewIsModal style={[s.menu, { top: menu.top, left: menu.left }]}>
+          <Pressable accessibilityRole="button" disabled={busy} onPress={() => { setMenu(null); open(menuTimer); }} style={s.menuItem}><MaterialCommunityIcons name="pencil-outline" size={18} color={colors.text} /><Text style={s.menuText}>Edit</Text></Pressable>
+          <Pressable accessibilityRole="button" disabled={busy} onPress={() => { setMenu(null); void pin(menuTimer, timerColors.get(menuTimer.id)!); }} style={s.menuItem}><MaterialCommunityIcons name="widgets-outline" size={18} color={colors.text} /><Text style={s.menuText}>Add to widget</Text></Pressable>
+          <Pressable accessibilityRole="button" disabled={busy} onPress={() => { setMenu(null); setDeleteError(""); setDeleting(menuTimer); }} style={s.menuItem}><MaterialCommunityIcons name="trash-can-outline" size={18} color="#fca5a5" /><Text style={[s.menuText, { color: "#fca5a5" }]}>Delete</Text></Pressable>
+        </View>}
+      </View>
+    </Modal>
     <Modal transparent visible={editing !== null} animationType="fade" onRequestClose={() => { if (!busy) setEditing(null); }}><KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={s.backdrop}><ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" style={{ width: "100%", maxHeight: "100%" }} contentContainerStyle={{ flexGrow: 1, justifyContent: "center" }}><View accessibilityViewIsModal style={s.dialog}><View style={s.editHeader}><Text style={s.dialogTitle}>{editing === "new" ? "Add timer" : "Edit timer"}</Text>{editing && editing !== "new" && <Pressable accessibilityRole="button" accessibilityLabel="Delete timer" disabled={busy} onPress={() => { setDeleteError(""); setDeleting(editing); setEditing(null); }} style={s.editDelete}><MaterialCommunityIcons name="trash-can-outline" size={22} color="#fca5a5" /></Pressable>}</View><Text style={s.label}>NAME</Text><TextInput autoFocus editable={!busy} value={title} onChangeText={setTitle} maxLength={80} placeholder="SSC CGL exam" placeholderTextColor={colors.subdued} style={s.input} /><Text style={s.label}>DATE</Text><CalendarDatePicker value={date} onChange={setDate} disabled={busy} />{!!formError && <Text style={s.error}>{formError}</Text>}<View style={s.actions}><Pressable disabled={busy} onPress={() => setEditing(null)} style={s.cancel}><Text style={s.cancelText}>Cancel</Text></Pressable><Pressable disabled={busy} onPress={() => void submit()} style={s.save}>{busy ? <ActivityIndicator color="#082f49" /> : <Text style={s.saveText}>Save timer</Text>}</Pressable></View></View></ScrollView></KeyboardAvoidingView></Modal>
     <Modal transparent visible={deleting !== null} animationType="fade" onRequestClose={() => { if (!busy) setDeleting(null); }}>
       <Pressable style={s.deleteBackdrop} onPress={() => { if (!busy) setDeleting(null); }}>
@@ -97,6 +112,10 @@ export function TimersScreen({ user, widgetRequest = 0 }: { user: User | null; w
 }
 
 const s = StyleSheet.create({
+  menuBackdrop: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,.15)" },
+  menu: { position: "absolute", width: 190, borderRadius: 13, padding: 4, borderWidth: 1, borderColor: "#414141", backgroundColor: "#242424", elevation: 12 },
+  menuItem: { flexDirection: "row", alignItems: "center", gap: 11, paddingHorizontal: 12, paddingVertical: 13 },
+  menuText: { color: colors.text, fontSize: 14, fontWeight: "600" },
   editHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 8 },
   editDelete: { padding: 8, borderRadius: 10, backgroundColor: "#f43f5e14" },
   deleteBackdrop: { flex: 1, alignItems: "center", justifyContent: "center", padding: 26, backgroundColor: "rgba(0,0,0,.76)" },
@@ -112,5 +131,5 @@ const s = StyleSheet.create({
   deleteConfirm: { flex: 1, minHeight: 45, alignItems: "center", justifyContent: "center", borderRadius: 13, backgroundColor: "#e11d48" },
   deleteConfirmText: { color: "#fff1f2", fontSize: 13, fontWeight: "800" },
 
-  page: { flex: 1, backgroundColor: colors.background }, header: { paddingHorizontal: 18, paddingTop: 16, paddingBottom: 10, flexDirection: "row", alignItems: "center", gap: 12 }, eyebrow: { color: colors.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.5 }, title: { color: colors.text, fontSize: 25, fontWeight: "800", marginTop: 4 }, add: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 11, borderWidth: 1, borderColor: "#60a5fa", backgroundColor: "#60a5fa" }, addText: { color: "#081a31", fontSize: 12, fontWeight: "700" }, content: { padding: 16, gap: 14, paddingBottom: 110 }, cardGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12 }, card: { padding: 10, paddingTop: 22, borderRadius: 18, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }, cardName: { textAlign: "center", color: colors.text, fontSize: 13, fontWeight: "700", marginTop: 4 }, cardDate: { textAlign: "center", color: colors.muted, fontSize: 10, marginTop: 4 }, cardEdit: { position: "absolute", right: 8, top: 8, zIndex: 2, padding: 10, borderRadius: 10 }, empty: { alignItems: "center", paddingHorizontal: 20, paddingVertical: 40, gap: 10, borderRadius: 18, borderWidth: 1, borderStyle: "dashed", borderColor: colors.border }, emptyTitle: { color: colors.text, fontSize: 17, fontWeight: "700", textAlign: "center" }, emptyCopy: { color: colors.muted, fontSize: 12, lineHeight: 18, textAlign: "center" }, backdrop: { flex: 1, justifyContent: "center", padding: 22, backgroundColor: "rgba(0,0,0,.82)" }, dialog: { borderRadius: 20, padding: 22, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }, dialogTitle: { color: colors.text, fontSize: 20, fontWeight: "800" }, label: { color: colors.muted, fontSize: 10, fontWeight: "700", letterSpacing: 1, marginTop: 14, marginBottom: 6 }, input: { borderRadius: 10, borderWidth: 1, borderColor: "#404040", backgroundColor: "#151515", color: colors.text, paddingHorizontal: 12, paddingVertical: 11, fontSize: 14 }, error: { color: "#fca5a5", fontSize: 12, marginTop: 8 }, actions: { flexDirection: "row", justifyContent: "flex-end", gap: 10, marginTop: 22 }, cancel: { padding: 12 }, cancelText: { color: colors.muted, fontWeight: "700" }, save: { minWidth: 110, alignItems: "center", justifyContent: "center", borderRadius: 10, backgroundColor: "#93c5fd", padding: 12 }, saveText: { color: "#082f49", fontWeight: "800" },
+  page: { flex: 1, backgroundColor: colors.background }, header: { paddingHorizontal: 18, paddingTop: 16, paddingBottom: 10, flexDirection: "row", alignItems: "center", gap: 12 }, eyebrow: { color: colors.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.5 }, title: { color: colors.text, fontSize: 25, fontWeight: "800", marginTop: 4 }, add: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 11, borderWidth: 1, borderColor: "#60a5fa", backgroundColor: "#60a5fa" }, addText: { color: "#081a31", fontSize: 12, fontWeight: "700" }, content: { padding: 16, gap: 14, paddingBottom: 110 }, cardGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12 }, card: { padding: 10, paddingTop: 22, borderRadius: 18, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }, cardName: { textAlign: "center", color: colors.text, fontSize: 13, fontWeight: "700", marginTop: 4 }, cardDate: { textAlign: "center", color: colors.muted, fontSize: 10, marginTop: 4 }, empty: { alignItems: "center", paddingHorizontal: 20, paddingVertical: 40, gap: 10, borderRadius: 18, borderWidth: 1, borderStyle: "dashed", borderColor: colors.border }, emptyTitle: { color: colors.text, fontSize: 17, fontWeight: "700", textAlign: "center" }, emptyCopy: { color: colors.muted, fontSize: 12, lineHeight: 18, textAlign: "center" }, backdrop: { flex: 1, justifyContent: "center", padding: 22, backgroundColor: "rgba(0,0,0,.82)" }, dialog: { borderRadius: 20, padding: 22, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }, dialogTitle: { color: colors.text, fontSize: 20, fontWeight: "800" }, label: { color: colors.muted, fontSize: 10, fontWeight: "700", letterSpacing: 1, marginTop: 14, marginBottom: 6 }, input: { borderRadius: 10, borderWidth: 1, borderColor: "#404040", backgroundColor: "#151515", color: colors.text, paddingHorizontal: 12, paddingVertical: 11, fontSize: 14 }, error: { color: "#fca5a5", fontSize: 12, marginTop: 8 }, actions: { flexDirection: "row", justifyContent: "flex-end", gap: 10, marginTop: 22 }, cancel: { padding: 12 }, cancelText: { color: colors.muted, fontWeight: "700" }, save: { minWidth: 110, alignItems: "center", justifyContent: "center", borderRadius: 10, backgroundColor: "#93c5fd", padding: 12 }, saveText: { color: "#082f49", fontWeight: "800" },
 });

@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { DropdownChevron } from "../components/DropdownChevron";
 import { NumberFlow } from "number-flow-react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { File } from "expo-file-system";
@@ -646,11 +647,7 @@ export function ProfileScreen({
             <View style={[styles.rangeWrap, { elevation: 40 }]}>
               <Pressable style={styles.rangeButton} onPress={() => setRangeOpen((value) => !value)}>
                 <Text style={styles.rangeText}>{activeRangeLabel}</Text>
-                <MaterialCommunityIcons
-                  name={rangeOpen ? "chevron-up" : "chevron-down"}
-                  size={14}
-                  color={colors.muted}
-                />
+                <DropdownChevron open={rangeOpen} size={14} color={colors.muted} />
               </Pressable>
               {rangeMenuVisible && (
                 <Animated.View

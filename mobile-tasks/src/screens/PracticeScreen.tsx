@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { DropdownChevron } from "../components/DropdownChevron";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Clipboard from "expo-clipboard";
@@ -1070,11 +1071,7 @@ function SetupSelect({
       <Text style={s.label}>{label.toUpperCase()}</Text>
       <Pressable disabled={disabled} onPress={onPress} style={[s.select, disabled && s.disabled]}>
         <Text numberOfLines={1} style={[s.selectText, !items.length && s.selectPlaceholder]}>{value}</Text>
-        <MaterialCommunityIcons
-          name={open ? "chevron-up" : "chevron-down"}
-          size={18}
-          color={colors.muted}
-        />
+        <DropdownChevron open={open} size={18} color={colors.muted} />
       </Pressable>
       {renderMenu && (
         <Animated.View style={[s.menu, { opacity: visibility, transform: [{ translateY: visibility.interpolate({ inputRange: [0, 1], outputRange: [-6, 0] }) }, { scale: visibility.interpolate({ inputRange: [0, 1], outputRange: [0.98, 1] }) }] }]} pointerEvents={open ? "auto" : "none"}>
@@ -1583,7 +1580,7 @@ function HistoryFilter({ label, open, onPress, onClose, options, onSelect }: { l
       <View ref={trigger} collapsable={false}>
       <Pressable onPress={toggle} accessibilityRole="button" accessibilityState={{ expanded: open }} style={s.historyFilterButton}>
         <Text numberOfLines={1} style={s.historyFilterText}>{label}</Text>
-        <MaterialCommunityIcons name={open ? "chevron-up" : "chevron-down"} size={17} color={colors.muted} />
+        <DropdownChevron open={open} size={17} color={colors.muted} />
       </Pressable>
       </View>
       <Modal transparent visible={renderMenu} statusBarTranslucent onRequestClose={onClose}>
@@ -2422,7 +2419,7 @@ function BankDropdown({
         <Text numberOfLines={1} style={s.bankDropdownValue}>
           {label}
         </Text>
-        <View style={s.bankDropdownChevron}><MaterialCommunityIcons name={open ? "chevron-up" : "chevron-down"} size={17} color={colors.muted} /></View>
+        <View style={s.bankDropdownChevron}><DropdownChevron open={open} size={17} color={colors.muted} /></View>
       </Pressable>
       {renderMenu ? (
         <Animated.View pointerEvents={open ? "auto" : "none"} style={[s.bankDropdownMenu, { opacity: visibility, transform: [{ translateY: visibility.interpolate({ inputRange: [0, 1], outputRange: [-6, 0] }) }, { scale: visibility.interpolate({ inputRange: [0, 1], outputRange: [0.98, 1] }) }] }]}>

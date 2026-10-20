@@ -1,3 +1,4 @@
+import { DropdownChevron } from "./src/components/DropdownChevron";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Image as ExpoImage } from "expo-image";
@@ -13,6 +14,8 @@ import {
   Image,
   ImageBackground,
   KeyboardAvoidingView,
+  Keyboard,
+  useWindowDimensions,
   Linking,
   Modal,
   Platform,
@@ -251,9 +254,7 @@ export default function App() {
   const [taskTabsWidth, setTaskTabsWidth] = useState(0);
   const taskTabIndicator = useRef(new Animated.Value(0)).current;
   const taskSwipeStartX = useRef<number | null>(null);
-  const [editingTasks, setEditingTasks] = useState(false);
   const [taskDay, setTaskDay] = useState<"today" | "tomorrow">("today");
-  useEffect(() => setEditingTasks(false), [taskDay, tab]);
   const [analyticsRange, setAnalyticsRange] = useState<TaskRange>("week");
   const [analyticsSubject, setAnalyticsSubject] = useState("All subjects");
   const [historyRange, setHistoryRange] = useState<TaskRange>("week");
@@ -268,6 +269,8 @@ export default function App() {
   const [type, setType] = useState<TaskType>("Practice Session");
   const [schedule, setSchedule] = useState<"today" | "tomorrow">("today");
   const [subjectMenuOpen, setSubjectMenuOpen] = useState(false);
+  const [typeMenuOpen, setTypeMenuOpen] = useState(false);
+  useEffect(() => { setSubjectMenuOpen(false); setTypeMenuOpen(false); }, [editor]);
   const [customSubject, setCustomSubject] = useState("");
   const [addSubjectDialog, setAddSubjectDialog] = useState(false);
   const [completion, setCompletion] = useState<Task | null>(null);
@@ -621,9 +624,7 @@ export default function App() {
   const today = calendarDay;
   const tomorrow = dateKeyFromOffset(1);
   const inRange = (value: string, range: TaskRange) => { const days = range === "today" ? 1 : range === "week" ? 7 : range === "month" ? 31 : range === "3months" ? 92 : 366; const from = dateKeyFromOffset(-(days - 1)); return value >= from && value <= today; };
-  const todayTasks = tasks
-    .filter((task) => task.date === (taskDay === "today" ? today : tomorrow))
-    .sort((a, b) => Number(a.completed) - Number(b.completed));
+  const todayTasks = tasks.filter((task) => task.date === (taskDay === "today" ? today : tomorrow));
   const todaySummary = summarizeTasks(todayTasks);
   const taskPoints = useMemo(() => weeklyTaskPointMap(tasks), [tasks, calendarDay]);
   const weeklyPoints = useMemo(() => [...taskPoints.values()].reduce((total, points) => total + points, 0) - weeklyInactivityPenalty(tasks), [taskPoints, tasks]);
@@ -790,7 +791,7 @@ export default function App() {
     setCompletion(null); setTaskActionLoading(false);
   };
   const reopen = (id: string) => {
-    // Unmarking also updates/reorders the list and can otherwise send a
+    // Unmarking updates the row and can otherwise send a
     // delayed Android touch to its first visible row.
     taskRowInteractionBlockedUntil.current = Date.now() + 800;
     persist(
@@ -801,14 +802,14 @@ export default function App() {
       ),
     );
   };
-  const remove = (id: string) => setDeletingTask(tasks.find((task) => task.id === id && task.date !== dateKey()) ?? null);
+  const remove = (id: string) => setDeletingTask(tasks.find((task) => task.id === id && task.date === dateKeyFromOffset(1)) ?? null);
   const canUseTaskRow = () => Date.now() >= taskRowInteractionBlockedUntil.current;
   const confirmDelete = async () => {
     if (!deletingTask) return;
-    if (deletingTask.date === dateKey()) { setDeletingTask(null); return; }
+    if (deletingTask.date !== dateKeyFromOffset(1)) { setDeletingTask(null); return; }
     setTaskActionLoading(true);
     await new Promise((resolve) => setTimeout(resolve, 280));
-    if (deletingTask.date === dateKey()) { setDeletingTask(null); setTaskActionLoading(false); return; }
+    if (deletingTask.date !== dateKeyFromOffset(1)) { setDeletingTask(null); setTaskActionLoading(false); return; }
     persist(tasks.filter((task) => task.id !== deletingTask.id));
     setDeletingTask(null); setTaskActionLoading(false);
   };
@@ -926,7 +927,7 @@ export default function App() {
                 </View>
               </View>
             </LiquidSpillCard>
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}><Text style={styles.sectionTitle}>{taskDay === "today" ? "TODAY'S TASKS" : "TOMORROW'S TASKS"}</Text><Pressable accessibilityRole="button" accessibilityState={{ selected: editingTasks }} onPress={() => setEditingTasks(value => !value)} style={{ flexDirection: "row", alignItems: "center", gap: 5, padding: 8 }}><MaterialCommunityIcons name={editingTasks ? "check" : "pencil-outline"} size={15} color="#93c5fd" /><Text style={{ color: "#93c5fd", fontSize: 12, fontWeight: "700" }}>{editingTasks ? "Done" : "Edit tasks"}</Text></Pressable></View>
+            <Text style={styles.sectionTitle}>{taskDay === "today" ? "TODAY'S TASKS" : "TOMORROW'S TASKS"}</Text>
             </View>,
             <View key="tasks-list" style={styles.tasksList}>
             {todayTasks.length === 0 ? (
@@ -937,7 +938,6 @@ export default function App() {
                   key={task.id}
                   task={task}
                   grouped
-                  editable={editingTasks}
                   last={index === todayTasks.length - 1}
                   points={taskPoints.get(task.id) ?? 0}
                   onDone={() => {
@@ -983,10 +983,12 @@ export default function App() {
           </>
         )}
       </ScrollView>
-      <Modal transparent visible={editor !== null} animationType="slide">
-        <Pressable style={styles.backdrop} onPress={() => setEditor(null)}>
-          <Pressable style={styles.sheet} onPress={() => undefined}>
-            <Text style={styles.sheetTitle}>{editor === "new" ? "Add task" : "Edit task"}</Text>
+      <Modal transparent visible={editor !== null} animationType="fade" onRequestClose={() => { if (!taskActionLoading) { setSubjectMenuOpen(false); setTypeMenuOpen(false); setEditor(null); } }}>
+        <KeyboardAvoidingView style={styles.backdrop} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+          <Pressable accessibilityLabel="Close task dialog" style={StyleSheet.absoluteFill} onPress={() => { if (!taskActionLoading) { setSubjectMenuOpen(false); setEditor(null); } }} />
+          <View accessibilityViewIsModal style={styles.sheet}>
+          <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.taskDialogContent}>
+            <Text style={styles.sheetTitle}>{editor === "new" ? "Add Task" : "Edit Task"}</Text>
             <Field
               label="Task name"
               value={name}
@@ -995,19 +997,11 @@ export default function App() {
             />
             <View style={styles.selectWrap}>
               <Text style={styles.fieldLabel}>SUBJECT</Text>
-              <TaskDropdown label={subject} open={subjectMenuOpen} onToggle={() => setSubjectMenuOpen((open) => !open)} options={[...subjectOptions, "__custom__"].map((value) => ({ value, label: value === "__custom__" ? "+ Add subject" : value }))} onSelect={(value) => { if (value === "__custom__") { setCustomSubject(""); setAddSubjectDialog(true); } else { setSubject(value); } setSubjectMenuOpen(false); }} />
+              <TaskDropdown label={subject} open={subjectMenuOpen} popup onToggle={() => { setTypeMenuOpen(false); setSubjectMenuOpen((open) => !open); }} options={[...subjectOptions, "__custom__"].map((value) => ({ value, label: value === "__custom__" ? "+ Add subject" : value }))} onSelect={(value) => { if (value === "__custom__") { setCustomSubject(""); setAddSubjectDialog(true); } else { setSubject(value); } setSubjectMenuOpen(false); }} />
             </View>
-            <Text style={styles.fieldLabel}>TYPE</Text>
-            <View style={styles.typeRow}>
-              {TASK_TYPES.map((item) => (
-                <Pressable
-                  key={item}
-                  onPress={() => setType(item)}
-                  style={[styles.typeChip, type === item && styles.typeChipActive]}
-                >
-                  <Text style={styles.typeText}>{item}</Text>
-                </Pressable>
-              ))}
+            <View style={styles.selectWrap}>
+              <Text style={styles.fieldLabel}>TYPE</Text>
+              <TaskDropdown popup label={type} open={typeMenuOpen} onToggle={() => { setSubjectMenuOpen(false); setTypeMenuOpen(value => !value); }} options={["Practice Session", "Lecture", ...TASK_TYPES.filter(value => value !== "Practice Session" && value !== "Lecture")].map(value => ({ value, label: value }))} onSelect={value => { setType(value as TaskType); setTypeMenuOpen(false); }} />
             </View>
             {editor === "new" && (
               <View>
@@ -1035,8 +1029,9 @@ export default function App() {
                 {taskActionLoading ? <ActivityIndicator size="small" color="#081a31" /> : <Text style={styles.primaryText}>Save task</Text>}
               </Pressable>
             </View>
-          </Pressable>
-        </Pressable>
+          </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
       <Modal transparent visible={addSubjectDialog} animationType="fade" onRequestClose={() => setAddSubjectDialog(false)}>
         <KeyboardAvoidingView style={styles.backdrop} behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={Platform.OS === "ios" ? 18 : 0}>
@@ -1052,10 +1047,12 @@ export default function App() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
-      <Modal transparent visible={completion !== null} animationType="fade" onRequestClose={() => setCompletion(null)}>
+      <Modal transparent visible={completion !== null} animationType="fade" onRequestClose={() => { if (!taskActionLoading) setCompletion(null); }}>
         <KeyboardAvoidingView style={styles.backdrop} behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={Platform.OS === "ios" ? 18 : 0}>
-          <View style={styles.sheet}>
-            <Text style={styles.sheetTitle}>Complete task</Text>
+          <Pressable accessibilityLabel="Close completion dialog" style={StyleSheet.absoluteFill} onPress={() => { if (!taskActionLoading) setCompletion(null); }} />
+          <View accessibilityViewIsModal style={styles.sheet}>
+          <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.taskDialogContent}>
+            <Text style={styles.sheetTitle}>Complete Task</Text>
             <Text style={styles.muted}>{completion?.name}</Text>
             <Field
               label="Actual study minutes"
@@ -1075,6 +1072,7 @@ export default function App() {
                 {taskActionLoading ? <ActivityIndicator size="small" color="#081a31" /> : <Text style={styles.primaryText}>Mark complete</Text>}
               </Pressable>
             </View>
+          </ScrollView>
           </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -1153,9 +1151,24 @@ function Field(props: {
     </View>
   );
 }
-function TaskDropdown({ label, open, onToggle, options, onSelect, compact = false }: { label: string; open: boolean; onToggle: () => void; options: Array<{ value: string; label: string }>; onSelect: (value: string) => void; compact?: boolean }) {
+function TaskDropdown({ label, open, onToggle, options, onSelect, compact = false, popup = false }: { label: string; open: boolean; onToggle: () => void; options: Array<{ value: string; label: string }>; onSelect: (value: string) => void; compact?: boolean; popup?: boolean }) {
   const visibility = useRef(new Animated.Value(open ? 1 : 0)).current;
   const [renderMenu, setRenderMenu] = useState(open);
+  const trigger = useRef<View>(null);
+  const [anchor, setAnchor] = useState<{ top: number; left: number; width: number; maxHeight: number } | null>(null);
+  const { width, height } = useWindowDimensions();
+  useEffect(() => {
+    if (!open || !popup) { setAnchor(null); return; }
+    let active = true;
+    trigger.current?.measureInWindow((x, y, measuredWidth, measuredHeight) => {
+      if (!active) return;
+      const menuHeight = Math.min(224, Math.max(48, height - 48));
+      const below = y + measuredHeight + 5;
+      const top = below + menuHeight <= height - 16 ? below : Math.max(16, y - menuHeight - 5);
+      setAnchor({ top, left: Math.max(12, Math.min(width - measuredWidth - 12, x)), width: Math.min(measuredWidth, width - 24), maxHeight: menuHeight });
+    });
+    return () => { active = false; };
+  }, [open, popup, width, height]);
   useEffect(() => {
     visibility.stopAnimation();
     if (open) {
@@ -1168,7 +1181,19 @@ function TaskDropdown({ label, open, onToggle, options, onSelect, compact = fals
       if (finished) setRenderMenu(false);
     });
   }, [open, renderMenu, visibility]);
-  return <View style={[styles.dropdownWrap, compact && styles.dropdownWrapCompact, open && styles.dropdownWrapOpen]}><Pressable style={[styles.dropdownTrigger, open && styles.dropdownTriggerOpen]} onPress={onToggle}><Text numberOfLines={1} style={styles.dropdownValue}>{label}</Text><View style={styles.dropdownChevronButton}><MaterialCommunityIcons name={open ? "chevron-up" : "chevron-down"} size={18} color="#a1a1aa" /></View></Pressable>{renderMenu && <Animated.View pointerEvents={open ? "auto" : "none"} style={[styles.dropdownMenu, { opacity: visibility, transform: [{ translateY: visibility.interpolate({ inputRange: [0, 1], outputRange: [-6, 0] }) }, { scale: visibility.interpolate({ inputRange: [0, 1], outputRange: [0.98, 1] }) }] }]}>{options.map((option) => { const selected = option.value === label || option.label === label; return <Pressable key={option.value} style={[styles.dropdownOption, selected && styles.dropdownOptionSelected]} onPress={() => onSelect(option.value)}><Text style={[styles.dropdownOptionText, selected && styles.dropdownOptionTextSelected]}>{option.label}</Text>{selected && <MaterialCommunityIcons name="check" size={16} color="#171717" />}</Pressable>; })}</Animated.View>}</View>;
+  const choices = <NativeScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled" style={{ maxHeight: anchor?.maxHeight ?? 224 }}>{options.map(option => {
+    const selected = option.value === label || option.label === label;
+    return <Pressable accessibilityRole="button" accessibilityState={{ selected }} key={option.value} style={[styles.dropdownOption, selected && styles.dropdownOptionSelected]} onPress={() => onSelect(option.value)}><Text style={[styles.dropdownOptionText, selected && styles.dropdownOptionTextSelected]}>{option.label}</Text>{selected && <MaterialCommunityIcons name="check" size={16} color="#171717" />}</Pressable>;
+  })}</NativeScrollView>;
+  return <View ref={trigger} collapsable={false} style={[styles.dropdownWrap, compact && styles.dropdownWrapCompact, open && styles.dropdownWrapOpen]}>
+    <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} style={[styles.dropdownTrigger, open && styles.dropdownTriggerOpen]} onPress={() => { if (popup && !open) Keyboard.dismiss(); onToggle(); }}><Text numberOfLines={1} style={styles.dropdownValue}>{label}</Text><View style={styles.dropdownChevronButton}><DropdownChevron open={open} size={18} color="#a1a1aa" /></View></Pressable>
+    {popup ? <Modal transparent visible={open && anchor !== null} animationType="fade" onRequestClose={onToggle}>
+      <View style={{ flex: 1 }}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Close dropdown" onPress={onToggle} style={StyleSheet.absoluteFill} />
+        {anchor && <View accessibilityViewIsModal style={[styles.dropdownMenu, { top: anchor.top, left: anchor.left, right: undefined, width: anchor.width, maxHeight: anchor.maxHeight }]}>{choices}</View>}
+      </View>
+    </Modal> : renderMenu && <Animated.View pointerEvents={open ? "auto" : "none"} style={[styles.dropdownMenu, { opacity: visibility, transform: [{ translateY: visibility.interpolate({ inputRange: [0, 1], outputRange: [-6, 0] }) }, { scale: visibility.interpolate({ inputRange: [0, 1], outputRange: [0.98, 1] }) }] }]}>{choices}</Animated.View>}
+  </View>;
 }
 
 function Empty({ onPress }: { onPress: () => void }) {
@@ -1413,20 +1438,25 @@ const styles = StyleSheet.create({
   historyHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   inactiveHistoryPoints: { color: "#fca5a5", fontSize: 12, fontWeight: "800" },
   historyTaskList: { marginTop: 8, borderTopWidth: 1, borderTopColor: "#303030" },
-  backdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,.72)" },
+  backdrop: { flex: 1, justifyContent: "center", alignItems: "center", padding: 22, backgroundColor: "rgba(0,0,0,.72)" },
   sheet: {
     backgroundColor: "#202020",
-    borderTopLeftRadius: 26,
-    borderTopRightRadius: 26,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "#383838",
+    width: "100%",
+    maxWidth: 420,
+    maxHeight: "90%",
     padding: 22,
     gap: 14,
   },
+  taskDialogContent: { gap: 14 },
   sheetTitle: { color: "#fafafa", fontSize: 21, fontWeight: "800" },
   timeChips: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: -5 },
-  timeChip: { borderRadius: 10, borderWidth: 1, borderColor: "#444", paddingHorizontal: 11, paddingVertical: 8, backgroundColor: "#292929" },
-  timeChipActive: { borderColor: "#60a5fa", backgroundColor: "#162c45" },
+  timeChip: { borderRadius: 10, borderWidth: 1, borderColor: "#303030", paddingHorizontal: 11, paddingVertical: 8, backgroundColor: "#151515" },
+  timeChipActive: { borderColor: "#60a5fa", backgroundColor: "#60a5fa" },
   timeChipText: { color: "#a1a1aa", fontSize: 11, fontWeight: "800" },
-  timeChipTextActive: { color: "#dbeafe" },
+  timeChipTextActive: { color: "#081a31" },
   fieldLabel: {
     color: "#a1a1aa",
     fontSize: 10,
@@ -1473,15 +1503,6 @@ const styles = StyleSheet.create({
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 7 },
   },
-  typeRow: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
-  typeChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 12,
-    backgroundColor: "#303030",
-  },
-  typeChipActive: { backgroundColor: "#162c45" },
-  typeText: { color: "#e4e4e7", fontSize: 12 },
   scheduleRow: { flexDirection: "row", gap: 8 },
   scheduleChip: {
     minWidth: 88,
@@ -1493,9 +1514,9 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 14,
   },
-  scheduleChipActive: { borderColor: "#60a5fa", backgroundColor: "#162c45" },
+  scheduleChipActive: { borderColor: "#60a5fa", backgroundColor: "#60a5fa" },
   scheduleText: { color: "#a1a1aa", fontSize: 13, fontWeight: "600" },
-  scheduleTextActive: { color: "#dbeafe" },
+  scheduleTextActive: { color: "#081a31" },
   subjectOption: { paddingHorizontal: 14, paddingVertical: 12 },
   subjectOptionActive: { backgroundColor: "#162c45" },
   subjectOptionText: { color: "#d4d4d8", fontSize: 15 },

@@ -1,3 +1,4 @@
+import { DropdownChevron } from "../components/DropdownChevron";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { useEffect, useRef, useState } from "react";
@@ -68,7 +69,7 @@ export function MockTestLogDialog({ visible, subjects, onClose, onSave }: { visi
 
   const select = (label: "type" | "subject", value: string, values: string[], onChoose: (value: string) => void, disabled = false) => <View style={styles.selectWrap}>
     <Text style={styles.label}>{label}</Text>
-    <Pressable disabled={disabled} style={[styles.select, disabled && styles.disabled]} onPress={() => { Keyboard.dismiss(); updateMenu(menu === label ? null : label); }}><Text style={styles.selectText}>{value}</Text><Animated.View style={{ transform: [{ rotate: menu === label ? "180deg" : "0deg" }] }}><MaterialCommunityIcons name="chevron-down" size={19} color={colors.muted} /></Animated.View></Pressable>
+    <Pressable disabled={disabled} style={[styles.select, disabled && styles.disabled]} onPress={() => { Keyboard.dismiss(); updateMenu(menu === label ? null : label); }}><Text style={styles.selectText}>{value}</Text><DropdownChevron open={menu === label} size={19} color={colors.muted} /></Pressable>
     {menuVisible === label && <Animated.View style={[styles.menu, { opacity: menuProgress, transform: [{ translateY: menuProgress.interpolate({ inputRange: [0, 1], outputRange: [-7, 0] }) }, { scale: menuProgress.interpolate({ inputRange: [0, 1], outputRange: [0.98, 1] }) }] }]}>{values.map((item) => { const selected = item === value; return <Pressable key={item} style={[styles.option, selected && styles.optionActive]} onPress={() => { onChoose(item); closeMenu(); }}><Text style={[styles.optionText, selected && styles.optionTextActive]}>{item}</Text>{selected && <MaterialCommunityIcons name="check" size={16} color="#171717" />}</Pressable>; })}</Animated.View>}
   </View>;
 
