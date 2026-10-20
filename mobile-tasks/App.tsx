@@ -302,9 +302,10 @@ export default function App() {
     try {
       const { requestWidgetUpdate } = require("react-native-android-widget");
       const { renderDailyTasksWidget } = require("./src/widgets/DailyTasksWidget");
+      const { loadDailyTaskWidgetOptions } = require("./src/widgets/daily-task-widget-store");
       void requestWidgetUpdate({
         widgetName: "DailyTasksWidget",
-        renderWidget: async () => renderDailyTasksWidget(next, widgetRank),
+        renderWidget: async (info: { widgetId: number; height: number }) => renderDailyTasksWidget(next, widgetRank, profileSettings?.accentColor, { ...await loadDailyTaskWidgetOptions(info.widgetId, user?.uid), height: info.height }),
       });
       const { renderQuickRecallWidget } = require("./src/widgets/QuickRecallWidget");
       void requestWidgetUpdate({
@@ -320,7 +321,7 @@ export default function App() {
   useEffect(() => {
     void AsyncStorage.setItem(WIDGET_META_STORAGE_KEY, JSON.stringify({ rank: widgetRank }));
     if (tasksLoaded) refreshDailyTasksWidget(tasks);
-  }, [widgetRank]);
+  }, [widgetRank, profileSettings?.accentColor, user?.uid]);
   useEffect(() => {
     if (!isFirebaseConfigured) return;
     return observeSession((nextUser) => {
@@ -495,6 +496,10 @@ export default function App() {
       if (!url.startsWith("sscbuddy://tasks/complete")) {
         setAppTab("tasks");
         setTaskDay("today");
+        const requestedDate = /[?&]date=(\d{4}-\d{2}-\d{2})(?:&|$)/.exec(url)?.[1];
+        if (requestedDate && requestedDate < dateKey()) setTaskHistoryDate(requestedDate);
+        else if (requestedDate === dateKeyFromOffset(1)) setTaskDay("tomorrow");
+        if (url.startsWith("sscbuddy://tasks/new")) openNew();
         return;
       }
       const taskId = /[?&]taskId=([^&]+)/.exec(url)?.[1];

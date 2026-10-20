@@ -22,6 +22,8 @@ if (supportsAndroidWidgets) {
   const { habitWidgetView, removeHabitWidget, bindPendingHabitWidget, actOnHabitWidget } = require("./src/widgets/habit-widget-store");
   const { registerWidgetTaskHandler } = require("react-native-android-widget");
   const { renderDailyTasksWidget } = require("./src/widgets/DailyTasksWidget");
+  const { loadDailyTaskWidgetOptions, saveDailyTaskWidgetOptions, removeDailyTaskWidgetOptions } = require("./src/widgets/daily-task-widget-store");
+  const { loadProfile } = require("./src/lib/profile-store");
   const { renderQuickRecallWidget } = require("./src/widgets/QuickRecallWidget");
   const { answerUnlockQuiz, advanceUnlockQuiz, getUnlockQuiz, releaseUnlockQuizReview, startUnlockQuiz } = require("./src/domain/unlock-quiz");
   const { getFirebaseAuth, publishLeaderboardAfterWidgetTask, recordQuickRecallPractice, toggleTaskFromWidget, writeQuestionLearning } = require("./src/lib/firebase");
@@ -88,6 +90,15 @@ if (supportsAndroidWidgets) {
       tasks = [];
     }
     if (widgetInfo.widgetName === "DailyTasksWidget") {
+      if (widgetAction === "WIDGET_DELETED") { await removeDailyTaskWidgetOptions(widgetInfo.widgetId); return; }
+      const owner = await getWidgetUser();
+      let view = await loadDailyTaskWidgetOptions(widgetInfo.widgetId, owner?.uid);
+      if (widgetAction === "WIDGET_CLICK" && clickAction?.startsWith("DAILY_")) {
+        if (clickAction === "DAILY_FILTER_DUE") view = { ...view, dueOnly: true };
+        else if (clickAction === "DAILY_FILTER_ALL") view = { ...view, dueOnly: false };
+        else if (/^DAILY_DATE_\d{4}-\d{2}-\d{2}$/.test(clickAction)) view = { ...view, date: clickAction.slice("DAILY_DATE_".length) };
+        await saveDailyTaskWidgetOptions(widgetInfo.widgetId, owner?.uid, view);
+      }
       if (widgetAction === "WIDGET_CLICK" && clickAction === "TOGGLE_TASK") {
         const taskId = typeof clickActionData?.taskId === "string" ? clickActionData.taskId : "";
         if (taskId) {
@@ -108,7 +119,8 @@ if (supportsAndroidWidgets) {
         const meta = rawMeta ? JSON.parse(rawMeta) : null;
         widgetRank = Number.isFinite(Number(meta?.rank)) && Number(meta.rank) > 0 ? Number(meta.rank) : null;
       } catch {}
-      renderWidget(renderDailyTasksWidget(tasks, widgetRank));
+      const profile = await loadProfile();
+      renderWidget(renderDailyTasksWidget(tasks, widgetRank, profile.accentColor, { ...view, height: widgetInfo.height }));
       // Android may deliver the scheduled widget refresh after midnight while
       // the app UI is closed. Rebuild the cloud score from the same task data
       // so overdue-task penalties are not delayed until a manual task action.

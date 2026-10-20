@@ -1,8 +1,8 @@
-import { FlexWidget, ImageWidget, SvgWidget, TextWidget } from "react-native-android-widget";
-
+import { FlexWidget, ImageWidget, ListWidget, SvgWidget, TextWidget } from "react-native-android-widget";
 import { dateKey, formatMinutes, summarizeTasks, type Task } from "../domain/tasks";
+import { accentInk, normalizeAppAccent } from "../domain/app-accent";
+import { dailyTaskWidgetModel, type DailyTaskWidgetOptions } from "../domain/daily-task-widget";
 
-/** Wide tap-through dashboard: render every task scheduled for today. */
 const weeklyTaskPoints = (tasks: Task[]) => {
   const now = new Date(); const start = new Date(now);
   start.setHours(0, 0, 0, 0); start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
@@ -16,23 +16,61 @@ const weeklyTaskPoints = (tasks: Task[]) => {
   }));
 };
 
-export function renderDailyTasksWidget(tasks: Task[], rank: number | null = null) {
-  const todayTasks = tasks.filter((task) => task.date === dateKey(new Date())).sort((left, right) => Number(left.completed) - Number(right.completed));
-  const summary = summarizeTasks(todayTasks);
+const circleSvg = (percent: number, accent: string, label: string, selected: boolean) => {
+  const arc = Math.max(selected ? 2 : 0, Math.min(100, percent)) * 81.68 / 100;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle cx="16" cy="16" r="13" fill="none" stroke="${selected ? "#535353" : "#292929"}" stroke-width="2.5"/>${arc > 0 ? `<circle cx="16" cy="16" r="13" fill="none" stroke="${accent}" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="${arc} 81.68" transform="rotate(-90 16 16)"/>` : ""}<text x="16" y="20" fill="#fafafa" font-size="12" font-family="sans-serif" font-weight="600" text-anchor="middle">${label}</text></svg>`;
+};
+export function renderDailyTasksWidget(tasks: Task[], rank: number | null = null, accentColor?: string, options: DailyTaskWidgetOptions = {}) {
+  const accent = normalizeAppAccent(accentColor), ink = accentInk(accent);
+  const model = dailyTaskWidgetModel(tasks, options), { today, selected, summary, visibleTasks } = model;
   const points = weeklyTaskPoints(tasks);
-  const pieChart = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="26" fill="none" stroke="#303030" stroke-width="7"/><circle cx="32" cy="32" r="26" fill="none" stroke="#60a5fa" stroke-width="7" stroke-linecap="round" stroke-dasharray="${(summary.percent * 163.36) / 100} 163.36" transform="rotate(-90 32 32)"/><text x="32" y="37" fill="#f8fafc" font-family="sans-serif" font-size="13" font-weight="700" text-anchor="middle">${summary.percent}%</text></svg>`;
-  return <FlexWidget accessibilityLabel="SSC Buddy daily tasks" style={{ width: "match_parent", height: "match_parent", flexDirection: "column", backgroundColor: "#171717", borderRadius: 24, padding: 18 }}>
-      <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: "sscbuddy://tasks" }} accessibilityLabel="Open SSC Buddy daily tasks" style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-      <FlexWidget style={{ flexDirection: "row", alignItems: "center", flex: 1, marginRight: 22 }}><ImageWidget image={require("../../assets/auth.jpg")} imageWidth={40} imageHeight={40} resizeMode="cover" style={{ width: 40, height: 40, borderRadius: 13, marginRight: 11 }} /><FlexWidget style={{ flexDirection: "column", flex: 1 }}><TextWidget text="SSC BUDDY" style={{ color: "#93c5fd", fontSize: 10, fontWeight: "bold", letterSpacing: 1.6 }} /><TextWidget text="Daily tasks" style={{ color: "#fafafa", fontSize: 20, fontWeight: "bold", marginTop: 2 }} /></FlexWidget></FlexWidget>
-      <FlexWidget style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end", marginRight: 9 }}>
-        {rank && rank <= 3 ? <ImageWidget image={[require("../../assets/gold-medal.png"), require("../../assets/silver-medal.png"), require("../../assets/bronze-medal.png")][rank - 1]} imageWidth={17} imageHeight={17} resizeMode="contain" style={{ width: 17, height: 17, marginRight: 4 }} /> : rank ? <TextWidget text="🏆" style={{ fontSize: 14, marginRight: 4 }} /> : null}
-        <TextWidget text={rank ? `#${rank}` : ""} style={{ color: "#fcd34d", fontSize: 12, fontWeight: "bold" }} />
+  const title = `${selected === today ? "Today" : new Date(selected + "T12:00:00").toLocaleDateString(undefined, { weekday: "short" })}, ${new Date(selected + "T12:00:00").toLocaleDateString(undefined, { day: "numeric", month: "short" })}`;
+  return <FlexWidget accessibilityLabel="SSC Buddy daily tasks" style={{ width: "match_parent", height: "match_parent", flexDirection: "column", backgroundColor: "#000000", borderRadius: 22, padding: 12 }}>
+    <FlexWidget style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", height: 30 }}>
+      <TextWidget text={title} clickAction="OPEN_URI" clickActionData={{ uri: `sscbuddy://tasks?date=${selected}` }} style={{ color: "#fafafa", fontSize: 17, fontWeight: "bold" }} />
+      <FlexWidget style={{ flexDirection: "row", alignItems: "center" }}>
+        {rank && rank <= 3 ? <ImageWidget image={[require("../../assets/gold-medal.png"), require("../../assets/silver-medal.png"), require("../../assets/bronze-medal.png")][rank - 1]} imageWidth={16} imageHeight={16} style={{ width: 16, height: 16, marginRight: 3 }} /> : null}
+        {rank ? <TextWidget text={`#${rank}`} style={{ color: "#e4e4e7", fontSize: 11, marginRight: 10 }} /> : null}
+        <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: "sscbuddy://tasks/new" }} accessibilityLabel="Add task" style={{ width: 28, height: 28, borderRadius: 9, backgroundColor: accent, alignItems: "center", justifyContent: "center" }}><TextWidget text="+" style={{ color: ink, fontSize: 21 }} /></FlexWidget>
       </FlexWidget>
-      <SvgWidget svg={pieChart} style={{ width: 64, height: 64 }} />
     </FlexWidget>
-    <FlexWidget style={{ flexDirection: "row", alignItems: "center", marginTop: 13 }}><TextWidget text={summary.total ? `${summary.done}/${summary.total} complete · ${formatMinutes(summary.minutes)} studied today` : "No tasks planned · 0m studied today"} style={{ color: "#b4b4b8", fontSize: 12 }} /></FlexWidget>
-    <FlexWidget style={{ width: "match_parent", flexDirection: "column", marginTop: 8 }}>
-      {todayTasks.length ? todayTasks.map((task) => { const taskPoints = points.get(task.id) ?? 0; const pointsText = taskPoints > 0 ? `+${taskPoints}` : taskPoints < 0 ? `−${Math.abs(taskPoints)}` : "0"; return <FlexWidget key={task.id} clickAction={task.completed ? "TOGGLE_TASK" : "OPEN_URI"} clickActionData={task.completed ? { taskId: task.id } : { uri: `sscbuddy://tasks/complete?taskId=${encodeURIComponent(task.id)}` }} accessibilityLabel={`${task.completed ? "Mark incomplete" : "Complete and record time"}: ${task.name}`} style={{ width: "match_parent", flexDirection: "row", alignItems: "center", borderRadius: 12, backgroundColor: task.completed ? "#172c46" : "#242424", borderWidth: 1, borderColor: task.completed ? "#315d91" : "#343434", paddingHorizontal: 12, paddingVertical: 10, marginTop: 7 }}><FlexWidget style={{ width: 21, height: 21, borderRadius: 11, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: task.completed ? "#60a5fa" : "#8b8b8b", backgroundColor: task.completed ? "#60a5fa" : "#242424", marginRight: 10 }}><TextWidget text={task.completed ? "✓" : ""} style={{ color: "#082f49", fontSize: 12, fontWeight: "bold" }} /></FlexWidget><FlexWidget style={{ flexDirection: "column", flex: 1 }}><TextWidget text={task.name} maxLines={1} truncate="END" style={{ color: task.completed ? "#bfdbfe" : "#f1f1f1", fontSize: 13, fontWeight: "bold" }} /><TextWidget text={task.subject || "General"} maxLines={1} truncate="END" style={{ color: "#9b9ba2", fontSize: 10, marginTop: 2 }} /></FlexWidget><TextWidget text={`${pointsText} pts`} style={{ color: taskPoints > 0 ? "#86efac" : taskPoints < 0 ? "#fca5a5" : "#9b9ba2", fontSize: 11, fontWeight: "bold", marginLeft: 8 }} /></FlexWidget>; }) : <FlexWidget style={{ width: "match_parent", alignItems: "center", borderRadius: 12, borderWidth: 1, borderColor: "#343434", borderStyle: "dashed", paddingVertical: 17, marginTop: 7 }}><TextWidget text="No tasks planned today" style={{ color: "#b4b4b8", fontSize: 12 }} /></FlexWidget>}
+    <FlexWidget style={{ flexDirection: "row", width: "match_parent", marginTop: 10 }}>
+      {model.dates.map((date) => {
+        const stats = summarizeTasks(tasks.filter((task) => task.date === date));
+        return <FlexWidget key={date} clickAction={`DAILY_DATE_${date}`} accessibilityLabel={date} style={{ flex: 1, alignItems: "center", flexDirection: "column" }}>
+          <TextWidget text={new Date(date + "T12:00:00").toLocaleDateString(undefined, { weekday: "short" })} style={{ color: date === selected ? "#fafafa" : "#777777", fontSize: 9, marginBottom: 5 }} />
+          <SvgWidget svg={circleSvg(stats.percent, accent, String(new Date(date + "T12:00:00").getDate()), date === selected)} style={{ width: 32, height: 32 }} />
+        </FlexWidget>;
+      })}
     </FlexWidget>
+    <FlexWidget style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 16 }}>
+      <FlexWidget style={{ flexDirection: "column" }}>
+        <TextWidget text="Filter" style={{ color: "#777777", fontSize: 10, marginBottom: 5 }} />
+        <FlexWidget style={{ flexDirection: "row", borderRadius: 9, borderWidth: 1, borderColor: "#292929", overflow: "hidden" }}>
+          {[false, true].map((dueOnly) => <TextWidget key={String(dueOnly)} text={dueOnly ? `Due (${model.due.length})` : `All (${summary.total})`} clickAction={dueOnly ? "DAILY_FILTER_DUE" : "DAILY_FILTER_ALL"} style={{ width: 63, height: 28, textAlign: "center", paddingVertical: 5, color: !!options.dueOnly === dueOnly ? ink : "#fafafa", backgroundColor: !!options.dueOnly === dueOnly ? accent : "#000000", fontSize: 11 }} />)}
+        </FlexWidget>
+      </FlexWidget>
+      <FlexWidget style={{ flexDirection: "column", alignItems: "flex-end" }}>
+        <TextWidget text="Task Meter" style={{ color: "#777777", fontSize: 10, marginBottom: 5 }} />
+        <TextWidget text={`${summary.percent}%`} style={{ color: "#fafafa", fontSize: 15, fontWeight: "bold", borderRadius: 9, borderWidth: 1, borderColor: "#292929", paddingHorizontal: 10, height: 28, paddingVertical: 4 }} />
+      </FlexWidget>
+    </FlexWidget>
+    <TextWidget text={`Study time  ${formatMinutes(summary.minutes)}`} style={{ color: "#a1a1aa", fontSize: 10, marginTop: 8, marginBottom: 8 }} />
+    <ListWidget style={{ width: "match_parent", height: Math.max(48, (options.height ?? 300) - 202) }}>
+      {visibleTasks.length ? visibleTasks.map((task) => {
+        const missed = !task.completed && selected < today, taskPoints = points.get(task.id) ?? 0;
+        const icon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 25 25"><circle cx="12.5" cy="12.5" r="11.5" fill="${task.completed ? accent : missed ? "#27191d" : "none"}" stroke="${task.completed ? accent : missed ? "#64363c" : accent}" stroke-width="1.3"/>${task.completed ? `<path d="m7 12.5 3.5 3.5 7.5-8" fill="none" stroke="${ink}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>` : missed ? `<path d="m9 9 7 7m0-7-7 7" stroke="#f19a9f" stroke-width="2" stroke-linecap="round"/>` : ""}</svg>`;
+        const action = model.readOnly ? "OPEN_URI" : task.completed ? "TOGGLE_TASK" : "OPEN_URI";
+        const actionData = model.readOnly ? { uri: `sscbuddy://tasks?date=${selected}` } : task.completed ? { taskId: task.id } : { uri: `sscbuddy://tasks/complete?taskId=${encodeURIComponent(task.id)}` };
+        return <FlexWidget key={task.id} clickAction={action} clickActionData={actionData} accessibilityLabel={`${task.completed ? "Completed" : missed ? "Missed" : "Pending"}: ${task.name}`} style={{ width: "match_parent", flexDirection: "row", alignItems: "center", backgroundColor: "#141414", paddingHorizontal: 10, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: "#292929" }}>
+          <SvgWidget svg={icon} style={{ width: 25, height: 25, marginRight: 10 }} />
+          <FlexWidget style={{ flex: 1, flexDirection: "column" }}>
+            <TextWidget text={task.name} maxLines={2} truncate="END" style={{ color: task.completed ? "#a1a1aa" : "#fafafa", fontSize: 12, fontWeight: "bold" }} />
+            <TextWidget text={[task.subject, task.type, task.completed ? formatMinutes(task.minutesSpent ?? 0) : ""].filter(Boolean).join(" · ")} maxLines={1} truncate="END" style={{ color: "#909099", fontSize: 9, marginTop: 3 }} />
+          </FlexWidget>
+          {taskPoints !== 0 && <TextWidget text={`${taskPoints > 0 ? "+" : "−"}${Math.abs(taskPoints)} pts`} style={{ color: taskPoints > 0 ? "#86efac" : "#fca5a5", fontSize: 10, marginLeft: 6 }} />}
+        </FlexWidget>;
+      }) : <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: `sscbuddy://tasks?date=${selected}` }} style={{ padding: 14 }}><TextWidget text={options.dueOnly && summary.total ? "All tasks complete" : "No tasks planned"} style={{ color: "#a1a1aa", fontSize: 12 }} /></FlexWidget>}
+    </ListWidget>
   </FlexWidget>;
 }

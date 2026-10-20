@@ -599,7 +599,7 @@ export function ProfileScreen({
               setProfileSettingsOpen(false);
               setEditing(true);
             }}>
-            <MaterialCommunityIcons name="cog-outline" size={20} color={colors.text} />
+            <MaterialCommunityIcons name="cog-outline" size={20} color={colors.muted} />
           </Pressable>}
           </View>
           <View style={[styles.avatar, { width: 70, height: 70, borderRadius: 35 }]}>
