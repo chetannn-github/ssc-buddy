@@ -1,0 +1,51 @@
+import NumberFlow from "@number-flow/react";
+import { dailyTaskWidgetModel } from "../../../mobile-tasks/src/domain/daily-task-widget";
+import { formatMinutes, summarizeTasks } from "../../../mobile-tasks/src/domain/tasks";
+import type { DailyTask } from "../lib/firebase";
+
+export function AndroidTasksWidget({ tasks, today, selectedDate, dueOnly, rank, medals, points, onSelectDate, onFilterChange, onNew, onComplete, onReopen }: {
+  tasks: DailyTask[]; today: string; selectedDate: string; dueOnly: boolean;
+  rank: number | null; medals: string[]; points: Map<string, number>;
+  onSelectDate: (date: string) => void; onFilterChange: (due: boolean) => void;
+  onNew: () => void; onComplete: (task: DailyTask) => void; onReopen: (task: DailyTask) => void;
+}) {
+  const model = dailyTaskWidgetModel(tasks, { date: selectedDate, dueOnly }, today);
+  const date = new Date(model.selected + "T12:00:00");
+  return <>
+    <div className="android-task-heading">
+      <h1 data-tauri-drag-region>{model.selected === today ? "Today" : date.toLocaleDateString(undefined, { weekday: "short" })}, {date.toLocaleDateString(undefined, { day: "numeric", month: "short" })}</h1>
+      <div className="android-task-actions">{rank !== null && <span className="android-task-rank">{rank <= 3 && rank > 0 && <img src={medals[rank - 1]} alt="" />}#{rank}</span>}<button onClick={onNew} aria-label="Add task">+</button></div>
+    </div>
+    <div className="android-task-dates">{model.dates.map(day => {
+      const value = new Date(day + "T12:00:00"), selected = day === model.selected;
+      const percent = summarizeTasks(tasks.filter(task => task.date === day)).percent;
+      const arc = Math.max(selected ? 2 : 0, Math.min(100, percent)) * 81.68 / 100;
+      return <button key={day} onClick={() => onSelectDate(day)} aria-label={day} aria-pressed={selected}>
+        <small>{value.toLocaleDateString(undefined, { weekday: "short" })}</small>
+        <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="13" fill="none" stroke={selected ? "#535353" : "#292929"} strokeWidth="2.5" />{arc > 0 && <circle cx="16" cy="16" r="13" fill="none" stroke="var(--accent)" strokeWidth="2.5" strokeLinecap="round" strokeDasharray={`${arc} 81.68`} transform="rotate(-90 16 16)" />}<text x="16" y="20" fill="#fafafa" fontSize="12" fontFamily="sans-serif" fontWeight="600" textAnchor="middle">{value.getDate()}</text></svg>
+      </button>;
+    })}</div>
+    <div className="android-task-overview">
+      <div><small>Filter</small><div className="android-task-filter">{[false, true].map(due => <button key={String(due)} aria-pressed={dueOnly === due} onClick={() => onFilterChange(due)}>{due ? `Due (${model.due.length})` : `All (${model.summary.total})`}</button>)}</div></div>
+      <div className="android-task-meter"><small>Task Meter</small><strong><NumberFlow value={model.summary.percent} suffix="%" /></strong></div>
+    </div>
+    <div className="android-task-study">Study time&nbsp; {formatMinutes(model.summary.minutes)}</div>
+    <section className="android-task-list" aria-label="Daily tasks">{model.visibleTasks.length ? model.visibleTasks.map(task => {
+      const missed = !task.completed && model.selected < today, score = points.get(task.id) ?? 0;
+      return <TaskWidgetRow key={task.id} task={task} missed={missed} score={score} readOnly={model.readOnly} onComplete={onComplete} onReopen={onReopen} />;
+    }) : <p className="android-task-empty">{dueOnly && model.summary.total ? "All tasks complete" : "No tasks planned"}</p>}</section>
+  </>;
+}
+
+
+export function TaskWidgetRow({ task, missed, score, readOnly, onComplete, onReopen, onContextMenu }: {
+  task: DailyTask; missed: boolean; score: number; readOnly: boolean;
+  onComplete: (task: DailyTask) => void; onReopen: (task: DailyTask) => void;
+  onContextMenu?: (event: React.MouseEvent<HTMLButtonElement>) => void;
+}) {
+  return <button className={`android-task-row ${task.completed ? "completed" : missed ? "missed" : ""}`} disabled={readOnly} onContextMenu={onContextMenu} onClick={() => task.completed ? onReopen(task) : onComplete(task)} aria-label={`${task.completed ? "Completed" : missed ? "Missed" : "Pending"}: ${task.name}`}>
+        <svg className="android-task-check" viewBox="0 0 25 25" aria-hidden="true"><circle cx="12.5" cy="12.5" r="11.5" fill={task.completed ? "var(--accent)" : missed ? "#27191d" : "none"} stroke={task.completed ? "var(--accent)" : missed ? "#64363c" : "var(--accent)"} strokeWidth="1.3" />{task.completed ? <path d="m7 12.5 3.5 3.5 7.5-8" fill="none" stroke="var(--accent-ink)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /> : missed ? <path d="m9 9 7 7m0-7-7 7" stroke="#f19a9f" strokeWidth="2" strokeLinecap="round" /> : null}</svg>
+        <span className="android-task-copy"><b>{task.name}</b><small>{[task.subject, task.type, task.completed ? formatMinutes(task.minutesSpent ?? 0) : ""].filter(Boolean).join(" · ")}</small></span>
+        {score !== 0 && <span className={`android-task-points ${score > 0 ? "positive" : "negative"}`}>{score > 0 ? "+" : "−"}{Math.abs(score)} pts</span>}
+      </button>;
+}

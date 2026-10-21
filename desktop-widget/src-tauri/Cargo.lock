@@ -2955,9 +2955,13 @@ dependencies = [
 name = "ssc-buddy-desktop-widget"
 version = "1.0.0"
 dependencies = [
+ "serde",
+ "serde_json",
  "tauri",
  "tauri-build",
  "tauri-plugin-autostart",
+ "windows",
+ "windows-registry",
 ]
 
 [[package]]

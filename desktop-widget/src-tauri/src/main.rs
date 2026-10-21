@@ -2,16 +2,36 @@
 
 use tauri::{menu::{Menu, MenuItem}, tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}, Manager};
 use tauri_plugin_autostart::ManagerExt;
+mod habit_widgets;
 
 fn show_window(app: &tauri::AppHandle) {
   if let Some(window) = app.get_webview_window("main") {
+    let _ = window.set_always_on_top(false);
     let _ = window.show();
     let _ = window.set_focus();
+    let _ = window.set_always_on_bottom(true);
+  }
+}
+
+
+fn toggle_window(app: &tauri::AppHandle) {
+  if let Some(window) = app.get_webview_window("main") {
+    if window.is_visible().unwrap_or(false) && !window.is_minimized().unwrap_or(false) {
+      let _ = window.hide();
+    } else {
+      let _ = window.set_always_on_top(false);
+      let _ = window.unminimize();
+      let _ = window.show();
+      let _ = window.set_focus();
+      let _ = window.set_always_on_bottom(true);
+    }
   }
 }
 
 fn main() {
-  tauri::Builder::default()
+  let app = tauri::Builder::default()
+    .manage(habit_widgets::HabitPins::default())
+    .invoke_handler(tauri::generate_handler![habit_widgets::pin_habit_widget, habit_widgets::remove_habit_widget])
     .setup(|app| {
       app.handle().plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, None))?;
       let _ = app.autolaunch().enable();
@@ -23,27 +43,35 @@ fn main() {
       TrayIconBuilder::with_id("ssc-buddy-tray")
         .icon(tray_icon)
         .menu(&menu)
+        .show_menu_on_left_click(false)
         .tooltip("SSC Buddy Widget")
         .on_menu_event(|app, event| match event.id.as_ref() {
           "show" => show_window(app),
           "hide" => { if let Some(window) = app.get_webview_window("main") { let _ = window.hide(); } }
-          "quit" => app.exit(0),
+          "quit" => { let _ = habit_widgets::persist(app); app.exit(0); },
           _ => {}
         })
         .on_tray_icon_event(|tray, event| {
           if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
-            show_window(tray.app_handle());
+            toggle_window(tray.app_handle());
           }
         })
         .build(app)?;
+      habit_widgets::restore(app.handle());
+      habit_widgets::watch_desktop(app.handle().clone());
       Ok(())
     })
     .on_window_event(|window, event| {
+      if matches!(event, tauri::WindowEvent::Focused(true) | tauri::WindowEvent::Moved(_)) { habit_widgets::keep_on_saved_desktops(window.app_handle()); }
+      if matches!(event, tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_)) { habit_widgets::remember_bounds(window); }
       if let tauri::WindowEvent::CloseRequested { api, .. } = event {
         api.prevent_close();
         let _ = window.hide();
       }
     })
-    .run(tauri::generate_context!())
+    .build(tauri::generate_context!())
     .expect("failed to run SSC Buddy");
+  app.run(|app, event| {
+    if matches!(event, tauri::RunEvent::ExitRequested { .. }) { let _ = habit_widgets::persist(app); }
+  });
 }

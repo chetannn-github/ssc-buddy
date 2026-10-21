@@ -1,12 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import NumberFlow from "@number-flow/react";
-import { ArrowLeft, ArrowRight, Check, ChevronDown, CloudOff, Eye, EyeOff, Flame, LoaderCircle, Plus, Sparkles, Trophy, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, ChevronDown, CloudOff, Eye, EyeOff, Flame, LoaderCircle, MonitorUp, Plus, Sparkles, Trophy, X } from "lucide-react";
 import type { User } from "firebase/auth";
-import { TASK_TYPES, type DailyTask, type TaskType, type QuickRecallSeed, createAccount, firebaseConfigured, loadQuickRecallSeed, watchRecallBank, makeTaskId, observeAuth, recordQuickRecallAnswer, recordQuickRecallPractice, removeTask, saveTask, signIn, signInGoogle, todayKey, watchStreakActivity, watchTasks, watchWeeklyLeaderboard, watchProfileAccent } from "./lib/firebase";
+import { TASK_TYPES, type DailyTask, type TaskType, type QuickRecallSeed, createAccount, firebaseConfigured, loadQuickRecallSeed, watchRecallBank, makeTaskId, observeAuth, recordQuickRecallAnswer, recordQuickRecallPractice, removeTask, saveTask, signIn, signInGoogle, todayKey, watchStreakActivity, watchTasks, watchWeeklyLeaderboard, watchProfileAccent, watchLeaderboardRank } from "./lib/firebase";
 import { createQuickRecallSession, RANDOM_RECALL_SCOPE, type QuickRecallScope, type QuickRecallSession } from "./lib/quick-recall";
 import { ALL_RECALL_EXERCISES, RECALL_QUESTION_COUNTS, type RecallQuestionCount } from "../../mobile-tasks/src/domain/recall-selection";
 import { ALL_LEADERBOARD_DAYS, leaderboardPeriodStats, leaderboardPeriodTasks } from "../../mobile-tasks/src/domain/leaderboard-period";
+import { pinDesktopRecall, pinDesktopTasks, removeDesktopHabit } from "./lib/desktop-habit-widgets";
+import { PinnedHabitWindow } from "./components/PinnedHabitWindow";
+import { HabitDashboard } from "./components/HabitDashboard";
+import { useHabits } from "./lib/habits";
+import { AndroidTasksWidget } from "./components/AndroidTasksWidget";
 import { TaskDashboard, TaskDateTitle } from "./components/TaskDashboard";
 import { normalizeAppAccent, accentInk } from "../../mobile-tasks/src/domain/app-accent";
 import { QuickRecallPanel } from "./components/QuickRecallPanel";
@@ -66,10 +71,19 @@ function WidgetDuration({ minutes }: { minutes: number }) {
 }
 
 function App() {
-  const savedQuickRecall = loadSavedQuickRecall();
+  const pinnedRecall = window.__SSC_HABIT_WIDGET__?.style === "recall";
+  const pinnedTasks = window.__SSC_HABIT_WIDGET__?.style === "tasks";
+  const pinnedDesktop = pinnedRecall || pinnedTasks;
+  const progressKey = pinnedRecall ? `ssc-buddy-desktop-quick-recall-progress:pinned:${window.__SSC_HABIT_WIDGET__?.uid}` : "ssc-buddy-desktop-quick-recall-progress";
+  const savedQuickRecall = pinnedDesktop ? null : loadSavedQuickRecall();
+  const [recallMenu, setRecallMenu] = useState<{ x: number; y: number } | null>(null);
+  const [pinError, setPinError] = useState("");
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(!firebaseConfigured);
   const [tasks, setTasks] = useState<DailyTask[]>([]);
+  const [widgetRank, setWidgetRank] = useState<number | null>(null);
+  const habitApi = useHabits(user?.uid);
+  const [section, setSection] = useState<"tasks" | "habits">("tasks");
   const [activityDates, setActivityDates] = useState<string[]>([]);
   const [leaderboardOpen, setLeaderboardOpen] = useState(false);
   const [leaderboardRows, setLeaderboardRows] = useState<Record<string, unknown>[]>([]);
@@ -82,11 +96,16 @@ function App() {
   const [accent, setAccent] = useState(() => normalizeAppAccent(undefined));
   const [recallCount, setRecallCount] = useState<RecallQuestionCount>(3);
   const [calendarDay, setCalendarDay] = useState(todayKey());
+  useEffect(() => {
+    setWidgetRank(null);
+    if (user && pinnedTasks) return watchLeaderboardRank(user, setWidgetRank);
+  }, [user?.uid, pinnedTasks, calendarDay]);
+
   const [complete, setComplete] = useState<DailyTask | null>(null);
   const [minutes, setMinutes] = useState("30");
   const [deletingTask, setDeletingTask] = useState<DailyTask | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [quickRecallOpen, setQuickRecallOpen] = useState(() => Boolean(savedQuickRecall));
+  const [quickRecallOpen, setQuickRecallOpen] = useState(() => pinnedRecall || Boolean(savedQuickRecall));
   const [quickRecallLoading, setQuickRecallLoading] = useState(false);
   const [quickRecallSession, setQuickRecallSession] = useState<QuickRecallSession | null>(() => savedQuickRecall?.session ?? null);
   const [quickRecallSeed, setQuickRecallSeed] = useState<QuickRecallSeed | null>(null);
@@ -99,8 +118,8 @@ function App() {
       if (editor) setEditor(null);
       else if (complete) setComplete(null);
       else if (deletingTask) setDeletingTask(null);
-      else if (quickRecallSession) { localStorage.removeItem("ssc-buddy-desktop-quick-recall-progress"); setQuickRecallSession(null); }
-      else if (quickRecallOpen) setQuickRecallOpen(false);
+      else if (quickRecallSession) { localStorage.removeItem(progressKey); setQuickRecallSession(null); }
+      else if (quickRecallOpen && !pinnedRecall) setQuickRecallOpen(false);
       else if (leaderboardOpen) setLeaderboardOpen(false);
       else return;
       event.preventDefault();
@@ -143,7 +162,7 @@ function App() {
     return () => { window.clearInterval(timer); window.removeEventListener("focus", refresh); };
   }, []);
   useEffect(() => {
-    if (!user) { setAccent(normalizeAppAccent(undefined)); setSelectedDate(todayKey()); setDueOnly(false); return; }
+    if (!user) { setAccent(normalizeAppAccent(undefined)); setSelectedDate(todayKey()); setDueOnly(false); setSection("tasks"); return; }
     setSelectedDate(todayKey()); setDueOnly(false);
     return watchProfileAccent(user, (value) => setAccent(normalizeAppAccent(value)));
   }, [user?.uid]);
@@ -176,6 +195,7 @@ function App() {
   const streak = streakValue;
 
   useEffect(() => {
+    if (pinnedRecall) return;
     if (quickRecallOpen && quickRecallSession) localStorage.setItem(QUICK_RECALL_SESSION_KEY, JSON.stringify({ open: true, session: quickRecallSession }));
     else localStorage.removeItem(QUICK_RECALL_SESSION_KEY);
   }, [quickRecallOpen, quickRecallSession]);
@@ -220,13 +240,17 @@ function App() {
   if (!firebaseConfigured) return <main className="auth"><section className="auth-card"><CloudOff /><h1>Firebase setup required</h1><p>Add the same Firebase web values used by SSC Buddy to <code>desktop-widget/.env</code>, then restart the desktop app.</p></section></main>;
   if (!authReady) return <WidgetSplash />;
   if (!user) return <AuthPanel />;
+  if (pinnedDesktop && user.uid !== window.__SSC_HABIT_WIDGET__?.uid) return <main className="widget"><p>Sign in to the original account in the main window.</p><button onClick={() => void removeDesktopHabit()}>Remove widget</button></main>;
 
-  return <main className={`widget ${leaderboardOpen ? "leaderboard-open" : ""} ${quickRecallOpen && quickRecallSession ? "recall-question-open" : ""}`}>
-    <header hidden={quickRecallOpen}><div className={`window-drag ${leaderboardOpen ? "leaderboard-title" : ""}`}><div className="header-title-row">{leaderboardOpen && <button className="leaderboard-header-back" aria-label="Back to tasks" onClick={() => setLeaderboardOpen(false)}><ArrowLeft size={17} /></button>}<h1>{leaderboardOpen ? "Weekly leaderboard" : quickRecallOpen ? "Quick Recall" : <TaskDateTitle date={selectedDate} today={today} />}</h1></div></div>{!leaderboardOpen && (quickRecallOpen ? <button className="quick-recall-trigger" onClick={() => { setQuickRecallOpen(false); setQuickRecallSession(null); }}><ArrowLeft size={16} /><span>Tasks</span></button> : <div className="header-actions"><div className={`streak-pill ${streak > 0 ? "active" : ""}`}><Flame size={16} fill="currentColor" /><span><WidgetNumber value={streak} /></span></div><button className="quick-recall-trigger" aria-label="Quick Recall" title="Quick Recall" onClick={() => void openQuickRecall()}><Sparkles size={16} /><span>Recall</span></button><button className="icon-button" aria-label="Add task" onClick={openNew}><Plus size={18} /></button></div>)}</header>
-    {leaderboardOpen ? <LeaderboardPanel rows={leaderboardRows} currentUserId={user.uid} /> : quickRecallOpen ? quickRecallSession ? <QuickRecallPanel subjects={quickRecallSeed?.subjects as any} onPruned={(questions) => setQuickRecallSession((current) => current ? { ...current, questions } : current)} session={quickRecallSession} loading={quickRecallLoading} onAnswered={(question, choice, index, correct) => { if (user) { void recordQuickRecallAnswer(user, question, correct).catch(() => undefined); void recordQuickRecallPractice(user, { runId: `${quickRecallSession?.runId ?? "quick-recall"}:${index}`, date: todayKey(), startedAt: quickRecallSession?.startedAt ?? new Date().toISOString(), questions: [question], answers: [choice] }).catch(() => undefined); } }} onBack={() => { localStorage.removeItem("ssc-buddy-desktop-quick-recall-progress"); setQuickRecallSession(null); }} onRestart={() => { setQuickRecallSession(null); }} /> : <QuickRecallSetup questionCount={recallCount} onQuestionCountChange={setRecallCount} seed={quickRecallSeed} loading={quickRecallLoading} scope={quickRecallScope} onScopeChange={setQuickRecallScope} onBack={() => setQuickRecallOpen(false)} onStart={() => quickRecallSeed && setQuickRecallSession(createQuickRecallSession(quickRecallSeed, quickRecallScope, recallCount))} /> : <TaskDashboard tasks={tasks} today={today} selectedDate={selectedDate} onSelectDate={setSelectedDate}
-      dueOnly={dueOnly} onFilterChange={setDueOnly} points={taskPoints} onNew={openNew}
+  return <main onContextMenu={pinnedTasks ? event => { event.preventDefault(); setRecallMenu({ x: Math.max(6, Math.min(innerWidth - 180, event.clientX)), y: Math.max(6, Math.min(innerHeight - 60, event.clientY)) }); } : pinnedRecall ? event => event.preventDefault() : undefined} className={`widget ${pinnedRecall ? "recall-desktop-card" : pinnedTasks ? "tasks-desktop-card" : ""} ${leaderboardOpen ? "leaderboard-open" : ""} ${quickRecallOpen && quickRecallSession ? "recall-question-open" : ""}`}>
+    {pinnedRecall && <div className="recall-widget-drag" data-tauri-drag-region onContextMenu={event => { event.preventDefault(); setRecallMenu({ x: Math.max(6, Math.min(innerWidth - 180, event.clientX)), y: Math.max(6, Math.min(innerHeight - 60, event.clientY)) }); }}><span>{pinnedTasks ? <Check size={14} /> : <Sparkles size={14} />}{pinnedTasks ? "Daily Tasks" : "Quick Recall"}</span></div>}
+    {!!pinError && <p role="alert" className="habit-error">{pinError}</p>}
+    {recallMenu && <div className="task-context-dismiss" onPointerDown={() => setRecallMenu(null)}><div role="menu" className="task-context-menu" style={{ left: recallMenu.x, top: recallMenu.y }} onPointerDown={event => event.stopPropagation()}><button role="menuitem" onClick={() => { setRecallMenu(null); void (pinnedDesktop ? removeDesktopHabit() : pinDesktopRecall(user.uid)).catch(error => setPinError(String(error))); }}>{pinnedDesktop ? "Remove widget" : "Add desktop widget"}</button></div></div>}
+    <header hidden={quickRecallOpen || pinnedTasks}><div className={`window-drag ${leaderboardOpen ? "leaderboard-title" : ""}`}><div className="header-title-row">{leaderboardOpen && <button className="leaderboard-header-back" aria-label="Back to tasks" onClick={() => setLeaderboardOpen(false)}><ArrowLeft size={17} /></button>}<h1>{leaderboardOpen ? "Weekly leaderboard" : quickRecallOpen ? "Quick Recall" : <TaskDateTitle date={selectedDate} today={today} />}</h1></div></div>{!leaderboardOpen && (quickRecallOpen ? <button className="quick-recall-trigger" onClick={() => { setQuickRecallOpen(false); setQuickRecallSession(null); }}><ArrowLeft size={16} /><span>Tasks</span></button> : <div className="header-actions"><div className={`streak-pill ${streak > 0 ? "active" : ""}`}><Flame size={16} fill="currentColor" /><span><WidgetNumber value={streak} /></span></div><button className="quick-recall-trigger" aria-label="Quick Recall" title="Quick Recall · right-click to add desktop widget" onContextMenu={event => { event.preventDefault(); setRecallMenu({ x: Math.max(6, Math.min(innerWidth - 180, event.clientX)), y: Math.max(6, Math.min(innerHeight - 60, event.clientY)) }); }} onClick={() => void openQuickRecall()}><Sparkles size={16} /><span>Recall</span></button>{section === "tasks" && <button className="icon-button" aria-label="Add task" onClick={openNew}><Plus size={18} /></button>}</div>)}</header>
+    {pinnedTasks ? <AndroidTasksWidget tasks={tasks} today={today} selectedDate={selectedDate} dueOnly={dueOnly} rank={widgetRank} medals={medalImages} points={taskPoints} onSelectDate={setSelectedDate} onFilterChange={setDueOnly} onNew={openNew} onComplete={task => { setMinutes(String(Math.min(180, task.minutesSpent ?? 30))); setComplete(task); }} onReopen={task => void reopen(task)} /> : leaderboardOpen ? <LeaderboardPanel rows={leaderboardRows} currentUserId={user.uid} /> : quickRecallOpen ? quickRecallSession ? <QuickRecallPanel subjects={quickRecallSeed?.subjects as any} onPruned={(questions) => setQuickRecallSession((current) => current ? { ...current, questions } : current)} session={quickRecallSession} loading={quickRecallLoading} onAnswered={(question, choice, index, correct) => { if (user) { void recordQuickRecallAnswer(user, question, correct).catch(() => undefined); void recordQuickRecallPractice(user, { runId: `${quickRecallSession?.runId ?? "quick-recall"}:${index}`, date: todayKey(), startedAt: quickRecallSession?.startedAt ?? new Date().toISOString(), questions: [question], answers: [choice] }).catch(() => undefined); } }} onBack={() => { localStorage.removeItem(progressKey); setQuickRecallSession(null); }} onRestart={() => { setQuickRecallSession(null); }} /> : <QuickRecallSetup widget={pinnedRecall} questionCount={recallCount} onQuestionCountChange={setRecallCount} seed={quickRecallSeed} loading={quickRecallLoading} scope={quickRecallScope} onScopeChange={setQuickRecallScope} onBack={() => { if (!pinnedRecall) setQuickRecallOpen(false); }} onStart={() => quickRecallSeed && setQuickRecallSession(createQuickRecallSession(quickRecallSeed, quickRecallScope, recallCount))} /> : <><div className="workspace-section-row">{!pinnedTasks && <div className="workspace-section-toggle" data-section={section} role="group" aria-label="Tasks or habits">{(["tasks", "habits"] as const).map(item => <button key={item} aria-pressed={section === item} onClick={() => { setSection(item); if (item === "habits" && selectedDate > today) setSelectedDate(today); }}>{item === "tasks" ? "Tasks" : "Habits"}</button>)}</div>}{!pinnedDesktop && section === "tasks" && <button className="tasks-pin-option" aria-label="Add Tasks widget" title="Add Tasks widget" onClick={() => { void pinDesktopTasks(user.uid).catch(error => setPinError(String(error))); }}><MonitorUp size={17} /></button>}</div><TaskDashboard minimal={pinnedTasks} mode={section} habits={habitApi.habits} tasks={tasks} today={today} selectedDate={pinnedTasks ? today : selectedDate} onSelectDate={setSelectedDate}
+      dueOnly={pinnedTasks ? false : dueOnly} onFilterChange={setDueOnly} points={taskPoints} onNew={openNew}
       onComplete={(task) => { setMinutes(String(Math.min(180, task.minutesSpent ?? 30))); setComplete(task); }}
-      onReopen={(task) => void reopen(task)} onEdit={openEdit} onDelete={setDeletingTask} />}
+      onReopen={(task) => void reopen(task)} onEdit={openEdit} onDelete={setDeletingTask} />{section === "habits" && <HabitDashboard uid={user.uid} api={habitApi} selected={selectedDate} today={today} dueOnly={dueOnly} />}</>}
 
     {editor && <TaskEditor draft={draft} setDraft={setDraft} subjects={taskSubjects} schedule={schedule} setSchedule={setSchedule} busy={busy} editing={editor !== "new"} onClose={() => setEditor(null)} onSave={() => void submitTask()} />}
     {complete && <CompleteDialog task={complete} minutes={minutes} setMinutes={setMinutes} busy={busy} onClose={() => setComplete(null)} onSave={() => void completeTask()} />}
@@ -256,17 +280,17 @@ function LeaderboardPanel({ rows, currentUserId }: { rows: Record<string, unknow
   return <section className="leaderboard-panel">{rows.length ? <div className="leaderboard-list">{rows.map((row, index) => { const rank = index + 1; const isYou = String(row.uid ?? "") === currentUserId; const name = displayName(row); const avatar = avatarSource(row.avatar); const completed = Math.max(0, Number(row.completed) || 0); const minutes = Math.max(0, Number(row.studyMinutes) || 0); const points = Number(row.points) || 0; return <button className={`leaderboard-row ${isYou ? "you" : ""}`} key={String(row.uid ?? index)} onClick={() => { setSelectedDate(todayKey()); setSelected(row); }}><span className={`leaderboard-rank top-${rank}`}><RankMark rank={rank} /></span><span className="leaderboard-avatar">{avatar ? <img src={avatar} alt="" /> : name.slice(0, 1).toUpperCase()}</span><span className="leaderboard-copy"><b>{name}</b><small><WidgetNumber value={completed} /> completed · <WidgetDuration minutes={minutes} /> study</small></span><strong className={`leaderboard-points ${points > 0 ? "positive" : points < 0 ? "negative" : "neutral"}`}><WidgetNumber value={points} prefix={points > 0 ? "+" : ""} suffix=" pts" /></strong></button>; })}</div> : <div className="leaderboard-empty"><Trophy size={20} /><span>Leaderboard is loading…</span></div>}</section>;
 }
 
-function QuickRecallSetup({ questionCount, onQuestionCountChange, seed, loading, scope, onScopeChange, onStart, onBack }: { questionCount: RecallQuestionCount; onQuestionCountChange: (count: RecallQuestionCount) => void; seed: QuickRecallSeed | null; loading: boolean; scope: QuickRecallScope; onScopeChange: (scope: QuickRecallScope) => void; onStart: () => void; onBack: () => void }) {
+function QuickRecallSetup({ widget = false, questionCount, onQuestionCountChange, seed, loading, scope, onScopeChange, onStart, onBack }: { widget?: boolean; questionCount: RecallQuestionCount; onQuestionCountChange: (count: RecallQuestionCount) => void; seed: QuickRecallSeed | null; loading: boolean; scope: QuickRecallScope; onScopeChange: (scope: QuickRecallScope) => void; onStart: () => void; onBack: () => void }) {
   const hasRecallQuestions = (chapter: any) => Array.isArray(chapter?.exercises) && chapter.exercises.some((exercise: any) => Array.isArray(exercise?.questions) && exercise.questions.some((question: any) => question?.id && question?.question && Array.isArray(question?.options) && question.options.length === 4 && ["A", "B", "C", "D"].includes(question?.correctAnswer)));
   const subjects = (seed?.subjects ?? []).map((item: any) => ({ id: String(item?.id ?? item?.name ?? ""), name: String(item?.name ?? "Subject"), chapters: (Array.isArray(item?.chapters) ? item.chapters : []).filter(hasRecallQuestions) })).filter((item) => item.id && item.chapters.length);
-  if (!loading && seed && !subjects.length) return <section className="quick-recall-panel quick-state"><Sparkles size={22} /><strong>No question-based exercise yet</strong><button className="secondary" onClick={onBack}>Back to tasks</button></section>;
+  if (!loading && seed && !subjects.length) return <section className="quick-recall-panel quick-state"><Sparkles size={22} /><strong>No question-based exercise yet</strong>{widget ? <span>Add exercises in the app or web to get started.</span> : <button className="secondary" onClick={onBack}>Back to tasks</button>}</section>;
   const selected = subjects.find((item) => item.id === scope.subjectId);
   const chapters: string[] = selected?.chapters.map((item: any) => String(item?.name ?? "")).filter(Boolean) ?? [];
   const selectedChapter = selected?.chapters.find((item: any) => item.name === scope.chapter);
   const exercises: Array<{ id: string; name: string }> = (selectedChapter?.exercises ?? [])
     .filter((exercise: any) => hasRecallQuestions({ exercises: [exercise] }))
     .map((exercise: any) => ({ id: String(exercise.id ?? exercise.name ?? "Exercise 1"), name: String(exercise.name ?? "Exercise 1") }));
-  return <section className="quick-recall-panel quick-setup"><div className="quick-setup-heading"><button className="quick-back-box" aria-label="Back to tasks" onClick={onBack}><ArrowLeft size={19} /></button><div><small>QUICK RECALL</small><h2>Choose your focus</h2></div></div><label>Subject<SelectMenu value={scope.subjectId === RANDOM_RECALL_SCOPE ? "Random" : (selected?.name ?? "Random")} options={["Random", ...subjects.map((item) => item.name)]} onChange={(name) => { const subject = subjects.find((item) => item.name === name); onScopeChange({ subjectId: subject?.id ?? RANDOM_RECALL_SCOPE, chapter: RANDOM_RECALL_SCOPE, exerciseId: ALL_RECALL_EXERCISES }); }} /></label><label>Chapter{selected ? <SelectMenu value={scope.chapter === RANDOM_RECALL_SCOPE ? "Random" : scope.chapter} options={["Random", ...chapters]} onChange={(chapter) => onScopeChange({ ...scope, chapter: chapter === "Random" ? RANDOM_RECALL_SCOPE : chapter, exerciseId: ALL_RECALL_EXERCISES })} /> : <div className="quick-setup-disabled">Random</div>}</label><label>Exercise{selectedChapter ? <SelectMenu value={exercises.find((item) => item.id === scope.exerciseId)?.name ?? "All exercises"} options={["All exercises", ...exercises.map((item) => item.name)]} onChange={(name) => onScopeChange({ ...scope, exerciseId: exercises.find((item) => item.name === name)?.id ?? ALL_RECALL_EXERCISES })} /> : <div className="quick-setup-disabled">All exercises</div>}</label><label>Questions<div className="recall-count-options">{RECALL_QUESTION_COUNTS.map((count) => <button key={count} aria-pressed={questionCount === count} onClick={() => onQuestionCountChange(count)}>{count}</button>)}</div></label><button className="primary" disabled={loading || !seed} onClick={onStart}>{loading ? <LoaderCircle className="spin" /> : <>Start recall <ArrowRight size={14} /></>}</button></section>;
+  return <section className="quick-recall-panel quick-setup">{!widget && <div className="quick-setup-heading"><button className="quick-back-box" aria-label="Back to tasks" onClick={onBack}><ArrowLeft size={19} /></button><div><small>QUICK RECALL</small><h2>Choose your focus</h2></div></div>}<label>Subject<SelectMenu value={scope.subjectId === RANDOM_RECALL_SCOPE ? "Random" : (selected?.name ?? "Random")} options={["Random", ...subjects.map((item) => item.name)]} onChange={(name) => { const subject = subjects.find((item) => item.name === name); onScopeChange({ subjectId: subject?.id ?? RANDOM_RECALL_SCOPE, chapter: RANDOM_RECALL_SCOPE, exerciseId: ALL_RECALL_EXERCISES }); }} /></label><label>Chapter{selected ? <SelectMenu value={scope.chapter === RANDOM_RECALL_SCOPE ? "Random" : scope.chapter} options={["Random", ...chapters]} onChange={(chapter) => onScopeChange({ ...scope, chapter: chapter === "Random" ? RANDOM_RECALL_SCOPE : chapter, exerciseId: ALL_RECALL_EXERCISES })} /> : <div className="quick-setup-disabled">Random</div>}</label><label>Exercise{selectedChapter ? <SelectMenu value={exercises.find((item) => item.id === scope.exerciseId)?.name ?? "All exercises"} options={["All exercises", ...exercises.map((item) => item.name)]} onChange={(name) => onScopeChange({ ...scope, exerciseId: exercises.find((item) => item.name === name)?.id ?? ALL_RECALL_EXERCISES })} /> : <div className="quick-setup-disabled">All exercises</div>}</label><label>Questions<div className="recall-count-options">{RECALL_QUESTION_COUNTS.map((count) => <button key={count} aria-pressed={questionCount === count} onClick={() => onQuestionCountChange(count)}>{count}</button>)}</div></label><button className="primary" disabled={loading || !seed} onClick={onStart}>{loading ? <LoaderCircle className="spin" /> : <>Start recall <ArrowRight size={14} /></>}</button></section>;
 }
 
 function WidgetSplash() {
@@ -328,4 +352,7 @@ function DeleteTaskDialog({ task, busy, onClose, onConfirm }: { task: DailyTask;
   return <div className="modal" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><div className="dialog delete-dialog"><div className="confirm-header"><div className="delete-dialog-icon"><Trash2 size={17} /></div><button className="confirm-close" aria-label="Close" onClick={onClose} disabled={busy}><X size={18} /></button></div><h2>Delete task?</h2><p className="muted">This task will be removed from your plan.</p><div className="dialog-actions"><button className="secondary" disabled={busy} onClick={onClose}>Cancel</button><button className="danger-primary" disabled={busy} onClick={onConfirm}>{busy ? <LoaderCircle className="spin" /> : "Delete"}</button></div></div></div>;
 }
 function formatMinutes(value: number) { return value >= 60 ? `${Math.floor(value / 60)}h${value % 60 ? ` ${value % 60}m` : ""}` : `${value}m`; }
-createRoot(document.getElementById("root")!).render(<App />);
+// Keep custom context menus; suppress the WebView browser menu (Refresh, etc.).
+document.addEventListener("contextmenu", event => event.preventDefault());
+const habitPin = window.__SSC_HABIT_WIDGET__;
+createRoot(document.getElementById("root")!).render(habitPin && habitPin.style !== "recall" && habitPin.style !== "tasks" ? <PinnedHabitWindow pin={habitPin} /> : <App />);

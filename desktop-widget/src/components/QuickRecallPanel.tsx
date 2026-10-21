@@ -4,7 +4,7 @@ import { ArrowLeft, LoaderCircle, RotateCcw, Sparkles } from "lucide-react";
 import type { QuickRecallSession, QuizChoice } from "../lib/quick-recall";
 
 const choices: QuizChoice[] = ["A", "B", "C", "D"];
-const QUICK_RECALL_PROGRESS_KEY = "ssc-buddy-desktop-quick-recall-progress";
+const QUICK_RECALL_PROGRESS_KEY = window.__SSC_HABIT_WIDGET__?.style === "recall" ? `ssc-buddy-desktop-quick-recall-progress:pinned:${window.__SSC_HABIT_WIDGET__.uid}` : "ssc-buddy-desktop-quick-recall-progress";
 type SavedProgress = { sessionId: string; index: number; correct: number; selected: QuizChoice | null; answers: QuizChoice[]; correctionUntil: number | null };
 
 function sessionId(session: QuickRecallSession | null) { return session?.runId ?? ""; }

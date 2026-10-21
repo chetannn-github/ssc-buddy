@@ -13,13 +13,17 @@
     "windows": [
       {
         "label": "main",
+        "visible": false,
         "title": "SSC Buddy Widget",
         "width": 400,
         "height": 475,
         "minWidth": 350,
         "minHeight": 360,
-        "alwaysOnTop": true,
+        "alwaysOnTop": false,
+        "alwaysOnBottom": true,
         "resizable": true,
+        "maximizable": false,
+        "fullscreen": false,
         "decorations": true,
         "transparent": false,
         "skipTaskbar": false

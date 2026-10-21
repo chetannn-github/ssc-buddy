@@ -19,6 +19,7 @@ import {
   initializeFirestore,
   onSnapshot,
   persistentLocalCache,
+  persistentMultipleTabManager,
   runTransaction,
   serverTimestamp,
   setDoc,
@@ -55,7 +56,7 @@ export const firebaseConfigured = Boolean(config.apiKey && config.authDomain && 
 const app = firebaseConfigured ? initializeApp(config) : null;
 // IndexedDB persistence gives cached reads, locally queued writes, and automatic
 // reconnect replay. This is Firestore's native conflict-safe offline mechanism.
-const db = app ? initializeFirestore(app, { localCache: persistentLocalCache() }) : null;
+const db = app ? initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) }) : null;
 const auth = app ? getAuth(app) : null;
 
 const tasksFor = (user: User) => collection(db!, "users", user.uid, "tasks");
@@ -302,4 +303,9 @@ export function watchRecallBank(user: User, callback: (subjects: Array<Record<st
 /** Read the same private accent setting saved by the mobile app. */
 export function watchProfileAccent(user: User, callback: (value: unknown) => void) {
   return onSnapshot(profileRef(user), (snapshot) => callback(snapshot.data()?.accentColor), () => callback(undefined));
+}
+
+export function getFirebaseFirestore() {
+  if (!db) throw new Error("Firebase setup required");
+  return db;
 }
