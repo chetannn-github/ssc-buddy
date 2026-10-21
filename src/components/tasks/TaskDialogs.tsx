@@ -49,8 +49,10 @@ export function TaskFormDialog({
   const [type, setType] = useState<TaskType>("Lecture");
   const [schedule, setSchedule] = useState<"today" | "tomorrow">("today");
   const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
   useEffect(() => {
     if (!open) return;
+    setSaveError("");
     setName(task?.name ?? "");
     setSubject(task?.subject ?? subjects[0] ?? "Other");
     setCustomSubject("");
@@ -66,9 +68,12 @@ export function TaskFormDialog({
     const date = new Date();
     if (schedule === "tomorrow") date.setDate(date.getDate() + 1);
     setIsSaving(true);
+    setSaveError("");
     try {
       await onSubmit({ name: name.trim(), subject: customSubject.trim() || subject, type, date: task?.date ?? todayKey(date) });
       onOpenChange(false);
+    } catch {
+      setSaveError("Could not save task. Please try again.");
     } finally {
       setIsSaving(false);
     }
@@ -83,10 +88,10 @@ export function TaskFormDialog({
     setAddSubjectOpen(false);
   };
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="border-transparent bg-[#1b1b1b] text-zinc-100 shadow-2xl sm:max-w-md">
+    <Dialog open={open} onOpenChange={(value) => { if (!isSaving) onOpenChange(value); }}>
+      <DialogContent className="border-transparent bg-[#121212] text-zinc-100 shadow-2xl sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{task ? "Edit task" : "New task"}</DialogTitle>
+          <DialogTitle>{task ? "Edit Task" : "Add Task"}</DialogTitle>
           {task && <DialogDescription>Update this task.</DialogDescription>}
         </DialogHeader>
         <div className="space-y-4">
@@ -95,10 +100,10 @@ export function TaskFormDialog({
             <Input
               id="task-name"
               autoFocus
-              className="border-white/10 bg-[#181818] text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-blue-500/40"
+              className="border-white/10 bg-[#121212] text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-primary/40"
               value={name}
               placeholder="Lecture 5 of Polity"
-              onChange={(event) => setName(event.target.value)}
+              onChange={(event) => setName(event.target.value.toUpperCase())}
               onKeyDown={(event) => event.key === "Enter" && submit()}
             />
           </div>
@@ -109,35 +114,35 @@ export function TaskFormDialog({
                 if (value === "__custom__") { setCustomSubject(""); setAddSubjectOpen(true); return; }
                 setSubject(value);
               }}>
-                <SelectTrigger className="border-white/10 bg-[#181818] text-zinc-100">
+                <SelectTrigger className="border-white/10 bg-[#121212] text-zinc-100">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="border-white/10 bg-[#181818] text-zinc-100">
+                <SelectContent className="border-white/10 bg-[#121212] text-zinc-100">
                   {subjectOptions.map((item) => (
                     <SelectItem
                       key={item}
                       value={item}
-                      className="focus:bg-white/10 focus:text-zinc-100 data-[state=checked]:bg-zinc-100 data-[state=checked]:font-medium data-[state=checked]:text-zinc-900"
+                      className="focus:bg-white/10 focus:text-zinc-100 data-[state=checked]:bg-primary data-[state=checked]:font-medium data-[state=checked]:text-primary-foreground"
                     >
                       {item}
                     </SelectItem>
                   ))}
-                  <SelectItem value="__custom__" className="text-sky-300 focus:bg-white/10 focus:text-sky-200">+ Add subject</SelectItem>
+                  <SelectItem value="__custom__" className="text-primary focus:bg-white/10 focus:text-primary">+ Add subject</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
               <Label>Task type</Label>
               <Select value={type} onValueChange={(value) => setType(value as TaskType)}>
-                <SelectTrigger className="border-white/10 bg-[#181818] text-zinc-100">
+                <SelectTrigger className="border-white/10 bg-[#121212] text-zinc-100">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="border-white/10 bg-[#181818] text-zinc-100">
-                  {TASK_TYPES.map((item) => (
+                <SelectContent className="border-white/10 bg-[#121212] text-zinc-100">
+                  {["Practice Session", "Lecture", ...TASK_TYPES.filter((type) => type !== "Practice Session" && type !== "Lecture")].map((item) => (
                     <SelectItem
                       key={item}
                       value={item}
-                      className="focus:bg-white/10 focus:text-zinc-100 data-[state=checked]:bg-zinc-100 data-[state=checked]:font-medium data-[state=checked]:text-zinc-900"
+                      className="focus:bg-white/10 focus:text-zinc-100 data-[state=checked]:bg-primary data-[state=checked]:font-medium data-[state=checked]:text-primary-foreground"
                     >
                       {item}
                     </SelectItem>
@@ -155,7 +160,7 @@ export function TaskFormDialog({
                     key={option}
                     type="button"
                     onClick={() => setSchedule(option)}
-                    className={`rounded-md border px-3 py-1.5 text-sm capitalize transition-colors ${schedule === option ? "border-white/25 bg-white/10 text-zinc-100" : "border-white/10 bg-[#181818] text-zinc-400 hover:bg-white/5"}`}
+                    className={`rounded-md border px-3 py-1.5 text-sm capitalize transition-colors ${schedule === option ? "border-primary bg-primary text-primary-foreground" : "border-white/10 bg-[#121212] text-zinc-400 hover:bg-white/5"}`}
                   >
                     {option}
                   </button>
@@ -164,6 +169,7 @@ export function TaskFormDialog({
             </div>
           )}
         </div>
+        {saveError && <p role="alert" className="text-xs text-red-300">{saveError}</p>}
         <DialogFooter>
           <Button variant="ghost" disabled={isSaving} onClick={() => onOpenChange(false)}>
             Cancel
@@ -175,10 +181,11 @@ export function TaskFormDialog({
         </DialogFooter>
       </DialogContent>
       <Dialog open={addSubjectOpen} onOpenChange={setAddSubjectOpen}>
-        <DialogContent className="border-transparent bg-[#1b1b1b] text-zinc-100 shadow-2xl sm:max-w-sm">
+        <DialogContent className="border-transparent bg-[#121212] text-zinc-100 shadow-2xl sm:max-w-sm">
           <DialogHeader><DialogTitle>Add subject</DialogTitle><DialogDescription>Create a subject just for your tasks.</DialogDescription></DialogHeader>
-          <div className="space-y-2"><Label htmlFor="custom-task-subject">Subject name</Label><Input id="custom-task-subject" autoFocus value={customSubject} className="border-white/10 bg-[#181818] text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-blue-500/40" placeholder="e.g. Polity" onChange={(event) => setCustomSubject(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") addCustomSubject(); }} /></div>
-          <DialogFooter><Button variant="ghost" onClick={() => setAddSubjectOpen(false)}>Cancel</Button><Button disabled={!customSubject.trim()} onClick={addCustomSubject}>Add subject</Button></DialogFooter>
+          <div className="space-y-2"><Label htmlFor="custom-task-subject">Subject name</Label><Input id="custom-task-subject" autoFocus value={customSubject} className="border-white/10 bg-[#121212] text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-primary/40" placeholder="e.g. Polity" onChange={(event) => setCustomSubject(event.target.value.toUpperCase())} onKeyDown={(event) => { if (event.key === "Enter") addCustomSubject(); }} /></div>
+          {saveError && <p role="alert" className="text-xs text-red-300">{saveError}</p>}
+        <DialogFooter><Button variant="ghost" onClick={() => setAddSubjectOpen(false)}>Cancel</Button><Button disabled={!customSubject.trim()} onClick={addCustomSubject}>Add subject</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </Dialog>
@@ -196,15 +203,17 @@ export function CompleteTaskDialog({
 }) {
   const [minutes, setMinutes] = useState("30");
   const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
   useEffect(() => {
     if (task) {
+      setSaveError("");
       setMinutes("30");
     }
   }, [task]);
   const total = Math.max(0, Math.min(180, Number(minutes) || 0));
   return (
-    <Dialog open={Boolean(task)} onOpenChange={onOpenChange}>
-      <DialogContent className="border-transparent bg-[#1b1b1b] text-zinc-100 shadow-2xl sm:max-w-sm">
+    <Dialog open={Boolean(task)} onOpenChange={(value) => { if (!isSaving) onOpenChange(value); }}>
+      <DialogContent className="border-transparent bg-[#121212] text-zinc-100 shadow-2xl sm:max-w-sm">
         <DialogHeader>
           <DialogTitle>Task completed</DialogTitle>
           <DialogDescription>How much time did this task take?</DialogDescription>
@@ -214,7 +223,7 @@ export function CompleteTaskDialog({
           <Label htmlFor="task-minutes">Minutes spent</Label>
           <Input
             id="task-minutes"
-            className="border-white/10 bg-[#181818] text-zinc-100 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            className="border-white/10 bg-[#121212] text-zinc-100 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             type="number"
             min={1}
             max={180}
@@ -233,12 +242,13 @@ export function CompleteTaskDialog({
               onClick={() => {
                 setMinutes(String(duration));
               }}
-              className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-zinc-300 transition-colors hover:bg-white/10 hover:text-white"
+              className={`rounded-full border px-3 py-1 text-xs transition-colors ${total === duration ? "border-primary bg-primary text-primary-foreground" : "border-white/10 bg-white/[0.04] text-zinc-300 hover:bg-white/10 hover:text-white"}`}
             >
               {duration >= 60 ? `${duration / 60}h` : `${duration}m`}
             </button>
           ))}
         </div>
+        {saveError && <p role="alert" className="text-xs text-red-300">{saveError}</p>}
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             Cancel
@@ -248,9 +258,12 @@ export function CompleteTaskDialog({
             onClick={async () => {
               if (!task || isSaving) return;
               setIsSaving(true);
+              setSaveError("");
               try {
                 await onComplete(task.id, total);
                 onOpenChange(false);
+              } catch {
+                setSaveError("Could not complete task. Please try again.");
               } finally {
                 setIsSaving(false);
               }

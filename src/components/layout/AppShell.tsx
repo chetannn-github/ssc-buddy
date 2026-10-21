@@ -1,3 +1,5 @@
+import { SlidingTabs } from "@/components/ui/sliding-tabs";
+import { applyWebAccent, normalizeAppAccent } from "@/lib/app-accent";
 import { useHabits } from "@/lib/habits";
 import { useHabitReminders } from "@/lib/habit-reminders";
 import type { PointerEvent, ReactNode } from "react";
@@ -53,10 +55,9 @@ type Props = {
 };
 
 const nav = [
-  { title: "Daily tasks", url: "/tasks", icon: ListTodo },
+  { title: "Tasks", url: "/tasks", icon: ListTodo },
   { title: "Track", url: "/track", icon: RouteIcon },
   { title: "Practice session", url: "/test", icon: FilePenLine },
-  { title: "Habits", url: "/habits", icon: Flame },
   { title: "Timers", url: "/timers", icon: Timer },
 ] as const;
 
@@ -95,6 +96,7 @@ function cloudPracticeProfile(value: Record<string, unknown> | null): PracticePr
   const questionGoal = Number(value["questionGoal"]);
   if (!Number.isFinite(questionGoal) || questionGoal < 1) return null;
   return {
+    accentColor: normalizeAppAccent(value["accentColor"]),
     name: value["name"].trim(),
     questionGoal: Math.round(questionGoal),
     ...(typeof value["username"] === "string" && value["username"].trim() ? { username: value["username"].trim().toLowerCase() } : {}),
@@ -192,13 +194,13 @@ function ProfileOnboarding({ onComplete, user, existingProfile }: { onComplete: 
   };
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4 backdrop-blur-md">
-      <section className="relative w-full max-w-md rounded-2xl border border-white/10 bg-[#1e1e1e] p-4 text-zinc-100 shadow-2xl sm:p-5">
+      <section className="relative w-full max-w-md rounded-2xl border border-white/10 bg-[#121212] p-4 text-zinc-100 shadow-2xl sm:p-5">
         <div className="flex items-center justify-between gap-3"><h2 className="text-lg font-semibold tracking-tight text-zinc-50">Setup your profile</h2><button type="button" aria-label="Profile settings" onClick={() => setSettingsOpen(true)} className="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 transition hover:bg-white/10 hover:text-zinc-100"><Settings className="h-4 w-4" /></button></div>
           <div className="mt-4 space-y-3">
           <label className="block text-sm font-medium text-zinc-200">
             Your name
             <Input
-              className="mt-1.5 h-10 border-white/10 bg-[#151515] text-zinc-100 placeholder:text-zinc-500 focus-visible:border-zinc-500"
+              className="mt-1.5 h-10 border-white/10 bg-[#121212] text-zinc-100 placeholder:text-zinc-500 focus-visible:border-zinc-500"
               value={name}
               onChange={(event) => setName(event.target.value)}
               placeholder="Enter your name"
@@ -209,7 +211,7 @@ function ProfileOnboarding({ onComplete, user, existingProfile }: { onComplete: 
             Username
             <div className="relative mt-2">
               <Input
-                className="h-10 border-white/10 bg-[#151515] pr-10 text-zinc-100 lowercase placeholder:text-zinc-500 focus-visible:border-zinc-500"
+                className="h-10 border-white/10 bg-[#121212] pr-10 text-zinc-100 lowercase placeholder:text-zinc-500 focus-visible:border-zinc-500"
                 value={username}
                 onChange={(event) => setUsername(event.target.value.toLowerCase())}
                 placeholder="e.g. ssc_aspirant"
@@ -225,7 +227,7 @@ function ProfileOnboarding({ onComplete, user, existingProfile }: { onComplete: 
           <label className="block text-sm font-medium text-zinc-200">
             Question goal
             <Input
-              className="mt-1.5 h-10 border-white/10 bg-[#151515] text-zinc-100 placeholder:text-zinc-500 focus-visible:border-zinc-500"
+              className="mt-1.5 h-10 border-white/10 bg-[#121212] text-zinc-100 placeholder:text-zinc-500 focus-visible:border-zinc-500"
               inputMode="numeric"
               value={goal}
               onChange={(event) => setGoal(event.target.value.replace(/\D/g, ""))}
@@ -235,7 +237,7 @@ function ProfileOnboarding({ onComplete, user, existingProfile }: { onComplete: 
           <label className="block text-sm font-medium text-zinc-200">
             Daily manifestation <span className="font-normal text-zinc-500">(optional)</span>
             <Input
-              className="mt-1.5 h-10 border-white/10 bg-[#151515] text-zinc-100 uppercase placeholder:text-zinc-500 focus-visible:border-zinc-500"
+              className="mt-1.5 h-10 border-white/10 bg-[#121212] text-zinc-100 uppercase placeholder:text-zinc-500 focus-visible:border-zinc-500"
               value={manifestation}
               onChange={(event) => setManifestation(event.target.value.toUpperCase())}
               placeholder="Write the sentence you want to type daily"
@@ -244,16 +246,16 @@ function ProfileOnboarding({ onComplete, user, existingProfile }: { onComplete: 
           <label className="block text-sm font-medium text-zinc-200">
             Exam name
             <Input
-              className="mt-1.5 h-10 border-white/10 bg-[#151515] text-zinc-100 placeholder:text-zinc-500 focus-visible:border-zinc-500"
+              className="mt-1.5 h-10 border-white/10 bg-[#121212] text-zinc-100 placeholder:text-zinc-500 focus-visible:border-zinc-500"
               value={examName}
               onChange={(event) => setExamName(event.target.value)}
               placeholder="e.g. SSC CGL 2027"
             />
           </label>
         </div>
-        {settingsOpen && <div className="absolute inset-0 z-10 rounded-2xl bg-[#1e1e1e] p-6 sm:p-8"><div className="flex items-center gap-2"><button type="button" aria-label="Back to profile form" onClick={() => setSettingsOpen(false)} className="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 hover:bg-white/10 hover:text-white"><ArrowLeft className="h-4 w-4" /></button><h3 className="text-lg font-semibold">Settings</h3></div><div className="mt-6 space-y-3"><button type="button" onClick={() => setPracticeSessionEnabled((value) => !value)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#151515] px-3 py-3 text-left"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Practice session</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Take practice tests, review answers and track your results.</span></span><span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", practiceSessionEnabled ? "border-zinc-100 bg-zinc-100" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", practiceSessionEnabled ? "translate-x-5 bg-zinc-900" : "translate-x-1 bg-zinc-400")} /></span></button><button type="button" onClick={() => setTrackProgressEnabled((value) => !value)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#151515] px-3 py-3 text-left"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Track</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Track syllabus, revision and mock test progress.</span></span><span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", trackProgressEnabled ? "border-zinc-100 bg-zinc-100" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", trackProgressEnabled ? "translate-x-5 bg-zinc-900" : "translate-x-1 bg-zinc-400")} /></span></button><button type="button" role="switch" aria-checked={timersEnabled} onClick={() => setTimersEnabled((value) => !value)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#151515] px-3 py-3 text-left"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Timers</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Countdowns for important dates and deadlines.</span></span><span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", timersEnabled ? "border-zinc-100 bg-zinc-100" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", timersEnabled ? "translate-x-5 bg-zinc-900" : "translate-x-1 bg-zinc-400")} /></span></button><button type="button" role="switch" aria-checked={habitsEnabled} onClick={() => setHabitsEnabled((value) => !value)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#151515] px-3 py-3 text-left"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Habits</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Daily heatmaps, streaks and personal challenges.</span></span><span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", habitsEnabled ? "border-zinc-100 bg-zinc-100" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", habitsEnabled ? "translate-x-5 bg-zinc-900" : "translate-x-1 bg-zinc-400")} /></span></button></div></div>}
+        {settingsOpen && <div className="absolute inset-0 z-10 rounded-2xl bg-[#121212] p-6 sm:p-8"><div className="flex items-center gap-2"><button type="button" aria-label="Back to profile form" onClick={() => setSettingsOpen(false)} className="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 hover:bg-white/10 hover:text-white"><ArrowLeft className="h-4 w-4" /></button><h3 className="text-lg font-semibold">Settings</h3></div><div className="mt-6 space-y-3"><button type="button" onClick={() => setPracticeSessionEnabled((value) => !value)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#121212] px-3 py-3 text-left"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Practice session</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Take practice tests, review answers and track your results.</span></span><span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", practiceSessionEnabled ? "border-zinc-100 bg-zinc-100" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", practiceSessionEnabled ? "translate-x-5 bg-zinc-900" : "translate-x-1 bg-zinc-400")} /></span></button><button type="button" onClick={() => setTrackProgressEnabled((value) => !value)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#121212] px-3 py-3 text-left"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Track</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Track syllabus, revision and mock test progress.</span></span><span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", trackProgressEnabled ? "border-zinc-100 bg-zinc-100" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", trackProgressEnabled ? "translate-x-5 bg-zinc-900" : "translate-x-1 bg-zinc-400")} /></span></button><button type="button" role="switch" aria-checked={timersEnabled} onClick={() => setTimersEnabled((value) => !value)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#121212] px-3 py-3 text-left"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Timers</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Countdowns for important dates and deadlines.</span></span><span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", timersEnabled ? "border-zinc-100 bg-zinc-100" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", timersEnabled ? "translate-x-5 bg-zinc-900" : "translate-x-1 bg-zinc-400")} /></span></button><button type="button" role="switch" aria-checked={habitsEnabled} onClick={() => setHabitsEnabled((value) => !value)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#121212] px-3 py-3 text-left"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Habits</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Daily heatmaps, streaks and personal challenges.</span></span><span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", habitsEnabled ? "border-zinc-100 bg-zinc-100" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", habitsEnabled ? "translate-x-5 bg-zinc-900" : "translate-x-1 bg-zinc-400")} /></span></button></div></div>}
         <Button
-          className="mt-4 h-10 w-full bg-sky-500 text-sky-950 hover:bg-sky-400"
+          className="mt-4 h-10 w-full bg-primary text-primary-foreground hover:bg-primary/90"
           disabled={!canContinue || isSaving}
           onClick={() => void submit()}
         >
@@ -268,7 +270,7 @@ function StreakCelebration({ streak, onClose }: { streak: number; onClose: () =>
   return (
     <div className="fixed inset-0 z-[80] grid place-items-center bg-black/80 p-4 backdrop-blur-sm">
       <CelebrationFireworks />
-      <section className="streak-celebration relative w-full max-w-sm rounded-2xl border border-white/10 bg-[#171717] p-6 text-center text-zinc-100 shadow-[0_24px_80px_-24px_black] sm:p-7">
+      <section className="streak-celebration relative w-full max-w-sm rounded-2xl border border-white/10 bg-[#121212] p-6 text-center text-zinc-100 shadow-[0_24px_80px_-24px_black] sm:p-7">
         <button
           type="button"
           aria-label="Close streak celebration"
@@ -300,7 +302,7 @@ function StreakCelebration({ streak, onClose }: { streak: number; onClose: () =>
 }
 
 function LevelCelebration({ level, onClose }: { level: number; onClose: () => void }) {
-  return <div className="fixed inset-0 z-[80] grid place-items-center bg-black/80 p-4 backdrop-blur-sm"><section className="relative w-full max-w-sm rounded-2xl border border-white/10 bg-[#171717] p-6 text-center text-zinc-100 shadow-[0_24px_80px_-24px_black] sm:p-7"><button type="button" aria-label="Close level celebration" onClick={onClose} className="absolute top-3 right-3 grid h-8 w-8 place-items-center rounded-md text-zinc-500 transition-colors hover:bg-white/10 hover:text-zinc-100"><X className="h-4 w-4" /></button><div className="mx-auto grid h-12 w-12 place-items-center rounded-xl border border-violet-300/15 bg-violet-400/10 text-violet-300"><Trophy className="h-6 w-6" /></div><p className="mt-4 text-[10px] font-semibold tracking-[0.18em] text-zinc-500 uppercase">Level up</p><p className="mt-1.5 text-2xl font-semibold tracking-tight text-zinc-50">Level {level}</p><p className="mt-2 text-sm text-zinc-400">Your effort is paying off.</p><button type="button" onClick={onClose} className="mt-5 w-full rounded-lg bg-zinc-100 px-4 py-2.5 text-sm font-semibold text-zinc-900 transition-colors hover:bg-white">Continue</button></section></div>;
+  return <div className="fixed inset-0 z-[80] grid place-items-center bg-black/80 p-4 backdrop-blur-sm"><section className="relative w-full max-w-sm rounded-2xl border border-white/10 bg-[#121212] p-6 text-center text-zinc-100 shadow-[0_24px_80px_-24px_black] sm:p-7"><button type="button" aria-label="Close level celebration" onClick={onClose} className="absolute top-3 right-3 grid h-8 w-8 place-items-center rounded-md text-zinc-500 transition-colors hover:bg-white/10 hover:text-zinc-100"><X className="h-4 w-4" /></button><div className="mx-auto grid h-12 w-12 place-items-center rounded-xl border border-violet-300/15 bg-violet-400/10 text-violet-300"><Trophy className="h-6 w-6" /></div><p className="mt-4 text-[10px] font-semibold tracking-[0.18em] text-zinc-500 uppercase">Level up</p><p className="mt-1.5 text-2xl font-semibold tracking-tight text-zinc-50">Level {level}</p><p className="mt-2 text-sm text-zinc-400">Your effort is paying off.</p><button type="button" onClick={onClose} className="mt-5 w-full rounded-lg bg-zinc-100 px-4 py-2.5 text-sm font-semibold text-zinc-900 transition-colors hover:bg-white">Continue</button></section></div>;
 }
 
 function DailyManifestation({
@@ -337,7 +339,7 @@ function DailyManifestation({
         role="dialog"
         aria-modal="true"
         aria-labelledby="manifestation-title"
-        className="w-full max-w-md rounded-2xl border border-white/10 bg-[#171717] p-6 text-zinc-100 shadow-[0_24px_80px_-24px_black]"
+        className="w-full max-w-md rounded-2xl border border-white/10 bg-[#121212] p-6 text-zinc-100 shadow-[0_24px_80px_-24px_black]"
       >
         <div className="flex items-center justify-between gap-3">
           <h2 id="manifestation-title" className="text-lg font-semibold">
@@ -510,7 +512,7 @@ export function MotivationalVideos({
         role="dialog"
         aria-modal="true"
         aria-label="Motivational videos"
-        className="relative h-full w-full overflow-hidden bg-black text-zinc-100"
+        className="relative h-full w-full overflow-hidden bg-[#121212] text-zinc-100"
         onMouseDown={(event) => event.stopPropagation()}
       >
         <button
@@ -965,7 +967,7 @@ export function MotivationalMusic({ onClose }: { onClose: () => void }) {
             }}
           >
             <MusicRingLiquid progress={playbackPercent} playing={isPlaying} />
-            <span className="relative z-10 grid h-full w-full place-items-center overflow-hidden rounded-full bg-[#1b1b1b]">
+            <span className="relative z-10 grid h-full w-full place-items-center overflow-hidden rounded-full bg-[#121212]">
               {coverUrl ? (
                 <img
                   draggable={false}
@@ -1015,7 +1017,7 @@ export function MotivationalMusic({ onClose }: { onClose: () => void }) {
           role="dialog"
           aria-modal="true"
           aria-label="Motivational music"
-          className="relative w-full max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-white/10 bg-[#171717] p-5 text-zinc-100 shadow-[0_24px_80px_-24px_black] sm:max-w-3xl sm:p-6"
+          className="relative w-full max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-white/10 bg-[#121212] p-5 text-zinc-100 shadow-[0_24px_80px_-24px_black] sm:max-w-3xl sm:p-6"
           onMouseDown={(event) => event.stopPropagation()}
         >
           <button
@@ -1034,7 +1036,7 @@ export function MotivationalMusic({ onClose }: { onClose: () => void }) {
           >
             <Minimize2 className="h-4 w-4" />
           </button>
-          <div className="grid min-w-0 gap-6 sm:grid-cols-[12rem_minmax(0,1fr)]">
+          <div className="grid min-w-0 gap-8 sm:gap-12 sm:grid-cols-[12rem_minmax(0,1fr)]">
             <div className="flex min-h-64 flex-col items-center justify-center sm:order-2">
               <button
                 type="button"
@@ -1047,7 +1049,7 @@ export function MotivationalMusic({ onClose }: { onClose: () => void }) {
                 aria-label="Play or pause music"
               >
                 <MusicRingLiquid progress={playbackPercent} playing={isPlaying} />
-                <span className="relative z-10 grid h-full w-full place-items-center overflow-hidden rounded-full bg-[#171717]">
+                <span className="relative z-10 grid h-full w-full place-items-center overflow-hidden rounded-full bg-[#121212]">
                   {coverUrl ? (
                     <img
                       draggable={false}
@@ -1117,24 +1119,8 @@ export function MotivationalMusic({ onClose }: { onClose: () => void }) {
                 )}
               </div>
             </div>
-            <div className="flex min-w-0 max-h-72 flex-col sm:order-1">
-              <div className="flex min-w-0 max-w-full items-center gap-1 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                {playlists.map((playlist) => (
-                  <button
-                    key={playlist}
-                    type="button"
-                    onClick={() => choosePlaylist(playlist)}
-                    className={cn(
-                      "inline-flex h-7 shrink-0 items-center justify-center whitespace-nowrap rounded-md px-2 text-[10px] leading-none transition-colors",
-                      selectedPlaylist === playlist
-                        ? "bg-white/10 text-white"
-                        : "text-zinc-400 hover:text-zinc-200",
-                    )}
-                  >
-                    {playlist}
-                  </button>
-                ))}
-              </div>
+            <div className="flex min-w-0 max-h-72 flex-col gap-3 sm:order-1">
+              <SlidingTabs options={playlists} value={selectedPlaylist} onChange={setSelectedPlaylist} label="Music playlists" />
               <div className="min-w-0 max-w-full overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {playlistTracks.map((track) => (
                   <button
@@ -1169,6 +1155,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
   const [xpLevel, setXpLevel] = useState<number | null>(null);
   const [profile, setProfile] = useState<PracticeProfile | null | undefined>(undefined);
   const [profileHydrated, setProfileHydrated] = useState(false);
+  useEffect(() => { applyWebAccent(profile?.accentColor); }, [profile?.accentColor]);
   const [celebratedStreak, setCelebratedStreak] = useState<number | null>(null);
   const [celebratedLevel, setCelebratedLevel] = useState<number | null>(null);
   const [streakReady, setStreakReady] = useState(false);
@@ -1186,10 +1173,9 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
     (item) =>
       (item.url !== "/test" || profile?.practiceSessionEnabled !== false) &&
       (item.url !== "/timers" || profile?.timersEnabled !== false) &&
-      (item.url !== "/habits" || profile?.habitsEnabled !== false) &&
       (!(["/track", "/progress"] as string[]).includes(item.url) || profile?.trackProgressEnabled !== false),
   );
-  const activeNavUrl = visibleNav.find((item) => (path === "/progress" ? "/track" : path).startsWith(item.url))?.url;
+  const activeNavUrl = visibleNav.find((item) => (path === "/progress" ? "/track" : path === "/habits" ? "/tasks" : path).startsWith(item.url))?.url;
   const navIndicatorUrl = navTarget ?? activeNavUrl;
 
   useEffect(() => {
@@ -1317,7 +1303,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
 
   return (
     <div className="flex min-h-screen w-full flex-col bg-[#121212] text-zinc-100">
-      <header className="h-16 border-0 bg-[#1b1b1b] text-zinc-100 shadow-none">
+      <header className="h-16 border-0 bg-[#121212] text-zinc-100 shadow-none">
         <div className="mx-auto flex h-16 w-full max-w-5xl items-center gap-4 px-4 sm:px-6">
           <Link
             to="/tasks"
@@ -1332,9 +1318,9 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
           </div>
           {actions}
           <nav className="relative flex shrink-0 items-center gap-1">
-            {navIndicator.width > 0 && <span aria-hidden="true" className="pointer-events-none absolute top-0 bottom-0 rounded-md bg-white/15 transition-[left,width] duration-300 ease-out" style={{ left: navIndicator.left, width: navIndicator.width }} />}
+            {navIndicator.width > 0 && <span aria-hidden="true" className="pointer-events-none absolute top-0 bottom-0 rounded-md bg-[var(--app-accent)] transition-[left,width] duration-300 ease-out" style={{ left: navIndicator.left, width: navIndicator.width }} />}
             {visibleNav.map((item) => {
-              const active = path.startsWith(item.url);
+              const active = path.startsWith(item.url) || (item.url === "/tasks" && path === "/habits");
               return (
                 <Link
                   key={item.url}
@@ -1352,7 +1338,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
                   className={cn(
                     "app-nav-link relative z-10 flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors sm:text-sm",
                     active
-                      ? "is-active text-white"
+                      ? "is-active text-[var(--app-accent-ink)]"
                       : "text-white/70 hover:text-white",
                   )}
                 >

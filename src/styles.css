@@ -243,7 +243,7 @@ input:-moz-autofill {
 }
 
 .exam-dark .card-surface {
-  background-color: #1d1d1d;
+  background-color: #121212;
   border-color: rgb(255 255 255 / 13%);
   box-shadow: 0 12px 28px rgb(0 0 0 / 18%);
 }
@@ -257,7 +257,7 @@ input:-moz-autofill {
 }
 
 .exam-dark button[class*="variant-outline"] {
-  background-color: #171717;
+  background-color: #121212;
   border-color: rgb(255 255 255 / 14%);
   color: #e4e4e7;
 }
@@ -277,7 +277,7 @@ input:-moz-autofill {
 }
 
 .exam-dark ::-webkit-scrollbar-track {
-  background: #181818;
+  background: #121212;
   border-radius: 999px;
 }
 
@@ -292,7 +292,7 @@ input:-moz-autofill {
 }
 
 .exam-dark ::-webkit-scrollbar-button {
-  background: #181818;
+  background: #121212;
 }
 
 .task-history-scroll {
@@ -304,7 +304,7 @@ input:-moz-autofill {
 }
 
 .task-history-scroll::-webkit-scrollbar-track {
-  background: #171717;
+  background: #121212;
 }
 
 .task-history-scroll::-webkit-scrollbar-thumb {
@@ -327,7 +327,7 @@ input:-moz-autofill {
   --border: oklch(1 0 0 / 12%);
   --primary: oklch(0.68 0.13 250);
   --primary-foreground: oklch(0.18 0 0);
-  background-color: #1c1c1c !important;
+  background-color: #121212 !important;
   border-color: rgb(255 255 255 / 12%) !important;
   color: #f4f4f5 !important;
 }
@@ -335,7 +335,7 @@ input:-moz-autofill {
 .exam-dark input,
 .exam-dark textarea,
 .exam-dark [data-slot="select-trigger"] {
-  background-color: #181818;
+  background-color: #121212;
   border-color: rgb(255 255 255 / 10%);
   color: #f4f4f5;
 }
@@ -348,13 +348,13 @@ input:-moz-autofill {
 
 .exam-select-content,
 .exam-dialog-content {
-  background-color: #181818 !important;
+  background-color: #121212 !important;
   border-color: rgb(255 255 255 / 14%) !important;
   color: #f4f4f5 !important;
 }
 
 .exam-dialog-content .card-surface {
-  background-color: #1c1c1c !important;
+  background-color: #121212 !important;
   border-color: rgb(255 255 255 / 10%) !important;
   color: #f4f4f5 !important;
 }
@@ -399,7 +399,7 @@ input:-moz-autofill {
 }
 
 .exam-select-content {
-  background-color: #1c1c1c !important;
+  background-color: #121212 !important;
   border: 0 !important;
   box-shadow: 0 12px 28px rgb(0 0 0 / 45%) !important;
 }
@@ -410,7 +410,7 @@ input:-moz-autofill {
 }
 
 .history-select-content {
-  background-color: #1c1c1c !important;
+  background-color: #121212 !important;
   border: 0 !important;
   box-shadow: 0 12px 28px rgb(0 0 0 / 45%) !important;
   color: #e4e4e7 !important;
@@ -501,7 +501,7 @@ input:-moz-autofill {
 
 .tracker-theme select option,
 .mock-test-dialog select option {
-  background-color: #1c1c1c;
+  background-color: #121212;
   color: #f4f4f5;
 }
 
@@ -715,4 +715,27 @@ select:not(:disabled),
 .leaderboard-page::-webkit-scrollbar,
 .leaderboard-page *::-webkit-scrollbar {
   display: none;
+}
+
+/* Account accent shared with the Android app. Semantic status colors stay distinct. */
+:root { --app-accent: #ffe000; --app-accent-ink: #171400; --app-accent-soft: #ffe00018; --app-accent-border: #ffe00066; }
+:root, .dark, .exam-dark, .tracker-theme {
+  --background: #121212; --primary: var(--app-accent); --primary-foreground: var(--app-accent-ink);
+  --ring: var(--app-accent); --accent-blue: var(--app-accent);
+}
+.app-nav-link.is-active { color: var(--app-accent-ink); }
+@keyframes daily-border-flow { to { stroke-dashoffset: -125.66; } }
+.daily-ring-mask { transition: stroke-dashoffset 650ms cubic-bezier(.65,0,.35,1); }
+.daily-ring-flow { animation: daily-border-flow 2.4s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .daily-ring-flow { animation: none; } .daily-ring-mask { transition: none; } }
+
+/* Shared near-black surfaces across Track, Practice, profile, and portaled dialogs. */
+:root, .dark, .tracker-theme, .exam-dark, .test-dark-dialog, .exam-dialog-content {
+  --background: #121212;
+  --surface: #121212;
+  --card: #121212;
+  --popover: #121212;
+  --secondary: #121212;
+  --muted: #121212;
+  --sidebar: #121212;
 }

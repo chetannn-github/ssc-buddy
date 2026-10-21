@@ -1,28 +1,25 @@
+import { accentInk } from "@/lib/app-accent";
 import { HabitIconSheet } from "./HabitIconSheet";
 import { HabitIcon } from "./HabitIcon";
 import { useRef, useState } from "react";
-import { ArrowLeft, Check, LoaderCircle, X } from "lucide-react";
+import { Check, LoaderCircle, X } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { requestHabitReminders } from "@/lib/habit-reminders";
 import {
   HABIT_COLORS,
   HABIT_COLOR_COLUMNS,
-  HABIT_ICONS,
-  HABIT_SYMBOLS,
   HABIT_FREQUENCIES,
-  habitDetails,
   habitFormDetails,
   canSaveHabit,
   normalizeHabitSettings,
-  validateHabitSettings,
   type Habit,
   type HabitColor,
   type HabitSettings,
   type HabitSaveDetails,
 } from "../../../mobile-tasks/src/domain/habits";
 const input =
-  "w-full rounded-xl border border-white/10 bg-[#0e0e0e] px-3 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-yellow-300";
-const section = "space-y-2.5 rounded-2xl bg-[#0e0e0e] p-3 text-sm";
+  "w-full rounded-xl border border-white/10 bg-[#121212] px-3 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-[var(--habit-color)]";
+const section = "space-y-3 rounded-xl border border-white/10 bg-[#121212] p-4 text-sm";
 export function HabitEditor({
   habit,
   initialColor,
@@ -47,10 +44,8 @@ export function HabitEditor({
   const [settings, setSettings] = useState(() => normalizeHabitSettings(habit?.settings));
   const [goal, setGoal] = useState(String(settings.dailyGoal)),
     [amount, setAmount] = useState(String(settings.step)),
-    [step, setStep] = useState(3),
     [message, setMessage] = useState("");
   const [themeOpen, setThemeOpen] = useState(false);
-  const [colorsOpen, setColorsOpen] = useState(false);
   const [adding, setAdding] = useState(false),
     [itemName, setItemName] = useState("");
   const tint = HABIT_COLORS[color],
@@ -77,22 +72,6 @@ export function HabitEditor({
       setSaving(false);
     }
   };
-  const next = () => {
-    if (!name.trim()) {
-      setMessage("Enter a habit title.");
-      return;
-    }
-    if (
-      step === 2 &&
-      ((settings.frequency === "weekdays" && !settings.weekdays.length) ||
-        (settings.frequency === "monthdays" && !settings.monthdays.length))
-    ) {
-      setMessage("Select at least one day.");
-      return;
-    }
-    setMessage("");
-    setStep(step + 1);
-  };
   const toggleDay = (key: "weekdays" | "monthdays", day: number) =>
     patch({
       [key]: settings[key].includes(day)
@@ -100,7 +79,7 @@ export function HabitEditor({
         : [...settings[key], day],
     });
   const palette = (
-    <div className="flex gap-3 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden rounded-2xl bg-[#101010] p-3">
+    <div className="flex gap-3 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden rounded-2xl bg-[#121212] p-3">
       {HABIT_COLOR_COLUMNS.map((column, index) => (
         <div key={index} className="flex shrink-0 flex-col gap-3">
           {column.map((option) => (
@@ -121,77 +100,13 @@ export function HabitEditor({
       ))}
     </div>
   );
-  const theme = (
-    <>
-      <div className="flex items-center gap-4 rounded-3xl bg-[#101010] p-4">
-        <span
-          className="grid h-10 w-10 place-items-center rounded-full text-2xl"
-          style={{ backgroundColor: tint + "18", color: tint }}
-        >
-          <HabitIcon name={settings.icon} />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="truncate font-semibold">{name || "Your habit"}</p>
-          <p className="text-xs text-zinc-500">
-            {target ? target + " day challenge" : "Build your routine"}
-          </p>
-        </div>
-        <span
-          className="grid h-10 w-10 place-items-center rounded-full text-black"
-          style={{ backgroundColor: tint }}
-        >
-          <Check />
-        </span>
-      </div>
-      <label className="block space-y-3">
-        <span>Select Habit Color</span>
-        <span className="flex gap-4 rounded-3xl bg-[#101010] p-4">
-          {(Object.keys(HABIT_COLORS) as HabitColor[]).map((option) => (
-            <button
-              key={option}
-              type="button"
-              aria-label={option}
-              aria-pressed={color === option}
-              onClick={() => setColor(option)}
-              className="h-9 w-9 rounded-full"
-              style={{
-                backgroundColor: HABIT_COLORS[option],
-                outline: color === option ? "3px solid white" : undefined,
-              }}
-            />
-          ))}
-        </span>
-      </label>
-      <div className="space-y-3">
-        <p>Select Habit Icon</p>
-        <div className="grid grid-cols-7 gap-3 rounded-3xl bg-[#101010] p-4">
-          {HABIT_ICONS.map((icon, index) => (
-            <button
-              type="button"
-              key={icon}
-              aria-label={icon}
-              aria-pressed={settings.icon === icon}
-              onClick={() => patch({ icon })}
-              className="grid h-9 place-items-center rounded-lg text-xl"
-              style={{
-                color: settings.icon === icon ? tint : "white",
-                backgroundColor: settings.icon === icon ? tint + "20" : undefined,
-              }}
-            >
-              <HabitIcon name={icon} />
-            </button>
-          ))}
-        </div>
-      </div>
-    </>
-  );
   const frequency = (
-    <section className="space-y-1 rounded-2xl bg-[#0e0e0e] px-3 py-2.5 text-sm">
+    <section className={section}>
       <h3 className="mb-1.5">Frequency</h3>
       {(Object.keys(HABIT_FREQUENCIES) as HabitSettings["frequency"][]).map((key) => (
         <label
           key={key}
-          className="flex cursor-pointer items-center gap-2.5 py-1.5 disabled:opacity-30"
+          className={`flex items-center gap-2.5 py-1.5 ${settings.type === "quit" && key !== "daily" ? "cursor-not-allowed opacity-30" : "cursor-pointer"}`}
         >
           <input
             type="radio"
@@ -202,7 +117,7 @@ export function HabitEditor({
             onChange={() => patch({ frequency: key })}
             style={{ accentColor: tint, "--habit-color": tint } as React.CSSProperties}
           />
-          {HABIT_FREQUENCIES[key]}
+          <span className={settings.type === "quit" && key !== "daily" ? "line-through" : undefined}>{HABIT_FREQUENCIES[key]}</span>
         </label>
       ))}
       {settings.frequency === "weekdays" && (
@@ -278,126 +193,35 @@ export function HabitEditor({
       )}
     </section>
   );
-  return (
-    <Dialog
-      open
-      onOpenChange={(open) => {
-        if (!open && !busy) onClose();
-      }}
-    >
-      <DialogContent className="flex h-[100dvh] max-h-[100dvh] w-screen max-w-none rounded-none sm:h-auto sm:max-h-[94dvh] sm:rounded-lg flex-col gap-0 overflow-hidden border-white/10 bg-black p-0 text-white sm:max-w-xl [&>button]:hidden">
-        <header className="flex shrink-0 items-center gap-3 px-4 py-3">
-          <button type="button" aria-label="Back" disabled={busy} onClick={onClose}>
-            <ArrowLeft />
-          </button>
-          <DialogTitle className="flex-1 text-lg font-normal">
-            {habit ? "Edit Habit" : "Add Habit"}
-          </DialogTitle>
-          {step === 3 && (
-            <button
-              type="button"
-              disabled={busy || !canSave}
-              aria-busy={busy}
-              onClick={() => void save()}
-              className="flex items-center gap-2 disabled:opacity-40"
-            >
-              {busy ? (
-                <>
-                  <LoaderCircle className="h-4 w-4 animate-spin" /> Saving…
-                </>
-              ) : (
-                <>
-                  Save <Check />
-                </>
-              )}
-            </button>
-          )}
-        </header>
-        {!habit && step < 3 && (
-          <div className="mx-6 h-2 shrink-0 overflow-hidden rounded-full bg-[#202020]">
-            <div
-              className="h-full rounded-full bg-[#ffe000] transition-all"
-              style={{ width: (step + 1) * 25 + "%" }}
-            />
-          </div>
-        )}
-        <fieldset
-          disabled={busy}
-          className="min-h-0 min-w-0 w-full space-y-3 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden p-3 sm:p-5"
-        >
-          {step === 0 ? (
-            <div className="flex min-h-[45vh] flex-col">
-              <h2 className="mt-8 text-center text-3xl font-bold">
-                What Habit Do You Want To Track?
-              </h2>
-              <label className="my-auto block space-y-3">
-                <span className="text-lg">Habit Title</span>
-                <input
-                  autoFocus
-                  className={input + " border-yellow-300"}
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  maxLength={80}
-                  placeholder="Wake Up Early"
-                />
-              </label>
-            </div>
-          ) : step === 1 ? (
-            <>
-              <h2 className="py-4 text-center text-2xl font-bold">Customize Tracker Theme</h2>
-              {theme}
-            </>
-          ) : step === 2 ? (
-            <>
-              <h2 className="py-8 text-center text-2xl font-bold">
-                How often do you want to do this habit?
-              </h2>
-              {frequency}
-            </>
-          ) : (
-            <>
-              <input
-                aria-label="Habit title"
-                className={input}
-                placeholder="Enter Habit Title"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                maxLength={80}
-              />
-
-              <div className="flex items-center gap-10 py-1">
-                <button
-                  type="button"
-                  aria-label="Choose habit color"
-                  onClick={() => setColorsOpen((value) => !value)}
-                  className="flex items-center gap-3"
-                >
-                  <span className="grid h-8 w-8 place-items-center rounded-lg bg-[#101010]">
-                    <span className="h-5 w-5 rounded-full" style={{ backgroundColor: tint }} />
-                  </span>
-                  Color
-                </button>
-                <button
-                  type="button"
-                  aria-label="Choose habit icon"
-                  onClick={() => setThemeOpen(true)}
-                  className="flex items-center gap-3"
-                >
-                  <span className="grid h-8 w-8 place-items-center rounded-lg bg-[#101010]">
-                    <HabitIcon name={settings.icon} className="h-5 w-5" />
-                  </span>
-                  Icon
+  return <Dialog open onOpenChange={(open) => { if (!open && !busy) onClose(); }}>
+    <DialogContent className="flex max-h-[90dvh] w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden rounded-2xl border-white/10 bg-[#121212] p-0 text-white sm:max-w-4xl [&>button]:hidden"
+      style={{ "--habit-color": tint } as React.CSSProperties}>
+      <header className="flex shrink-0 items-center justify-between border-b border-white/10 px-5 py-4 sm:px-6">
+        <div><DialogTitle className="text-lg font-semibold">{habit ? "Edit habit" : "Create a habit"}</DialogTitle><p className="mt-1 text-xs text-zinc-500">Choose how you want to track your routine.</p></div>
+        <button type="button" aria-label="Close habit editor" disabled={busy} onClick={onClose} className="rounded-lg p-2 text-zinc-500 hover:bg-white/5 hover:text-white"><X className="h-5 w-5" /></button>
+      </header>
+      <form className="flex min-h-0 flex-1 flex-col overflow-hidden" onSubmit={(event) => { event.preventDefault(); if (canSave) void save(); }}>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"><fieldset disabled={busy} className="m-0 grid min-w-0 gap-5 border-0 p-5 sm:grid-cols-2 sm:p-6">
+          <div className="min-w-0 space-y-4">
+            <section className={section}>
+              <label htmlFor="habit-title" className="block text-xs font-medium text-zinc-400">Habit name</label>
+              <input autoFocus id="habit-title" className={input} placeholder="e.g. READ EVERY DAY" value={name} onChange={(event) => setName(event.target.value.toUpperCase())} maxLength={80} />
+              <div className="flex items-center justify-between pt-2">
+                <span className="text-xs text-zinc-500">Color & icon</span>
+                <button type="button" aria-label="Choose habit icon" onClick={() => setThemeOpen(true)} className="flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs hover:bg-white/5">
+                  <HabitIcon name={settings.icon} className="h-4 w-4" /><span>Change icon</span>
                 </button>
               </div>
-              {colorsOpen && palette}
-              <section className={section}>
+              {palette}
+            </section>
+<section className={section}>
                 <h3>Type</h3>
                 <div className="flex gap-3">
                   {(["build", "quit"] as const).map((type) => (
                     <button
                       key={type}
                       type="button"
-                      className="flex-1 rounded-xl bg-[#1b1b1b] px-3 py-2.5 font-semibold"
+                      className="flex-1 rounded-xl bg-[#121212] px-3 py-2.5 font-semibold"
                       style={{ backgroundColor: settings.type === type ? tint + "40" : undefined }}
                       onClick={() => {
                         patch({ type, ...(type === "quit" ? { frequency: "daily" } : {}) });
@@ -414,8 +238,45 @@ export function HabitEditor({
                     : "Do it regularly. Tap to mark it done."}
                 </p>
               </section>
-              {frequency}
-              <section className={section}>
+<section className={section}><h3>Reminder & challenge</h3>                <label className="mt-4 flex items-center justify-between">
+                  Set Reminder
+                  <input
+                    type="checkbox"
+                    checked={!!settings.reminder}
+                    onChange={(event) => patch({ reminder: event.target.checked ? "09:00" : null })}
+                    style={{ accentColor: tint, "--habit-color": tint } as React.CSSProperties}
+                    className="h-7 w-11 shrink-0 appearance-none rounded-full border-2 border-white bg-[#121212] before:block before:h-4 before:w-4 before:translate-x-1 before:translate-y-[3px] before:rounded-full before:bg-white before:transition-transform checked:before:translate-x-5"
+                  />
+                </label>
+                {settings.reminder && (
+                  <input
+                    type="time"
+                    aria-label="Reminder time"
+                    className={input}
+                    value={settings.reminder}
+                    onChange={(event) => patch({ reminder: event.target.value })}
+                  />
+                )}
+                <label className="mt-4 block space-y-2">
+                  Challenge target (optional)
+                  <input
+                    className={input}
+                    type="number"
+                    value={target}
+                    onChange={(event) => setTarget(event.target.value)}
+                    min={1}
+                    max={10000}
+                    placeholder="70 days"
+                  />
+                </label>
+                <p className="text-xs text-zinc-500">
+                  Each completed day counts toward your target.
+                </p>
+              </section>
+          </div>
+          <div className="min-w-0 space-y-4">
+            {frequency}
+<section className={section}>
                 <h3>Tracking</h3>
                 <div className="flex gap-3">
                   {(["tick", "count", "checklist"] as const).map((tracking) => (
@@ -423,7 +284,7 @@ export function HabitEditor({
                       type="button"
                       key={tracking}
                       disabled={false}
-                      className="flex-1 rounded-xl bg-[#1b1b1b] py-3 capitalize disabled:opacity-30"
+                      className="flex-1 rounded-xl bg-[#121212] py-3 capitalize disabled:opacity-30"
                       style={{
                         backgroundColor: settings.tracking === tracking ? tint + "40" : undefined,
                       }}
@@ -459,7 +320,7 @@ export function HabitEditor({
                         />
                         <button
                           type="button"
-                          className="rounded-xl bg-[#1b1b1b] px-4 text-xl"
+                          className="rounded-xl bg-[#121212] px-4 text-xl"
                           onClick={() =>
                             setGoal(
                               String(Math.max(settings.type === "quit" ? 0 : 1, Number(goal) - 1)),
@@ -470,7 +331,7 @@ export function HabitEditor({
                         </button>
                         <button
                           type="button"
-                          className="rounded-xl bg-[#1b1b1b] px-4 text-xl"
+                          className="rounded-xl bg-[#121212] px-4 text-xl"
                           onClick={() => setGoal(String((Number(goal) || 0) + 1))}
                         >
                           +
@@ -501,7 +362,7 @@ export function HabitEditor({
                         <button
                           type="button"
                           aria-label="Decrease tap amount"
-                          className="rounded-xl bg-[#1b1b1b] px-4 text-xl"
+                          className="rounded-xl bg-[#121212] px-4 text-xl"
                           onClick={() =>
                             setAmount(String(Math.max(0.001, (Number(amount) || 1) - 1)))
                           }
@@ -511,14 +372,14 @@ export function HabitEditor({
                         <button
                           type="button"
                           aria-label="Increase tap amount"
-                          className="rounded-xl bg-[#1b1b1b] px-4 text-xl"
+                          className="rounded-xl bg-[#121212] px-4 text-xl"
                           onClick={() => setAmount(String((Number(amount) || 0) + 1))}
                         >
                           +
                         </button>
                       </div>
                       <p className="text-center text-xs text-zinc-500">
-                        Long press opens the count editor
+                        Right-click the habit button to edit its count
                       </p>{" "}
                     </label>
                   </>
@@ -556,65 +417,17 @@ export function HabitEditor({
                     </button>
                   </>
                 )}
-                <label className="mt-4 flex items-center justify-between">
-                  Set Reminder
-                  <input
-                    type="checkbox"
-                    checked={!!settings.reminder}
-                    onChange={(event) => patch({ reminder: event.target.checked ? "09:00" : null })}
-                    style={{ accentColor: tint, "--habit-color": tint } as React.CSSProperties}
-                    className="h-7 w-11 shrink-0 appearance-none rounded-full border-2 border-white bg-black before:block before:h-4 before:w-4 before:translate-x-1 before:translate-y-[3px] before:rounded-full before:bg-white before:transition-transform checked:before:translate-x-5"
-                  />
-                </label>
-                {settings.reminder && (
-                  <input
-                    type="time"
-                    aria-label="Reminder time"
-                    className={input}
-                    value={settings.reminder}
-                    onChange={(event) => patch({ reminder: event.target.value })}
-                  />
-                )}
-                <label className="mt-4 block space-y-2">
-                  Challenge target (optional)
-                  <input
-                    className={input}
-                    type="number"
-                    value={target}
-                    onChange={(event) => setTarget(event.target.value)}
-                    min={1}
-                    max={10000}
-                    placeholder="70 days"
-                  />
-                </label>
-                <p className="text-xs text-zinc-500">
-                  Each completed day counts toward your target.
-                </p>
-              </section>
-            </>
-          )}
-          {!!(message || error) && (
-            <p role="alert" className="text-sm text-red-300">
-              {message || error}
-            </p>
-          )}
-        </fieldset>
-        {!habit && step < 3 && (
-          <footer className="flex shrink-0 items-center gap-5 p-6">
-            {step > 0 && (
-              <button type="button" onClick={() => setStep(step - 1)}>
-                Back
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={next}
-              className="flex-1 rounded-full bg-[#ffe000] py-4 text-lg font-bold text-black"
-            >
-              Next
-            </button>
-          </footer>
-        )}
+</section>
+          </div>
+          {!!(message || error) && <p role="alert" className="text-sm text-red-300 sm:col-span-2">{message || error}</p>}
+        </fieldset></div>
+        <footer className="relative z-10 bg-[#121212] flex shrink-0 items-center justify-end gap-3 border-t border-white/10 px-5 py-4 sm:px-6">
+          <button type="button" disabled={busy} onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-zinc-400 hover:bg-white/5">Cancel</button>
+          <button type="submit" disabled={busy || !canSave} aria-busy={busy} className="inline-flex items-center gap-2 rounded-lg px-5 py-2 text-sm font-semibold disabled:opacity-40" style={{ backgroundColor: tint, color: accentInk(tint) }}>
+            {busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}{busy ? "Saving…" : habit ? "Save changes" : "Create habit"}
+          </button>
+        </footer>
+      </form>
         {themeOpen && (
           <HabitIconSheet
             value={settings.icon}
@@ -625,14 +438,14 @@ export function HabitEditor({
         )}
 
         <Dialog open={adding} onOpenChange={setAdding}>
-          <DialogContent className="rounded-3xl border-white/10 bg-[#101010] p-7 text-white">
+          <DialogContent className="rounded-3xl border-white/10 bg-[#121212] p-7 text-white">
             <DialogTitle className="text-center">Add Checklist</DialogTitle>
             <input
               autoFocus
               className={input}
               placeholder="Enter Checklist Title"
               value={itemName}
-              onChange={(event) => setItemName(event.target.value)}
+              onChange={(event) => setItemName(event.target.value.toUpperCase())}
               maxLength={80}
             />
             <div className="flex items-center justify-end gap-6">
@@ -652,14 +465,13 @@ export function HabitEditor({
                   setAdding(false);
                 }}
                 className="rounded-xl px-6 py-3 font-semibold text-black"
-                style={{ backgroundColor: tint }}
+                style={{ backgroundColor: tint, color: accentInk(tint) }}
               >
                 Add
               </button>
             </div>
           </DialogContent>
         </Dialog>
-      </DialogContent>
-    </Dialog>
-  );
+    </DialogContent>
+  </Dialog>;
 }

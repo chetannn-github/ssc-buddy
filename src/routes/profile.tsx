@@ -1,3 +1,5 @@
+import { AccentPicker } from "@/components/profile/AccentPicker";
+import { applyWebAccent, normalizeAppAccent, type AppAccent } from "@/lib/app-accent";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
   ArrowLeft,
@@ -7,7 +9,6 @@ import {
   LoaderCircle,
   LogOut,
   Music2,
-  Pencil,
   Play,
   RefreshCw,
   Save,
@@ -473,7 +474,7 @@ function ActivityHeatmap({
       {hoveredTooltip && typeof document !== "undefined"
         ? createPortal(
             <span
-              className="pointer-events-none fixed z-[100] -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md border border-white/10 bg-[#1d1d1d] px-2 py-1 text-[10px] font-medium text-zinc-200 shadow-lg"
+              className="pointer-events-none fixed z-[100] -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md border border-white/10 bg-[#121212] px-2 py-1 text-[10px] font-medium text-zinc-200 shadow-lg"
               style={{ left: hoveredTooltip.x, top: hoveredTooltip.y }}
             >
               {hoveredTooltip.text}
@@ -581,7 +582,7 @@ function TargetProgress({
   }, [rangeOpen]);
 
   return (
-    <section className="overflow-visible rounded-2xl border border-white/10 bg-[#1a1a1a]">
+    <section className="overflow-visible rounded-2xl border border-white/10 bg-[#121212]">
       <div className="flex items-center justify-between gap-3 px-4 pt-2 sm:px-5">
         <span className="text-[11px] font-semibold tracking-[0.16em] text-zinc-500 uppercase">
           {showPractice ? "Practice" : showTracker ? "Study tracker" : "Tasks"}
@@ -606,7 +607,7 @@ function TargetProgress({
           {rangeOpen && (
             <div
               role="listbox"
-              className="animate-in fade-in-0 zoom-in-95 slide-in-from-top-1 absolute top-8 right-0 z-30 min-w-32 origin-top-right rounded-md border border-white/10 bg-[#202020] p-1 shadow-xl duration-200 ease-out"
+              className="animate-in fade-in-0 zoom-in-95 slide-in-from-top-1 absolute top-8 right-0 z-30 min-w-32 origin-top-right rounded-md border border-white/10 bg-[#121212] p-1 shadow-xl duration-200 ease-out"
             >
               {(Object.keys(rangeLabels) as ActivityRange[]).map((option) => (
                 <button
@@ -682,17 +683,15 @@ function TrackerRow({
   label,
   done,
   total,
-  tone = "bg-blue-500",
 }: {
   label: string;
   done: number;
   total: number;
-  tone?: string;
 }) {
   return (
     <div className="grid grid-cols-[5.5rem_minmax(0,1fr)_auto] items-center gap-2 py-1.5 text-sm sm:grid-cols-[7rem_minmax(0,1fr)_auto]">
       <span className="truncate text-zinc-300">{label}</span>
-      <LiquidProgressBar progress={pct(done, total) / 100} color={tone === "bg-emerald-500" ? "#10b981" : tone === "bg-violet-500" ? "#8b5cf6" : "#3b82f6"} />
+      <LiquidProgressBar progress={pct(done, total) / 100} color="var(--app-accent)" />
       <span className="font-mono text-xs text-zinc-500">
         {done}/{total}
       </span>
@@ -774,7 +773,7 @@ function StudyTrackerOverview({ tracker, readOnly = false }: { tracker: TrackerD
                   label={subject.name}
                   done={progress.done}
                   total={progress.total}
-                  tone="bg-emerald-500"
+
                 />
               );
             })}
@@ -795,20 +794,20 @@ function StudyTrackerOverview({ tracker, readOnly = false }: { tracker: TrackerD
                 label={subject.name}
                 done={testsDone(tracker, subject.id)}
                 total={tracker.tests.targets[subject.id] ?? 0}
-                tone="bg-violet-500"
+
               />
             ))}
             <TrackerRow
               label="Pre"
               done={tracker.tests.mocks.pre.done}
               total={tracker.tests.mocks.pre.target}
-              tone="bg-violet-500"
+
             />
             <TrackerRow
               label="Mains"
               done={tracker.tests.mocks.mains.done}
               total={tracker.tests.mocks.mains.target}
-              tone="bg-violet-500"
+
             />
           </div>
         </Link>}
@@ -858,6 +857,8 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
   const [timersEnabledDraft, setTimersEnabledDraft] = useState(true);
   const [habitsEnabledDraft, setHabitsEnabledDraft] = useState(true);
   const [profileSettingsOpen, setProfileSettingsOpen] = useState(false);
+  const [savingAccent, setSavingAccent] = useState(false);
+  const [accentError, setAccentError] = useState("");
   const [importMessage, setImportMessage] = useState("");
   const [promptCopied, setPromptCopied] = useState(false);
   const [xpTimelineOpen, setXpTimelineOpen] = useState(false);
@@ -1000,6 +1001,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
     if (!nameDraft.trim() || Number(goalDraft) < 1 || isSavingProfile || (authUser && usernameStatus !== "available")) return;
     setIsSavingProfile(true);
     const next = {
+      accentColor: normalizeAppAccent(profile?.accentColor),
       name: nameDraft.trim(),
       ...(usernameDraft.trim() ? { username: normalizeUsername(usernameDraft) } : {}),
       questionGoal: Math.min(100000, Number(goalDraft)),
@@ -1037,8 +1039,19 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
       setIsSavingProfile(false);
     }
   };
+  const chooseAccent = async (color: AppAccent) => {
+    if (!profile || savingAccent || savingFeature || isSavingProfile) return;
+    const previous = normalizeAppAccent(profile.accentColor);
+    const next = { ...profile, accentColor: color };
+    setSavingAccent(true); setAccentError(""); applyWebAccent(color);
+    try {
+      if (authUser && next.username) await saveProfileWithUsername(authUser, next);
+      savePracticeProfile(next); setProfile(next);
+    } catch { applyWebAccent(previous); setAccentError("Could not save accent. Please try again."); }
+    finally { setSavingAccent(false); }
+  };
   const saveFeature = async (feature: "practice" | "track" | "timers" | "habits") => {
-    if (savingFeature || isSavingProfile) return;
+    if (savingFeature || savingAccent || isSavingProfile) return;
     const nextPractice = feature === "practice" ? !practiceSessionEnabledDraft : practiceSessionEnabledDraft;
     const nextTrack = feature === "track" ? !trackProgressEnabledDraft : trackProgressEnabledDraft;
     const nextHabits = feature === "habits" ? !habitsEnabledDraft : habitsEnabledDraft;
@@ -1055,6 +1068,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
     setHabitsEnabledDraft(nextHabits);
     setSavingFeature(feature);
     const next = {
+      accentColor: normalizeAppAccent(profile?.accentColor),
       name: nameDraft.trim() || profile?.name || "Student",
       ...(normalizeUsername(usernameDraft || profile?.username || "")
         ? { username: normalizeUsername(usernameDraft || profile?.username || "") }
@@ -1148,7 +1162,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
     <AppShell title={readOnly ? displayName : "Your Profile"}>
       <div className="profile-dark -mx-4 -my-6 min-h-[calc(100vh-4rem)] bg-[#121212] px-4 pt-5 pb-10 text-zinc-100 sm:-mx-6 sm:px-6 sm:pt-6 sm:pb-14">
         <div className="mx-auto max-w-4xl space-y-7">
-          <section className="flex flex-col items-center gap-4 text-center sm:flex-row sm:items-center sm:text-left">
+          <section className="relative flex flex-col items-center gap-4 text-center sm:flex-row sm:items-start sm:text-left">
             <div className="relative flex w-28 min-w-0 flex-col items-center">
               {avatar ? (
                 <button
@@ -1171,7 +1185,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
                 type="button"
                 size="icon"
                 variant="ghost"
-                className="absolute right-0 bottom-0 z-20 h-8 w-8 rounded-full bg-[#202020] text-zinc-300 ring-1 ring-white/10 hover:bg-white/10 hover:text-zinc-100"
+                className="absolute right-0 bottom-0 z-20 h-8 w-8 rounded-full bg-[#121212] text-zinc-300 ring-1 ring-white/10 hover:bg-white/10 hover:text-zinc-100"
                 onClick={updateAvatar}
                 disabled={avatarFiles.length < 2}
                 aria-label="Change profile image"
@@ -1186,8 +1200,16 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
                 </p>
               )}
 
-              <div className="mt-0.5 flex items-center justify-center gap-1 sm:justify-start">
+              <div className="mt-0.5 flex items-center justify-center gap-2 sm:justify-start">
                 <h2 className="truncate text-xl font-semibold text-zinc-50">{displayName}</h2>
+              <div className="inline-flex shrink-0 items-center gap-2 rounded-full border border-white/10 bg-white/5 px-2 py-1" aria-label="Weekly medals">
+                {(["gold", "silver", "bronze"] as const).map((medal) => (
+                  <span key={medal} title={`${medal}: ${medalCounts[medal]} weekly medals`} aria-label={`${medal} medals: ${medalCounts[medal]}`} className="inline-flex items-center gap-0.5 text-[10px] font-semibold tabular-nums text-zinc-200">
+                    <img src={`/${medal}-medal.png`} alt="" className="h-4 w-4 object-contain" />
+                    <RollingNumber value={medalCounts[medal]} prefix="×" />
+                  </span>
+                ))}
+              </div>
                 {readOnly && (
                   <span
                     title={`${consistencyStreak}-day consistency streak`}
@@ -1201,20 +1223,12 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
                   type="button"
                   size="icon"
                   variant="ghost"
-                  className="h-7 w-7 shrink-0 text-zinc-500 hover:bg-white/10 hover:text-zinc-100"
+                  className="absolute top-0 right-0 h-7 w-7 shrink-0 bg-transparent text-zinc-500 hover:bg-transparent hover:text-zinc-100"
                   onClick={() => { setUsernameTouched(false); setUsernameStatus(usernameDraft ? "available" : "idle"); setUsernameMessage(""); setEditingProfile(true); }}
-                  aria-label="Edit profile"
+                  aria-label="Profile settings"
                 >
-                  <Pencil className="h-3.5 w-3.5" />
+                  <Settings className="h-4 w-4" />
                 </Button>}
-              </div>
-              <div className="my-1 flex items-center justify-center gap-1.5 sm:justify-start" aria-label="Weekly medals">
-                {(["gold", "silver", "bronze"] as const).map((medal) => (
-                  <span key={medal} title={`${medal}: ${medalCounts[medal]} weekly medals`} aria-label={`${medal} medals: ${medalCounts[medal]}`} className="inline-flex items-center gap-0.5 rounded-full border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-zinc-200">
-                    <img src={`/${medal}-medal.png`} alt="" className="h-4 w-4 object-contain" />
-                    <RollingNumber value={medalCounts[medal]} prefix="×" />
-                  </span>
-                ))}
               </div>
               <button type="button" onClick={() => setXpTimelineOpen(true)} className="mt-1 w-full max-w-52 text-center outline-none sm:text-left">
                 <span className={`text-xs font-semibold ${xpSummary.xp > 0 ? "text-emerald-300" : xpSummary.xp < 0 ? "text-red-300" : "text-zinc-400"}`}>Lv. <RollingNumber value={xpSummary.level} /> · {levelName(xpSummary.level)} · <RollingNumber value={xpSummary.xp} prefix={xpSummary.xp > 0 ? "+" : ""} suffix=" XP" /></span>
@@ -1226,7 +1240,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
                 </Button>
               </div>}
               {!readOnly && <div className="mt-0 flex flex-wrap items-center justify-center gap-1.5 sm:justify-start">
-                <Button type="button" variant="ghost" className="h-9 gap-1.5 px-2.5 text-sm text-zinc-300 hover:bg-white/10 hover:text-white" onClick={() => void navigate({ to: "/leaderboard" })}>
+                <Button type="button" variant="ghost" className="h-9 gap-1.5 pr-2.5 pl-0 text-sm text-zinc-300 hover:bg-white/10 hover:text-white" onClick={() => void navigate({ to: "/leaderboard" })}>
                   <Trophy className="h-4 w-4" /> Leaderboard
                 </Button>
                 <Button
@@ -1292,7 +1306,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
         </button>
       )}
       <Dialog open={logoutConfirmOpen} onOpenChange={setLogoutConfirmOpen}>
-        <DialogContent onOpenAutoFocus={(event) => event.preventDefault()} className="border-white/10 bg-[#1b1b1b] p-5 text-zinc-100 sm:max-w-sm">
+        <DialogContent onOpenAutoFocus={(event) => event.preventDefault()} className="border-white/10 bg-[#121212] p-5 text-zinc-100 sm:max-w-sm">
           <DialogHeader className="space-y-1">
             <DialogTitle className="text-base">Sign out?</DialogTitle>
             <DialogDescription className="text-sm text-zinc-400">
@@ -1318,15 +1332,15 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
       </Dialog>
       {editingProfile && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-md" onMouseDown={(event) => { if (event.target === event.currentTarget) setEditingProfile(false); }}>
-          <section className="relative w-full max-w-md rounded-2xl border border-white/10 bg-[#1e1e1e] p-4 text-zinc-100 shadow-2xl sm:p-5" onMouseDown={(event) => event.stopPropagation()}>
+          <section className="relative max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-2xl border border-white/10 bg-[#121212] p-4 text-zinc-100 shadow-2xl sm:p-5" onMouseDown={(event) => event.stopPropagation()}>
             <div className="flex items-center justify-between gap-3"><h2 className="text-lg font-semibold tracking-tight text-zinc-50">{profile ? "Edit your profile" : "Setup your profile"}</h2><div className="flex items-center gap-1"><button type="button" aria-label="Profile settings" onClick={() => setProfileSettingsOpen((open) => !open)} className="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 transition hover:bg-white/10 hover:text-zinc-100"><Settings className="h-4 w-4" /></button><button type="button" aria-label="Log out" disabled={isLoggingOut} onClick={() => { setEditingProfile(false); setLogoutConfirmOpen(true); }} className="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 transition hover:bg-rose-500/10 hover:text-rose-300 disabled:opacity-50"><LogOut className="h-4 w-4" /></button></div></div>
             <div className="mt-4 space-y-3">
               <label className="block text-sm font-medium text-zinc-200">
                 Your name
                 <Input
-                  className="mt-1.5 h-10 border-white/10 bg-[#151515] text-zinc-100 placeholder:text-zinc-500 focus-visible:border-zinc-500"
+                  className="mt-1.5 h-10 border-white/10 bg-[#121212] text-zinc-100 placeholder:text-zinc-500 focus-visible:border-zinc-500"
                   value={nameDraft}
-                  onChange={(event) => setNameDraft(event.target.value)}
+                  onChange={(event) => setNameDraft(event.target.value.toUpperCase())}
                   autoFocus
                 />
               </label>
@@ -1334,7 +1348,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
                 Username
                 <div className="relative mt-2">
                   <Input
-                    className="h-10 border-white/10 bg-[#151515] pr-10 text-zinc-100 lowercase placeholder:text-zinc-500 focus-visible:border-zinc-500"
+                    className="h-10 border-white/10 bg-[#121212] pr-10 text-zinc-100 lowercase placeholder:text-zinc-500 focus-visible:border-zinc-500"
                     value={usernameDraft}
                     onChange={(event) => { setUsernameTouched(true); setUsernameDraft(event.target.value.toLowerCase()); }}
                     placeholder="e.g. ssc_aspirant"
@@ -1350,7 +1364,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
               <label className="block text-sm font-medium text-zinc-200">
                 Question goal
                 <Input
-                  className="mt-1.5 h-10 border-white/10 bg-[#151515] text-zinc-100 placeholder:text-zinc-500 focus-visible:border-zinc-500"
+                  className="mt-1.5 h-10 border-white/10 bg-[#121212] text-zinc-100 placeholder:text-zinc-500 focus-visible:border-zinc-500"
                   inputMode="numeric"
                   value={goalDraft}
                   onChange={(event) => setGoalDraft(event.target.value.replace(/\D/g, ""))}
@@ -1359,7 +1373,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
               <label className="block text-sm font-medium text-zinc-200">
                 Daily manifestation <span className="font-normal text-zinc-500">(optional)</span>
                 <Input
-                  className="mt-1.5 h-10 border-white/10 bg-[#151515] text-zinc-100 uppercase placeholder:text-zinc-500 focus-visible:border-sky-500"
+                  className="mt-1.5 h-10 border-white/10 bg-[#121212] text-zinc-100 uppercase placeholder:text-zinc-500 focus-visible:border-primary"
                   value={manifestationDraft}
                   onChange={(event) => setManifestationDraft(event.target.value.toUpperCase())}
                   placeholder="Write the sentence you want to type daily"
@@ -1368,18 +1382,18 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
               <label className="block text-sm font-medium text-zinc-200">
                 Exam name
                 <Input
-                  className="mt-1.5 h-10 border-white/10 bg-[#151515] text-zinc-100 placeholder:text-zinc-500 focus-visible:border-zinc-500"
+                  className="mt-1.5 h-10 border-white/10 bg-[#121212] text-zinc-100 placeholder:text-zinc-500 focus-visible:border-zinc-500"
                   value={examNameDraft}
-                  onChange={(event) => setExamNameDraft(event.target.value)}
+                  onChange={(event) => setExamNameDraft(event.target.value.toUpperCase())}
                   placeholder="e.g. SSC CGL 2027"
                 />
               </label>
-              {false && <button type="button" onClick={() => setPracticeSessionEnabledDraft((value) => !value)} className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-[#151515] px-3 py-3 text-left transition hover:bg-white/[.04]">
+              {false && <button type="button" onClick={() => setPracticeSessionEnabledDraft((value) => !value)} className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-[#121212] px-3 py-3 text-left transition hover:bg-white/[.04]">
                 <span><span className="block text-sm font-medium text-zinc-200">Practice session</span><span className="mt-0.5 block text-xs font-normal text-zinc-500">Show the practice tab and practice statistics.</span></span>
-                <span className={cn("relative h-5 w-9 rounded-full border transition-colors", practiceSessionEnabledDraft ? "border-zinc-100 bg-zinc-100" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", practiceSessionEnabledDraft ? "translate-x-5 bg-zinc-900" : "translate-x-1 bg-zinc-400")} /></span>
+                <span className={cn("relative h-5 w-9 rounded-full border transition-colors", practiceSessionEnabledDraft ? "border-primary bg-primary" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", practiceSessionEnabledDraft ? "translate-x-5 bg-primary-foreground" : "translate-x-1 bg-zinc-400")} /></span>
               </button>}
             </div>
-            {profileSettingsOpen && <div className="absolute inset-0 z-10 rounded-2xl bg-[#1e1e1e] p-6 sm:p-8"><div className="flex items-center gap-2"><button type="button" aria-label="Back to profile form" onClick={() => setProfileSettingsOpen(false)} className="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 hover:bg-white/10 hover:text-white"><ArrowLeft className="h-4 w-4" /></button><h3 className="text-lg font-semibold">Settings</h3></div><div className="mt-6 space-y-3"><button type="button" disabled={savingFeature !== null} onClick={() => void saveFeature("practice")} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#151515] px-3 py-3 text-left disabled:cursor-wait disabled:opacity-70"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Practice session</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Take practice tests, review answers and track your results.</span></span>{savingFeature === "practice" ? <LoaderCircle className="h-5 w-5 shrink-0 animate-spin text-sky-400" /> : <span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", practiceSessionEnabledDraft ? "border-zinc-100 bg-zinc-100" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", practiceSessionEnabledDraft ? "translate-x-5 bg-zinc-900" : "translate-x-1 bg-zinc-400")} /></span>}</button><button type="button" disabled={savingFeature !== null} onClick={() => void saveFeature("track")} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#151515] px-3 py-3 text-left disabled:cursor-wait disabled:opacity-70"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Track</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Track syllabus, revision and mock test progress.</span></span>{savingFeature === "track" ? <LoaderCircle className="h-5 w-5 shrink-0 animate-spin text-sky-400" /> : <span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", trackProgressEnabledDraft ? "border-zinc-100 bg-zinc-100" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", trackProgressEnabledDraft ? "translate-x-5 bg-zinc-900" : "translate-x-1 bg-zinc-400")} /></span>}</button><button type="button" role="switch" aria-checked={timersEnabledDraft} disabled={savingFeature !== null} onClick={() => void saveFeature("timers")} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#151515] px-3 py-3 text-left disabled:cursor-wait disabled:opacity-70"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Timers</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Countdowns for important dates and deadlines.</span></span>{savingFeature === "timers" ? <LoaderCircle className="h-5 w-5 shrink-0 animate-spin text-sky-400" /> : <span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", timersEnabledDraft ? "border-zinc-100 bg-zinc-100" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", timersEnabledDraft ? "translate-x-5 bg-zinc-900" : "translate-x-1 bg-zinc-400")} /></span>}</button><button type="button" role="switch" aria-checked={habitsEnabledDraft} disabled={savingFeature !== null} onClick={() => void saveFeature("habits")} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#151515] px-3 py-3 text-left disabled:cursor-wait disabled:opacity-70"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Habits</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Daily heatmaps, streaks and personal challenges.</span></span>{savingFeature === "habits" ? <LoaderCircle className="h-5 w-5 shrink-0 animate-spin text-sky-400" /> : <span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", habitsEnabledDraft ? "border-zinc-100 bg-zinc-100" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", habitsEnabledDraft ? "translate-x-5 bg-zinc-900" : "translate-x-1 bg-zinc-400")} /></span>}</button></div></div>}
+            {profileSettingsOpen && <div className="absolute inset-0 z-10 overflow-y-auto rounded-2xl bg-[#121212] p-6 sm:p-8"><div className="flex items-center gap-2"><button type="button" aria-label="Back to profile form" onClick={() => setProfileSettingsOpen(false)} className="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 hover:bg-white/10 hover:text-white"><ArrowLeft className="h-4 w-4" /></button><h3 className="text-lg font-semibold">Settings</h3></div><div className="mt-6 space-y-4"><AccentPicker value={profile?.accentColor} onChange={(color) => void chooseAccent(color)} disabled={!profile || savingAccent || savingFeature !== null} saving={savingAccent} />{accentError && <p role="alert" className="text-xs text-red-300">{accentError}</p>}<div className="divide-y divide-white/10 overflow-hidden rounded-xl border border-white/10 bg-[#121212]"><button type="button" disabled={savingFeature !== null || savingAccent} onClick={() => void saveFeature("practice")} className="flex w-full items-center justify-between gap-3 border-0 bg-transparent px-3 py-3 text-left disabled:cursor-wait disabled:opacity-70"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Practice session</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Take practice tests, review answers and track your results.</span></span>{savingFeature === "practice" ? <LoaderCircle className="h-5 w-5 shrink-0 animate-spin text-primary" /> : <span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", practiceSessionEnabledDraft ? "border-primary bg-primary" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", practiceSessionEnabledDraft ? "translate-x-5 bg-primary-foreground" : "translate-x-1 bg-zinc-400")} /></span>}</button><button type="button" disabled={savingFeature !== null || savingAccent} onClick={() => void saveFeature("track")} className="flex w-full items-center justify-between gap-3 border-0 bg-transparent px-3 py-3 text-left disabled:cursor-wait disabled:opacity-70"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Track</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Track syllabus, revision and mock test progress.</span></span>{savingFeature === "track" ? <LoaderCircle className="h-5 w-5 shrink-0 animate-spin text-primary" /> : <span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", trackProgressEnabledDraft ? "border-primary bg-primary" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", trackProgressEnabledDraft ? "translate-x-5 bg-primary-foreground" : "translate-x-1 bg-zinc-400")} /></span>}</button><button type="button" role="switch" aria-checked={timersEnabledDraft} disabled={savingFeature !== null || savingAccent} onClick={() => void saveFeature("timers")} className="flex w-full items-center justify-between gap-3 border-0 bg-transparent px-3 py-3 text-left disabled:cursor-wait disabled:opacity-70"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Timers</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Countdowns for important dates and deadlines.</span></span>{savingFeature === "timers" ? <LoaderCircle className="h-5 w-5 shrink-0 animate-spin text-primary" /> : <span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", timersEnabledDraft ? "border-primary bg-primary" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", timersEnabledDraft ? "translate-x-5 bg-primary-foreground" : "translate-x-1 bg-zinc-400")} /></span>}</button><button type="button" role="switch" aria-checked={habitsEnabledDraft} disabled={savingFeature !== null || savingAccent} onClick={() => void saveFeature("habits")} className="flex w-full items-center justify-between gap-3 border-0 bg-transparent px-3 py-3 text-left disabled:cursor-wait disabled:opacity-70"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Habits</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Daily heatmaps, streaks and personal challenges.</span></span>{savingFeature === "habits" ? <LoaderCircle className="h-5 w-5 shrink-0 animate-spin text-primary" /> : <span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", habitsEnabledDraft ? "border-primary bg-primary" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", habitsEnabledDraft ? "translate-x-5 bg-primary-foreground" : "translate-x-1 bg-zinc-400")} /></span>}</button></div></div></div>}
             <div className="mt-4 flex justify-end gap-2">
               <Button
                 variant="outline"
@@ -1388,7 +1402,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
               >
                 Cancel
               </Button>
-              <Button disabled={isSavingProfile || (Boolean(authUser) && usernameStatus !== "available")} className="bg-sky-500 text-sky-950 hover:bg-sky-400" onClick={saveProfile}>
+              <Button disabled={isSavingProfile || (Boolean(authUser) && usernameStatus !== "available")} className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={saveProfile}>
                 {isSavingProfile ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save profile
               </Button>
             </div>
@@ -1397,7 +1411,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
       )}
       {importingData && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-md">
-          <section className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#1e1e1e] p-6 text-zinc-100 shadow-2xl sm:p-7">
+          <section className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#121212] p-6 text-zinc-100 shadow-2xl sm:p-7">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-xl font-semibold tracking-tight text-zinc-50">Import data</h2>
@@ -1469,14 +1483,14 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
       )}
       {isLoggingOut && (
         <div className="fixed inset-0 z-[100] grid place-items-center bg-[#121212] text-zinc-300">
-          <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-[#1d1d1d] px-4 py-3 shadow-2xl">
+          <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-[#121212] px-4 py-3 shadow-2xl">
             <LoaderCircle className="h-4 w-4 animate-spin text-emerald-400" />
             <span className="text-sm font-medium">Signing out</span>
           </div>
         </div>
       )}
       <Dialog open={xpTimelineOpen} onOpenChange={setXpTimelineOpen}>
-        <DialogContent className="border-white/10 bg-[#1b1b1b] p-5 text-zinc-100 sm:max-w-sm">
+        <DialogContent className="border-white/10 bg-[#121212] p-5 text-zinc-100 sm:max-w-sm">
           <DialogHeader><DialogTitle>Level {xpSummary.level} · {levelName(xpSummary.level)}</DialogTitle><DialogDescription className="text-zinc-400">Your all-time XP path</DialogDescription></DialogHeader>
           <div className="relative space-y-2 pt-2">{xpTimelineLevels.map((level) => { const current = level === xpSummary.level; const reached = level <= xpSummary.level; const detail = current ? `${xpSummary.xp > 0 ? "+" : ""}${xpSummary.xp} XP · ${Math.max(0, xpSummary.nextLevelXp - xpSummary.xp)} XP to Level ${xpSummary.level + 1}` : level === 0 ? "Below 0 XP" : `${xpForLevel(level)} XP`; return <div key={level} className="relative flex items-start gap-3">{level < xpTimelineStart + 5 && <div className="absolute left-[2px] top-[13px] w-1.5" style={{ height: "calc(100% + 8px)" }}><LiquidProgressBar vertical height={6} progress={xpSegmentProgress(xpSummary.xp, level)} color="#a78bfa" label={`Level ${level} to ${level + 1} progress`} /></div>}<span className={`z-10 mt-2 h-2.5 w-2.5 shrink-0 rounded-full border-2 border-[#1b1b1b] ${current ? "bg-violet-300 ring-4 ring-violet-400/15" : reached ? "bg-violet-400" : "bg-zinc-700"}`} /><div className={`min-w-0 flex-1 rounded-lg px-3 py-2 ${current ? "border border-violet-300/20 bg-violet-400/[0.09]" : "bg-white/[0.025]"}`}><p className={`text-sm font-semibold ${current ? "text-white" : "text-zinc-300"}`}>Lv. {level} · {levelName(level)}</p><p className="text-xs text-zinc-500">{detail}</p></div></div>; })}</div>
         </DialogContent>

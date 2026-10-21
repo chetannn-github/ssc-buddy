@@ -12,7 +12,7 @@ import { Star, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
+import { ReattemptButton } from "@/components/exam/ReattemptButton";
 import {
   deleteBankQuestion,
   loadFavoriteQuestionIds,
@@ -78,7 +78,7 @@ function QuestionViewer() {
       <div className="exam-dark -mx-4 -my-6 min-h-[calc(100vh-4rem)] bg-[#121212] px-4 py-6 text-zinc-100 sm:-mx-6 sm:px-6">
         {question ? (
           <div className="mx-auto grid max-w-7xl gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
-            <section className="rounded-xl border border-white/10 bg-[#1b1b1b] p-5 sm:p-6">
+            <section className="rounded-xl border border-white/10 bg-[#121212] p-5 sm:p-6">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-3">
                 <div>
                   <p className="text-xs text-zinc-500">
@@ -89,15 +89,7 @@ function QuestionViewer() {
                   </h2>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <label className="flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-xs">
-                    Attempt Mode
-                    <Switch
-                      checked={attemptMode}
-                      onCheckedChange={setAttemptMode}
-                      aria-label="Attempt Mode"
-                      className="data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-white/30"
-                    />
-                  </label>
+                  <ReattemptButton active={attemptMode} onChange={setAttemptMode} />
                   <Button
                     size="sm"
                     variant="ghost"
@@ -208,7 +200,7 @@ function QuestionViewer() {
       >
         <AlertDialogContent
           aria-describedby={undefined}
-          className="max-w-sm border-white/10 bg-[#202020] text-zinc-100"
+          className="max-w-sm border-white/10 bg-[#121212] text-zinc-100"
         >
           <AlertDialogHeader>
             <AlertDialogTitle>Delete question?</AlertDialogTitle>
@@ -317,7 +309,7 @@ function QuestionPalette({
   onSelect: (index: number) => void;
 }) {
   return (
-    <aside className="h-fit rounded-xl border border-white/10 bg-[#1b1b1b] p-4 lg:sticky lg:top-24">
+    <aside className="h-fit rounded-xl border border-white/10 bg-[#121212] p-4 lg:sticky lg:top-24">
       <h3 className="text-sm font-semibold">Question palette</h3>
       <p className="mt-1 text-xs text-zinc-500">Gold = favourite</p>
       <div className="mt-4 grid max-h-[420px] grid-cols-5 gap-2 overflow-y-auto pt-2 pr-1 pb-2 pl-2">

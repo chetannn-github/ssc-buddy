@@ -85,7 +85,7 @@ function AuthPage() {
 
   return (
     <main className="min-h-screen overflow-hidden bg-[#121212] text-zinc-100 lg:grid lg:grid-cols-2">
-      <section className="relative hidden overflow-hidden border-r border-white/[0.06] bg-[#171717] lg:block">
+      <section className="relative hidden overflow-hidden border-r border-white/[0.06] bg-[#121212] lg:block">
         <img src="/auth.jpg" alt="Focused study" className="absolute inset-0 h-full w-full object-cover opacity-35" />
         <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(18,18,18,.82),rgba(18,18,18,.3)),linear-gradient(0deg,rgba(18,18,18,.8),transparent_55%)]" />
         <div className="relative flex h-full flex-col justify-between p-12">
@@ -115,7 +115,7 @@ function AuthPage() {
           </>}
         </div>
       </section>
-      {loading && <div className="fixed inset-0 z-50 grid place-items-center bg-[#121212]/85 backdrop-blur-md"><div className="flex flex-col items-center gap-3 rounded-2xl border border-white/10 bg-[#1d1d1d] px-7 py-6 shadow-2xl"><LoaderCircle className="h-6 w-6 animate-spin text-blue-300" /><p className="text-sm font-medium text-zinc-200">Securing your workspace…</p></div></div>}
+      {loading && <div className="fixed inset-0 z-50 grid place-items-center bg-black/85 backdrop-blur-md"><div className="flex flex-col items-center gap-3 rounded-2xl border border-white/10 bg-[#121212] px-7 py-6 shadow-2xl"><LoaderCircle className="h-6 w-6 animate-spin text-blue-300" /><p className="text-sm font-medium text-zinc-200">Securing your workspace…</p></div></div>}
     </main>
   );
 }

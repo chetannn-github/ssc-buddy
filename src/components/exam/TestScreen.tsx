@@ -183,7 +183,7 @@ export function TestScreen({
       <header
         className={cn(
           "sticky top-0 z-20 h-16 shadow-[var(--shadow-card)]",
-          darkMode ? "bg-[#1b1b1b] text-zinc-100" : "text-exam-header-foreground",
+          darkMode ? "bg-[#121212] text-zinc-100" : "text-exam-header-foreground",
         )}
         style={darkMode ? undefined : { backgroundImage: "var(--gradient-header)" }}
       >

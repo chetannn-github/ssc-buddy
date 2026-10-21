@@ -128,7 +128,7 @@ export function FloatingMusicPlayer({
   return (
     <div
       ref={element}
-      className="fixed top-0 left-0 z-[75] flex max-w-[calc(100vw-2rem)] touch-none select-none items-center gap-2 rounded-xl border border-white/10 bg-[#1b1b1b] p-2 pl-3 text-zinc-100 shadow-2xl will-change-transform [--player-safe-bottom:env(safe-area-inset-bottom)]"
+      className="fixed top-0 left-0 z-[75] flex max-w-[calc(100vw-2rem)] touch-none select-none items-center gap-2 rounded-xl border border-white/10 bg-[#121212] p-2 pl-3 text-zinc-100 shadow-2xl will-change-transform [--player-safe-bottom:env(safe-area-inset-bottom)]"
       onPointerDown={(event) => {
         if (!event.isPrimary || event.button !== 0) return;
         suppressClick.current = false;

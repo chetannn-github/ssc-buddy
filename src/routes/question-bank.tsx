@@ -68,7 +68,7 @@ function QuestionBank() {
             </Button>
           </div>
 
-          <div className="mt-6 flex flex-wrap gap-3 rounded-xl border border-white/10 bg-[#1b1b1b] p-3">
+          <div className="mt-6 flex flex-wrap gap-3 rounded-xl border border-white/10 bg-[#121212] p-3">
             <Select
               value={subjectName}
               onValueChange={(value) => {
@@ -76,10 +76,10 @@ function QuestionBank() {
                 setChapterName("all");
               }}
             >
-              <SelectTrigger className="w-52 border-white/15 bg-[#171717] text-zinc-100">
+              <SelectTrigger className="w-52 border-white/15 bg-[#121212] text-zinc-100">
                 <SelectValue placeholder="All subjects" />
               </SelectTrigger>
-              <SelectContent className="border-white/15 bg-[#171717] text-zinc-100">
+              <SelectContent className="border-white/15 bg-[#121212] text-zinc-100">
                 <SelectItem value="all">All subjects</SelectItem>
                 {subjects.map((subject) => (
                   <SelectItem key={subject.name} value={subject.name}>
@@ -89,10 +89,10 @@ function QuestionBank() {
               </SelectContent>
             </Select>
             <Select value={chapterName} onValueChange={setChapterName}>
-              <SelectTrigger className="w-56 border-white/15 bg-[#171717] text-zinc-100">
+              <SelectTrigger className="w-56 border-white/15 bg-[#121212] text-zinc-100">
                 <SelectValue placeholder="All chapters" />
               </SelectTrigger>
-              <SelectContent className="border-white/15 bg-[#171717] text-zinc-100">
+              <SelectContent className="border-white/15 bg-[#121212] text-zinc-100">
                 <SelectItem value="all">All chapters</SelectItem>
                 {[...new Set(chapters.map(({ chapter }) => chapter.name))].map((chapter) => (
                   <SelectItem key={chapter} value={chapter}>
@@ -114,7 +114,7 @@ function QuestionBank() {
                     chapter: entry.chapter,
                     exercise: entry.exercise.name,
                   }}
-                  className="flex flex-wrap items-center gap-4 rounded-xl border border-white/10 bg-[#1b1b1b] p-4 transition-all hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[0.06] focus-visible:outline-2 focus-visible:outline-primary"
+                  className="flex flex-wrap items-center gap-4 rounded-xl border border-white/10 bg-[#121212] p-4 transition-all hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[0.06] focus-visible:outline-2 focus-visible:outline-primary"
                 >
                   <span className="grid h-10 w-10 place-items-center rounded-lg bg-white/5 text-zinc-300">
                     <BookOpen className="h-4 w-4" />

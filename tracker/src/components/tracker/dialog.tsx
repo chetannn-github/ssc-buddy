@@ -71,7 +71,7 @@ export function TrackerDialogProvider({ children }: { children: ReactNode }) {
             role="dialog"
             aria-modal="true"
             aria-labelledby="tracker-dialog-title"
-            className="w-full max-w-md rounded-2xl border border-white/10 bg-[#1c1c1c] p-5 text-zinc-100 shadow-2xl"
+            className="w-full max-w-md rounded-2xl border border-white/10 bg-[#121212] p-5 text-zinc-100 shadow-2xl"
           >
             <h2 id="tracker-dialog-title" className="text-lg font-semibold">
               {dialog.title}

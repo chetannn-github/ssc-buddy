@@ -473,7 +473,7 @@ export function SetupScreen({
             <div className="flex gap-2">
               <Input
                 value={newSubject}
-                onChange={(e) => setNewSubject(e.target.value)}
+                onChange={(e) => setNewSubject(e.target.value.toUpperCase())}
                 placeholder="New subject e.g. Reasoning"
               />
               <Button type="button" variant="outline" onClick={createSubject}>
@@ -499,7 +499,7 @@ export function SetupScreen({
             <div className="flex gap-2">
               <Input
                 value={newChapter}
-                onChange={(e) => setNewChapter(e.target.value)}
+                onChange={(e) => setNewChapter(e.target.value.toUpperCase())}
                 placeholder="New chapter e.g. Blood Relation"
                 disabled={!subject}
               />
@@ -913,7 +913,7 @@ export function SetupScreen({
               size="sm"
               variant="ghost"
               onClick={() => void copyQuestionPrompt()}
-              className="h-8 shrink-0 gap-1.5 px-2 text-xs text-sky-300 hover:bg-sky-400/10 hover:text-sky-200"
+              className="h-8 shrink-0 gap-1.5 px-2 text-xs text-primary hover:bg-[var(--app-accent-soft)] hover:text-primary"
             >
               {promptCopied ? (
                 <Check className="h-3.5 w-3.5 text-emerald-300" />
@@ -926,7 +926,7 @@ export function SetupScreen({
           <div className="space-y-3">
             <Input
               value={jsonExerciseName}
-              onChange={(e) => setJsonExerciseName(e.target.value)}
+              onChange={(e) => setJsonExerciseName(e.target.value.toUpperCase())}
               placeholder="Exercise name e.g. Practice Set 1"
             />
             <input
@@ -939,9 +939,9 @@ export function SetupScreen({
             <button
               type="button"
               onClick={() => questionFileInput.current?.click()}
-              className="flex min-h-28 w-full flex-col items-center justify-center rounded-xl border border-dashed border-white/15 bg-white/[.025] px-4 text-center transition hover:border-sky-400/50 hover:bg-sky-400/5"
+              className="flex min-h-28 w-full flex-col items-center justify-center rounded-xl border border-dashed border-white/15 bg-white/[.025] px-4 text-center transition hover:border-primary/50 hover:bg-[var(--app-accent-soft)]"
             >
-              <Upload className="mb-2 h-5 w-5 text-sky-300" />
+              <Upload className="mb-2 h-5 w-5 text-primary" />
               <span className="text-sm font-medium text-zinc-100">
                 {jsonFileName || "Choose question JSON file"}
               </span>

@@ -1,3 +1,4 @@
+import { normalizeAppAccent, type AppAccent } from "./app-accent";
 export type PracticeProfile = {
   name: string;
   username?: string;
@@ -10,6 +11,7 @@ export type PracticeProfile = {
   trackProgressEnabled?: boolean;
   timersEnabled?: boolean;
   habitsEnabled?: boolean;
+  accentColor?: AppAccent;
 };
 
 export const PROFILE_KEY = "cbt-practice-profile";
@@ -28,6 +30,7 @@ export function loadPracticeProfile(): PracticeProfile | null {
       return null;
     }
     return {
+      accentColor: normalizeAppAccent(profile.accentColor),
       name: profile.name.trim(),
       ...(typeof profile.username === "string" && profile.username.trim()
         ? { username: profile.username.trim().toLowerCase() }
@@ -54,6 +57,7 @@ export function savePracticeProfile(profile: PracticeProfile) {
   localStorage.setItem(
     PROFILE_KEY,
     JSON.stringify({
+      accentColor: normalizeAppAccent(profile.accentColor),
       name: profile.name.trim(),
       ...(profile.username?.trim() ? { username: profile.username.trim().toLowerCase() } : {}),
       questionGoal: Math.max(1, Math.round(profile.questionGoal)),

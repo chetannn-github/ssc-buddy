@@ -186,7 +186,7 @@ function ResultDetail() {
                   "rounded-md border px-2.5 py-1 text-[11px] transition-colors",
                   a.id === id
                     ? "border-2 border-[#93c5fd] bg-[#2563eb] text-white shadow-[0_0_0_2px_rgb(37_99_235_/_35%)]"
-                    : "border-white/10 bg-[#171717] text-zinc-300 hover:border-white/25 hover:text-white",
+                    : "border-white/10 bg-[#121212] text-zinc-300 hover:border-white/25 hover:text-white",
                 )}
               >
                 Attempt {i + 1} · {a.score ?? "—"}

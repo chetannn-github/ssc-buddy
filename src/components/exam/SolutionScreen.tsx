@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
+import { ReattemptButton } from "@/components/exam/ReattemptButton";
 import { cn } from "@/lib/utils";
 import { loadSubjects, type Option, type TestRecord } from "@/lib/exam";
 import { isQuickRecallRecord } from "../../../mobile-tasks/src/domain/quick-recall-history";
@@ -107,7 +107,7 @@ export function SolutionScreen({ record, onExit }: Props) {
 
   return (
     <div className="exam-dark min-h-screen bg-[#121212] text-zinc-100">
-      <header className="sticky top-0 z-20 h-16 bg-[#1b1b1b] text-zinc-100 shadow-[var(--shadow-card)]">
+      <header className="sticky top-0 z-20 h-16 bg-[#121212] text-zinc-100 shadow-[var(--shadow-card)]">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4">
           <div className="min-w-0">
             <h1 className="text-xs font-semibold tracking-[0.14em] uppercase opacity-80">
@@ -119,14 +119,7 @@ export function SolutionScreen({ record, onExit }: Props) {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <label className="flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-xs backdrop-blur-sm">
-              Reattempt Mode
-              <Switch
-                checked={reattempt}
-                onCheckedChange={setReattempt}
-                className="data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-white/30"
-              />
-            </label>
+            <ReattemptButton active={reattempt} onChange={setReattempt} />
             <Button size="sm" variant="secondary" onClick={onExit}>
               Close
             </Button>

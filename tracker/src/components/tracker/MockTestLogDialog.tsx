@@ -28,13 +28,13 @@ function DarkDropdown({
         type="button"
         disabled={disabled}
         onClick={() => setOpen((current) => !current)}
-        className="flex h-10 w-full items-center justify-between rounded-xl bg-[#303030] px-3 text-left text-sm text-zinc-100 outline-none transition hover:bg-[#373737] disabled:cursor-not-allowed disabled:bg-black/20 disabled:text-zinc-500"
+        className="flex h-10 w-full items-center justify-between rounded-xl bg-[#121212] px-3 text-left text-sm text-zinc-100 outline-none transition hover:bg-[#373737] disabled:cursor-not-allowed disabled:bg-black/20 disabled:text-zinc-500"
       >
         <span>{selected}</span>
         <span className="text-xs text-zinc-500">⌄</span>
       </button>
       {open && !disabled && (
-        <div className="animate-in fade-in-0 zoom-in-95 slide-in-from-top-1 absolute z-10 mt-1 w-full origin-top overflow-hidden rounded-xl bg-[#242424] py-1 shadow-xl ring-1 ring-white/5 duration-200 ease-out">
+        <div className="animate-in fade-in-0 zoom-in-95 slide-in-from-top-1 absolute z-10 mt-1 w-full origin-top overflow-hidden rounded-xl bg-[#121212] py-1 shadow-xl ring-1 ring-white/5 duration-200 ease-out">
           {options.map((option) => (
             <button
               key={option.value}
@@ -150,7 +150,7 @@ export function MockTestLogDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="log-mock-test-title"
-        className="mock-test-dialog w-full max-w-lg rounded-2xl border border-white/10 bg-[#1c1c1c] p-5 text-zinc-100 shadow-2xl"
+        className="mock-test-dialog w-full max-w-lg rounded-2xl border border-white/10 bg-[#121212] p-5 text-zinc-100 shadow-2xl"
       >
         <p className="font-mono text-[11px] tracking-[0.18em] text-blue-300 uppercase">Mock test</p>
         <h2 id="log-mock-test-title" className="mt-1 text-xl font-semibold">
@@ -241,7 +241,7 @@ export function MockTestLogDialog({
             <button
               type="submit"
               disabled={isSaving}
-              className="rounded-xl bg-blue-500 px-3 py-2 text-sm font-medium text-white hover:bg-blue-400 disabled:cursor-wait disabled:opacity-70"
+              className="rounded-xl bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-70"
             >
               {isSaving && <LoaderCircle className="mr-1 inline h-3.5 w-3.5 animate-spin" />} Save mock test
             </button>

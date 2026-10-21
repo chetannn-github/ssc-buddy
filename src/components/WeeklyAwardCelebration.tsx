@@ -15,7 +15,7 @@ export function WeeklyAwardCelebration({ uid }: { uid: string }) {
   }, [key]);
   if (!award || key !== visibleKey) return null;
   const close = () => { if (key) { try { localStorage.setItem(key, "1"); } catch {} } setVisibleKey(null); };
-  return <div className="fixed inset-0 z-[85] grid place-items-center bg-black/85 p-4 backdrop-blur-sm"><CelebrationFireworks /><section role="dialog" aria-modal="true" aria-labelledby="weekly-award-title" className="relative w-full max-w-sm rounded-2xl border border-amber-300/25 bg-[#171717] p-7 text-center text-zinc-100 shadow-2xl">
+  return <div className="fixed inset-0 z-[85] grid place-items-center bg-black/85 p-4 backdrop-blur-sm"><CelebrationFireworks /><section role="dialog" aria-modal="true" aria-labelledby="weekly-award-title" className="relative w-full max-w-sm rounded-2xl border border-amber-300/25 bg-[#121212] p-7 text-center text-zinc-100 shadow-2xl">
     <img src={["/gold-medal.png", "/silver-medal.png", "/bronze-medal.png"][award.rank - 1]} alt="" className="mx-auto h-24 w-24 animate-in zoom-in duration-700 object-contain" />
     <p className="mt-4 text-xs font-semibold tracking-widest text-amber-300 uppercase">{CELEBRATION_PREVIEW ? "Silver celebration preview" : "Weekly podium"}</p><h2 id="weekly-award-title" className="mt-2 text-2xl font-bold">You finished #{award.rank}!</h2>
     <p className="mt-2 text-sm text-zinc-400">{leaderboardWeekLabel(award.week)}</p><p className="mt-2 text-sm text-zinc-300">{CELEBRATION_PREVIEW ? "Preview only · Your actual rank is unchanged." : `${award.points} points · Your weekly medal is on your profile.`}</p>

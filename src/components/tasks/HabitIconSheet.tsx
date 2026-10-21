@@ -32,10 +32,10 @@ export function HabitIconSheet({
         if (!open) onClose();
       }}
     >
-      <DialogContent className="fixed bottom-0 top-auto flex h-[86dvh] max-h-[86dvh] flex-col translate-y-0 overflow-hidden rounded-t-3xl border-white/5 bg-black px-3 pb-0 pt-3 text-white sm:max-w-lg [&>button]:hidden">
+      <DialogContent className="fixed bottom-0 top-auto flex h-[86dvh] max-h-[86dvh] flex-col translate-y-0 overflow-hidden rounded-t-3xl border-white/5 bg-[#121212] px-3 pb-0 pt-3 text-white sm:top-1/2 sm:bottom-auto sm:-translate-y-1/2 sm:h-[75dvh] sm:max-w-2xl sm:rounded-2xl [&>button]:text-zinc-400">
         <div className="mx-auto h-1 w-9 rounded-full bg-zinc-700" />
         <DialogTitle className="mb-3 text-center">Icon</DialogTitle>
-        <label className="flex shrink-0 items-center gap-3 rounded-xl border border-white/10 bg-[#0e0e0e] p-3">
+        <label className="flex shrink-0 items-center gap-3 rounded-xl border border-white/10 bg-[#121212] p-3">
           <Search className="h-5 w-5 text-zinc-500" />
           <input
             aria-label="Search icons"
@@ -51,7 +51,7 @@ export function HabitIconSheet({
               type="button"
               key={item}
               onClick={() => setGroup(item)}
-              className="shrink-0 rounded-full bg-[#101010] px-4 py-2.5 text-xs"
+              className="shrink-0 rounded-full bg-[#121212] px-4 py-2.5 text-xs"
               style={{
                 color: group === item ? tint : "#999",
                 backgroundColor: group === item ? tint + "40" : undefined,
@@ -78,7 +78,7 @@ export function HabitIconSheet({
                         onSelect(icon.name);
                         onClose();
                       }}
-                      className="grid aspect-square place-items-center rounded-xl border border-transparent bg-[#101010]"
+                      className="grid aspect-square place-items-center rounded-xl border border-transparent bg-[#121212]"
                       style={{
                         color: value === icon.name ? tint : "white",
                         borderColor: value === icon.name ? tint : undefined,

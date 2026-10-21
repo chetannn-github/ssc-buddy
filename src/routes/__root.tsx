@@ -479,7 +479,7 @@ function RootComponent() {
         <Outlet />
         {syncUser && !workspaceReady && path !== "/auth" && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#121212] text-zinc-300 backdrop-blur-xl">
-            <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-[#1d1d1d] px-4 py-3 shadow-2xl">
+            <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-[#121212] px-4 py-3 shadow-2xl">
               <LoaderCircle className="h-4 w-4 animate-spin text-emerald-400" />
               <span className="text-sm font-medium">Syncing your workspace</span>
             </div>

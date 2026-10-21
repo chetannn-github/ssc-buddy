@@ -617,7 +617,7 @@ function ChapterDrawer({
     >
       <aside
         className={cn(
-          "chapter-drawer h-full w-full max-w-md overflow-y-auto border-l border-white/10 bg-[#1c1c1c] p-5 text-zinc-100 shadow-2xl transition-transform duration-300 ease-out motion-reduce:transition-none",
+          "chapter-drawer h-full w-full max-w-md overflow-y-auto border-l border-white/10 bg-[#121212] p-5 text-zinc-100 shadow-2xl transition-transform duration-300 ease-out motion-reduce:transition-none",
           entered && !closing ? "translate-x-0" : "translate-x-full",
         )}
         onClick={(event) => event.stopPropagation()}
@@ -707,7 +707,7 @@ function ChapterDrawer({
                 <input
                   value={name}
                   onChange={(event) => setName(event.target.value)}
-                  className="mt-1.5 h-10 w-full rounded-lg border border-white/10 bg-[#151515] px-3 text-zinc-100 outline-none focus:border-accent-blue"
+                  className="mt-1.5 h-10 w-full rounded-lg border border-white/10 bg-[#121212] px-3 text-zinc-100 outline-none focus:border-accent-blue"
                 />
               </label>
               <label className="mt-3 block text-sm text-zinc-400">
@@ -715,7 +715,7 @@ function ChapterDrawer({
                 <input
                   value={total}
                   onChange={(event) => setTotal(event.target.value.replace(/\D/g, ""))}
-                  className="mt-1.5 h-10 w-full rounded-lg border border-white/10 bg-[#151515] px-3 text-zinc-100 outline-none focus:border-accent-blue"
+                  className="mt-1.5 h-10 w-full rounded-lg border border-white/10 bg-[#121212] px-3 text-zinc-100 outline-none focus:border-accent-blue"
                   inputMode="numeric"
                 />
               </label>

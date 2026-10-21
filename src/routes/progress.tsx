@@ -117,7 +117,7 @@ function ProgressTooltip({
     year: "numeric",
   });
   return (
-    <div className="min-w-48 rounded-lg border border-white/10 bg-[#202020] px-3 py-2.5 shadow-xl">
+    <div className="min-w-48 rounded-lg border border-white/10 bg-[#121212] px-3 py-2.5 shadow-xl">
       <div className="flex items-center justify-between gap-5">
         <p className="text-xs font-semibold text-zinc-100">Test {point.label}</p>
         <span className="text-[11px] text-zinc-500">{date}</span>
@@ -195,7 +195,7 @@ function FilterMenu<T extends string>({
       {open && (
         <div
           role="listbox"
-          className="animate-in fade-in-0 zoom-in-95 slide-in-from-top-1 absolute top-10 right-0 z-30 min-w-[11rem] origin-top-right overflow-hidden rounded-lg border border-white/10 bg-[#202020] p-1 shadow-xl duration-200 ease-out"
+          className="animate-in fade-in-0 zoom-in-95 slide-in-from-top-1 absolute top-10 right-0 z-30 min-w-[11rem] origin-top-right overflow-hidden rounded-lg border border-white/10 bg-[#121212] p-1 shadow-xl duration-200 ease-out"
         >
           {options.map((option) => (
             <button

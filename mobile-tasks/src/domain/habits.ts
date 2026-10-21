@@ -113,10 +113,10 @@ export function habitStats(habit: Habit, today = habitDay()) {
   };
 }
 /** A continuous calendar: Sunday is row 0, each following Sunday starts a column. */
-export function habitCalendar(today = habitDay()) {
+export function habitCalendar(today = habitDay(), months = 6) {
   const end = new Date(today + "T12:00:00"),
     start = new Date(end);
-  start.setMonth(start.getMonth() - 6);
+  start.setMonth(start.getMonth() - months);
   start.setDate(start.getDate() - start.getDay());
   const cells: { key: string; column: number; row: number; future: boolean; month: string }[] = [];
   const date = new Date(start);
