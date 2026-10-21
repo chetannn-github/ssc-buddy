@@ -738,3 +738,33 @@ test("failed replacement keeps working alarms; obsolete reminders and other noti
   assert.ok(h.alarms.has("music"));
   assert.equal(h.alarms.size, 1);
 });
+
+
+test("Quit habits receive today's reminder even though they start completed by default", () => {
+  const now = new Date(); now.setHours(0, 0, 0, 0);
+  const habit = reminderHabit("quit");
+  habit.settings = sharedDomain.normalizeHabitSettings({ type: "quit", reminder: "23:59" });
+  const plan = reminderPlanExports.habitReminderPlan([habit], "alice", now);
+  assert.ok(plan.length > 0);
+  assert.equal(sharedDomain.habitDay(new Date(plan[0].at)), sharedDomain.habitDay(now));
+});
+test("late Android alarms are retained while still valid instead of cancelled on resume", async () => {
+  const h = schedulerHarness();
+  const old = reminderPlanExports.habitReminderPlan([reminderHabit("read")], "alice", reminderNow);
+  await schedulerExports.reconcileHabitReminders(h.notifications, old, "alice");
+  const preserve = new Set([old[0].identifier]);
+  await schedulerExports.reconcileHabitReminders(h.notifications, old.slice(1), "alice", () => true, preserve);
+  assert.ok(h.alarms.has(old[0].identifier));
+  assert.equal(h.cancelled.length, 0);
+});
+test("editing one habit replaces only its own alarms and preserves other habit reminders", async () => {
+  const h = schedulerHarness();
+  const initial = reminderPlanExports.habitReminderPlan([reminderHabit("read"), reminderHabit("exercise")], "alice", reminderNow);
+  await schedulerExports.reconcileHabitReminders(h.notifications, initial, "alice");
+  const otherIds = initial.filter(alarm => alarm.habitId === "exercise").map(alarm => alarm.identifier);
+  const edited = reminderPlanExports.habitReminderPlan([reminderHabit("read", "10:00")], "alice", reminderNow);
+  await schedulerExports.reconcileHabitReminders(h.notifications, edited, "alice", () => true, new Set(), "read");
+  assert.ok(otherIds.every(id => h.alarms.has(id)));
+  assert.ok(edited.every(alarm => h.alarms.has(alarm.identifier)));
+  assert.ok(initial.filter(alarm => alarm.habitId === "read").every(alarm => !h.alarms.has(alarm.identifier)));
+});

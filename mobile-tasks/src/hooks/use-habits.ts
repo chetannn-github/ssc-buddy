@@ -123,12 +123,15 @@ export function useHabits(uid?: string) {
       },
       habit?: Habit,
     ) => {
-      if (habit) await updateDoc(ref(habit.id), details);
-      else {
-        if (!uid) throw new Error("Sign in to save habits.");
-        const item = doc(collection(getFirebaseFirestore(), "users", uid, "habits"));
-        await setDoc(item, { ...details, createdAt: new Date().toISOString(), completedDates: [] });
+      if (habit) {
+        await updateDoc(ref(habit.id), details);
+        return normalizeHabit(habit.id, { ...habit, ...details })!;
       }
+      if (!uid) throw new Error("Sign in to save habits.");
+      const item = doc(collection(getFirebaseFirestore(), "users", uid, "habits"));
+      const value = { ...details, createdAt: new Date().toISOString(), completedDates: [] };
+      await setDoc(item, value);
+      return normalizeHabit(item.id, value)!;
     },
     updateDay: async (id: string, day: string, action: HabitDayAction) => {
       const reference = ref(id);

@@ -80,7 +80,7 @@ async function runHook({ reminders = true, appState = "active", granted = false,
   for (const effect of effects) cleanups.push(effect());
   const flush = async () => { for (let i = 0; i < 5; i++) await new Promise(setImmediate); };
   await flush();
-  return { api, async resume() { state.currentState = "active"; for (const listener of listeners) listener("active"); await flush(); },
+  return { api, saveHabit: habit => hooks.scheduleSavedHabitReminders("owner", habit), async resume() { state.currentState = "active"; for (const listener of listeners) listener("active"); await flush(); },
     dispose() { for (const cleanup of cleanups) cleanup?.(); } };
 }
 test("APK with saved reminders asks permission and schedules without resaving the habit", async () => {
@@ -132,4 +132,13 @@ test("auth and cached settings must load before touching persisted reminder alar
   const hook = await runHook({ ready: false });
   try { assert.equal(hook.api.calls.length, 0); }
   finally { hook.dispose(); }
+});
+
+
+test("saving a habit explicitly waits for its alarm scheduling without a new listener snapshot", async () => {
+  const hook = await runHook({ reminders: false, granted: true });
+  try {
+    await hook.saveHabit({ id: "edited", name: "Edited reminder", settings: { reminder: "10:00", checklist: [] } });
+    assert.ok(hook.api.calls.some(([name, alarm]) => name === "schedule" && alarm.content.data.habitId === "edited"));
+  } finally { hook.dispose(); }
 });

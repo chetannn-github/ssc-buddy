@@ -8,11 +8,10 @@ import {
   NOTIFICATION_BUILD_MESSAGE,
 } from "../lib/native-notifications";
 import { useHabits } from "./use-habits";
-import { normalizeHabitSettings } from "../domain/habits";
+import { normalizeHabitSettings, type Habit } from "../domain/habits";
 import { habitReminderPlan } from "../domain/habit-reminder-plan";
 import {
   ensureHabitNotificationPermission,
-  HABIT_NOTIFICATION_CHANNEL,
 } from "../lib/habit-notification-permissions";
 export async function requestHabitReminders() {
   // Save the preference in Expo Go without invoking incompatible channel APIs.
@@ -22,17 +21,22 @@ export async function requestHabitReminders() {
   if (!(await ensureHabitNotificationPermission(Notifications, Platform.OS === "android", true)))
     throw new Error("Allow notifications in your phone settings to enable reminders.");
 }
-export async function testHabitReminder(title: string) {
-  await requestHabitReminders();
-  const notifications = getNativeNotifications();
-  if (!notifications) throw new Error(NOTIFICATION_BUILD_MESSAGE);
-  await notifications.scheduleNotificationAsync({
-    content: { title: title || "Habit reminder", body: "Your habit reminders are working.", sound: "default", data: { source: "ssc-buddy-habit-test", url: "sscbuddy://habits" } },
-    trigger: { type: notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 5, channelId: HABIT_NOTIFICATION_CHANNEL },
-  });
-}
 // Rebuild only our alarms. A serialized chain prevents older snapshots replacing newer schedules.
 let queue = Promise.resolve();
+/** Saving a reminder must finish scheduling it, independently of the Firestore listener. */
+export async function scheduleSavedHabitReminders(uid: string, habit: Habit) {
+  if (IS_EXPO_GO) return;
+  const notifications = getNativeNotifications();
+  if (!notifications) throw new Error(NOTIFICATION_BUILD_MESSAGE);
+  const settings = normalizeHabitSettings(habit.settings);
+  const hasReminder = !!settings.reminder || settings.checklist.some(item => !!item.reminder);
+  if (hasReminder && !(await ensureHabitNotificationPermission(notifications, Platform.OS === "android", false)))
+    throw new Error("Habit saved, but reminders need notification permission. Allow notifications in phone settings and save again.");
+  const work = queue.catch(() => undefined).then(() =>
+    reconcileHabitReminders(notifications, habitReminderPlan([habit], uid), uid, () => true, new Set(), habit.id));
+  queue = work;
+  await work;
+}
 export function useHabitReminders(uid?: string, enabled = true, ready = true) {
   const { habits, loading, error } = useHabits(uid);
   const permissionAttempt = useRef({ uid, attempted: false });
@@ -63,7 +67,13 @@ export function useHabitReminders(uid?: string, enabled = true, ready = true) {
             }
           }
           if (!active || loading || error) return;
-          await reconcileHabitReminders(Notifications, uid && enabled ? habitReminderPlan(habits, uid) : [], uid, () => active);
+          const now = new Date();
+          const plan = uid && enabled ? habitReminderPlan(habits, uid, now) : [];
+          // Android may deliver an inexact alarm after its wall-clock time.
+          // Keep still-valid pending reminders for an hour instead of cancelling them on resume.
+          const recent = uid && enabled ? habitReminderPlan(habits, uid, new Date(now.getTime() - 60 * 60 * 1000)) : [];
+          const preservePending = new Set(recent.filter(alarm => alarm.at <= now.getTime()).map(alarm => alarm.identifier));
+          await reconcileHabitReminders(Notifications, plan, uid, () => active, preservePending);
         });
       void queue.catch((error) => console.warn("Habit reminder scheduling failed:", error));
     };

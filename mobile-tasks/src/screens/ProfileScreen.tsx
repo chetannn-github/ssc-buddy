@@ -1,7 +1,5 @@
 // @ts-nocheck
 import { createThemedStyles, setAppAccent, useAppAccent } from "../theme";
-import { testHabitReminder } from "../hooks/use-habit-reminders";
-import { IS_EXPO_GO } from "../lib/native-notifications";
 import { APP_ACCENTS, accentInk, type AppAccent } from "../domain/app-accent";
 import { DropdownChevron } from "../components/DropdownChevron";
 import { NumberFlow } from "number-flow-react-native";
@@ -14,7 +12,6 @@ import {
   Easing,
   Image,
   KeyboardAvoidingView,
-  Linking,
   Modal,
   Platform,
   Pressable,
@@ -229,8 +226,6 @@ export function ProfileScreen({
   const [profileSettingsOpen, setProfileSettingsOpen] = useState(false);
   const appAccent = useAppAccent();
   const [savingAccent, setSavingAccent] = useState(false);
-  const [testingReminder, setTestingReminder] = useState(false);
-  const [reminderTestError, setReminderTestError] = useState("");
   const [accentSaveError, setAccentSaveError] = useState("");
   const [trackProgressEnabled, setTrackProgressEnabled] = useState(
     profileSettings?.trackProgressEnabled !== false,
@@ -930,23 +925,6 @@ export function ProfileScreen({
                     {savingFeature === "quotes" ? <ActivityIndicator size="small" color={colors.accent} /> : <View style={[styles.featureSwitch, randomQuotesEnabled && styles.featureSwitchOn]}><View style={[styles.featureKnob, randomQuotesEnabled && styles.featureKnobOn]} /></View>}
                   </Pressable>
                   </View>
-                  {Platform.OS === "android" && !IS_EXPO_GO && <View style={styles.accentPanel}>
-                    <Text style={styles.featureToggleTitle}>Habit notification test</Text>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 18, flexWrap: "wrap", marginTop: 8 }}>
-                      <Pressable accessibilityRole="button" disabled={testingReminder} onPress={async () => {
-                        setTestingReminder(true); setReminderTestError("");
-                        try { await testHabitReminder("Habit reminder test"); }
-                        catch (error) { setReminderTestError(error instanceof Error ? error.message : "Could not send test reminder."); }
-                        finally { setTestingReminder(false); }
-                      }} style={{ paddingVertical: 8 }}>
-                        {testingReminder ? <ActivityIndicator size="small" color={colors.accent} /> : <Text style={{ color: colors.accent, fontWeight: "600", fontSize: 13 }}>Test reminder (5 sec)</Text>}
-                      </Pressable>
-                      <Pressable accessibilityRole="button" onPress={() => { void Linking.openSettings().catch(() => setReminderTestError("Open SSC Buddy notification settings from your phone settings.")); }} style={{ paddingVertical: 8 }}>
-                        <Text style={[styles.featureToggleCopy, { marginTop: 0 }]}>Notification settings</Text>
-                      </Pressable>
-                    </View>
-                    {!!reminderTestError && <Text accessibilityRole="alert" style={{ color: "#fca5a5", fontSize: 11, marginTop: 6 }}>{reminderTestError}</Text>}
-                  </View>}
                   <View style={styles.accentPanel}>
                     <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
                       <Text style={styles.featureToggleTitle}>App accent</Text>

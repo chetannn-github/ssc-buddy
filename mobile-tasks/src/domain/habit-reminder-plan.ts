@@ -1,4 +1,4 @@
-import { habitDay, habitDue, habitEntry, normalizeHabitSettings, type Habit } from "./habits";
+import { habitDay, habitDue, habitEntry, habitScheduled, normalizeHabitSettings, type Habit } from "./habits";
 
 export type HabitReminderAlarm = { identifier: string; at: number; title: string; body: string; habitId: string; signature: string };
 export function habitReminderPlan(habits: Habit[], uid: string, now = new Date(), limit = 60): HabitReminderAlarm[] {
@@ -19,8 +19,9 @@ export function habitReminderPlan(habits: Habit[], uid: string, now = new Date()
         const [hour, minute] = reminder.time.split(":").map(Number);
         date.setHours(hour, minute, 0, 0);
         const day = habitDay(date);
-        if (date.getTime() <= now.getTime() || !habitDue(habit, day) ||
-          (reminder.itemId && habitEntry(habit, day).checks.includes(reminder.itemId))) continue;
+        if (date.getTime() <= now.getTime() || !habitScheduled(habit, day) ||
+          (settings.type !== "quit" && !habitDue(habit, day)) ||
+          (settings.type !== "quit" && reminder.itemId && habitEntry(habit, day).checks.includes(reminder.itemId))) continue;
         const body = settings.description || "A small step today. Keep your habit going.";
         alarms.push({
           identifier: `habit:${JSON.stringify([uid, habit.id, reminder.itemId, day, reminder.time])}`,

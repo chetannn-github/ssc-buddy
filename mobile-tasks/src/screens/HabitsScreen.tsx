@@ -1,3 +1,4 @@
+import { scheduleSavedHabitReminders } from "../hooks/use-habit-reminders";
 import { UppercaseTextInput as TextInput } from "../components/UppercaseTextInput";
 import { colors } from "../theme";
 import { createThemedStyles } from "../theme";
@@ -356,7 +357,11 @@ export function HabitsScreen({ user, widgetRequest, onWidgetRequestHandled, onSw
           }}
           onSave={(details) =>
             act(
-              () => save(details, editing !== "new" ? editing : undefined),
+              async () => {
+                const saved = await save(details, editing !== "new" ? editing : undefined);
+                if (editing === "new" && saved) setEditing(saved);
+                if (user && saved) await scheduleSavedHabitReminders(user.uid, saved);
+              },
               () => setEditing(null),
             )
           }
