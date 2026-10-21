@@ -2,7 +2,9 @@
 
 ## Build-time media
 
-Put music in `assets/music/` and reels in `assets/videos/` (nested music folders are supported). `pnpm run prepare-media` generates Expo's required static import map automatically. It runs before `pnpm start`, `pnpm android`, and EAS builds, so new `.mp3`/`.m4a`/`.ogg`/`.wav` and `.mp4`/`.mov`/`.webm` files appear in the app without editing playlist code. Every bundled file increases the Android installer size.
+Use the shared project folders: `public/media/music/` for music, `public/media/videos/` for reels, and `public/avatars/` for motivational/profile images. Add or delete files there; no playlist or image-list code changes are needed.
+
+Expo config automatically copies the current shared images into the mobile assets and regenerates literal imports before an APK build. The copied image selection is retained in mobile-only EAS archives. `pnpm run prepare-media` also refreshes these lists before app development and EAS builds. Music/reels use the deployed website; images are bundled, so install a new APK after changing images.
 
 Separate Expo/React Native app for SSC Buddy. Navigation has Tasks, Track, Practice, Progress,
 and Profile; Daily Tasks is the first functional module. It keeps task data locally with

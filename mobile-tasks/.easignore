@@ -23,3 +23,6 @@ build/
 
 # Keep assets/, src/, plugins/, app.json, eas.json, package.json,
 # pnpm-lock.yaml, and environment configuration available to EAS.
+
+# Local Android asset verification export
+dist-image-check/
