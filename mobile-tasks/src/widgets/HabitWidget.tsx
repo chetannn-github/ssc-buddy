@@ -32,7 +32,10 @@ export function renderHabitWidget(habit?: Habit, error = "", size: HabitWidgetSi
   const label = checklist ? "Open checklist" : !scheduled ? "Open habit" : count ? `Add ${settings.step}`
     : settings.type === "quit" ? done ? "Mark slip" : "Undo slip" : done ? "Undo completion" : "Mark done";
   const targetProgress = habit.targetDays ? `${stats.total}/${habit.targetDays} days` : "";
-  const footer = Boolean(error || count || checklist || (style === "compact" && targetProgress));
+  const progressLabel = count ? `${entry.count}/${settings.dailyGoal}` : checklist ? `${checks.length}/${settings.checklist.length}` : "";
+  const streakUnit = settings.frequency === "period" ? settings.period === "week" ? "WEEKS" : "MONTHS" : stats.streak === 1 ? "DAY" : "DAYS";
+  const streakCaption = `${streakUnit}${progressLabel ? ` · ${progressLabel}` : ""}`;
+  const footer = Boolean(error || (style === "compact" && targetProgress));
   const reservedFooterHeight = footer ? 36 : 0;
   const layout = habitWidgetLayout(size, today, reservedFooterHeight, style);
   const { step, columnStep, labelWidth, labelHeight, cells, wide, gridWidth, gridHeight } = layout;
@@ -46,9 +49,7 @@ export function renderHabitWidget(habit?: Habit, error = "", size: HabitWidgetSi
   }).join("");
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${gridWidth}" height="${gridHeight}" viewBox="0 0 ${gridWidth} ${gridHeight}" preserveAspectRatio="xMidYMid meet">${labels}${boxes}</svg>`;
   const subtitle = targetProgress || (wide ? "Last 20 weeks" : new Date(today + "T12:00:00").toLocaleDateString(undefined, { month: "long" }));
-  const detail = error || (style === "compact" && targetProgress ? targetProgress
-    : count ? `${entry.count}/${settings.dailyGoal}${settings.unit ? " " + settings.unit : ""}`
-    : checklist ? `${checks.length}/${settings.checklist.length} items` : "");
+  const detail = error || (style === "compact" ? targetProgress : "");
   const narrowCompact = size.width < 160;
   const compactButton = narrowCompact ? 40 : 48;
   const compactTitleOffset = narrowCompact ? Math.max(0, Math.min(18, size.height - 150)) : 0;
@@ -63,7 +64,7 @@ export function renderHabitWidget(habit?: Habit, error = "", size: HabitWidgetSi
           <TextWidget text={String(stats.streak)} style={{ color: "#fafafa", fontSize: narrowCompact ? 27 : 32, fontWeight: "bold" }} />
           <SvgWidget svg={flame(tint)} style={{ width: narrowCompact ? 18 : 23, height: narrowCompact ? 21 : 26, marginLeft: 3 }} />
         </FlexWidget>
-        <TextWidget text={settings.frequency === "period" ? settings.period === "week" ? "WEEKS" : "MONTHS" : stats.streak === 1 ? "DAY" : "DAYS"} style={{ color: "#999999", fontSize: 11, marginTop: 2 }} />
+        <TextWidget text={streakCaption} maxLines={1} truncate="END" style={{ color: "#999999", fontSize: narrowCompact && progressLabel ? 8 : 11, marginTop: 2 }} />
       </FlexWidget>
       <FlexWidget clickAction={action} clickActionData={{ uri: habitUri }} accessibilityLabel={label}
         style={{ width: compactButton, height: compactButton, borderRadius: compactButton / 2, borderWidth: 1.5, borderColor: tint, backgroundColor: done ? tint : "#080808", alignItems: "center", justifyContent: "center" }}>
@@ -89,7 +90,7 @@ export function renderHabitWidget(habit?: Habit, error = "", size: HabitWidgetSi
           <TextWidget text={String(stats.streak)} style={{ color: "#fafafa", fontSize: wide ? 19 : 15, fontWeight: "bold" }} />
           <SvgWidget svg={flame(tint)} style={{ width: wide ? 15 : 12, height: wide ? 15 : 12, marginLeft: 2 }} />
         </FlexWidget>
-        <TextWidget text={settings.frequency === "period" ? settings.period === "week" ? "WEEKS" : "MONTHS" : "DAYS"} style={{ color: "#777777", fontSize: 7 }} />
+        <TextWidget text={streakCaption} maxLines={1} truncate="END" style={{ color: "#777777", fontSize: 7 }} />
       </FlexWidget>
     </FlexWidget>
     <FlexWidget style={{ height: gridHeight, width: "match_parent", alignItems: "center", justifyContent: "center", marginTop: 8 }}>
@@ -97,9 +98,6 @@ export function renderHabitWidget(habit?: Habit, error = "", size: HabitWidgetSi
     </FlexWidget>
     <FlexWidget style={{ flex: 1 }} />
     {footer && <FlexWidget style={{ width: "match_parent", height: reservedFooterHeight, marginTop: 6, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-      {count && scheduled && <FlexWidget clickAction="HABIT_MINUS" accessibilityLabel={`Subtract ${settings.step}`} style={{ width: 30, height: 30, borderRadius: 15, borderWidth: 1.5, borderColor: tint, backgroundColor: done ? tint : "#080808", alignItems: "center", justifyContent: "center", marginRight: 6 }}>
-        <SvgWidget svg={actionIcon("minus", done ? accentInk(tint) : tint)} style={{ width: 21, height: 21 }} />
-      </FlexWidget>}
       <FlexWidget style={{ flex: 1 }}><TextWidget text={detail} maxLines={1} truncate="END" style={{ color: error ? "#fca5a5" : "#999999", fontSize: 9 }} /></FlexWidget>
     </FlexWidget>}
   </FlexWidget>;

@@ -5,7 +5,7 @@ export function LaunchMotivation({ source, onClose }: { source: number; onClose:
   const asset = Image.resolveAssetSource(source);
   const ratio = asset.width / asset.height || 1;
   const imageWidth = Math.min(360, width - 48, (height * .68) * ratio);
-  return <Modal transparent visible animationType="fade" onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
+  return <Modal transparent visible animationType="none" onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
     <View style={styles.backdrop}>
       <Pressable accessibilityRole="button" accessibilityLabel="Dismiss motivational image" style={StyleSheet.absoluteFill} onPress={onClose} />
       <View accessibilityViewIsModal style={[styles.dialog, { width: imageWidth, height: imageWidth / ratio }]}>
@@ -15,7 +15,7 @@ export function LaunchMotivation({ source, onClose }: { source: number; onClose:
   </Modal>;
 }
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,.72)", alignItems: "center", justifyContent: "center" },
+  backdrop: { flex: 1, backgroundColor: "#000", alignItems: "center", justifyContent: "center" },
   dialog: { borderRadius: 20, overflow: "hidden", backgroundColor: "#0e0e0e" },
   image: { width: "100%", height: "100%" },
 });

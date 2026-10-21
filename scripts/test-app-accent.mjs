@@ -108,3 +108,35 @@ test("every Habits color is available as an accent with readable filled controls
   assert.equal(api.accentInk("#234dc0"), "#fafafa");
   assert.equal(api.accentInk("#ffe000"), "#171400");
 });
+
+
+test("all cached UI toggles and random quotes survive mobile restart with the accent", async () => {
+  for (const enabled of [false, true]) {
+    await api.saveProfile({ name: "Student", questionGoal: 100, accentColor: "#ff8fbd",
+      practiceSessionEnabled: enabled, trackProgressEnabled: enabled, timersEnabled: enabled,
+      habitsEnabled: enabled, randomQuotesEnabled: enabled });
+    const loaded = await api.loadProfile();
+    for (const key of ["practiceSessionEnabled", "trackProgressEnabled", "timersEnabled", "habitsEnabled", "randomQuotesEnabled"]) assert.equal(loaded[key], enabled);
+    assert.equal(loaded.accentColor, "#ff8fbd");
+    api.setAppAccent(loaded.accentColor);
+    assert.equal(api.colors.accent, "#ff8fbd");
+  }
+});
+
+test("web storage preserves disabled UI tabs and random quotes when reloaded", async () => {
+  const webProfile = (await read("../src/lib/profile.ts")).replace(/^import .*;$/gm, "");
+  const js = ts.transpileModule(`
+    const data = new Map();
+    const localStorage = { getItem: key => data.get(key) ?? null, setItem: (key, value) => data.set(key, value), removeItem: key => data.delete(key) };
+    const window = { dispatchEvent: () => {} };
+    ${palette}
+${domain}
+${webProfile}
+  `, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
+  const web = await import(`data:text/javascript;base64,${Buffer.from(js).toString("base64")}`);
+  web.savePracticeProfile({ name: "Student", questionGoal: 100, accentColor: "#ff8fbd",
+    practiceSessionEnabled: false, trackProgressEnabled: false, timersEnabled: false, habitsEnabled: false, randomQuotesEnabled: false });
+  const loaded = web.loadPracticeProfile();
+  assert.equal(loaded.accentColor, "#ff8fbd");
+  for (const key of ["practiceSessionEnabled", "trackProgressEnabled", "timersEnabled", "habitsEnabled", "randomQuotesEnabled"]) assert.equal(loaded[key], false);
+});

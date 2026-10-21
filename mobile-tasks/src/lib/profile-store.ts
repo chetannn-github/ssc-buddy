@@ -15,6 +15,7 @@ export type PracticeProfile = {
   trackProgressEnabled?: boolean;
   timersEnabled?: boolean;
   habitsEnabled?: boolean;
+  randomQuotesEnabled?: boolean;
   accentColor?: AppAccent;
 };
 
@@ -36,6 +37,7 @@ export function normalizeProfile(value: unknown): PracticeProfile {
     ...(typeof profile.trackProgressEnabled === "boolean" ? { trackProgressEnabled: profile.trackProgressEnabled } : {}),
     ...(typeof profile.timersEnabled === "boolean" ? { timersEnabled: profile.timersEnabled } : {}),
     ...(typeof profile.habitsEnabled === "boolean" ? { habitsEnabled: profile.habitsEnabled } : {}),
+      ...(typeof profile.randomQuotesEnabled === "boolean" ? { randomQuotesEnabled: profile.randomQuotesEnabled } : {}),
   };
 }
 

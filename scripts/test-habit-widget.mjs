@@ -73,7 +73,8 @@ test("widget uses the habit color and switches between month and 20-week heatmap
 test("count widgets retain direct controls and checklist widgets open their sheet", () => {
   const count = flatten(renderHabitWidget(habit({ tracking: "count", dailyGoal: 8, step: 2 })));
   assert.ok(count.some((node) => node.props.clickAction === "HABIT_PLUS"));
-  assert.ok(count.some((node) => node.props.clickAction === "HABIT_MINUS"));
+  assert.ok(!count.some((node) => node.props.clickAction === "HABIT_MINUS"));
+  assert.ok(count.some(node => node.props.text === "DAYS · 0/8"));
   const checklist = flatten(renderHabitWidget(habit({ tracking: "checklist", checklist: [{ id: "read:one", title: "Read", reminder: null }] })));
   assert.ok(checklist.some((node) => node.props.clickAction === "OPEN_URI" && node.props.clickActionData?.uri === "sscbuddy://habits/checklist?habitId=one"));
   assert.ok(!checklist.some((node) => node.props.clickAction?.startsWith("HABIT_CHECK_")));
@@ -90,7 +91,7 @@ test("compact widgets show name and streak without a heatmap and preserve direct
     const item = habit(settings);
     const nodes = flatten(renderHabitWidget(item, "", { width: 140, height: 170 }, "compact"));
     assert.ok(nodes.some(node => node.props.text === item.name));
-    assert.ok(nodes.some(node => node.props.text === "DAYS" || node.props.text === "DAY"));
+    assert.ok(nodes.some(node => /^DAYS?(?: · |$)/.test(node.props.text ?? "")));
     assert.ok(nodes.some(node => node.props.clickAction === expected));
     assert.ok(!nodes.some(node => node.type === "Svg" && node.props.svg.includes("<rect")));
   }
@@ -126,7 +127,7 @@ test("all checklist widget types open the exact account-scoped habit without mar
 });
 
 
-test("monthly and wide heatmaps keep equal cell spacing and reserve the minus footer", () => {
+test("monthly and wide heatmaps keep square cells and count widgets share the tick layout", () => {
   for (const style of ["month", "heatmap"]) {
     for (const size of [{ width: 290, height: 210 }, { width: 360, height: 190 }, { width: 440, height: 230 }]) {
       const layout = habitWidgetLayout(size, "2026-10-21", 36, style);
@@ -139,12 +140,23 @@ test("monthly and wide heatmaps keep equal cell spacing and reserve the minus fo
   const nodes = flatten(renderHabitWidget(habit({ tracking: "count", dailyGoal: 8 }), "", { width: 360, height: 190 }));
   const chart = nodes.find(node => node.type === "Svg" && node.props.svg.includes("<rect"));
   assert.ok(chart.props.svg.includes('preserveAspectRatio="xMidYMid meet"'));
-  const minus = nodes.find(node => node.props.clickAction === "HABIT_MINUS");
-  assert.equal(minus.props.style.height, 30);
-  assert.ok(nodes.some(node => node.type === "Flex" && node.props.style?.height === 36));
+  assert.ok(!nodes.some(node => node.props.clickAction === "HABIT_MINUS"));
+  const tickChart = flatten(renderHabitWidget(habit(), "", { width: 360, height: 190 })).find(node => node.type === "Svg" && node.props.svg.includes("<rect"));
+  assert.equal(chart.props.style.height, tickChart.props.style.height);
   const chartHeight = Number(/height="([\d.]+)"/.exec(chart.props.svg)[1]);
   assert.ok(nodes.some(node => node.type === "Flex" && node.props.style?.height === chartHeight));
   const rects = [...chart.props.svg.matchAll(/<rect[^>]*width="([\d.]+)" height="([\d.]+)"/g)];
   assert.ok(rects.length > 0);
   assert.ok(rects.every(rect => rect[1] === rect[2]));
+});
+
+
+test("all widget layouts put checklist progress beside DAYS without a separate tracking footer", () => {
+  for (const style of ["heatmap", "month", "compact"]) {
+    const item = habit({ tracking: "checklist", checklist: [{ id: "a", title: "A" }, { id: "b", title: "B" }, { id: "c", title: "C" }] });
+    const nodes = flatten(renderHabitWidget(item, "", { width: 180, height: 210 }, style));
+    assert.ok(nodes.some(node => node.props.text === "DAYS · 0/3"));
+    assert.ok(!nodes.some(node => /items$/.test(node.props.text ?? "")));
+    assert.ok(!nodes.some(node => node.props.clickAction === "HABIT_MINUS"));
+  }
 });

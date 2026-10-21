@@ -98,20 +98,8 @@ const localDayKey = (date: Date) =>
 
 // Keep these exact filenames aligned with public/avatars/manifest.json in the
 // web app. `avatar` is the filename in the shared cloud profile document.
-export const avatarAssets: Record<string, number> = {
-  "1.jpg": require("../../assets/avatars/1.jpg"),
-  "32.jpg": require("../../assets/avatars/32.jpg"),
-  "Motivational Quotes.jpg": require("../../assets/avatars/Motivational Quotes.jpg"),
-  "babe get up i believe in you_.jpg": require("../../assets/avatars/babe get up i believe in you_.jpg"),
-  "download (1).jpg": require("../../assets/avatars/download (1).jpg"),
-  "download (2).jpg": require("../../assets/avatars/download (2).jpg"),
-  "download (3).jpg": require("../../assets/avatars/download (3).jpg"),
-  "download (4).jpg": require("../../assets/avatars/download (4).jpg"),
-  "download (5).jpg": require("../../assets/avatars/download (5).jpg"),
-  "download.jpg": require("../../assets/avatars/download.jpg"),
-  "pain is  fuel 🦅🟥.jpg": require("../../assets/avatars/pain is  fuel 🦅🟥.jpg"),
-  "💪🏻.jpg": require("../../assets/avatars/💪🏻.jpg"),
-};
+import { avatarAssets } from "../lib/launch-images";
+export { avatarAssets } from "../lib/launch-images";
 const avatarFiles = Object.keys(avatarAssets);
 const rankMedals = [require("../../assets/gold-medal.png"), require("../../assets/silver-medal.png"), require("../../assets/bronze-medal.png")];
 const defaultAvatarFor = (name: string) => {
@@ -244,7 +232,8 @@ export function ProfileScreen({
   );
   const [timersEnabled, setTimersEnabled] = useState(profileSettings?.timersEnabled !== false);
   const [habitsEnabled, setHabitsEnabled] = useState(profileSettings?.habitsEnabled !== false);
-  const [savingFeature, setSavingFeature] = useState<"practice" | "track" | "timers" | "habits" | null>(null);
+  const [randomQuotesEnabled, setRandomQuotesEnabled] = useState(profileSettings?.randomQuotesEnabled !== false);
+  const [savingFeature, setSavingFeature] = useState<"practice" | "track" | "timers" | "habits" | "quotes" | null>(null);
   const [editing, setEditing] = useState(() => !profileSettings?.username);
   const [confirmLogout, setConfirmLogout] = useState(false);
   const name = profileReady
@@ -431,11 +420,12 @@ export function ProfileScreen({
     setTrackProgressEnabled(profileSettings.trackProgressEnabled !== false);
     setTimersEnabled(profileSettings.timersEnabled !== false);
     setHabitsEnabled(profileSettings.habitsEnabled !== false);
+    setRandomQuotesEnabled(profileSettings.randomQuotesEnabled !== false);
     setProfileReady(true);
   }, [profileSettings?.name, profileSettings?.username, profileSettings?.examName,
     profileSettings?.questionGoal, profileSettings?.manifestation, profileSettings?.avatar,
     profileSettings?.practiceSessionEnabled, profileSettings?.trackProgressEnabled,
-    profileSettings?.timersEnabled, profileSettings?.habitsEnabled]);
+    profileSettings?.timersEnabled, profileSettings?.habitsEnabled, profileSettings?.randomQuotesEnabled]);
   const filteredTasks = tasks.filter((task) => withinRange(task.date, range));
   const filteredSummary = summarizeTasks(filteredTasks);
   const filteredPracticeRecords = practiceRecords.filter((record) =>
@@ -487,6 +477,7 @@ export function ProfileScreen({
         trackProgressEnabled,
         timersEnabled,
         habitsEnabled,
+        randomQuotesEnabled,
       });
       const newSubjects = !syllabusSubjects.length ? importedSubjects : [];
       if (user && newSubjects.length) {
@@ -536,16 +527,17 @@ export function ProfileScreen({
       setAccentSaveError("Could not save accent. Please try again.");
     } finally { setSavingAccent(false); }
   };
-  const saveFeature = async (feature: "practice" | "track" | "timers" | "habits") => {
+  const saveFeature = async (feature: "practice" | "track" | "timers" | "habits" | "quotes") => {
     if (savingFeature || savingAccent) return;
     const nextPractice = feature === "practice" ? !practiceSessionEnabled : practiceSessionEnabled;
     const nextTrack = feature === "track" ? !trackProgressEnabled : trackProgressEnabled;
     const nextHabits = feature === "habits" ? !habitsEnabled : habitsEnabled;
+    const nextQuotes = feature === "quotes" ? !randomQuotesEnabled : randomQuotesEnabled;
     const nextTimers = feature === "timers" ? !timersEnabled : timersEnabled;
-    setPracticeSessionEnabled(nextPractice); setTrackProgressEnabled(nextTrack); setTimersEnabled(nextTimers); setHabitsEnabled(nextHabits);
+    setPracticeSessionEnabled(nextPractice); setTrackProgressEnabled(nextTrack); setTimersEnabled(nextTimers); setHabitsEnabled(nextHabits); setRandomQuotesEnabled(nextQuotes);
     setSavingFeature(feature);
-    try { await onProfileSaved({ ...profileSettings, accentColor: appAccent, name: profileName, username: normalizeUsername(username), examName, questionGoal: Number(goal) || 100, manifestation, avatar: avatarFile, practiceSessionEnabled: nextPractice, trackProgressEnabled: nextTrack, timersEnabled: nextTimers, habitsEnabled: nextHabits }); }
-    catch { setPracticeSessionEnabled(practiceSessionEnabled); setTrackProgressEnabled(trackProgressEnabled); setTimersEnabled(timersEnabled); setHabitsEnabled(habitsEnabled); }
+    try { await onProfileSaved({ ...profileSettings, accentColor: appAccent, name: profileName, username: normalizeUsername(username), examName, questionGoal: Number(goal) || 100, manifestation, avatar: avatarFile, practiceSessionEnabled: nextPractice, trackProgressEnabled: nextTrack, timersEnabled: nextTimers, habitsEnabled: nextHabits, randomQuotesEnabled: nextQuotes }); }
+    catch { setPracticeSessionEnabled(practiceSessionEnabled); setTrackProgressEnabled(trackProgressEnabled); setTimersEnabled(timersEnabled); setHabitsEnabled(habitsEnabled); setRandomQuotesEnabled(randomQuotesEnabled); }
     finally { setSavingFeature(null); }
   };
   useEffect(() => {
@@ -927,6 +919,10 @@ export function ProfileScreen({
                   <Pressable accessibilityRole="switch" accessibilityState={{ checked: habitsEnabled }} disabled={savingFeature !== null || savingAccent} onPress={() => void saveFeature("habits")} style={[styles.featureToggle, styles.settingsToggleRow, styles.settingsToggleDivider]}>
                     <View style={styles.featureToggleContent}><Text style={styles.featureToggleTitle}>Habits</Text><Text style={styles.featureToggleCopy}>Daily heatmaps, streaks and personal challenges.</Text></View>
                     {savingFeature === "habits" ? <ActivityIndicator size="small" color={colors.accent} /> : <View style={[styles.featureSwitch, habitsEnabled && styles.featureSwitchOn]}><View style={[styles.featureKnob, habitsEnabled && styles.featureKnobOn]} /></View>}
+                  </Pressable>
+                  <Pressable accessibilityRole="switch" accessibilityState={{ checked: randomQuotesEnabled }} disabled={savingFeature !== null || savingAccent} onPress={() => void saveFeature("quotes")} style={[styles.featureToggle, styles.settingsToggleRow, styles.settingsToggleDivider]}>
+                    <View style={styles.featureToggleContent}><Text style={styles.featureToggleTitle}>Random quotes</Text><Text style={styles.featureToggleCopy}>Show a random motivational image on normal app launch.</Text></View>
+                    {savingFeature === "quotes" ? <ActivityIndicator size="small" color={colors.accent} /> : <View style={[styles.featureSwitch, randomQuotesEnabled && styles.featureSwitchOn]}><View style={[styles.featureKnob, randomQuotesEnabled && styles.featureKnobOn]} /></View>}
                   </Pressable>
                   </View>
                   <View style={styles.accentPanel}>

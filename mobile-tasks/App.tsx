@@ -214,6 +214,7 @@ function LevelCelebration({ level, onClose }: { level: number; onClose: () => vo
 export default function App() {
   const [authReady, setAuthReady] = useState(!isFirebaseConfigured);
   const [showSplash, setShowSplash] = useState(true);
+  const [uiSettingsReady, setUiSettingsReady] = useState(false);
   const nativeSplashHidden = useRef(false);
   const [authenticated, setAuthenticated] = useState(false);
   const [user, setUser] = useState<User | null>(null);
@@ -234,6 +235,9 @@ export default function App() {
   const [celebratedStreak, setCelebratedStreak] = useState<number | null>(null);
   const [celebratedLevel, setCelebratedLevel] = useState<number | null>(null);
   const [profileSettings, setProfileSettings] = useState<PracticeProfile | null>(null);
+  const launchQuotesEnabled = useRef(true);
+  launchQuotesEnabled.current = profileSettings?.randomQuotesEnabled !== false;
+  useEffect(() => { if (profileSettings?.randomQuotesEnabled === false) setShowLaunchMotivation(false); }, [profileSettings?.randomQuotesEnabled]);
   const widgetAppearance = useRef({ rank: widgetRank, accent: profileSettings?.accentColor });
   widgetAppearance.current = { rank: widgetRank, accent: profileSettings?.accentColor };
   useAppAccent();
@@ -338,10 +342,14 @@ export default function App() {
       const version = ++authChangeVersion.current;
       if (!nextUser) {
         setAuthenticated(false);
+        setUiSettingsReady(true);
         setUser(null);
         setAuthReady(true);
         return;
       }
+      setAuthReady(false);
+      setUiSettingsReady(false);
+      profileCacheVersion.current += 1;
       void prepareMobileAccountCache(nextUser.uid).then(async (switchedAccount) => {
         const activeTest = await loadActiveTest().catch(() => null);
         if (version !== authChangeVersion.current) return;
@@ -350,14 +358,21 @@ export default function App() {
           taskCacheVersion.current += 1;
           profileCacheVersion.current += 1;
           setTasks([]);
-          setProfileSettings(defaultProfile());
           learningFingerprint.current = "";
         }
+        const cachedProfile = await loadProfile();
+        if (version !== authChangeVersion.current) return;
+        setAppAccent(cachedProfile.accentColor);
+        setProfileSettings(cachedProfile);
+        setUiSettingsReady(Boolean(cachedProfile.name?.trim()));
         setUser(nextUser);
         setAuthenticated(true);
         setAuthReady(true);
       }).catch(() => {
         if (version !== authChangeVersion.current) return;
+        setAppAccent(undefined);
+        setProfileSettings(defaultProfile());
+        setUiSettingsReady(true);
         setUser(nextUser);
         setAuthenticated(true);
         setAuthReady(true);
@@ -370,8 +385,12 @@ export default function App() {
   }, []);
   useEffect(() => {
     const version = profileCacheVersion.current;
-    void loadProfile().then((profile) => {
-      if (version === profileCacheVersion.current) setProfileSettings(profile);
+    void loadProfile().catch(() => defaultProfile()).then((profile) => {
+      if (version === profileCacheVersion.current) {
+        setAppAccent(profile.accentColor);
+        setProfileSettings(profile);
+        setUiSettingsReady(true);
+      }
     });
   }, []);
   useEffect(() => {
@@ -419,7 +438,7 @@ export default function App() {
     const apply = async (raw: Record<string, unknown>) => {
       try {
         const next = await saveProfile(normalizeProfile(raw));
-        if (!cancelled) setProfileSettings(next);
+        if (!cancelled) { setAppAccent(next.accentColor); setProfileSettings(next); }
       } catch {}
     };
     const start = async () => {
@@ -433,6 +452,7 @@ export default function App() {
           if (value && !applyingRemote) void apply(value);
         });
       } catch {}
+      finally { if (!cancelled) setUiSettingsReady(true); }
     };
     void start();
     return () => { cancelled = true; unsubscribe?.(); };
@@ -449,6 +469,19 @@ export default function App() {
     await saveProfile(normalized);
     if (user && Object.keys(changed).length && !normalized.username) void patchCloudProfile(user, changed);
   };
+
+  const avatarRepair = useRef("");
+  useEffect(() => {
+    if (!authenticated || !profileSettings?.avatar || avatarAssets[profileSettings.avatar]) return;
+    const key = `${user?.uid ?? "local"}:${profileSettings.avatar}`;
+    if (avatarRepair.current === key) return;
+    const files = Object.keys(avatarAssets).filter(file => file !== "__default");
+    if (!files.length) return;
+    avatarRepair.current = key;
+    const next = { ...profileSettings, avatar: files[Math.floor(Math.random() * files.length)] };
+    // Persist the repair, including the shared cloud profile, rather than only rendering a fallback.
+    void saveSharedProfile(next).catch(() => { avatarRepair.current = ""; });
+  }, [authenticated, user?.uid, profileSettings]);
 
   useEffect(() => {
     if (authenticated && profileSettings && !profileSettings.username) setAppTab("profile");
@@ -556,7 +589,7 @@ export default function App() {
             if (typeof notificationUrl === "string") openCompletionFromWidget(notificationUrl);
           }
           if (response) void HabitNotifications?.clearLastNotificationResponseAsync().catch(() => undefined);
-        } else if (!externalLaunch.current) setShowLaunchMotivation(true);
+        } else if (!externalLaunch.current && launchQuotesEnabled.current) setShowLaunchMotivation(true);
       });
     }
     const subscription = Linking.addEventListener("url", ({ url }) => openCompletionFromWidget(url));
@@ -813,7 +846,7 @@ export default function App() {
     setDeletingTask(null); setTaskActionLoading(false);
   };
 
-  if (showSplash || !authReady) {
+  if (showSplash || !authReady || !uiSettingsReady) {
     return (
       <SafeAreaProvider
         onLayout={() => {
@@ -1043,8 +1076,8 @@ export default function App() {
       <MediaOverlay user={user} mode={mediaMode} musicOpenRequest={musicOpenRequest} onClose={() => setMediaMode(null)} />
       {celebratedStreak !== null && <StreakCelebration streak={celebratedStreak} onClose={() => setCelebratedStreak(null)} />}
       {celebratedLevel !== null && <LevelCelebration level={celebratedLevel} onClose={() => setCelebratedLevel(null)} />}
-      {user && <WeeklyAwardCelebration uid={user.uid} enabled={!showLaunchMotivation && !dailyManifestation && celebratedStreak === null && celebratedLevel === null} />}
-      {showLaunchMotivation && !dailyManifestation && celebratedStreak === null && celebratedLevel === null && <LaunchMotivation source={launchImage} onClose={() => setShowLaunchMotivation(false)} />}
+      {user && <WeeklyAwardCelebration uid={user.uid} enabled={(!showLaunchMotivation || profileSettings?.randomQuotesEnabled === false) && !dailyManifestation && celebratedStreak === null && celebratedLevel === null} />}
+      {showLaunchMotivation && profileSettings?.randomQuotesEnabled !== false && !dailyManifestation && celebratedStreak === null && celebratedLevel === null && <LaunchMotivation source={launchImage} onClose={() => setShowLaunchMotivation(false)} />}
       <DailyManifestationDialog
         phrase={dailyManifestation}
         entry={manifestationEntry}

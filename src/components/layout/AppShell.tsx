@@ -108,6 +108,7 @@ function cloudPracticeProfile(value: Record<string, unknown> | null): PracticePr
     ...(typeof value["trackProgressEnabled"] === "boolean" ? { trackProgressEnabled: value["trackProgressEnabled"] } : {}),
     ...(typeof value["timersEnabled"] === "boolean" ? { timersEnabled: value["timersEnabled"] } : {}),
     ...(typeof value["habitsEnabled"] === "boolean" ? { habitsEnabled: value["habitsEnabled"] } : {}),
+    ...(typeof value["randomQuotesEnabled"] === "boolean" ? { randomQuotesEnabled: value["randomQuotesEnabled"] } : {}),
   };
 }
 
@@ -142,6 +143,7 @@ function ProfileOnboarding({ onComplete, user, existingProfile }: { onComplete: 
   const [trackProgressEnabled, setTrackProgressEnabled] = useState(existingProfile?.trackProgressEnabled !== false);
   const [timersEnabled, setTimersEnabled] = useState(existingProfile?.timersEnabled !== false);
   const [habitsEnabled, setHabitsEnabled] = useState(existingProfile?.habitsEnabled !== false);
+  const [randomQuotesEnabled, setRandomQuotesEnabled] = useState(existingProfile?.randomQuotesEnabled !== false);
   const parsedGoal = Math.max(1, Math.min(100000, Number(goal) || 0));
   const canContinue = name.trim().length > 0 && Number(goal) >= 1 && usernameStatus === "available";
 
@@ -173,6 +175,7 @@ function ProfileOnboarding({ onComplete, user, existingProfile }: { onComplete: 
       trackProgressEnabled,
       timersEnabled,
       habitsEnabled,
+      randomQuotesEnabled,
     };
     try {
       await saveProfileWithUsername(user, profile);
@@ -254,7 +257,7 @@ function ProfileOnboarding({ onComplete, user, existingProfile }: { onComplete: 
             />
           </label>
         </div>
-        {settingsOpen && <div className="absolute inset-0 z-10 rounded-2xl bg-[#121212] p-6 sm:p-8"><div className="flex items-center gap-2"><button type="button" aria-label="Back to profile form" onClick={() => setSettingsOpen(false)} className="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 hover:bg-white/10 hover:text-white"><ArrowLeft className="h-4 w-4" /></button><h3 className="text-lg font-semibold">Settings</h3></div><div className="mt-6 space-y-3"><button type="button" onClick={() => setPracticeSessionEnabled((value) => !value)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#121212] px-3 py-3 text-left"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Practice session</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Take practice tests, review answers and track your results.</span></span><span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", practiceSessionEnabled ? "border-zinc-100 bg-zinc-100" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", practiceSessionEnabled ? "translate-x-5 bg-zinc-900" : "translate-x-1 bg-zinc-400")} /></span></button><button type="button" onClick={() => setTrackProgressEnabled((value) => !value)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#121212] px-3 py-3 text-left"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Track</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Track syllabus, revision and mock test progress.</span></span><span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", trackProgressEnabled ? "border-zinc-100 bg-zinc-100" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", trackProgressEnabled ? "translate-x-5 bg-zinc-900" : "translate-x-1 bg-zinc-400")} /></span></button><button type="button" role="switch" aria-checked={timersEnabled} onClick={() => setTimersEnabled((value) => !value)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#121212] px-3 py-3 text-left"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Timers</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Countdowns for important dates and deadlines.</span></span><span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", timersEnabled ? "border-zinc-100 bg-zinc-100" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", timersEnabled ? "translate-x-5 bg-zinc-900" : "translate-x-1 bg-zinc-400")} /></span></button><button type="button" role="switch" aria-checked={habitsEnabled} onClick={() => setHabitsEnabled((value) => !value)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#121212] px-3 py-3 text-left"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Habits</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Daily heatmaps, streaks and personal challenges.</span></span><span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", habitsEnabled ? "border-zinc-100 bg-zinc-100" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", habitsEnabled ? "translate-x-5 bg-zinc-900" : "translate-x-1 bg-zinc-400")} /></span></button></div></div>}
+        {settingsOpen && <div className="absolute inset-0 z-10 rounded-2xl bg-[#121212] p-6 sm:p-8"><div className="flex items-center gap-2"><button type="button" aria-label="Back to profile form" onClick={() => setSettingsOpen(false)} className="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 hover:bg-white/10 hover:text-white"><ArrowLeft className="h-4 w-4" /></button><h3 className="text-lg font-semibold">Settings</h3></div><div className="mt-6 space-y-3"><button type="button" onClick={() => setPracticeSessionEnabled((value) => !value)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#121212] px-3 py-3 text-left"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Practice session</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Take practice tests, review answers and track your results.</span></span><span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", practiceSessionEnabled ? "border-zinc-100 bg-zinc-100" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", practiceSessionEnabled ? "translate-x-5 bg-zinc-900" : "translate-x-1 bg-zinc-400")} /></span></button><button type="button" onClick={() => setTrackProgressEnabled((value) => !value)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#121212] px-3 py-3 text-left"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Track</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Track syllabus, revision and mock test progress.</span></span><span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", trackProgressEnabled ? "border-zinc-100 bg-zinc-100" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", trackProgressEnabled ? "translate-x-5 bg-zinc-900" : "translate-x-1 bg-zinc-400")} /></span></button><button type="button" role="switch" aria-checked={timersEnabled} onClick={() => setTimersEnabled((value) => !value)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#121212] px-3 py-3 text-left"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Timers</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Countdowns for important dates and deadlines.</span></span><span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", timersEnabled ? "border-zinc-100 bg-zinc-100" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", timersEnabled ? "translate-x-5 bg-zinc-900" : "translate-x-1 bg-zinc-400")} /></span></button><button type="button" role="switch" aria-checked={habitsEnabled} onClick={() => setHabitsEnabled((value) => !value)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#121212] px-3 py-3 text-left"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Habits</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Daily heatmaps, streaks and personal challenges.</span></span><span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", habitsEnabled ? "border-zinc-100 bg-zinc-100" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", habitsEnabled ? "translate-x-5 bg-zinc-900" : "translate-x-1 bg-zinc-400")} /></span></button><button type="button" role="switch" aria-checked={randomQuotesEnabled} onClick={() => setRandomQuotesEnabled((value) => !value)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#121212] px-3 py-3 text-left"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Random quotes</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Show a random motivational image when opening the app.</span></span><span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", randomQuotesEnabled ? "border-zinc-100 bg-zinc-100" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", randomQuotesEnabled ? "translate-x-5 bg-zinc-900" : "translate-x-1 bg-zinc-400")} /></span></button></div></div>}
         <Button
           className="mt-4 h-10 w-full bg-primary text-primary-foreground hover:bg-primary/90"
           disabled={!canContinue || isSaving}
@@ -1154,7 +1157,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
   const [trackerActivityDates, setTrackerActivityDates] = useState<string[]>([]);
   const [taskActivityDates, setTaskActivityDates] = useState<string[]>([]);
   const [xpLevel, setXpLevel] = useState<number | null>(null);
-  const [profile, setProfile] = useState<PracticeProfile | null | undefined>(undefined);
+  const [profile, setProfile] = useState<PracticeProfile | null | undefined>(() => loadPracticeProfile());
   const [profileHydrated, setProfileHydrated] = useState(false);
   useEffect(() => { applyWebAccent(profile?.accentColor); }, [profile?.accentColor]);
   const [celebratedStreak, setCelebratedStreak] = useState<number | null>(null);
@@ -1162,6 +1165,26 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
   const [streakReady, setStreakReady] = useState(false);
   const [manifestationOpen, setManifestationOpen] = useState(false);
   const authUser = useAuthUser();
+  useEffect(() => {
+    if (!profileHydrated || !profile?.avatar || !authUser) return;
+    let cancelled = false;
+    const missingAvatar = profile.avatar;
+    void fetch("/avatars/manifest.json", { cache: "no-store" })
+      .then(response => response.ok ? response.json() : null)
+      .then(async (value: unknown) => {
+        if (cancelled || !Array.isArray(value)) return;
+        const files = value.filter((file): file is string => typeof file === "string" && /\.(avif|gif|jpe?g|png|webp)$/i.test(file) && !/[\\/]/.test(file));
+        if (!files.length || files.includes(missingAvatar)) return;
+        const current = loadPracticeProfile();
+        if (!current || current.avatar !== missingAvatar) return;
+        const next = { ...current, avatar: files[Math.floor(Math.random() * files.length)] };
+        savePracticeProfile(next);
+        setProfile(next);
+        if (next.username) await saveProfileWithUsername(authUser, next);
+      }).catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [profileHydrated, profile?.avatar, authUser?.uid]);
+
   const habitReminderData = useHabits(authUser?.uid);
   useHabitReminders(habitReminderData.habits, authUser?.uid, profile?.habitsEnabled !== false);
   const previousStreak = useRef<number | null>(null);
@@ -1382,7 +1405,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
         {children}
       </main>
       {profileHydrated && profile !== undefined && !profile?.username && authUser && <ProfileOnboarding user={authUser} existingProfile={profile} onComplete={setProfile} />}
-      <LaunchMotivation enabled={!!authUser && profileHydrated && !!profile?.username && !manifestationOpen && celebratedStreak === null && celebratedLevel === null} />
+      <LaunchMotivation enabled={!!authUser && profileHydrated && !!profile?.username && profile?.randomQuotesEnabled !== false && !manifestationOpen && celebratedStreak === null && celebratedLevel === null} />
       {profile?.manifestation && manifestationOpen && (
         <DailyManifestation
           manifestation={profile.manifestation}

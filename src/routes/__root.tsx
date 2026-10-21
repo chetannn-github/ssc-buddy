@@ -25,7 +25,8 @@ import {
   watchCloudProfile,
   watchCloudPreferences,
 } from "@/lib/firebase-sync";
-import { PROFILE_KEY } from "@/lib/profile";
+import { PROFILE_KEY, loadPracticeProfile } from "@/lib/profile";
+import { applyWebAccent } from "@/lib/app-accent";
 import { startPracticeSync } from "@/lib/practice-sync";
 import { AuthUserContext } from "@/lib/auth-context";
 import { loadDailyTasks, saveDailyTasks } from "@/lib/daily-tasks";
@@ -168,11 +169,21 @@ function RootComponent() {
   const [syncUser, setSyncUser] = useState<User | null>(null);
   const [authResolved, setAuthResolved] = useState(!isFirebaseConfigured);
   const [workspaceReady, setWorkspaceReady] = useState(!isFirebaseConfigured);
+  const [uiSettingsReady, setUiSettingsReady] = useState(false);
+  useEffect(() => {
+    if (!isFirebaseConfigured) {
+      applyWebAccent(loadPracticeProfile()?.accentColor);
+      setUiSettingsReady(true);
+    }
+  }, []);
 
   useEffect(() => {
     if (!isFirebaseConfigured) return;
     return observeFirebaseUser((user) => {
       if (user) prepareWebAccountCache(user.uid);
+      const cached = loadPracticeProfile();
+      applyWebAccent(cached?.accentColor);
+      setUiSettingsReady(!user || !!cached || !WEB_CLOUD_SYNC_ENABLED);
       setSyncUser(user);
       setWorkspaceReady(!user);
       setAuthResolved(true);
@@ -391,11 +402,12 @@ function RootComponent() {
     let stopProfileWatch: (() => void) | undefined;
     const clean = (profile: Record<string, unknown>) =>
       Object.fromEntries(
-        ["name", "username", "questionGoal", "examName", "manifestation", "avatar", "practiceSessionEnabled", "trackProgressEnabled", "timersEnabled", "habitsEnabled"]
+        ["accentColor", "name", "username", "questionGoal", "examName", "manifestation", "avatar", "practiceSessionEnabled", "trackProgressEnabled", "timersEnabled", "habitsEnabled", "randomQuotesEnabled"]
           .filter((key) => profile[key] !== undefined)
           .map((key) => [key, profile[key]]),
       );
     const apply = (profile: Record<string, unknown>) => {
+      applyWebAccent(profile["accentColor"]);
       const raw = JSON.stringify(clean(profile));
       // `savePracticeProfile` and Firestore can serialize identical fields in a different
       // property order. Comparing the raw JSON used to turn every profile snapshot into a
@@ -453,7 +465,9 @@ function RootComponent() {
         if (!disposed && remote) apply(remote);
       });
     };
-    void start();
+    void start().catch(() => undefined).finally(() => {
+      if (!disposed) { applyWebAccent(loadPracticeProfile()?.accentColor); setUiSettingsReady(true); }
+    });
     return () => {
       disposed = true;
       stopProfileWatch?.();
@@ -476,11 +490,11 @@ function RootComponent() {
     <AuthUserContext.Provider value={syncUser}>
       <QueryClientProvider client={queryClient}>
         {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-        <Outlet />
-        {syncUser && !workspaceReady && path !== "/auth" && (
+        {authResolved && uiSettingsReady && <Outlet />}
+        {(!authResolved || !uiSettingsReady || (syncUser && !workspaceReady && path !== "/auth")) && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#121212] text-zinc-300 backdrop-blur-xl">
             <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-[#121212] px-4 py-3 shadow-2xl">
-              <LoaderCircle className="h-4 w-4 animate-spin text-emerald-400" />
+              <LoaderCircle className="h-4 w-4 animate-spin text-primary" />
               <span className="text-sm font-medium">Syncing your workspace</span>
             </div>
           </div>
