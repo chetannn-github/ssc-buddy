@@ -298,3 +298,8 @@ export function watchRecallBank(user: User, callback: (subjects: Array<Record<st
   if (!db) return () => undefined;
   return onSnapshot(collection(db, "users", user.uid, "practiceSubjects"), (snapshot) => callback(snapshot.docs.map((item) => ({ ...item.data(), id: item.id }))));
 }
+
+/** Read the same private accent setting saved by the mobile app. */
+export function watchProfileAccent(user: User, callback: (value: unknown) => void) {
+  return onSnapshot(profileRef(user), (snapshot) => callback(snapshot.data()?.accentColor), () => callback(undefined));
+}

@@ -25,6 +25,13 @@
     "question-json-prompt.ts",
     "quick-recall-history.ts",
     "quick-recall-solutions.ts",
-    "xp-levels.ts"
+    "xp-levels.ts",
+    "habits.ts",
+    "habit-icons.ts",
+    "habit-colors.ts",
+    "optimistic-habits.ts",
+    "app-accent.ts",
+    "tasks.ts",
+    "daily-task-widget.ts"
   ]
 }

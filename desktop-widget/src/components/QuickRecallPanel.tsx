@@ -49,7 +49,7 @@ export function QuickRecallPanel({ subjects = [], onPruned, session, loading, on
     const tick = () => {
       const seconds = Math.max(0, Math.ceil((correctionUntil - Date.now()) / 1000));
       setSecondsLeft(seconds);
-      if (seconds === 0) nextQuestion();
+      if (seconds === 0) setCorrectionUntil(null);
     };
     tick();
     const interval = window.setInterval(tick, 200);
@@ -85,14 +85,14 @@ export function QuickRecallPanel({ subjects = [], onPruned, session, loading, on
         <span>{session.subject}</span>
       </div>
       <div className="quick-actions">
-        <button className="secondary" onClick={onBack}><ArrowLeft size={14} /> Tasks</button>
+        <button className="secondary" onClick={onBack}><ArrowLeft size={14} /> Setup</button>
         <button className="primary" onClick={onRestart}><RotateCcw size={14} /> Again</button>
       </div>
     </section>;
   }
 
   return <section className="quick-recall-panel">
-    <div className="quick-heading"><span>{session.subject.toUpperCase()} · {chapterLabel.toUpperCase()}</span><div className="quick-progress"><small>{correctionUntil ? `Next in ${secondsLeft}s` : `${index + 1}/${session.questions.length}`}</small><button type="button" className="quick-next" disabled={selected !== question?.correctAnswer || Boolean(correctionUntil)} onClick={nextQuestion}>{index + 1 === session.questions.length ? "Finish" : "Next"}</button></div></div>
+    <div className="quick-heading"><button className="quick-back-box" aria-label="Back to recall setup" onClick={onBack}><ArrowLeft size={17} /></button><span>{session.subject.toUpperCase()} · {chapterLabel.toUpperCase()}</span><div className="quick-progress"><small className={correctionUntil ? "quick-countdown" : undefined}>{correctionUntil ? `Next in ${secondsLeft}s` : `${index + 1}/${session.questions.length}`}</small><button type="button" className="quick-next" disabled={!selected || Boolean(correctionUntil)} onClick={nextQuestion}>{index + 1 === session.questions.length ? "Finish" : "Next"}</button></div></div>
     <p className="quick-question">{question?.question}</p>
     <div className="quick-options">{choices.map((choice, optionIndex) => {
       const selectedThis = selected === choice;

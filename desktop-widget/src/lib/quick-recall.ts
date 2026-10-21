@@ -1,6 +1,6 @@
 import { applyQuestionDeletions } from "../../../mobile-tasks/src/domain/question-deletion";
 import type { QuickRecallSeed } from "./firebase";
-import { filterRecallScope, selectRecallQuestions } from "../../../mobile-tasks/src/domain/recall-selection";
+import { filterRecallScope, selectRecallQuestions, type RecallQuestionCount } from "../../../mobile-tasks/src/domain/recall-selection";
 
 export type QuizChoice = "A" | "B" | "C" | "D";
 export type QuickRecallQuestion = {
@@ -24,8 +24,8 @@ const choices: QuizChoice[] = ["A", "B", "C", "D"];
 const isChoice = (value: unknown): value is QuizChoice => typeof value === "string" && choices.includes(value as QuizChoice);
 type PracticePerformance = { askedCount: number; correctCount: number; wrongCount: number };
 
-/** Same balanced three-question selection used by web and Android. */
-export function createQuickRecallSession(seed: QuickRecallSeed, scope: QuickRecallScope = { subjectId: RANDOM_RECALL_SCOPE, chapter: RANDOM_RECALL_SCOPE }): QuickRecallSession | null {
+/** Same balanced question selection used by web and Android. */
+export function createQuickRecallSession(seed: QuickRecallSeed, scope: QuickRecallScope = { subjectId: RANDOM_RECALL_SCOPE, chapter: RANDOM_RECALL_SCOPE }, questionCount: RecallQuestionCount = 3): QuickRecallSession | null {
   const questions: QuickRecallQuestion[] = [];
   (seed.subjects as Array<Record<string, unknown>>).map((subject) => applyQuestionDeletions(subject as any) as Record<string, unknown>).forEach((subject) => {
     const chapters = Array.isArray(subject.chapters) ? subject.chapters : [];
@@ -68,6 +68,6 @@ export function createQuickRecallSession(seed: QuickRecallSeed, scope: QuickReca
   });
   const favourites = new Set(seed.favouriteQuestionIds);
   const learning = seed.learningStats ?? {};
-  const selected = selectRecallQuestions(scopedQuestions, favourites, learning, practice);
+  const selected = selectRecallQuestions(scopedQuestions, favourites, learning, practice, Date.now(), Math.random, questionCount);
   return selected.length ? { runId: makeRunId(), startedAt: new Date().toISOString(), subject: selected[0].subject, chapter: selected[0].chapter, questions: selected } : null;
 }

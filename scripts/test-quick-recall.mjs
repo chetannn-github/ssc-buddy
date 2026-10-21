@@ -212,3 +212,39 @@ test("larger recall requests cap at available questions without duplicates", () 
   assert.equal(select(bank, new Set(), {}, new Map(), now, () => 0.5, 10).length, 6);
   assert.equal(select(bank, new Set(), {}, new Map(), now, () => 0.5).length, 3);
 });
+
+// Exercise the Windows adapter as well as the shared selector: the chosen count
+// must survive question-bank parsing and exercise filtering.
+const moduleUrl = (code) => `data:text/javascript;base64,${Buffer.from(code).toString("base64")}`;
+const deletionSource = await readFile(new URL("../mobile-tasks/src/domain/question-deletion.ts", import.meta.url), "utf8");
+const deletionUrl = moduleUrl(ts.transpileModule(deletionSource, {
+  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
+}).outputText);
+const desktopSource = await readFile(new URL("../desktop-widget/src/lib/quick-recall.ts", import.meta.url), "utf8");
+const desktopCode = ts.transpileModule(desktopSource, {
+  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
+}).outputText
+  .replace("../../../mobile-tasks/src/domain/question-deletion", deletionUrl)
+  .replace("../../../mobile-tasks/src/domain/recall-selection", moduleUrl(outputText));
+const { createQuickRecallSession } = await import(moduleUrl(desktopCode));
+const desktopSeed = (count = 12) => ({
+  subjects: [{ id: "maths", name: "Maths", chapters: [{ name: "Algebra", exercises: [
+    { id: "first", name: "First", questions: Array.from({ length: count }, (_, i) => fullQuestion(`q${i}`)) },
+    { id: "second", name: "Second", questions: [fullQuestion("other")] },
+  ] }] }],
+  attempts: [], favouriteQuestionIds: [], learningStats: {},
+});
+const desktopScope = { subjectId: "maths", chapter: "Algebra", exerciseId: "first" };
+for (const count of [3, 5, 10]) {
+  test(`Windows Quick Recall selects ${count} unique questions from the selected exercise`, () => {
+    const session = createQuickRecallSession(desktopSeed(), desktopScope, count);
+    assert.equal(session.questions.length, count);
+    assert.equal(new Set(session.questions.map((q) => q.id)).size, count);
+    assert.ok(session.questions.every((q) => q.exerciseId === "first"));
+  });
+}
+test("Windows Quick Recall caps the selected count for small banks and handles empty scopes", () => {
+  assert.equal(createQuickRecallSession(desktopSeed(2), desktopScope, 10).questions.length, 2);
+  assert.equal(createQuickRecallSession(desktopSeed(), { ...desktopScope, exerciseId: "missing" }, 5), null);
+  assert.equal(createQuickRecallSession(desktopSeed()).questions.length, 3);
+});
