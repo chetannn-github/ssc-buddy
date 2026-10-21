@@ -152,13 +152,7 @@ export function HabitsScreen({ user, widgetRequest, onWidgetRequestHandled, onSw
   };
   return (
     <View style={s.page}>
-      <ScrollView
-        stickyHeaderIndices={[0]}
-        contentContainerStyle={s.content}
-        scrollEventThrottle={16}
-        onScroll={(event) => reportVerticalScroll(event.nativeEvent.contentOffset.y, event.nativeEvent)}
-      >
-        <View style={{ backgroundColor: "#000000", paddingTop: 16, paddingBottom: 12 }}>
+      <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12 }}>
         <DailySectionHeader section="habits" today={today} selected={selected} tasks={dateTasks}
           weekEnd={visibleWeekEnd} onWeekEndChange={onWeekEndChange} onSelect={onSelectDate}
           onSwitch={onSwitchToTasks} rankAction={rankAction} addDisabled={!user || busy}
@@ -170,6 +164,12 @@ export function HabitsScreen({ user, widgetRequest, onWidgetRequestHandled, onSw
         <TaskOverview total={scoped.length} due={due.length} percent={score}
           dueOnly={dueOnly} onFilterChange={setDueOnly} meterLabel="Habit Score" />
         </View>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={s.content}
+        scrollEventThrottle={16}
+        onScroll={(event) => reportVerticalScroll(event.nativeEvent.contentOffset.y, event.nativeEvent)}
+      >
         {!!categories.length && (
           <ScrollView
             horizontal
@@ -749,7 +749,7 @@ const s = createThemedStyles({
   habitMenuItem: { flexDirection: "row", alignItems: "center", gap: 11, paddingHorizontal: 12, paddingVertical: 13 },
   habitMenuText: { flex: 1, flexShrink: 1, color: colors.text, fontSize: 14, fontWeight: "600" },
   page: { flex: 1, backgroundColor: "transparent" },
-  content: { padding: 20, gap: 20, paddingBottom: 110, paddingTop: 0 },
+  content: { padding: 20, gap: 20, paddingBottom: 110, paddingTop: 8 },
   header: { flexDirection: "row", alignItems: "center", gap: 8 },
   title: { flex: 1, color: "white", fontSize: 21, fontWeight: "800" },
   headerIcon: {

@@ -565,15 +565,11 @@ export function ProfileScreen({
   }, [rangeOpen, rangeMenuProgress, rangeMenuVisible]);
   return (
     <View style={styles.page}>
-      {readOnly && (
-        <View style={styles.publicBackRow}>
-          <Pressable accessibilityLabel="Back" hitSlop={10} onPress={onBack}>
-            <MaterialCommunityIcons name="arrow-left" size={23} color={colors.text} />
-          </Pressable>
-        </View>
-      )}
       <View style={styles.profileTop}>
         <View style={styles.profileRow}>
+          {readOnly && <Pressable accessibilityRole="button" accessibilityLabel="Back" hitSlop={8} onPress={onBack} style={styles.publicBackRow}>
+            <MaterialCommunityIcons name="arrow-left" size={23} color={colors.text} />
+          </Pressable>}
           <View style={styles.profileTopActions}>
 
           <View
@@ -1681,7 +1677,7 @@ function EditField({
 
 const styles: Record<string, any> = createThemedStyles({
   page: { flex: 1, backgroundColor: "transparent" },
-  publicBackRow: { height: 38, paddingHorizontal: 15, justifyContent: "flex-end" },
+  publicBackRow: { position: "absolute", left: 4, top: 0, height: 70, width: 40, justifyContent: "center", alignItems: "flex-start", zIndex: 2 },
   profileTop: {
     zIndex: 5,
     paddingHorizontal: 11,

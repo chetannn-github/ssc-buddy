@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
+  BackHandler,
   Easing,
   Image,
   Pressable,
@@ -184,6 +185,16 @@ export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { 
   const [publicEntry, setPublicEntry] = useState<any>(null);
   const [isSyncing, setIsSyncing] = useState(true);
   const [dayFilterOpen, setDayFilterOpen] = useState(false);
+  useEffect(() => {
+    const back = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (dayFilterOpen) setDayFilterOpen(false);
+      else if (publicEntry) setPublicEntry(null);
+      else if (selectedEntry) setSelected(null);
+      else onClose();
+      return true;
+    });
+    return () => back.remove();
+  }, [dayFilterOpen, publicEntry, selectedEntry, onClose]);
   const currentWeek = useLeaderboardWeek();
   const [historyWeek, setHistoryWeek] = useState<string | null>(null);
   const selectedWeek = historyWeek ?? currentWeek;
@@ -304,16 +315,12 @@ export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { 
     );
     return (
       <View style={s.page}>
-        <View style={s.header}>
-          <Pressable onPress={() => setSelected(null)}>
-            <MaterialCommunityIcons name="arrow-left" size={24} color={colors.text} />
-          </Pressable>
-          <Text style={s.title}>Profile</Text>
-          <View style={{ width: 24 }} />
-        </View>
         <View style={s.detailSticky}>
           <View style={s.detailProfileHeader}>
             <View style={s.avatarRankLine}>
+              <Pressable accessibilityRole="button" accessibilityLabel="Back to leaderboard" hitSlop={8} style={s.profileBack} onPress={() => { setDayFilterOpen(false); setSelected(null); }}>
+                <MaterialCommunityIcons name="arrow-left" size={24} color={colors.text} />
+              </Pressable>
               <Pressable style={s.bigAvatar} onPress={() => setPublicEntry({ ...selected, leaderboardRank: rank })}>
                 {selected.avatar && avatarAssets[selected.avatar] ? (
                   <Image source={avatarAssets[selected.avatar]} style={s.bigImage} />
@@ -461,8 +468,9 @@ const s = createThemedStyles({
   points: { fontWeight: "800", fontSize: 16 },
   empty: { color: colors.subdued, textAlign: "center", marginTop: 45 },
   profile: { alignItems: "center", padding: 30 },
-  detailSticky: { alignItems: "center", paddingHorizontal: 16, paddingTop: 8, paddingBottom: 10, backgroundColor: colors.background, zIndex: 2 },
+  detailSticky: { alignItems: "center", paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10, backgroundColor: "transparent", zIndex: 2 },
   detailProfileHeader: { alignSelf: "stretch", alignItems: "center" },
+  profileBack: { position: "absolute", left: 0, top: 0, width: 40, height: 56, alignItems: "flex-start", justifyContent: "center", zIndex: 2 },
   avatarRankLine: { alignSelf: "stretch", alignItems: "center", justifyContent: "center", position: "relative" },
   detailIdentity: { maxWidth: "100%", alignItems: "center", marginTop: 7 },
   centeredUsername: { textAlign: "center" },
