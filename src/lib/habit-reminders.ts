@@ -40,10 +40,15 @@ export function useHabitReminders(habits: Habit[], uid?: string, enabled = true)
           const key = "habit-reminder:" + uid + ":" + habit.id + ":" + reminder.id + ":" + today;
           try {
             if (localStorage.getItem(key)) continue;
-            new Notification(reminder.title, {
+            const notification = new Notification(reminder.title, {
               body: settings.description || "A small step today. Keep your habit going.",
               tag: key,
             });
+            notification.onclick = () => {
+              window.dispatchEvent(new Event("ssc-buddy-external-launch"));
+              window.focus();
+              notification.close();
+            };
             localStorage.setItem(key, "1");
           } catch {
             /* Browser may block notifications. */

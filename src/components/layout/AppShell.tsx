@@ -1,3 +1,4 @@
+import { LaunchMotivation } from "./LaunchMotivation";
 import { SlidingTabs } from "@/components/ui/sliding-tabs";
 import { applyWebAccent, normalizeAppAccent } from "@/lib/app-accent";
 import { useHabits } from "@/lib/habits";
@@ -1381,6 +1382,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
         {children}
       </main>
       {profileHydrated && profile !== undefined && !profile?.username && authUser && <ProfileOnboarding user={authUser} existingProfile={profile} onComplete={setProfile} />}
+      <LaunchMotivation enabled={!!authUser && profileHydrated && !!profile?.username && !manifestationOpen && celebratedStreak === null && celebratedLevel === null} />
       {profile?.manifestation && manifestationOpen && (
         <DailyManifestation
           manifestation={profile.manifestation}
