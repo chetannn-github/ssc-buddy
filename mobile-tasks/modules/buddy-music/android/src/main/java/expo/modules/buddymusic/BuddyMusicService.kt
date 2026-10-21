@@ -63,7 +63,8 @@ class BuddyMusicService : MediaSessionService() {
     val buttons = listOf(
       CommandButton.Builder(CommandButton.ICON_PREVIOUS).setDisplayName("Previous song").setPlayerCommand(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM).setSlots(CommandButton.SLOT_BACK).build(),
       CommandButton.Builder(CommandButton.ICON_NEXT).setDisplayName("Next song").setPlayerCommand(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM).setSlots(CommandButton.SLOT_FORWARD).build(),
-      CommandButton.Builder(CommandButton.ICON_REPEAT_ALL)
+      // Publish a distinct icon as Android notification surfaces often hide action labels.
+      CommandButton.Builder(if (repeatEnabled) CommandButton.ICON_REPEAT_ALL else CommandButton.ICON_REPEAT_OFF)
         .setDisplayName(if (repeatEnabled) "Repeat: on" else "Repeat: off")
         .setSessionCommand(SessionCommand(REPEAT, Bundle.EMPTY)).setSlots(CommandButton.SLOT_OVERFLOW).build()
     )

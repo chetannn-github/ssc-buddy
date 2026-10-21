@@ -606,7 +606,7 @@ html, body, #root {
 .tasks-pin-option { display:flex; flex:0 0 auto; align-items:center; gap:6px; align-self:flex-start; background:transparent; border:0; color:#999; font-size:10px; padding:4px 0; margin-bottom:2px; }
 .tasks-pin-option:hover { color:var(--accent); }
 
-.pinned-target { flex:0 0 auto; margin-top:7px; font-size:10px; color:#999; }
+.pinned-target { flex:0 0 auto; margin-top:7px; font-size:10px; color:#777; }
 .pinned-target>div { height:3px; margin-top:4px; border-radius:8px; overflow:hidden; background:#ffffff12; }
 .pinned-target i { display:block; height:100%; background:var(--habit-color); border-radius:inherit; transition:width 300ms ease; }
 @media(prefers-reduced-motion:reduce) { .pinned-target i { transition:none; } }
@@ -716,3 +716,7 @@ html, body, #root {
 .heatmap-liquid-wave { animation:heatmap-wave 3.4s linear infinite; }
 @keyframes heatmap-wave { to { transform:translateX(-100px); } }
 @media(prefers-reduced-motion:reduce) { .heatmap-liquid-wave { animation:none; }.heatmap-liquid-level { transition:none; } }
+
+/* Secondary habit widget labels stay muted, including animated progress digits. */
+.pinned-habit .pinned-streak small, .pinned-habit .pinned-target>span { color:#777; }
+.pinned-habit .pinned-target>span * { color:inherit; }
