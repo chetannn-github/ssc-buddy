@@ -12,25 +12,26 @@ const permissionCode = await compile("lib/habit-notification-permissions.ts");
 const hookCode = await compile("hooks/use-habit-reminders.ts");
 function evaluate(code, imports = {}) {
   const exports = {};
-  vm.runInNewContext(code, { exports, console, require: (name) => {
+  vm.runInNewContext(code, { exports, console, setInterval: () => 1, clearInterval: () => {}, require: (name) => {
     assert.ok(name in imports, `Unexpected dependency: ${name}`);
     return imports[name];
   } });
   return exports;
 }
 const permissionApi = evaluate(permissionCode);
+const schedulerApi = evaluate(await compile("lib/habit-reminder-scheduler.ts"), { "./habit-notification-permissions": permissionApi });
 function notificationMock(granted = false, canAskAgain = true, allowRequest = true) {
   const calls = [];
   return {
     calls,
-    AndroidImportance: { HIGH: 4 },
-    SchedulableTriggerInputTypes: { DATE: "date" },
+    AndroidImportance: { HIGH: 4, NONE: 0 },
+    SchedulableTriggerInputTypes: { DATE: "date", TIME_INTERVAL: "timeInterval" },
     async setNotificationChannelAsync(id, settings) { calls.push(["channel", id, settings.importance]); },
     async getPermissionsAsync() { calls.push(["permission"]); return { granted, canAskAgain }; },
     async requestPermissionsAsync() { calls.push(["request"]); granted = allowRequest; return { granted, canAskAgain }; },
     async getAllScheduledNotificationsAsync() { calls.push(["scheduled"]); return []; },
     async cancelScheduledNotificationAsync() { calls.push(["cancel"]); },
-    async scheduleNotificationAsync() { calls.push(["schedule"]); },
+    async scheduleNotificationAsync(alarm) { calls.push(["schedule", alarm]); },
   };
 }
 test("Android creates the channel before asking notification permission", async () => {
@@ -51,7 +52,7 @@ test("background sync and permanently denied permission never prompt", async () 
   }
 });
 
-async function runHook({ reminders = true, appState = "active", granted = false, native = true, allowRequest = true } = {}) {
+async function runHook({ reminders = true, appState = "active", granted = false, native = true, allowRequest = true, ready = true } = {}) {
   const effects = [], listeners = [], cleanups = [];
   const api = notificationMock(granted, true, allowRequest);
   const state = {
@@ -59,6 +60,8 @@ async function runHook({ reminders = true, appState = "active", granted = false,
     addEventListener: (_, listener) => { listeners.push(listener); return { remove() {} }; },
   };
   const hooks = evaluate(hookCode, {
+    "../lib/habit-reminder-scheduler": schedulerApi,
+    "../domain/habit-reminder-plan": { habitReminderPlan: habits => habits.map(habit => ({ identifier: habit.id, at: Date.now() + 60000, title: habit.name, body: "Reminder", habitId: habit.id, signature: "stable" })) },
     react: { useRef: (current) => ({ current }), useEffect: (effect) => effects.push(effect) },
     "react-native": { Platform: { OS: "android" }, AppState: state },
     "../widgets/habit-widget-store": { cacheWidgetHabits: async () => {} },
@@ -73,7 +76,7 @@ async function runHook({ reminders = true, appState = "active", granted = false,
       habitEntry: () => ({ checks: [] }),
     },
   });
-  hooks.useHabitReminders("owner", true);
+  hooks.useHabitReminders("owner", true, ready);
   for (const effect of effects) cleanups.push(effect());
   const flush = async () => { for (let i = 0; i < 5; i++) await new Promise(setImmediate); };
   await flush();
@@ -117,4 +120,16 @@ test("background hooks do not prompt, and old APKs without native APIs remain sa
     try { assert.ok(!hook.api.calls.some(([name]) => name === "request")); }
     finally { hook.dispose(); }
   }
+});
+
+
+test("blocked habit channel is reported even when app notification permission is granted", async () => {
+  const api = notificationMock(true);
+  api.setNotificationChannelAsync = async () => ({ importance: 0 });
+  await assert.rejects(permissionApi.ensureHabitNotificationPermission(api, true, true), /Habit reminders are blocked/);
+});
+test("auth and cached settings must load before touching persisted reminder alarms", async () => {
+  const hook = await runHook({ ready: false });
+  try { assert.equal(hook.api.calls.length, 0); }
+  finally { hook.dispose(); }
 });

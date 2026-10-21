@@ -11,7 +11,6 @@ import { useRef, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
-  Linking,
   Modal,
   Platform,
   Pressable,
@@ -36,7 +35,7 @@ import {
   type HabitSettings,
   type HabitSaveDetails,
 } from "../domain/habits";
-import { requestHabitReminders, testHabitReminder } from "../hooks/use-habit-reminders";
+import { requestHabitReminders } from "../hooks/use-habit-reminders";
 export function HabitEditor({
   habit,
   initialColor,
@@ -65,7 +64,6 @@ export function HabitEditor({
     [localError, setLocalError] = useState("");
   const [themeOpen, setThemeOpen] = useState(false);
   const [colorsOpen, setColorsOpen] = useState(false);
-  const [testingReminder, setTestingReminder] = useState(false);
   const [adding, setAdding] = useState(false),
     [itemName, setItemName] = useState("");
   const tint = HABIT_COLORS[color];
@@ -607,15 +605,6 @@ export function HabitEditor({
                       disabled={busy}
                     />
                   )}
-                  {settings.reminder && !IS_EXPO_GO && <View style={{ flexDirection: "row", gap: 18, alignItems: "center", flexWrap: "wrap" }}>
-                    <Pressable disabled={testingReminder || busy} onPress={async () => {
-                      setTestingReminder(true); setLocalError("");
-                      try { await testHabitReminder(name.trim()); }
-                      catch (error) { setLocalError(error instanceof Error ? error.message : "Could not send test reminder."); }
-                      finally { setTestingReminder(false); }
-                    }}><Text style={{ color: tint, paddingVertical: 8 }}>{testingReminder ? "Scheduling…" : "Test reminder (5 sec)"}</Text></Pressable>
-                    <Pressable onPress={() => { void Linking.openSettings(); }}><Text style={[s.hint, { paddingVertical: 8 }]}>Notification settings</Text></Pressable>
-                  </View>}
                   {settings.reminder && IS_EXPO_GO && (
                     <Text style={s.hint}>
                       Reminder saved with your habit. Notifications run in the installed Android
