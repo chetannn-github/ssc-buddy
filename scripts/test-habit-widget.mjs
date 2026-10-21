@@ -126,10 +126,25 @@ test("all checklist widget types open the exact account-scoped habit without mar
 });
 
 
-test("short wide monthly widgets spread square cells across the full chart width", () => {
-  const layout = habitWidgetLayout({ width: 290, height: 210 }, "2026-10-21", 30, "month");
-  assert.equal(layout.gridWidth, 266);
-  assert.ok(layout.columnStep > layout.step);
-  assert.ok(Math.abs(6 * layout.columnStep + layout.step - layout.gridWidth) < .001);
-  assert.ok(layout.gridHeight + 24 + 38 + 8 + 30 <= 210);
+test("monthly and wide heatmaps keep equal cell spacing and reserve the minus footer", () => {
+  for (const style of ["month", "heatmap"]) {
+    for (const size of [{ width: 290, height: 210 }, { width: 360, height: 190 }, { width: 440, height: 230 }]) {
+      const layout = habitWidgetLayout(size, "2026-10-21", 36, style);
+      assert.equal(layout.columnStep, layout.step);
+      assert.ok(layout.gridWidth <= size.width - 24 + .001);
+      assert.ok(layout.gridHeight + 24 + 38 + 8 + 36 + 6 <= size.height + .001);
+      assert.ok(Math.abs(layout.gridWidth - layout.labelWidth - layout.columns * layout.step) < .001);
+    }
+  }
+  const nodes = flatten(renderHabitWidget(habit({ tracking: "count", dailyGoal: 8 }), "", { width: 360, height: 190 }));
+  const chart = nodes.find(node => node.type === "Svg" && node.props.svg.includes("<rect"));
+  assert.ok(chart.props.svg.includes('preserveAspectRatio="xMidYMid meet"'));
+  const minus = nodes.find(node => node.props.clickAction === "HABIT_MINUS");
+  assert.equal(minus.props.style.height, 30);
+  assert.ok(nodes.some(node => node.type === "Flex" && node.props.style?.height === 36));
+  const chartHeight = Number(/height="([\d.]+)"/.exec(chart.props.svg)[1]);
+  assert.ok(nodes.some(node => node.type === "Flex" && node.props.style?.height === chartHeight));
+  const rects = [...chart.props.svg.matchAll(/<rect[^>]*width="([\d.]+)" height="([\d.]+)"/g)];
+  assert.ok(rects.length > 0);
+  assert.ok(rects.every(rect => rect[1] === rect[2]));
 });
