@@ -26,7 +26,7 @@ export function renderDailyTasksWidget(tasks: Task[], rank: number | null = null
   const points = weeklyTaskPoints(tasks);
   const title = `${selected === today ? "Today" : new Date(selected + "T12:00:00").toLocaleDateString(undefined, { weekday: "short" })}, ${new Date(selected + "T12:00:00").toLocaleDateString(undefined, { day: "numeric", month: "short" })}`;
   return <FlexWidget accessibilityLabel="SSC Buddy daily tasks" style={{ width: "match_parent", height: "match_parent", flexDirection: "column", backgroundColor: "#000000", borderRadius: 22, padding: 12 }}>
-    <FlexWidget style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", height: 30 }}>
+    <FlexWidget style={{ width: "match_parent", flexDirection: "row", alignItems: "center", justifyContent: "space-between", height: 30 }}>
       <TextWidget text={title} clickAction="OPEN_URI" clickActionData={{ uri: `sscbuddy://tasks?date=${selected}` }} style={{ color: "#fafafa", fontSize: 17, fontWeight: "bold" }} />
       <FlexWidget style={{ flexDirection: "row", alignItems: "center" }}>
         {rank && rank <= 3 ? <ImageWidget image={[require("../../assets/gold-medal.png"), require("../../assets/silver-medal.png"), require("../../assets/bronze-medal.png")][rank - 1]} imageWidth={16} imageHeight={16} style={{ width: 16, height: 16, marginRight: 3 }} /> : null}
@@ -43,7 +43,7 @@ export function renderDailyTasksWidget(tasks: Task[], rank: number | null = null
         </FlexWidget>;
       })}
     </FlexWidget>
-    <FlexWidget style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 16 }}>
+    <FlexWidget style={{ width: "match_parent", flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 16 }}>
       <FlexWidget style={{ flexDirection: "column" }}>
         <TextWidget text="Filter" style={{ color: "#777777", fontSize: 10, marginBottom: 5 }} />
         <FlexWidget style={{ flexDirection: "row", borderRadius: 9, borderWidth: 1, borderColor: "#292929", overflow: "hidden" }}>

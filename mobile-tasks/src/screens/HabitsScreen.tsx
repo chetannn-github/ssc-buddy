@@ -54,7 +54,7 @@ export function HabitsScreen({ user, onSwitchToTasks, selectedDate, onSelectDate
   const [menuPosition, setMenuPosition] = useState({ left: 12, top: 100 });
   const openHabitMenu = (habit: Habit, event: { nativeEvent: { pageX: number; pageY: number } }) => {
     if (busy) return;
-    const menuHeight = Platform.OS === "android" ? 152 : 104;
+    const menuHeight = Platform.OS === "android" ? 200 : 104;
     setMenuPosition({
       left: Math.max(12, Math.min(windowWidth - 192, event.nativeEvent.pageX - 24)),
       top: Math.max(12, Math.min(windowHeight - menuHeight - 24, event.nativeEvent.pageY + 12)),
@@ -369,6 +369,17 @@ export function HabitsScreen({ user, onSwitchToTasks, selectedDate, onSelectDate
               }}>
               <MaterialCommunityIcons name="widgets-outline" size={18} color={colors.text} />
               <Text style={s.habitMenuText}>Add to widget</Text>
+            </Pressable>}
+            {Platform.OS === "android" && <Pressable disabled={busy || !user} style={s.habitMenuItem}
+              onPress={() => {
+                const habit = menu; setMenu(null);
+                if (habit && user) void act(async () => {
+                  await cacheWidgetHabits(user.uid, habits);
+                  await pinHabitWidget(user.uid, habit.id, "compact");
+                });
+              }}>
+              <MaterialCommunityIcons name="widgets-outline" size={18} color={colors.text} />
+              <Text style={s.habitMenuText}>Add compact widget</Text>
             </Pressable>}
             <Pressable disabled={busy} style={s.habitMenuItem} onPress={() => { setMessage(""); setDeleting(menu); setMenu(null); }}>
               <MaterialCommunityIcons name="trash-can-outline" size={18} color="#fca5a5" />

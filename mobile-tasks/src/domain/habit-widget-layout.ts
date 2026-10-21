@@ -1,5 +1,6 @@
 import { habitDay } from "./habits";
 
+export type HabitWidgetStyle = "heatmap" | "compact";
 export type HabitWidgetSize = { width: number; height: number };
 export function habitWidgetCalendar(today: string, wide: boolean) {
   const date = new Date(today + "T12:00:00");

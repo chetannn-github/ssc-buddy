@@ -5,6 +5,7 @@ import type { WidgetConfigurationScreenProps } from "react-native-android-widget
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, onSnapshot } from "firebase/firestore";
 import { getFirebaseAuth, getFirebaseFirestore } from "../lib/firebase";
+import type { HabitWidgetStyle } from "../domain/habit-widget-layout";
 import { HABIT_COLORS, normalizeHabit, type Habit } from "../domain/habits";
 import {
   bindHabitWidget,
@@ -16,6 +17,7 @@ export function HabitWidgetConfiguration(props: WidgetConfigurationScreenProps) 
   const [habits, setHabits] = useState<Habit[]>([]),
     [uid, setUid] = useState(""),
     [selected, setSelected] = useState(""),
+    [widgetStyle, setWidgetStyle] = useState<HabitWidgetStyle>("heatmap"),
     [loading, setLoading] = useState(true),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
@@ -32,7 +34,7 @@ export function HabitWidgetConfiguration(props: WidgetConfigurationScreenProps) 
       setLoading(!!user);
       if (!user) return;
       void pendingHabitWidget(user.uid).then((p) => {
-        if (alive && current === revision && p) setSelected(p.habitId);
+        if (alive && current === revision && p) { setSelected(p.habitId); setWidgetStyle(p.style === "compact" ? "compact" : "heatmap"); }
       });
       stop = onSnapshot(
         collection(getFirebaseFirestore(), "users", user.uid, "habits"),
@@ -68,7 +70,7 @@ export function HabitWidgetConfiguration(props: WidgetConfigurationScreenProps) 
     try {
       if (getFirebaseAuth().currentUser?.uid !== uid) throw new Error("Sign in again");
       await cacheWidgetHabits(uid, habits);
-      await bindHabitWidget(props.widgetInfo.widgetId, uid, selected);
+      await bindHabitWidget(props.widgetInfo.widgetId, uid, selected, widgetStyle);
       props.renderWidget(await habitWidgetView(props.widgetInfo.widgetId, uid, "", false, props.widgetInfo));
       props.setResult("ok");
     } catch {
@@ -86,6 +88,14 @@ export function HabitWidgetConfiguration(props: WidgetConfigurationScreenProps) 
       <Text style={{ color: "#999", fontSize: 13, marginBottom: 14 }}>
         Choose a habit for this widget.
       </Text>
+      <View accessibilityRole="radiogroup" style={{ flexDirection: "row", gap: 8, marginBottom: 16 }}>
+        {(["heatmap", "compact"] as const).map((style) => <Pressable key={style} disabled={busy}
+          accessibilityRole="radio" accessibilityState={{ checked: widgetStyle === style }} onPress={() => setWidgetStyle(style)}
+          style={{ flex: 1, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: widgetStyle === style ? "#ffe000" : "#333", backgroundColor: widgetStyle === style ? "#ffe00020" : "#141414" }}>
+          <Text style={{ color: widgetStyle === style ? "#ffe000" : "#fafafa", fontWeight: "700" }}>{style === "heatmap" ? "Heatmap" : "Compact streak"}</Text>
+          <Text style={{ color: "#999", fontSize: 11, marginTop: 4 }}>{style === "heatmap" ? "Calendar and streak" : "Name, streak and mark"}</Text>
+        </Pressable>)}
+      </View>
       {loading ? (
         <ActivityIndicator color="#ffe000" />
       ) : !uid ? (

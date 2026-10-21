@@ -54,7 +54,7 @@ test("monthly calendar preserves weekday placement for leap years and six-row mo
   assert.equal(august[0].column, 6);
 });
 test("resized widgets keep header, grid and controls within the card", () => {
-  for (const size of [{ width: 180, height: 170 }, { width: 360, height: 170 }, { width: 440, height: 230 }]) {
+  for (const size of [{ width: 140, height: 170 }, { width: 180, height: 170 }, { width: 360, height: 170 }, { width: 440, height: 230 }]) {
     const layout = habitWidgetLayout(size, "2026-08-21", 27);
     assert.ok(layout.gridWidth <= size.width - 24 + .01);
     assert.ok(layout.gridHeight + 24 + 38 + 8 + 27 <= size.height + .01);
@@ -77,4 +77,22 @@ test("count and checklist widgets retain direct marking controls", () => {
   const checklist = flatten(renderHabitWidget(habit({ tracking: "checklist", checklist: [{ id: "read:one", title: "Read", reminder: null }] })));
   assert.ok(checklist.some((node) => node.props.clickAction === "HABIT_CHECK_read%3Aone"));
   assert.ok(flatten(renderHabitWidget(habit({}, [today]))).some((node) => node.props.accessibilityLabel === "Undo completion"));
+});
+
+
+test("compact widgets show name and streak without a heatmap and preserve direct actions", () => {
+  for (const [settings, expected] of [
+    [{}, "HABIT_TOGGLE"],
+    [{ tracking: "count", dailyGoal: 8, step: 2 }, "HABIT_PLUS"],
+    [{ tracking: "checklist", checklist: [{ id: "read", title: "Read", reminder: null }] }, "HABIT_CHECK_read"],
+  ]) {
+    const item = habit(settings);
+    const nodes = flatten(renderHabitWidget(item, "", { width: 140, height: 170 }, "compact"));
+    assert.ok(nodes.some(node => node.props.text === item.name));
+    assert.ok(nodes.some(node => node.props.text === "DAYS" || node.props.text === "DAY"));
+    assert.ok(nodes.some(node => node.props.clickAction === expected));
+    assert.ok(!nodes.some(node => node.type === "Svg" && node.props.svg.includes("<rect")));
+  }
+  const completed = flatten(renderHabitWidget(habit({}, [today]), "", { width: 140, height: 170 }, "compact"));
+  assert.ok(completed.some(node => node.props.accessibilityLabel === "Undo completion"));
 });

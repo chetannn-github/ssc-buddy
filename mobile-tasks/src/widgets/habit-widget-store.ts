@@ -1,4 +1,4 @@
-import type { HabitWidgetSize } from "../domain/habit-widget-layout";
+import type { HabitWidgetSize, HabitWidgetStyle } from "../domain/habit-widget-layout";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import { Platform } from "react-native";
@@ -44,27 +44,27 @@ export function cacheWidgetHabits(uid: string | undefined, habits: Habit[]) {
     });
   return queue;
 }
-export async function bindHabitWidget(id: number, uid: string, habitId: string) {
-  await AsyncStorage.setItem(key(id), JSON.stringify({ uid, habitId }));
+export async function bindHabitWidget(id: number, uid: string, habitId: string, style: HabitWidgetStyle = "heatmap") {
+  await AsyncStorage.setItem(key(id), JSON.stringify({ uid, habitId, style }));
 }
 export async function removeHabitWidget(id: number) {
   await AsyncStorage.removeItem(key(id));
 }
 export async function pendingHabitWidget(uid: string) {
   const p = await readJSON(PENDING);
-  return p?.uid === uid && Date.now() - p.at < 120000 ? (p as { habitId: string }) : null;
+  return p?.uid === uid && Date.now() - p.at < 120000 ? (p as { habitId: string; style?: HabitWidgetStyle }) : null;
 }
 export async function bindPendingHabitWidget(id: number, uid?: string) {
   if (!uid || (await readJSON(key(id)))) return;
   const p = await pendingHabitWidget(uid);
   if (p && (await readWidgetHabits(uid)).some((h) => h.id === p.habitId)) {
-    await bindHabitWidget(id, uid, p.habitId);
+    await bindHabitWidget(id, uid, p.habitId, p.style);
     await AsyncStorage.removeItem(PENDING);
   }
 }
-export async function pinHabitWidget(uid: string, habitId: string) {
+export async function pinHabitWidget(uid: string, habitId: string, style: HabitWidgetStyle = "heatmap") {
   if (!supportsHabitWidgets()) throw new Error("Habit widgets need the installed Android app.");
-  await AsyncStorage.setItem(PENDING, JSON.stringify({ uid, habitId, at: Date.now() }));
+  await AsyncStorage.setItem(PENDING, JSON.stringify({ uid, habitId, style, at: Date.now() }));
   const { requestPinWidget } = require("react-native-android-widget");
   try {
     if (!(await requestPinWidget({ widgetName: "HabitWidget" })))
@@ -100,7 +100,7 @@ export async function habitWidgetView(id: number, uid?: string, error = "", fetc
       /* Use the last account-scoped cache offline. */
     }
   }
-  return renderHabitWidget(habit, error, size);
+  return renderHabitWidget(habit, error, size, binding.style === "compact" ? "compact" : "heatmap");
 }
 export async function actOnHabitWidget(id: number, uid: string, action: string) {
   const binding = await readJSON(key(id));

@@ -298,7 +298,8 @@ const widgetJS = ts.transpileModule(widgetSource, {
 function widgetHarness() {
   const memory = new Map(),
     writes = [],
-    documents = new Map();
+    documents = new Map(),
+    renderCalls = [];
   let currentUid = "alice";
   const storage = {
     getItem: async (key) => memory.get(key) ?? null,
@@ -325,7 +326,7 @@ function widgetHarness() {
           getFirebaseFirestore: () => ({}),
           getFirebaseAuth: () => ({ currentUser: { uid: currentUid } }),
         };
-      if (name === "./HabitWidget") return { renderHabitWidget: (habit) => habit ?? null };
+      if (name === "./HabitWidget") return { renderHabitWidget: (...args) => { renderCalls.push(args); return args[0] ?? null; } };
       if (name === "react-native-android-widget")
         return { requestWidgetUpdate: async () => {}, requestPinWidget: async () => true };
       if (name === "firebase/firestore")
@@ -356,6 +357,7 @@ function widgetHarness() {
     memory,
     writes,
     documents,
+    renderCalls,
     asUser: (uid) => {
       currentUid = uid;
     },
@@ -649,4 +651,24 @@ test("failed background marking rolls back without leaving a pending change", as
   h.waiting.shift().reject(new Error("offline"));
   await rejected;
   assert.equal(sharedDomain.habitEntry(h.render().habits[0], habitDay()).count, 0);
+});
+
+
+test("habit widget style persists per instance, including compact pins and legacy heatmaps", async () => {
+  const { api, renderCalls, memory } = widgetHarness();
+  const item = { ...configured({}), id: "style-habit", name: "Read" };
+  await api.cacheWidgetHabits("alice", [item]);
+  await api.bindHabitWidget(90, "alice", item.id, "compact");
+  await api.bindHabitWidget(91, "alice", item.id);
+  await api.habitWidgetView(90, "alice", "", false);
+  assert.equal(renderCalls.at(-1)[3], "compact");
+  await api.habitWidgetView(91, "alice", "", false);
+  assert.equal(renderCalls.at(-1)[3], "heatmap");
+  memory.set("ssc-buddy:habit-widget:92", JSON.stringify({ uid: "alice", habitId: item.id }));
+  await api.habitWidgetView(92, "alice", "", false);
+  assert.equal(renderCalls.at(-1)[3], "heatmap");
+  await api.pinHabitWidget("alice", item.id, "compact");
+  await api.bindPendingHabitWidget(93, "alice");
+  await api.habitWidgetView(93, "alice", "", false);
+  assert.equal(renderCalls.at(-1)[3], "compact");
 });

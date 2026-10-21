@@ -3,7 +3,7 @@ import {
   HABIT_COLORS, habitDay, habitEntry, habitIntensity, habitIsComplete,
   habitScheduled, habitStats, normalizeHabitSettings, type Habit,
 } from "../domain/habits";
-import { habitWidgetLayout, type HabitWidgetSize } from "../domain/habit-widget-layout";
+import { habitWidgetLayout, type HabitWidgetSize, type HabitWidgetStyle } from "../domain/habit-widget-layout";
 import { accentInk } from "../domain/app-accent";
 
 function actionIcon(mark: string, color: string) {
@@ -12,7 +12,7 @@ function actionIcon(mark: string, color: string) {
 }
 const flame = (tint: string) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 2c1 6-3 6-2 10-2-1-3-3-2-5C2 13 4 22 12 22s11-10 1-20Zm0 12c4 4 1 7-1 6-3-1-2-4 1-6Z" fill="${tint}"/></svg>`;
 
-export function renderHabitWidget(habit?: Habit, error = "", size: HabitWidgetSize = { width: 180, height: 210 }) {
+export function renderHabitWidget(habit?: Habit, error = "", size: HabitWidgetSize = { width: 180, height: 210 }, style: HabitWidgetStyle = "heatmap") {
   const today = habitDay();
   if (!habit) return <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: "sscbuddy://habits" }}
     style={{ width: "match_parent", height: "match_parent", backgroundColor: "#080808", borderRadius: 24, padding: 14, justifyContent: "center" }}>
@@ -48,6 +48,26 @@ export function renderHabitWidget(habit?: Habit, error = "", size: HabitWidgetSi
   const subtitle = wide ? "Last 20 weeks" : new Date(today + "T12:00:00").toLocaleDateString(undefined, { month: "long" });
   const detail = error || (count ? `${entry.count}/${settings.dailyGoal}${settings.unit ? " " + settings.unit : ""}`
     : checklist ? `${checks.length}/${settings.checklist.length} · ${label}` : habit.targetDays ? `${stats.total}/${habit.targetDays} days` : "");
+  if (style === "compact") return <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: "sscbuddy://habits" }}
+    accessibilityLabel={`${habit.name}, streak ${stats.streak}, ${done ? "completed" : "incomplete"} today`}
+    style={{ width: "match_parent", height: "match_parent", backgroundColor: "#080808", borderRadius: 24, padding: 14, flexDirection: "column" }}>
+    <TextWidget text={habit.name} maxLines={2} truncate="END" style={{ color: "#fafafa", fontSize: 19, fontWeight: "bold" }} />
+    <FlexWidget style={{ flex: 1 }} />
+    <FlexWidget style={{ width: "match_parent", flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+      <FlexWidget style={{ flex: 1, flexDirection: "column" }}>
+        <FlexWidget style={{ flexDirection: "row", alignItems: "center" }}>
+          <TextWidget text={String(stats.streak)} style={{ color: "#fafafa", fontSize: 32, fontWeight: "bold" }} />
+          <SvgWidget svg={flame(tint)} style={{ width: 23, height: 26, marginLeft: 3 }} />
+        </FlexWidget>
+        <TextWidget text={settings.frequency === "period" ? settings.period === "week" ? "WEEKS" : "MONTHS" : stats.streak === 1 ? "DAY" : "DAYS"} style={{ color: "#999999", fontSize: 11, marginTop: 2 }} />
+      </FlexWidget>
+      <FlexWidget clickAction={action} clickActionData={{ uri: "sscbuddy://habits" }} accessibilityLabel={label}
+        style={{ width: 48, height: 48, borderRadius: 24, borderWidth: 1.5, borderColor: tint, backgroundColor: done ? tint : "#080808", alignItems: "center", justifyContent: "center" }}>
+        <SvgWidget svg={actionIcon(count || (checklist && !done) ? "plus" : "check", done ? accentInk(tint) : tint)} style={{ width: 33, height: 33 }} />
+      </FlexWidget>
+    </FlexWidget>
+    {footer && <TextWidget text={detail} maxLines={1} truncate="END" style={{ color: error ? "#fca5a5" : "#999999", fontSize: 9, marginTop: 8 }} />}
+  </FlexWidget>;
   return <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: "sscbuddy://habits" }}
     accessibilityLabel={`${habit.name}, streak ${stats.streak}, ${done ? "completed" : "incomplete"} today`}
     style={{ width: "match_parent", height: "match_parent", backgroundColor: "#080808", borderRadius: 24, padding: 12, flexDirection: "column", overflow: "hidden" }}>
