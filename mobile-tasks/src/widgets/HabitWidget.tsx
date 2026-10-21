@@ -12,7 +12,7 @@ function actionIcon(mark: string, color: string) {
 }
 const flame = (tint: string) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 2c1 6-3 6-2 10-2-1-3-3-2-5C2 13 4 22 12 22s11-10 1-20Zm0 12c4 4 1 7-1 6-3-1-2-4 1-6Z" fill="${tint}"/></svg>`;
 
-export function renderHabitWidget(habit?: Habit, error = "", size: HabitWidgetSize = { width: 180, height: 210 }, style: HabitWidgetStyle = "heatmap") {
+export function renderHabitWidget(habit?: Habit, error = "", size: HabitWidgetSize = { width: 180, height: 210 }, style: HabitWidgetStyle = "heatmap", ownerUid?: string) {
   const today = habitDay();
   if (!habit) return <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: "sscbuddy://habits" }}
     style={{ width: "match_parent", height: "match_parent", backgroundColor: "#080808", borderRadius: 24, padding: 14, justifyContent: "center" }}>
@@ -25,15 +25,14 @@ export function renderHabitWidget(habit?: Habit, error = "", size: HabitWidgetSi
   const checklist = settings.tracking === "checklist";
   const count = settings.tracking === "count";
   const checks = settings.checklist.filter((item) => entry.checks.includes(item.id));
-  const nextItem = settings.type === "quit"
-    ? checks[0] ?? settings.checklist[0]
-    : settings.checklist.find((item) => !entry.checks.includes(item.id)) ?? checks[checks.length - 1];
-  const action = !scheduled ? "OPEN_URI" : count ? "HABIT_PLUS" : checklist && nextItem
-    ? `HABIT_CHECK_${encodeURIComponent(nextItem.id)}` : checklist ? "OPEN_URI" : "HABIT_TOGGLE";
-  const label = !scheduled ? "Open habit" : count ? `Add ${settings.step}` : checklist
-    ? `${nextItem && entry.checks.includes(nextItem.id) ? "Uncheck" : "Check"} ${nextItem?.title ?? "habit"}`
+  const habitUri = checklist
+    ? `sscbuddy://habits/checklist?habitId=${encodeURIComponent(habit.id)}${ownerUid ? `&uid=${encodeURIComponent(ownerUid)}` : ""}`
+    : "sscbuddy://habits";
+  const action = checklist || !scheduled ? "OPEN_URI" : count ? "HABIT_PLUS" : "HABIT_TOGGLE";
+  const label = checklist ? "Open checklist" : !scheduled ? "Open habit" : count ? `Add ${settings.step}`
     : settings.type === "quit" ? done ? "Mark slip" : "Undo slip" : done ? "Undo completion" : "Mark done";
-  const footer = Boolean(error || count || checklist || habit.targetDays);
+  const targetProgress = habit.targetDays ? `${stats.total}/${habit.targetDays} days` : "";
+  const footer = Boolean(error || count || checklist || (style === "compact" && targetProgress));
   const layout = habitWidgetLayout(size, today, footer ? 27 : 0, style);
   const { step, labelWidth, labelHeight, cells, wide, gridWidth, gridHeight } = layout;
   const gap = Math.max(2, step * .2), box = step - gap;
@@ -45,15 +44,17 @@ export function renderHabitWidget(habit?: Habit, error = "", size: HabitWidgetSi
     return `<rect x="${x}" y="${y}" width="${box}" height="${box}" rx="${Math.min(3, box * .22)}" fill="${tint}" fill-opacity="${cell.future ? .035 : intensity > 0 ? .35 + .65 * intensity : wide ? .12 : .025}"${!wide && intensity === 0 ? ` stroke="${cell.future ? "#333333" : tint}" stroke-opacity=".45" stroke-width="1"` : ""}/>`;
   }).join("");
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${gridWidth}" height="${gridHeight}" viewBox="0 0 ${gridWidth} ${gridHeight}">${labels}${boxes}</svg>`;
-  const subtitle = wide ? "Last 20 weeks" : new Date(today + "T12:00:00").toLocaleDateString(undefined, { month: "long" });
-  const detail = error || (count ? `${entry.count}/${settings.dailyGoal}${settings.unit ? " " + settings.unit : ""}`
-    : checklist ? `${checks.length}/${settings.checklist.length} · ${label}` : habit.targetDays ? `${stats.total}/${habit.targetDays} days` : "");
+  const subtitle = targetProgress || (wide ? "Last 20 weeks" : new Date(today + "T12:00:00").toLocaleDateString(undefined, { month: "long" }));
+  const detail = error || (style === "compact" && targetProgress ? targetProgress
+    : count ? `${entry.count}/${settings.dailyGoal}${settings.unit ? " " + settings.unit : ""}`
+    : checklist ? `${checks.length}/${settings.checklist.length} items` : "");
   const narrowCompact = size.width < 160;
   const compactButton = narrowCompact ? 40 : 48;
-  if (style === "compact") return <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: "sscbuddy://habits" }}
+  const compactTitleOffset = narrowCompact ? Math.max(0, Math.min(18, size.height - 150)) : 0;
+  if (style === "compact") return <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: habitUri }}
     accessibilityLabel={`${habit.name}, streak ${stats.streak}, ${done ? "completed" : "incomplete"} today`}
     style={{ width: "match_parent", height: "match_parent", backgroundColor: "#080808", borderRadius: 24, padding: narrowCompact ? 10 : 14, flexDirection: "column" }}>
-    <TextWidget text={habit.name} maxLines={2} truncate="END" style={{ color: "#fafafa", fontSize: narrowCompact ? 16 : 19, fontWeight: "bold" }} />
+    <TextWidget text={habit.name} maxLines={2} truncate="END" style={{ color: "#fafafa", fontSize: narrowCompact ? 16 : 19, fontWeight: "bold", marginTop: compactTitleOffset }} />
     <FlexWidget style={{ flex: 1 }} />
     <FlexWidget style={{ width: "match_parent", flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
       <FlexWidget style={{ flex: 1, flexDirection: "column" }}>
@@ -63,18 +64,18 @@ export function renderHabitWidget(habit?: Habit, error = "", size: HabitWidgetSi
         </FlexWidget>
         <TextWidget text={settings.frequency === "period" ? settings.period === "week" ? "WEEKS" : "MONTHS" : stats.streak === 1 ? "DAY" : "DAYS"} style={{ color: "#999999", fontSize: 11, marginTop: 2 }} />
       </FlexWidget>
-      <FlexWidget clickAction={action} clickActionData={{ uri: "sscbuddy://habits" }} accessibilityLabel={label}
+      <FlexWidget clickAction={action} clickActionData={{ uri: habitUri }} accessibilityLabel={label}
         style={{ width: compactButton, height: compactButton, borderRadius: compactButton / 2, borderWidth: 1.5, borderColor: tint, backgroundColor: done ? tint : "#080808", alignItems: "center", justifyContent: "center" }}>
         <SvgWidget svg={actionIcon(count || (checklist && !done) ? "plus" : "check", done ? accentInk(tint) : tint)} style={{ width: narrowCompact ? 27 : 33, height: narrowCompact ? 27 : 33 }} />
       </FlexWidget>
     </FlexWidget>
     {footer && <TextWidget text={detail} maxLines={1} truncate="END" style={{ color: error ? "#fca5a5" : "#999999", fontSize: 9, marginTop: 8 }} />}
   </FlexWidget>;
-  return <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: "sscbuddy://habits" }}
+  return <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: habitUri }}
     accessibilityLabel={`${habit.name}, streak ${stats.streak}, ${done ? "completed" : "incomplete"} today`}
     style={{ width: "match_parent", height: "match_parent", backgroundColor: "#080808", borderRadius: 24, padding: 12, flexDirection: "column", overflow: "hidden" }}>
     <FlexWidget style={{ width: "match_parent", flexDirection: "row", alignItems: "center", height: 38 }}>
-      <FlexWidget clickAction={action} clickActionData={{ uri: "sscbuddy://habits" }} accessibilityLabel={label}
+      <FlexWidget clickAction={action} clickActionData={{ uri: habitUri }} accessibilityLabel={label}
         style={{ width: 30, height: 30, borderRadius: 15, borderWidth: 1.5, borderColor: tint, backgroundColor: done ? tint : "#080808", alignItems: "center", justifyContent: "center", marginRight: 8 }}>
         <SvgWidget svg={actionIcon(count || (checklist && !done) ? "plus" : "check", done ? accentInk(tint) : tint)} style={{ width: 21, height: 21 }} />
       </FlexWidget>

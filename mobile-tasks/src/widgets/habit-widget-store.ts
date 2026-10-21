@@ -101,7 +101,7 @@ export async function habitWidgetView(id: number, uid?: string, error = "", fetc
       /* Use the last account-scoped cache offline. */
     }
   }
-  return renderHabitWidget(habit, error, size, habitWidgetStyleForName(size?.widgetName) ?? (binding.style === "compact" ? "compact" : binding.style === "month" ? "month" : "heatmap"));
+  return renderHabitWidget(habit, error, size, habitWidgetStyleForName(size?.widgetName) ?? (binding.style === "compact" ? "compact" : binding.style === "month" ? "month" : "heatmap"), uid);
 }
 export async function actOnHabitWidget(id: number, uid: string, action: string) {
   const binding = await readJSON(key(id));

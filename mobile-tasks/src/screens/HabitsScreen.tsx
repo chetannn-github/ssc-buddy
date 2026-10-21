@@ -44,19 +44,21 @@ import {
   type HabitSaveDetails,
 } from "../domain/habits";
 import { reportVerticalScroll } from "../navigation/bottomNavigationVisibility";
-export function HabitsScreen({ user, onSwitchToTasks, selectedDate, onSelectDate, dateTasks, visibleWeekEnd, onWeekEndChange, rankAction, dueOnly, onFilterChange }: {
+export function HabitsScreen({ user, widgetRequest, onWidgetRequestHandled, onSwitchToTasks, selectedDate, onSelectDate, dateTasks, visibleWeekEnd, onWeekEndChange, rankAction, dueOnly, onFilterChange }: {
+  widgetRequest?: { id: string; uid?: string } | null; onWidgetRequestHandled?: () => void;
   dueOnly: boolean; onFilterChange: (value: boolean) => void;
   user: User | null; onSwitchToTasks?: () => void; selectedDate: string; onSelectDate: (date: string) => void;
   dateTasks: Task[]; visibleWeekEnd?: string; onWeekEndChange: (date: string) => void; rankAction?: React.ReactNode;
 }) {
   const { habits, loading, error, retry, save, remove, updateDay } = useHabits(user?.uid);
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const menuWidth = Math.min(260, windowWidth - 24);
   const [menuPosition, setMenuPosition] = useState({ left: 12, top: 100 });
   const openHabitMenu = (habit: Habit, event: { nativeEvent: { pageX: number; pageY: number } }) => {
     if (busy) return;
     const menuHeight = Platform.OS === "android" ? 200 : 104;
     setMenuPosition({
-      left: Math.max(12, Math.min(windowWidth - 192, event.nativeEvent.pageX - 24)),
+      left: Math.max(12, Math.min(windowWidth - menuWidth - 12, event.nativeEvent.pageX - 24)),
       top: Math.max(12, Math.min(windowHeight - menuHeight - 24, event.nativeEvent.pageY + 12)),
     });
     setMenu(habit);
@@ -68,8 +70,7 @@ export function HabitsScreen({ user, onSwitchToTasks, selectedDate, onSelectDate
   const [editing, setEditing] = useState<Habit | "new" | null>(null),
     [deleting, setDeleting] = useState<Habit | null>(null),
     [menu, setMenu] = useState<Habit | null>(null);
-  const [detail, setDetail] = useState<{ id: string; day: string } | null>(null),
-    [count, setCount] = useState("");
+  const [detail, setDetail] = useState<{ id: string; day: string } | null>(null);
   const [busy, setBusy] = useState(false),
     [message, setMessage] = useState("");
   const locked = useRef(false);
@@ -97,11 +98,22 @@ export function HabitsScreen({ user, onSwitchToTasks, selectedDate, onSelectDate
     }
   };
   const openDetail = (habit: Habit, day: string) => {
-    const entry = habitEntry(habit, day);
-    setCount(String(entry.count));
     setMessage("");
     setDetail({ id: habit.id, day });
   };
+  useEffect(() => {
+    if (!widgetRequest || !user || loading || error) return;
+    if (widgetRequest.uid && widgetRequest.uid !== user.uid) {
+      onWidgetRequestHandled?.();
+      return;
+    }
+    const requested = habits.find(habit => habit.id === widgetRequest.id);
+    if (requested && normalizeHabitSettings(requested.settings).tracking === "checklist") {
+      onSelectDate(today);
+      openDetail(requested, today);
+    }
+    onWidgetRequestHandled?.();
+  }, [widgetRequest, user?.uid, loading, error, habits, today, onWidgetRequestHandled, onSelectDate]);
   const detailHabit = habits.find((habit) => habit.id === detail?.id),
     detailSettings = normalizeHabitSettings(detailHabit?.settings);
   const scoped = habits.filter(
@@ -354,7 +366,12 @@ export function HabitsScreen({ user, onSwitchToTasks, selectedDate, onSelectDate
         <View style={{ flex: 1 }}>
           <Pressable accessibilityRole="button" accessibilityLabel="Close habit menu"
             style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(0,0,0,.15)" }]} onPress={() => setMenu(null)} />
-          {menu && <View accessibilityViewIsModal style={[s.habitMenu, menuPosition]}>
+          {menu && <View accessibilityViewIsModal style={[s.habitMenu, { width: menuWidth, maxHeight: windowHeight - 48 }, menuPosition]}
+            onLayout={({ nativeEvent: { layout } }) => setMenuPosition(previous => {
+              const left = Math.max(12, Math.min(windowWidth - layout.width - 12, previous.left));
+              const top = Math.max(12, Math.min(windowHeight - layout.height - 24, previous.top));
+              return left === previous.left && top === previous.top ? previous : { left, top };
+            })}>
             <Pressable disabled={busy} style={s.habitMenuItem} onPress={() => { setEditing(menu); setMessage(""); setMenu(null); }}>
               <MaterialCommunityIcons name="pencil-outline" size={18} color={colors.text} />
               <Text style={s.habitMenuText}>Edit Habit</Text>
@@ -391,7 +408,7 @@ export function HabitsScreen({ user, onSwitchToTasks, selectedDate, onSelectDate
       <Modal
         transparent
         visible={!!detail && !!detailHabit}
-        animationType="fade"
+        animationType="slide"
         onRequestClose={() => {
           if (!busy) setDetail(null);
         }}
@@ -419,6 +436,8 @@ export function HabitsScreen({ user, onSwitchToTasks, selectedDate, onSelectDate
                 {
                   backgroundColor: "#000",
                   padding: 10,
+                  paddingBottom: detailSettings.tracking === "count" ? 26 : 10,
+                  maxWidth: detailSettings.tracking === "count" ? undefined : 420,
                   gap: 10,
                   borderBottomLeftRadius: 0,
                   borderBottomRightRadius: 0,
@@ -497,27 +516,13 @@ export function HabitsScreen({ user, onSwitchToTasks, selectedDate, onSelectDate
                 )}
               </View>
               {detailHabit && detail && detailSettings.tracking === "count" && (
-                <>
-                  <Text style={s.copy}>
-                    Count · {detailSettings.unit || "units"} / {detailSettings.dailyGoal} daily goal
-                  </Text>
-                  <TextInput
-                    editable={!!detail && canEditHabitDay(detail.day, today)}
-                    keyboardType="decimal-pad"
-                    value={count}
-                    onChangeText={setCount}
-                    style={s.input}
-                  />
-                  <Pressable
-                    disabled={busy || !detail || !canEditHabitDay(detail.day, today)}
-                    style={s.add}
-                    onPress={() =>
-                      mark(detailHabit.id, detail.day, { type: "count", value: Number(count) })
-                    }
-                  >
-                    <Text style={s.addText}>Update count</Text>
-                  </Pressable>
-                </>
+                <HabitCountControls
+                  value={habitEntry(detailHabit, detail.day).count}
+                  goal={detailSettings.dailyGoal}
+                  tint={HABIT_COLORS[detailHabit.color]}
+                  disabled={busy || !canEditHabitDay(detail.day, today)}
+                  onChange={direction => mark(detailHabit.id, detail.day, { type: "increment", amount: direction * detailSettings.step })}
+                />
               )}
               {detailHabit &&
                 detail &&
@@ -664,6 +669,36 @@ export function HabitsScreen({ user, onSwitchToTasks, selectedDate, onSelectDate
   );
 }
 const INITIAL_HEATMAP_OFFSET = { x: 10000, y: 0 };
+function HabitCountControls({ value, goal, tint, disabled, onChange }: {
+  value: number; goal: number; tint: string; disabled: boolean; onChange: (direction: number) => void;
+}) {
+  const progress = useRef(new Animated.Value(goal > 0 ? Math.min(1, value / goal) : 0)).current;
+  useEffect(() => {
+    const animation = Animated.timing(progress, { toValue: goal > 0 ? Math.max(0, Math.min(1, value / goal)) : 0, duration: 350, easing: Easing.out(Easing.cubic), useNativeDriver: false });
+    animation.start();
+    return () => animation.stop();
+  }, [value, goal, progress]);
+  return <View style={{ paddingHorizontal: 22, paddingTop: 24, gap: 28 }}>
+    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 40 }}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Decrease count" disabled={disabled || value <= 0} onPress={() => onChange(-1)}
+        style={{ width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center", backgroundColor: tint + "25", opacity: disabled || value <= 0 ? .5 : 1 }}>
+        <MaterialCommunityIcons name="minus" size={30} color={tint} />
+      </Pressable>
+      <View accessibilityLabel={`${value} of ${goal}`} style={{ minWidth: 56, alignItems: "center", gap: 5 }}>
+        <NumberFlow value={value} style={{ color: "#fafafa", fontSize: 30, fontWeight: "700" }} />
+        <Text style={{ color: "#888", fontSize: 15 }}>/ {goal}</Text>
+      </View>
+      <Pressable accessibilityRole="button" accessibilityLabel="Increase count" disabled={disabled} onPress={() => onChange(1)}
+        style={{ width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center", backgroundColor: tint, opacity: disabled ? .5 : 1 }}>
+        <MaterialCommunityIcons name="plus" size={30} color="#000" />
+      </Pressable>
+    </View>
+    <View style={{ height: 9, backgroundColor: tint + "28", borderRadius: 9, overflow: "hidden" }}>
+      <Animated.View style={{ height: "100%", borderRadius: 9, backgroundColor: tint, width: progress.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] }) }} />
+    </View>
+  </View>;
+}
+
 const HabitGrid = memo(function HabitGrid({
   habit,
   today,
@@ -742,9 +777,9 @@ const HabitGrid = memo(function HabitGrid({
   );
 });
 const s = createThemedStyles({
-  habitMenu: { position: "absolute", width: 180, borderRadius: 13, padding: 4, backgroundColor: "#242424", borderWidth: 1, borderColor: "#414141", elevation: 12 },
+  habitMenu: { position: "absolute", borderRadius: 13, padding: 4, backgroundColor: "#0e0e0e", borderWidth: 1, borderColor: "#262626", elevation: 12, overflow: "hidden" },
   habitMenuItem: { flexDirection: "row", alignItems: "center", gap: 11, paddingHorizontal: 12, paddingVertical: 13 },
-  habitMenuText: { color: colors.text, fontSize: 14, fontWeight: "600" },
+  habitMenuText: { flex: 1, flexShrink: 1, color: colors.text, fontSize: 14, fontWeight: "600" },
   page: { flex: 1, backgroundColor: "#000" },
   content: { padding: 20, gap: 20, paddingBottom: 110, paddingTop: 0 },
   header: { flexDirection: "row", alignItems: "center", gap: 8 },

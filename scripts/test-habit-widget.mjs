@@ -70,12 +70,13 @@ test("widget uses the habit color and switches between month and 20-week heatmap
     assert.ok(nodes.some((node) => node.props.clickAction === "HABIT_TOGGLE"));
   }
 });
-test("count and checklist widgets retain direct marking controls", () => {
+test("count widgets retain direct controls and checklist widgets open their sheet", () => {
   const count = flatten(renderHabitWidget(habit({ tracking: "count", dailyGoal: 8, step: 2 })));
   assert.ok(count.some((node) => node.props.clickAction === "HABIT_PLUS"));
   assert.ok(count.some((node) => node.props.clickAction === "HABIT_MINUS"));
   const checklist = flatten(renderHabitWidget(habit({ tracking: "checklist", checklist: [{ id: "read:one", title: "Read", reminder: null }] })));
-  assert.ok(checklist.some((node) => node.props.clickAction === "HABIT_CHECK_read%3Aone"));
+  assert.ok(checklist.some((node) => node.props.clickAction === "OPEN_URI" && node.props.clickActionData?.uri === "sscbuddy://habits/checklist?habitId=one"));
+  assert.ok(!checklist.some((node) => node.props.clickAction?.startsWith("HABIT_CHECK_")));
   assert.ok(flatten(renderHabitWidget(habit({}, [today]))).some((node) => node.props.accessibilityLabel === "Undo completion"));
 });
 
@@ -84,7 +85,7 @@ test("compact widgets show name and streak without a heatmap and preserve direct
   for (const [settings, expected] of [
     [{}, "HABIT_TOGGLE"],
     [{ tracking: "count", dailyGoal: 8, step: 2 }, "HABIT_PLUS"],
-    [{ tracking: "checklist", checklist: [{ id: "read", title: "Read", reminder: null }] }, "HABIT_CHECK_read"],
+    [{ tracking: "checklist", checklist: [{ id: "read", title: "Read", reminder: null }] }, "OPEN_URI"],
   ]) {
     const item = habit(settings);
     const nodes = flatten(renderHabitWidget(item, "", { width: 140, height: 170 }, "compact"));
@@ -108,4 +109,18 @@ test("launcher widget categories determine style and month remains monthly when 
   const layout = api.habitWidgetLayout({ width: 360, height: 210 }, "2026-10-21", 0, "month");
   assert.equal(layout.wide, false);
   assert.equal(layout.cells.length, 31);
+});
+
+
+test("all checklist widget types open the exact account-scoped habit without marking an item", () => {
+  const item = { ...habit({ tracking: "checklist", checklist: [{ id: "a", title: "A" }] }), id: "habit / one" };
+  for (const style of ["heatmap", "month", "compact"]) {
+    const nodes = flatten(renderHabitWidget(item, "", { width: 140, height: 170 }, style, "owner / one"));
+    const actions = nodes.filter(node => node.props.clickAction);
+    assert.ok(actions.length >= 2);
+    for (const node of actions) {
+      assert.equal(node.props.clickAction, "OPEN_URI");
+      assert.equal(node.props.clickActionData.uri, "sscbuddy://habits/checklist?habitId=habit%20%2F%20one&uid=owner%20%2F%20one");
+    }
+  }
 });

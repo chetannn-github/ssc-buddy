@@ -729,3 +729,7 @@ html, body, #root {
   .recall-desktop-card .quick-setup>.primary { min-height:36px; }
   .recall-desktop-card .quick-state { min-height:180px; }
 }
+
+/* Use the same animated border liquid as the main calendar at widget scale. */
+.android-task-dates .date-ring { width:32px; height:32px; }
+.android-task-dates .date-ring b { font-size:12px; }

@@ -1,3 +1,4 @@
+import { DateRing } from "./DateRing";
 import NumberFlow from "@number-flow/react";
 import { dailyTaskWidgetModel } from "../../../mobile-tasks/src/domain/daily-task-widget";
 import { formatMinutes, summarizeTasks } from "../../../mobile-tasks/src/domain/tasks";
@@ -19,10 +20,9 @@ export function AndroidTasksWidget({ tasks, today, selectedDate, dueOnly, rank, 
     <div className="android-task-dates">{model.dates.map(day => {
       const value = new Date(day + "T12:00:00"), selected = day === model.selected;
       const percent = summarizeTasks(tasks.filter(task => task.date === day)).percent;
-      const arc = Math.max(selected ? 2 : 0, Math.min(100, percent)) * 81.68 / 100;
       return <button key={day} onClick={() => onSelectDate(day)} aria-label={day} aria-pressed={selected}>
         <small>{value.toLocaleDateString(undefined, { weekday: "short" })}</small>
-        <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="13" fill="none" stroke={selected ? "#535353" : "#292929"} strokeWidth="2.5" />{arc > 0 && <circle cx="16" cy="16" r="13" fill="none" stroke="var(--accent)" strokeWidth="2.5" strokeLinecap="round" strokeDasharray={`${arc} 81.68`} transform="rotate(-90 16 16)" />}<text x="16" y="20" fill="#fafafa" fontSize="12" fontFamily="sans-serif" fontWeight="600" textAnchor="middle">{value.getDate()}</text></svg>
+        <DateRing percent={percent} selected={selected} day={value.getDate()} />
       </button>;
     })}</div>
     <div className="android-task-overview">

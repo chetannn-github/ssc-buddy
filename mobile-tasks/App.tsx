@@ -240,6 +240,7 @@ export default function App() {
   const taskSection = useRef<"tasks" | "habits">("tasks");
   useEffect(() => { if (appTab === "tasks" || appTab === "habits") taskSection.current = appTab; }, [appTab]);
   const [timerWidgetRequest, setTimerWidgetRequest] = useState(0);
+  const [habitWidgetRequest, setHabitWidgetRequest] = useState<{ id: string; uid?: string } | null>(null);
   const initialWidgetUrlRead = useRef(false);
   const [trackTab, setTrackTab] = useState<"Syllabus" | "Revision" | "Mock Test">("Syllabus");
   const [dailyManifestation, setDailyManifestation] = useState("");
@@ -487,7 +488,17 @@ export default function App() {
   useEffect(() => {
     if (!tasksLoaded) return;
     const openCompletionFromWidget = (url: string | null) => {
-      if (url?.startsWith("sscbuddy://habits")) { setAppTab("habits"); return; }
+      if (url?.startsWith("sscbuddy://habits")) {
+        setAppTab("habits");
+        if (url.startsWith("sscbuddy://habits/checklist?")) {
+          try {
+            const id = /[?&]habitId=([^&]+)/.exec(url)?.[1];
+            const owner = /[?&]uid=([^&]+)/.exec(url)?.[1];
+            if (id) setHabitWidgetRequest({ id: decodeURIComponent(id), uid: owner ? decodeURIComponent(owner) : undefined });
+          } catch { /* Ignore malformed external links. */ }
+        }
+        return;
+      }
       if (url?.startsWith("sscbuddy://music")) { setMediaMode("music"); setMusicOpenRequest((value) => value + 1); return; }
       if (url?.startsWith("sscbuddy://timers")) {
         setAppTab("timers");
@@ -840,7 +851,7 @@ export default function App() {
       ) : appTab === "practice" ? (
         <PracticeScreen user={user} onOpenQuickRecall={() => setQuickRecallOpen(true)} />
       ) : appTab === "habits" ? (
-        <HabitsScreen user={user} onSwitchToTasks={() => setAppTab("tasks")}
+        <HabitsScreen user={user} widgetRequest={habitWidgetRequest} onWidgetRequestHandled={() => setHabitWidgetRequest(null)} onSwitchToTasks={() => setAppTab("tasks")}
           selectedDate={activeTaskDate} onSelectDate={selectDailyDate} dateTasks={tasks}
           visibleWeekEnd={dailyWeekEnd} onWeekEndChange={setDailyWeekEnd} rankAction={dailyRankAction}
           dueOnly={taskDueOnly} onFilterChange={setTaskDueOnly} />
