@@ -28,7 +28,7 @@ header, .toolbar, footer, .task { display: flex; align-items: center; } header {
 .task-dialog label, .complete-dialog label { font-weight: 600; }.task-dialog .primary, .task-dialog .secondary, .complete-dialog .primary, .complete-dialog .secondary { font-weight: 600; }.complete-dialog { width: min(100%, 330px); gap: 10px; padding: 17px; border-radius: 16px; }.complete-dialog h2 { margin: 0; font-size: 18px; }.complete-dialog .dialog-copy { margin: -5px 0 0; }.complete-name { margin: 0; overflow: hidden; color: #e4e4e7; font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }.time-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }.time-grid label { display: grid; gap: 5px; color: #b4b4b8; font-size: 11px; }.time-grid input { height: 38px; padding: 0 10px; border: 1px solid #414141; border-radius: 9px; color: #f4f4f5; background: #181818; outline: none; }.complete-dialog .chips { gap: 5px; }.complete-dialog .chip { padding: 6px 8px; border-radius: 8px; font-size: 10px; }.complete-dialog .dialog-actions { margin-top: 2px; gap: 8px; }.complete-dialog .primary, .complete-dialog .secondary { min-height: 37px; border-radius: 10px; font-size: 12px; }
 .task-dialog .dialog-actions { margin-top: auto; }.task-dialog .primary, .task-dialog .secondary { min-height: 34px; border-radius: 9px; font-size: 11px; }.task-dialog.editing { width: min(100%, 320px); min-height: 0; gap: 10px; padding: 16px; }.task-dialog.editing .dialog-copy { margin: -6px 0 0; }.complete-dialog { width: min(100%, 310px); gap: 9px; padding: 16px; }.complete-dialog h2 { font-size: 17px; }.complete-dialog .complete-name { color: #a1a1aa; font-size: 11px; font-weight: 500; }.complete-dialog label { display: grid; gap: 5px; color: #b4b4b8; font-size: 11px; }.complete-dialog label input { height: 38px; padding: 0 10px; border: 1px solid #414141; border-radius: 9px; color: #f4f4f5; background: #181818; outline: none; }.complete-dialog .chips { gap: 5px; }.complete-dialog .chip { padding: 6px 8px; font-size: 10px; }.complete-dialog .dialog-actions { margin-top: 1px; }.complete-dialog .primary, .complete-dialog .secondary { min-height: 35px; border-radius: 9px; font-size: 11px; }
 .auth { display: grid; min-height: 100vh; place-items: center; padding: 22px; background: #111; }.auth-card { width: min(100%, 360px); padding: 22px; border: 1px solid #343434; border-radius: 18px; background: #1b1b1b; }.auth-card h1 { margin: 8px 0; }.auth-card p { color: #a1a1aa; font-size: 12px; line-height: 1.55; }.auth-card input, .dialog input, .dialog select { width: 100%; height: 42px; padding: 0 11px; color: #f4f4f5; border: 1px solid #414141; border-radius: 10px; outline: none; background: #141414; }.auth-card input { margin-top: 8px; }.auth-card .primary, .auth-card .secondary { margin-top: 10px; }.error { color: #fda4af !important; }.spin { animation: spin 900ms linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }
-.modal { position: fixed; inset: 0; z-index: 110; display: grid; place-items: center; padding: 20px; background: #000b; }.dialog { position: relative; width: min(100%, 350px); display: grid; gap: 11px; padding: 20px; border: 1px solid #3a3a3a; border-radius: 17px; background: #202020; box-shadow: 0 20px 70px #000; }.dialog label { display: grid; gap: 6px; color: #b4b4b8; font-size: 11px; font-weight: 700; }.close { position: absolute; top: 12px; right: 12px; width: 27px; height: 27px; background: transparent; }.chips { display: flex; gap: 6px; }.chip { border: 1px solid #414141; border-radius: 9px; padding: 7px 9px; color: #c4c4c8; background: #292929; font-size: 11px; }.chip.active { color: #ccfbf1; border-color: var(--accent); background: #164c43; }
+.modal { position: fixed; inset: 0; z-index: 110; display: grid; place-items: center; padding: 20px; background: #000b; }.dialog { position: relative; width: min(100%, 350px); display: grid; gap: 11px; padding: 20px; border: 1px solid #3a3a3a; border-radius: 17px; background: #202020; box-shadow: 0 20px 70px #000; }.dialog label { display: grid; gap: 6px; color: #b4b4b8; font-size: 11px; font-weight: 700; }.close { position: absolute; top: 12px; right: 12px; width: 27px; height: 27px; background: transparent; }.chips { display: flex; gap: 6px; }.chip { border: 1px solid #414141; border-radius: 9px; padding: 7px 9px; color: #c4c4c8; background: #292929; font-size: 11px; }.chip.active { color: var(--accent-ink); border-color: var(--accent); background: var(--accent); }
 .task-dialog { width: min(100%, 390px); gap: 15px; }.task-dialog h2 { margin-bottom: 0; }.dialog-copy { margin: -8px 0 0; }.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }.task-dialog select { appearance: auto; }.schedule { display: grid; gap: 7px; color: #b4b4b8; font-size: 11px; font-weight: 700; }.schedule > div { display: flex; gap: 7px; }.schedule button { border: 1px solid #3b3b3b; border-radius: 8px; padding: 7px 12px; color: #a1a1aa; background: #181818; font-size: 11px; text-transform: capitalize; transition: background 150ms ease, border-color 150ms ease, color 150ms ease; }.schedule button:hover { color: #f4f4f5; background: #242424; }.schedule button.active { border-color: #666; color: #f4f4f5; background: #303030; }.task-dialog .dialog-actions { margin-top: 2px; }.task-dialog .secondary, .task-dialog .primary { min-height: 39px; font-size: 12px; }
 .task-dialog { width: min(100%, 312px); max-height: calc(100vh - 20px); gap: 9px; padding: 14px; border-radius: 14px; overflow: auto; }.task-dialog h2 { font-size: 17px; }.task-dialog .close { top: 8px; right: 8px; }.task-dialog .form-grid { gap: 7px; }.task-dialog label { gap: 4px; font-size: 10px; }.task-dialog input, .task-dialog .select-trigger { height: 36px; padding-inline: 9px; font-size: 11px; }.task-dialog .schedule { gap: 5px; font-size: 10px; }.task-dialog .schedule > div { gap: 6px; }.task-dialog .schedule button { padding: 5px 9px; font-size: 10px; }.task-dialog .dialog-actions { margin-top: 0; gap: 7px; }.task-dialog .secondary, .task-dialog .primary { min-height: 34px; border-radius: 9px; font-size: 11px; }
 .select-menu { position: relative; }.select-trigger { display: flex; width: 100%; height: 42px; align-items: center; justify-content: space-between; gap: 7px; padding: 0 10px; border: 1px solid #414141; border-radius: 10px; color: #f4f4f5; background: #181818; text-align: left; }.select-trigger:hover, .select-trigger[aria-expanded="true"] { border-color: #666; background: #202020; }.select-trigger span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.select-trigger svg { flex: 0 0 auto; color: #a1a1aa; transition: transform 160ms ease; }.select-trigger[aria-expanded="true"] svg { transform: rotate(180deg); }.select-popover { position: absolute; z-index: 20; top: calc(100% + 5px); right: 0; left: 0; overflow: auto; max-height: 154px; padding: 4px; border: 1px solid #454545; border-radius: 10px; background: #202020; box-shadow: 0 14px 32px #000b; animation: select-in 140ms ease-out; }.select-popover button { display: block; width: 100%; padding: 8px 8px; border: 0; border-radius: 7px; color: #c4c4c8; background: transparent; text-align: left; font-size: 11px; }.select-popover button:hover, .select-popover button.selected { color: #f4f4f5; background: #353535; } @keyframes select-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
@@ -145,7 +145,7 @@ header, .toolbar, footer, .task { display: flex; align-items: center; } header {
 .widget .task.done { border-color: #285f94; background: #162c45; }
 .widget .check { color: var(--accent-ink); border-color: rgba(255,255,255,.68); }
 .widget .done .check { background: var(--accent); }
-.widget .chip.active { color: #dbeafe; border-color: var(--accent); background: #162c45; }
+.widget .chip.active { color: var(--accent-ink); border-color: var(--accent); background: var(--accent); }
 .quick-recall-trigger:hover, .quick-recall-trigger.active { border-color: #285f94; color: #dbeafe; background: #162c45; }
 .quick-option:hover:not(:disabled) { border-color: #52525b; background: #242424; }
 .quick-option:focus-visible { outline: none; border-color: #52525b; }
@@ -497,7 +497,7 @@ html, body, #root {
 .habit-mark:disabled { opacity:.4; cursor:default; }
 .habit-heatmap { overflow-x:auto; scrollbar-width:none; overscroll-behavior-x:contain; }
 .habit-heatmap::-webkit-scrollbar { display:none; }
-.habit-heatmap>div { display:grid; width:max-content; grid-template-rows:repeat(7,13px); gap:3px; }
+.habit-heatmap>div { display:grid; width:max-content; grid-template-rows:repeat(7,16px); gap:3px; }
 .habit-heatmap span { border-radius:3px; transition:opacity 180ms; }
 .habit-challenge { margin-top:9px; color:#999; font-size:10px; }
 .habit-challenge>div { height:3px; border-radius:9px; overflow:hidden; margin-top:5px; background:#ffffff10; }
@@ -531,7 +531,7 @@ html, body, #root {
 .pin-habit-button:hover { color:var(--habit-color); }
 .pinned-habit-body { min-width:0; background:transparent; }
 .pinned-habit-body #root { padding:4px; }
-.pinned-habit { display:flex; flex-direction:column; height:100%; width:100%; min-height:0; padding:13px 16px; overflow:hidden; border:1px solid #ffffff14; border-radius:23px; background:#080808; color:#fafafa; position:relative; }
+.pinned-habit { display:flex; flex-direction:column; height:100%; width:100%; min-height:0; padding:13px 16px; overflow:hidden; border:0; border-radius:23px; background:#080808; color:#fafafa; position:relative; }
 .pinned-tools { position:absolute; top:0; left:16px; right:16px; height:10px; display:flex; color:#555; }
 .pinned-tools>span { flex:1; cursor:grab; height:10px; }
 .pinned-tools>span svg { pointer-events:none; }
@@ -544,7 +544,7 @@ html, body, #root {
 .pinned-streak svg { color:var(--habit-color); }
 .pinned-streak small { font-size:8px; margin-top:1px; color:#777; }
 .pinned-grid { flex:1; min-height:0; display:flex; align-items:center; justify-content:center; padding-top:5px; }
-.pinned-grid svg { display:block; width:100%; height:100%; }
+.pinned-grid>svg { display:block; width:100%; height:100%; }
 .pinned-footer { display:flex; align-items:center; justify-content:space-between; flex:0 0 auto; margin-top:3px; }
 .pinned-footer small { font-size:10px; color:#777; }
 .pinned-habit .habit-mark { width:30px; height:30px; }
@@ -634,7 +634,7 @@ html, body, #root {
 .tasks-desktop-card .pinned-task-heading h1 { font-size:17px; }
 
 /* Match the Android daily-task widget's geometry, type sizes and colors. */
-.tasks-desktop-card { background:#000; border:0; border-radius:22px; padding:12px; gap:0; }
+.tasks-desktop-card { background:#000; border:0; border-radius:22px; padding:16px; gap:0; }
 .android-task-heading { display:flex; flex:0 0 30px; align-items:center; justify-content:space-between; gap:8px; }
 .widget .android-task-heading h1 { margin:0; min-width:0; flex:1; font-size:17px; font-weight:700; letter-spacing:normal; color:#fafafa; cursor:grab; }
 .android-task-actions { display:flex; flex:0 0 auto; align-items:center; }
@@ -686,3 +686,33 @@ html, body, #root {
 .widget .main-android-task-list .task-main small { margin-top:5px; }
 
 .widget>.main-shared-task-list { display:block; padding:0; border:0; border-radius:0; background:transparent; gap:0; }
+
+/* Let the wide heatmap use the whole chart area instead of letterboxing it. */
+.pinned-heatmap .pinned-grid { padding:10px 0 6px; }
+.pinned-heatmap .pinned-grid>svg { display:block; width:100%; height:100%; }
+
+/* Checklist occupies the widget cleanly; only its item list scrolls. */
+.pinned-checklist { inset:0; border:0; border-radius:23px; padding:12px; display:flex; flex-direction:column; overflow:hidden; }
+.pinned-checklist>.pinned-checklist-header { display:flex; align-items:center; flex:0 0 auto; gap:8px; margin:0 0 10px; min-height:28px; }
+.pinned-checklist-header>b { flex:1; min-width:0; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; font-size:12px; line-height:1.35; cursor:grab; }
+.pinned-checklist-score { flex:0 0 auto; padding:4px 7px; border-radius:8px; background:var(--habit-soft); color:var(--habit-color); font-size:10px; font-weight:600; }
+.pinned-checklist-header>button { flex:0 0 auto; display:grid; place-items:center; width:24px; height:24px; padding:0; border:0; background:transparent; color:#999; }
+.pinned-checklist>.pinned-checklist-items { display:flex; flex-direction:column; justify-content:flex-start; align-items:stretch; flex:1; min-height:0; overflow-y:auto; gap:6px; margin:0; scrollbar-width:none; }
+.pinned-checklist-items::-webkit-scrollbar { display:none; }
+.pinned-checklist .habit-check-item { display:flex; align-items:center; flex:0 0 auto; min-height:42px; padding:8px 9px; margin:0; gap:8px; font-size:11px; }
+.pinned-checklist .habit-check-item>span { min-width:0; flex:1; line-height:1.4; overflow-wrap:anywhere; }
+.pinned-checklist .habit-check-item>i { flex:0 0 auto; display:grid; place-items:center; width:24px; height:24px; border-radius:50%; background:var(--habit-soft); color:var(--habit-color); }
+.pinned-checklist .habit-check-item.checked>i { background:var(--habit-color); color:var(--habit-ink); }
+.pinned-checklist .habit-check-item.checked>i svg { color:inherit; }
+
+/* A full-width SVG viewport with its natural aspect ratio keeps every cell square. */
+.pinned-habit:not(.pinned-compact) .pinned-grid { display:block; flex:0 0 auto; width:100%; min-height:0; padding:0; margin:10px 0 6px; }
+.pinned-habit:not(.pinned-compact) .pinned-grid>svg { display:block; width:100%; height:100%; }
+.pinned-habit:not(.pinned-compact) .pinned-footer { margin-top:0; }
+
+/* Shared liquid cells retain square geometry in both dashboard and native widgets. */
+.heatmap-liquid-cell { display:block; overflow:visible; }
+.heatmap-liquid-level { transition:transform 400ms ease; }
+.heatmap-liquid-wave { animation:heatmap-wave 3.4s linear infinite; }
+@keyframes heatmap-wave { to { transform:translateX(-100px); } }
+@media(prefers-reduced-motion:reduce) { .heatmap-liquid-wave { animation:none; }.heatmap-liquid-level { transition:none; } }

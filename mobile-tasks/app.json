@@ -48,7 +48,9 @@
         "react-native-android-widget",
         {
           "widgets": [
-            { "name": "HabitWidget", "label": "Habit", "description": "Habit heatmap with monthly or 20-week history and streak", "minWidth": "140dp", "minResizeWidth": "140dp", "minHeight": "170dp", "targetCellWidth": 2, "targetCellHeight": 2, "resizeMode": "horizontal|vertical", "updatePeriodMillis": 1800000, "widgetFeatures": "reconfigurable" },
+            { "name": "HabitWidget", "label": "Habit Heatmap", "description": "Habit heatmap with monthly or 20-week history and streak", "minWidth": "140dp", "minResizeWidth": "140dp", "minHeight": "170dp", "targetCellWidth": 2, "targetCellHeight": 2, "resizeMode": "horizontal|vertical", "updatePeriodMillis": 1800000, "widgetFeatures": "reconfigurable" },
+            { "name": "HabitMonthWidget", "label": "Habit Month", "description": "Monthly habit calendar and streak", "minWidth": "140dp", "minResizeWidth": "140dp", "minHeight": "170dp", "targetCellWidth": 2, "targetCellHeight": 2, "resizeMode": "horizontal|vertical", "updatePeriodMillis": 1800000, "widgetFeatures": "reconfigurable" },
+            { "name": "HabitCompactWidget", "label": "Habit Compact", "description": "Compact habit name, streak and mark button", "minWidth": "140dp", "minResizeWidth": "140dp", "minHeight": "170dp", "targetCellWidth": 2, "targetCellHeight": 2, "resizeMode": "horizontal|vertical", "updatePeriodMillis": 1800000, "widgetFeatures": "reconfigurable" },
             { "name": "TimerWidget", "label": "Timer", "description": "Countdown for an important date", "minWidth": "160dp", "minHeight": "150dp", "targetCellWidth": 2, "targetCellHeight": 2, "resizeMode": "horizontal|vertical", "updatePeriodMillis": 1800000, "widgetFeatures": "reconfigurable" },
             {
               "name": "DailyTasksWidget",

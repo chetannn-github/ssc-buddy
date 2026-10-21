@@ -288,6 +288,10 @@ test("incompatible notification API fails gracefully", () =>
 const sharedDomain = await import(
   `data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}`
 );
+const widgetLayoutApi = {};
+vm.runInNewContext(ts.transpileModule(await readFile(new URL("../mobile-tasks/src/domain/habit-widget-layout.ts", import.meta.url), "utf8"), {
+  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
+}).outputText, { exports: widgetLayoutApi, Date, require: () => sharedDomain });
 const widgetSource = await readFile(
   new URL("../mobile-tasks/src/widgets/habit-widget-store.ts", import.meta.url),
   "utf8",
@@ -321,6 +325,7 @@ function widgetHarness() {
         return { __esModule: true, default: { appOwnership: "standalone" } };
       if (name === "react-native") return { Platform: { OS: "android" } };
       if (name === "../domain/habits") return sharedDomain;
+      if (name === "../domain/habit-widget-layout") return widgetLayoutApi;
       if (name === "../lib/firebase")
         return {
           getFirebaseFirestore: () => ({}),

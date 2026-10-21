@@ -1,3 +1,4 @@
+import { HeatmapCell } from "./HeatmapCell";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import NumberFlow from "@number-flow/react";
 import { Check, Flame, ListChecks, LoaderCircle, MonitorUp, Minus, Plus, X } from "lucide-react";
@@ -96,7 +97,7 @@ function HabitHeatmap({ habit, today }: { habit: Habit; today: string }) {
   const cells = useMemo(() => habitCalendar(today), [today]);
   const scroll = useRef<HTMLDivElement>(null);
   useEffect(() => { if (scroll.current) scroll.current.scrollLeft = scroll.current.scrollWidth; }, [today]);
-  return <div className="habit-heatmap" ref={scroll} tabIndex={0} role="region" aria-label={`${habit.name} heatmap`}><div style={{ gridTemplateColumns: `repeat(${cells.length / 7}, 13px)` }}>
-    {cells.map(cell => <span key={cell.key} title={`${cell.key} · ${Math.round(habitIntensity(habit, cell.key) * 100)}%`} style={{ gridRow: cell.row + 1, gridColumn: cell.column + 1, background: HABIT_COLORS[habit.color], opacity: cell.future ? .04 : .12 + habitIntensity(habit, cell.key) * .88 }} />)}
+  return <div className="habit-heatmap" ref={scroll} tabIndex={0} role="region" aria-label={`${habit.name} heatmap`}><div style={{ gridTemplateColumns: `repeat(${cells.length / 7}, 16px)` }}>
+    {cells.map(cell => <span key={cell.key} title={`${cell.key} · ${Math.round(habitIntensity(habit, cell.key) * 100)}%`} style={{ gridRow: cell.row + 1, gridColumn: cell.column + 1, }}><HeatmapCell intensity={habitIntensity(habit, cell.key)} color={HABIT_COLORS[habit.color]} future={cell.future} size={16} /></span>)}
   </div></div>;
 }

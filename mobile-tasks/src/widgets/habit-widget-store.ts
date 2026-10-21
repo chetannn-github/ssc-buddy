@@ -1,3 +1,4 @@
+import { HABIT_WIDGET_NAMES, habitWidgetStyleForName, habitWidgetNameForStyle } from "../domain/habit-widget-layout";
 import type { HabitWidgetSize, HabitWidgetStyle } from "../domain/habit-widget-layout";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
@@ -54,10 +55,10 @@ export async function pendingHabitWidget(uid: string) {
   const p = await readJSON(PENDING);
   return p?.uid === uid && Date.now() - p.at < 120000 ? (p as { habitId: string; style?: HabitWidgetStyle }) : null;
 }
-export async function bindPendingHabitWidget(id: number, uid?: string) {
+export async function bindPendingHabitWidget(id: number, uid?: string, widgetName?: string) {
   if (!uid || (await readJSON(key(id)))) return;
   const p = await pendingHabitWidget(uid);
-  if (p && (await readWidgetHabits(uid)).some((h) => h.id === p.habitId)) {
+  if (p && (!widgetName || habitWidgetNameForStyle(p.style ?? "heatmap") === widgetName) && (await readWidgetHabits(uid)).some((h) => h.id === p.habitId)) {
     await bindHabitWidget(id, uid, p.habitId, p.style);
     await AsyncStorage.removeItem(PENDING);
   }
@@ -67,7 +68,7 @@ export async function pinHabitWidget(uid: string, habitId: string, style: HabitW
   await AsyncStorage.setItem(PENDING, JSON.stringify({ uid, habitId, style, at: Date.now() }));
   const { requestPinWidget } = require("react-native-android-widget");
   try {
-    if (!(await requestPinWidget({ widgetName: "HabitWidget" })))
+    if (!(await requestPinWidget({ widgetName: habitWidgetNameForStyle(style) })))
       throw new Error("Add SSC Buddy Habit from your home-screen widget menu.");
   } catch (error) {
     await AsyncStorage.removeItem(PENDING);
@@ -77,12 +78,12 @@ export async function pinHabitWidget(uid: string, habitId: string, style: HabitW
 export async function refreshHabitWidgets(uid?: string) {
   if (!supportsHabitWidgets()) return;
   const { requestWidgetUpdate } = require("react-native-android-widget");
-  await requestWidgetUpdate({
-    widgetName: "HabitWidget",
-    renderWidget: (info: { widgetId: number; width: number; height: number }) => habitWidgetView(info.widgetId, uid, "", false, info),
-  });
+  await Promise.all(HABIT_WIDGET_NAMES.map(widgetName => requestWidgetUpdate({
+    widgetName,
+    renderWidget: (info: { widgetId: number; width: number; height: number }) => habitWidgetView(info.widgetId, uid, "", false, { ...info, widgetName }),
+  })));
 }
-export async function habitWidgetView(id: number, uid?: string, error = "", fetchCloud = true, size?: HabitWidgetSize) {
+export async function habitWidgetView(id: number, uid?: string, error = "", fetchCloud = true, size?: HabitWidgetSize & { widgetName?: string }) {
   const { renderHabitWidget } = require("./HabitWidget"),
     binding = await readJSON(key(id));
   if (!uid || binding?.uid !== uid || getFirebaseAuth().currentUser?.uid !== uid)
@@ -100,7 +101,7 @@ export async function habitWidgetView(id: number, uid?: string, error = "", fetc
       /* Use the last account-scoped cache offline. */
     }
   }
-  return renderHabitWidget(habit, error, size, binding.style === "compact" ? "compact" : "heatmap");
+  return renderHabitWidget(habit, error, size, habitWidgetStyleForName(size?.widgetName) ?? (binding.style === "compact" ? "compact" : binding.style === "month" ? "month" : "heatmap"));
 }
 export async function actOnHabitWidget(id: number, uid: string, action: string) {
   const binding = await readJSON(key(id));

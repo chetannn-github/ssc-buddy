@@ -18,7 +18,7 @@ if (supportsAndroidWidgets) {
   const { timerWidgetView, removeTimerWidget, bindPendingTimerWidget } = require("./src/widgets/timer-widget-store");
   const { HabitWidgetConfiguration } = require("./src/widgets/HabitWidgetConfiguration");
   const React = require("react");
-  registerWidgetConfigurationScreen((props) => React.createElement(props.widgetInfo.widgetName === "HabitWidget" ? HabitWidgetConfiguration : TimerWidgetConfiguration, props));
+  registerWidgetConfigurationScreen((props) => React.createElement(["HabitWidget", "HabitMonthWidget", "HabitCompactWidget"].includes(props.widgetInfo.widgetName) ? HabitWidgetConfiguration : TimerWidgetConfiguration, props));
   const { habitWidgetView, removeHabitWidget, bindPendingHabitWidget, actOnHabitWidget } = require("./src/widgets/habit-widget-store");
   const { registerWidgetTaskHandler } = require("react-native-android-widget");
   const { renderDailyTasksWidget } = require("./src/widgets/DailyTasksWidget");
@@ -66,10 +66,10 @@ if (supportsAndroidWidgets) {
   };
 
   registerWidgetTaskHandler(async ({ widgetInfo, widgetAction, clickAction, clickActionData, renderWidget }) => {
-    if (widgetInfo.widgetName === "HabitWidget") {
+    if (["HabitWidget", "HabitMonthWidget", "HabitCompactWidget"].includes(widgetInfo.widgetName)) {
       if (widgetAction === "WIDGET_DELETED") { await removeHabitWidget(widgetInfo.widgetId); return; }
       const user = await getWidgetUser(); let error = "";
-      if (widgetAction === "WIDGET_ADDED") await bindPendingHabitWidget(widgetInfo.widgetId, user?.uid);
+      if (widgetAction === "WIDGET_ADDED") await bindPendingHabitWidget(widgetInfo.widgetId, user?.uid, widgetInfo.widgetName);
       if (widgetAction === "WIDGET_CLICK" && user && clickAction?.startsWith("HABIT_")) {
         try { await actOnHabitWidget(widgetInfo.widgetId, user.uid, clickAction); } catch { error = "Could not save. Tap to retry."; }
       }

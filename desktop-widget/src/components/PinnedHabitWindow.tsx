@@ -1,4 +1,6 @@
-import { useEffect, useState, type CSSProperties } from "react";
+import { HeatmapCell } from "./HeatmapCell";
+import { invoke } from "@tauri-apps/api/core";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import NumberFlow from "@number-flow/react";
 import { Check, Flame, ListChecks, LoaderCircle, Plus, Trash2, X } from "lucide-react";
 import type { User } from "firebase/auth";
@@ -13,15 +15,69 @@ export function PinnedHabitWindow({ pin }: { pin: DesktopHabitPin }) {
   const [user, setUser] = useState<User | null>(null), [ready, setReady] = useState(false);
   const [error, setError] = useState(""), [checklist, setChecklist] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const card = useRef<HTMLElement>(null);
+  const resizingChecklist = useRef(false);
+  const resizeSequence = useRef(Promise.resolve());
   const [displayStyle, setDisplayStyle] = useState(() => responsiveHabitStyle(window.innerWidth, window.innerHeight));
   useEffect(() => {
-    const resize = () => setDisplayStyle(responsiveHabitStyle(window.innerWidth, window.innerHeight));
+    const resize = () => { if (!checklist && !resizingChecklist.current) setDisplayStyle(responsiveHabitStyle(window.innerWidth, window.innerHeight)); };
     window.addEventListener("resize", resize);
     return () => window.removeEventListener("resize", resize);
-  }, []);
+  }, [checklist]);
   const today = useHabitToday();
   const api = useHabits(user?.uid === pin.uid ? user.uid : undefined);
   const habit = api.habits.find(h => h.id === pin.habitId);
+  const checklistCount = habit ? normalizeHabitSettings(habit.settings).checklist.length : 0;
+  useEffect(() => {
+    if (!checklist || displayStyle !== "compact") return;
+    let cancelled = false;
+    resizingChecklist.current = true;
+    const animate = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const expand = resizeSequence.current.catch(() => undefined).then(() => invoke("resize_habit_checklist", { expanded: true, itemCount: checklistCount, animate }))
+      .then(() => undefined).catch(() => { if (!cancelled) setError("Could not expand checklist."); });
+    resizeSequence.current = expand;
+    return () => {
+      cancelled = true;
+      const collapse = expand.then(() => invoke("resize_habit_checklist", { expanded: false, itemCount: 0, animate }))
+        .then(() => undefined).catch(() => undefined);
+      resizeSequence.current = collapse;
+      void collapse.then(() => {
+        if (resizeSequence.current === collapse) {
+          resizingChecklist.current = false;
+          setDisplayStyle(responsiveHabitStyle(window.innerWidth, window.innerHeight));
+        }
+      });
+    };
+  }, [checklist, checklistCount, displayStyle]);
+
+  useEffect(() => {
+    if (!habit || displayStyle === "compact" || checklist || resizingChecklist.current || !card.current) return;
+    let timer = 0;
+    const fit = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        const element = card.current;
+        if (!element || resizingChecklist.current || window.innerHeight < 200) return;
+        const rootStyle = getComputedStyle(element);
+        let required = parseFloat(rootStyle.paddingTop) + parseFloat(rootStyle.paddingBottom) + 8;
+        for (const child of Array.from(element.children)) {
+          const style = getComputedStyle(child);
+          if (style.position === "absolute" || style.position === "fixed") continue;
+          required += child.getBoundingClientRect().height + (parseFloat(style.marginTop) || 0) + (parseFloat(style.marginBottom) || 0);
+        }
+        if (Math.abs(Math.ceil(required) - window.innerHeight) > 2) {
+          void invoke("fit_habit_heatmap", { height: Math.ceil(required) }).catch(() => setError("Could not fit heatmap."));
+        }
+      }, 100);
+    };
+    const observer = new ResizeObserver(fit);
+    observer.observe(card.current);
+    const grid = card.current.querySelector(".pinned-grid");
+    if (grid) observer.observe(grid);
+    fit();
+    return () => { observer.disconnect(); window.clearTimeout(timer); };
+  }, [habit?.id, habit?.targetDays, displayStyle, checklist, checklistCount, today]);
+
   useEffect(() => { document.body.classList.add("pinned-habit-body"); return () => document.body.classList.remove("pinned-habit-body"); }, []);
   useEffect(() => observeAuth(next => { setUser(next); setReady(true); setChecklist(false); setError(""); }), []);
   const tint = habit ? HABIT_COLORS[habit.color] : "#ffe000";
@@ -55,19 +111,23 @@ export function PinnedHabitWindow({ pin }: { pin: DesktopHabitPin }) {
   const cells = displayStyle === "compact" ? [] : habitWidgetCalendar(today, displayStyle === "heatmap");
   const wide = displayStyle === "heatmap", step = wide ? 16 : 25, labelX = wide ? 13 : 0, labelY = wide ? 0 : 16;
   const columns = wide ? 20 : 7, rows = Math.max(0, ...cells.map(c => c.row)) + 1;
-  return <main className={`pinned-habit pinned-${displayStyle}`} style={style} onContextMenu={openMenu}>
+  return <main ref={card} className={`pinned-habit pinned-${displayStyle}`} style={style} onContextMenu={openMenu}>
     <div className="pinned-tools"><span data-tauri-drag-region title="Drag widget"></span></div>
     <div className="pinned-heading"><h1 data-tauri-drag-region>{habit.name}</h1>{displayStyle !== "compact" && streak}</div>
     {displayStyle === "compact" ? <div className="pinned-compact-bottom">{streak}{markButton}</div> : <>
-      <div className="pinned-grid"><svg viewBox={`0 0 ${labelX + columns * step} ${labelY + rows * step}`} role="img" aria-label={`${habit.name} ${wide ? "20-week heatmap" : "monthly heatmap"}`}>
+      <div className="pinned-grid" style={{ aspectRatio: `${labelX + columns * step} / ${labelY + rows * step}` }}><svg preserveAspectRatio="xMidYMid meet" viewBox={`0 0 ${labelX + columns * step} ${labelY + rows * step}`} role="img" aria-label={`${habit.name} ${wide ? "20-week heatmap" : "monthly heatmap"}`}>
         {["S", "M", "T", "W", "T", "F", "S"].map((day, i) => <text key={i} x={wide ? 2 : (i + .5) * step} y={wide ? (i + .65) * step : 10} fill="#777" fontSize="9" textAnchor={wide ? "start" : "middle"}>{day}</text>)}
-        {cells.map(cell => <rect key={cell.key} x={labelX + cell.column * step + 2} y={labelY + cell.row * step + 2} width={step - 4} height={step - 4} rx="3" fill={tint} opacity={cell.future ? .04 : .12 + .88 * habitIntensity(habit, cell.key)}><title>{cell.key}</title></rect>)}
+        {cells.map(cell => <HeatmapCell key={cell.key} x={labelX + cell.column * step + 1} y={labelY + cell.row * step + 1} size={step - 2} color={tint} intensity={habitIntensity(habit, cell.key)} future={cell.future} />)}
       </svg></div><div className="pinned-footer"><small>{wide ? "Last 20 weeks" : new Date(today + "T12:00:00").toLocaleDateString(undefined, { month: "long" })}</small>{markButton}</div>
     </>}
     {habit.targetDays && <div className="pinned-target" aria-label={`${stats.total} of ${habit.targetDays} challenge days completed`}><span><NumberFlow value={stats.total} />/{habit.targetDays} days</span><div><i style={{ width: `${stats.progress * 100}%` }} /></div></div>}
     {settings.tracking === "count" && <div className="pinned-count"><button disabled={!available} aria-label="Subtract count" onClick={() => update({ type: "increment", amount: -settings.step })}>−</button><span><NumberFlow value={entry.count} />/{settings.dailyGoal} {settings.unit}</span></div>}
     {!!error && <p role="alert" className="habit-error">{error}</p>}
-    {checklist && <div className="pinned-checklist"><div><b>{habit.name}</b><button onClick={() => setChecklist(false)} aria-label="Close checklist"><X size={15} /></button></div>{settings.checklist.map(item => <button key={item.id} className={`habit-check-item ${entry.checks.includes(item.id) ? "checked" : ""}`} disabled={!available} onClick={() => update({ type: "check", id: item.id })}><span>{item.title}</span><Check size={18} /></button>)}</div>}
+    {checklist && <div className="pinned-checklist" role="dialog" aria-modal="true" aria-label={`${habit.name} checklist`}>
+      <div className="pinned-checklist-header"><b data-tauri-drag-region>{habit.name}</b><span className="pinned-checklist-score">{settings.checklist.filter(item => entry.checks.includes(item.id)).length}/{settings.checklist.length}</span><button onClick={() => setChecklist(false)} aria-label="Close checklist"><X size={16} /></button></div>
+      <div className="pinned-checklist-items">{settings.checklist.map(item => <button key={item.id} className={`habit-check-item ${entry.checks.includes(item.id) ? "checked" : ""}`} disabled={!available} onClick={() => update({ type: "check", id: item.id })}><span>{item.title}</span><i><Check size={15} /></i></button>)}</div>
+      {!!error && <p role="alert" className="habit-error">{error}</p>}
+    </div>}
     {contextMenu}
   </main>;
 }

@@ -21,7 +21,7 @@ impl HabitPin {
     match self.style.as_str() { "recall" => (400., 400.), "tasks" => (340., 400.), _ => (220., 160.) }
   }
   fn max_size(&self) -> (f64, f64) {
-    match self.style.as_str() { "recall" => (400., 600.), "tasks" => (340., 600.), _ => (430., 300.) }
+    match self.style.as_str() { "recall" => (400., 600.), "tasks" => (340., 500.), _ => (430., 420.) }
   }
   fn label(&self) -> String {
     let mut hash = DefaultHasher::new();
@@ -49,6 +49,113 @@ impl HabitPin {
 
 #[derive(Default)]
 pub struct HabitPins(pub Mutex<Vec<HabitPin>>);
+#[derive(Default)]
+pub struct BoundsSaveDebounce(pub Mutex<(u64, bool)>);
+
+// Keep the latest bounds in memory during dragging; write once movement settles.
+fn schedule_bounds_save(app: &AppHandle) {
+  let state = app.state::<BoundsSaveDebounce>();
+  let mut pending = state.0.lock().unwrap_or_else(|e| e.into_inner());
+  pending.0 = pending.0.wrapping_add(1);
+  if pending.1 { return; }
+  pending.1 = true;
+  let mut revision = pending.0;
+  drop(pending);
+  let app = app.clone();
+  std::thread::spawn(move || loop {
+    std::thread::sleep(std::time::Duration::from_millis(450));
+    let state = app.state::<BoundsSaveDebounce>();
+    let mut pending = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    if pending.0 != revision { revision = pending.0; continue; }
+    // Serialize the final write with new drag events scheduling another save.
+    if let Err(error) = persist(&app) { eprintln!("Could not save widget bounds: {error}"); }
+    pending.1 = false;
+    break;
+  });
+}
+#[derive(Clone, Copy)]
+pub struct ChecklistBounds { x: f64, y: f64, width: f64, height: f64 }
+#[derive(Default)]
+pub struct ChecklistWindows(pub Mutex<std::collections::HashMap<String, ChecklistBounds>>);
+
+fn checklist_height(items: usize, original: f64) -> f64 {
+  (70. + items.min(100) as f64 * 48.).max(original).min(300.)
+}
+
+fn checklist_ease(t: f64) -> f64 { let t = t.clamp(0., 1.); t * t * (3. - 2. * t) }
+
+async fn animate_checklist(window: WebviewWindow, width: f64, height: f64, position: Option<(f64, f64)>, animate: bool) -> Result<(), String> {
+  tauri::async_runtime::spawn_blocking(move || {
+    let scale = window.scale_factor().map_err(|e| e.to_string())?;
+    let from = window.inner_size().map_err(|e| e.to_string())?.to_logical::<f64>(scale);
+    let start_position = window.outer_position().map_err(|e| e.to_string())?.to_logical::<f64>(scale);
+    let duration = if animate { 240. } else { 0. };
+    let start = std::time::Instant::now();
+    loop {
+      let t = if duration > 0. { (start.elapsed().as_secs_f64() * 1000. / duration).min(1.) } else { 1. };
+      let eased = checklist_ease(t);
+      window.set_size(tauri::LogicalSize::new(from.width + (width - from.width) * eased, from.height + (height - from.height) * eased)).map_err(|e| e.to_string())?;
+      if let Some((x, y)) = position {
+        let _ = window.set_position(tauri::LogicalPosition::new(start_position.x + (x - start_position.x) * eased, start_position.y + (y - start_position.y) * eased));
+      }
+      if t >= 1. { break; }
+      std::thread::sleep(std::time::Duration::from_millis(16));
+    }
+    Ok(())
+  }).await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn fit_habit_heatmap(app: AppHandle, window: WebviewWindow, height: f64) -> Result<(), String> {
+  let label = window.label();
+  let valid = app.state::<HabitPins>().0.lock().map_err(|e| e.to_string())?.iter()
+    .any(|pin| pin.label() == label && matches!(pin.style.as_str(), "heatmap" | "month" | "compact"));
+  if !valid || !height.is_finite() { return Err("Invalid heatmap window.".into()); }
+  if app.state::<ChecklistWindows>().0.lock().map_err(|e| e.to_string())?.contains_key(label) { return Ok(()); }
+  let scale = window.scale_factor().map_err(|e| e.to_string())?;
+  let size = window.inner_size().map_err(|e| e.to_string())?.to_logical::<f64>(scale);
+  if size.height < 200. { return Ok(()); }
+  let height = height.clamp(200., 420.);
+  if (height - size.height).abs() > 2. {
+    window.set_size(tauri::LogicalSize::new(size.width, height)).map_err(|e| e.to_string())?;
+    crate::window_bounds::keep_visible(&window.as_ref().window());
+    remember_bounds(&window.as_ref().window());
+  }
+  Ok(())
+}
+
+#[tauri::command]
+pub async fn resize_habit_checklist(app: AppHandle, window: WebviewWindow, expanded: bool, item_count: usize, animate: Option<bool>) -> Result<(), String> {
+  let label = window.label().to_owned();
+  let is_habit = app.state::<HabitPins>().0.lock().map_err(|e| e.to_string())?.iter()
+    .any(|pin| pin.label() == label && matches!(pin.style.as_str(), "heatmap" | "month" | "compact"));
+  if !is_habit { return Err("Not a habit widget.".into()); }
+  let state = app.state::<ChecklistWindows>();
+  if expanded {
+    let scale = window.scale_factor().map_err(|e| e.to_string())?;
+    let size = window.inner_size().map_err(|e| e.to_string())?.to_logical::<f64>(scale);
+    let pos = window.outer_position().map_err(|e| e.to_string())?.to_logical::<f64>(scale);
+    let original = {
+      let mut saved = state.0.lock().map_err(|e| e.to_string())?;
+      *saved.entry(label.clone()).or_insert(ChecklistBounds { x: pos.x, y: pos.y, width: size.width, height: size.height })
+    };
+    if let Err(error) = animate_checklist(window.clone(), original.width, checklist_height(item_count, original.height), None, animate.unwrap_or(true)).await {
+      state.0.lock().map_err(|e| e.to_string())?.remove(&label);
+      return Err(error.to_string());
+    }
+    crate::window_bounds::keep_visible(&window.as_ref().window());
+  } else {
+    let original = state.0.lock().map_err(|e| e.to_string())?.get(&label).copied();
+    if let Some(original) = original {
+      animate_checklist(window.clone(), original.width, original.height, Some((original.x, original.y)), animate.unwrap_or(true)).await?;
+      state.0.lock().map_err(|e| e.to_string())?.remove(&label);
+      crate::window_bounds::keep_visible(&window.as_ref().window());
+      remember_bounds(&window.as_ref().window());
+    }
+  }
+  Ok(())
+}
+
 
 pub fn persist(app: &AppHandle) -> Result<(), String> {
   let directory = app.path().app_data_dir().map_err(|e| e.to_string())?;
@@ -86,6 +193,7 @@ fn open(app: &AppHandle, pin: &HabitPin) -> Result<(), String> {
     .resizable(true).maximizable(false).fullscreen(false).focused(false);
   if let (Some(x), Some(y)) = (pin.x, pin.y) { builder = builder.position(x, y); }
   let window = builder.build().map_err(|e| e.to_string())?;
+  if let Some(native) = app.get_webview_window(&pin.label()) { crate::window_bounds::keep_visible(&native.as_ref().window()); }
   if let Some(id) = &pin.desktop_id { virtual_desktop::move_to(&window, id); }
   Ok(())
 }
@@ -123,6 +231,7 @@ pub async fn remove_habit_widget(app: AppHandle, window: WebviewWindow) -> Resul
   if !window.label().starts_with("habit-") { return Err("Not a habit widget.".into()); }
   app.state::<HabitPins>().0.lock().map_err(|e| e.to_string())?.retain(|p| p.label() != window.label());
   persist(&app)?;
+  app.state::<ChecklistWindows>().0.lock().map_err(|e| e.to_string())?.remove(window.label());
   window.destroy().map_err(|e| e.to_string())
 }
 
@@ -130,6 +239,7 @@ pub fn remember_bounds(window: &tauri::Window) {
   if !window.label().starts_with("habit-") { return; }
   let scale = window.scale_factor().unwrap_or(1.);
   let app = window.app_handle();
+  if app.state::<ChecklistWindows>().0.lock().map(|saved| saved.contains_key(window.label())).unwrap_or(false) { return; }
   let state = app.state::<HabitPins>();
   if let Ok(mut pins) = state.0.lock() {
     if let Some(pin) = pins.iter_mut().find(|p| p.label() == window.label()) {
@@ -143,7 +253,7 @@ pub fn remember_bounds(window: &tauri::Window) {
       }
     }
   };
-  if let Err(error) = persist(app) { eprintln!("Could not save habit widget position: {error}"); }
+  schedule_bounds_save(app);
 }
 
 #[cfg(test)]
@@ -169,6 +279,12 @@ mod tests {
     widget.desktop_id = Some("removed".into());
     assert!(!widget.recover_desktop("removed", &["current".into()]));
     assert_eq!(widget.desktop_id.as_deref(), Some("removed"));
+  }
+  #[test]
+  fn checklist_expands_to_fit_items_without_shrinking_or_exceeding_limit() {
+    assert_eq!(checklist_height(1, 180.), 180.);
+    assert_eq!(checklist_height(3, 180.), 214.);
+    assert_eq!(checklist_height(20, 180.), 300.);
   }
   #[test]
   fn validates_and_roundtrips_saved_widgets() {

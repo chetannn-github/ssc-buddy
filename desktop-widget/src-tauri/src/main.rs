@@ -3,6 +3,7 @@
 use tauri::{menu::{Menu, MenuItem}, tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}, Manager};
 use tauri_plugin_autostart::ManagerExt;
 mod habit_widgets;
+mod window_bounds;
 
 fn show_window(app: &tauri::AppHandle) {
   if let Some(window) = app.get_webview_window("main") {
@@ -31,7 +32,9 @@ fn toggle_window(app: &tauri::AppHandle) {
 fn main() {
   let app = tauri::Builder::default()
     .manage(habit_widgets::HabitPins::default())
-    .invoke_handler(tauri::generate_handler![habit_widgets::pin_habit_widget, habit_widgets::remove_habit_widget])
+    .manage(habit_widgets::BoundsSaveDebounce::default())
+    .manage(habit_widgets::ChecklistWindows::default())
+    .invoke_handler(tauri::generate_handler![habit_widgets::pin_habit_widget, habit_widgets::remove_habit_widget, habit_widgets::resize_habit_checklist, habit_widgets::fit_habit_heatmap])
     .setup(|app| {
       app.handle().plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, None))?;
       let _ = app.autolaunch().enable();
@@ -57,13 +60,14 @@ fn main() {
           }
         })
         .build(app)?;
+      if let Some(window) = app.get_webview_window("main") { window_bounds::keep_visible(&window.as_ref().window()); }
       habit_widgets::restore(app.handle());
       habit_widgets::watch_desktop(app.handle().clone());
       Ok(())
     })
     .on_window_event(|window, event| {
       if matches!(event, tauri::WindowEvent::Focused(true) | tauri::WindowEvent::Moved(_)) { habit_widgets::keep_on_saved_desktops(window.app_handle()); }
-      if matches!(event, tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_)) { habit_widgets::remember_bounds(window); }
+      if matches!(event, tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_) | tauri::WindowEvent::ScaleFactorChanged { .. }) { window_bounds::keep_visible(window); habit_widgets::remember_bounds(window); }
       if let tauri::WindowEvent::CloseRequested { api, .. } = event {
         api.prevent_close();
         let _ = window.hide();

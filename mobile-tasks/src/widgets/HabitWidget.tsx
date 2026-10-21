@@ -34,7 +34,7 @@ export function renderHabitWidget(habit?: Habit, error = "", size: HabitWidgetSi
     ? `${nextItem && entry.checks.includes(nextItem.id) ? "Uncheck" : "Check"} ${nextItem?.title ?? "habit"}`
     : settings.type === "quit" ? done ? "Mark slip" : "Undo slip" : done ? "Undo completion" : "Mark done";
   const footer = Boolean(error || count || checklist || habit.targetDays);
-  const layout = habitWidgetLayout(size, today, footer ? 27 : 0);
+  const layout = habitWidgetLayout(size, today, footer ? 27 : 0, style);
   const { step, labelWidth, labelHeight, cells, wide, gridWidth, gridHeight } = layout;
   const gap = Math.max(2, step * .2), box = step - gap;
   const dayLabels = ["S", "M", "T", "W", "T", "F", "S"];

@@ -96,3 +96,16 @@ test("compact widgets show name and streak without a heatmap and preserve direct
   const completed = flatten(renderHabitWidget(habit({}, [today]), "", { width: 140, height: 170 }, "compact"));
   assert.ok(completed.some(node => node.props.accessibilityLabel === "Undo completion"));
 });
+
+
+test("launcher widget categories determine style and month remains monthly when stretched", () => {
+  const api = load(path.join(root, "domain/habit-widget-layout.ts"));
+  assert.equal(api.habitWidgetNameForStyle("compact"), "HabitCompactWidget");
+  assert.equal(api.habitWidgetNameForStyle("month"), "HabitMonthWidget");
+  assert.equal(api.habitWidgetNameForStyle("heatmap"), "HabitWidget");
+  assert.equal(api.habitWidgetStyleForName("HabitCompactWidget"), "compact");
+  assert.equal(api.habitWidgetStyleForName("HabitMonthWidget"), "month");
+  const layout = api.habitWidgetLayout({ width: 360, height: 210 }, "2026-10-21", 0, "month");
+  assert.equal(layout.wide, false);
+  assert.equal(layout.cells.length, 31);
+});

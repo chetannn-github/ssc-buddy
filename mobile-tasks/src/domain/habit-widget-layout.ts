@@ -1,6 +1,6 @@
 import { habitDay } from "./habits";
 
-export type HabitWidgetStyle = "heatmap" | "compact";
+export type HabitWidgetStyle = "heatmap" | "month" | "compact";
 export type HabitWidgetSize = { width: number; height: number };
 export function habitWidgetCalendar(today: string, wide: boolean) {
   const date = new Date(today + "T12:00:00");
@@ -23,9 +23,9 @@ export function habitWidgetCalendar(today: string, wide: boolean) {
   return cells;
 }
 
-export function habitWidgetLayout(size: HabitWidgetSize, today: string, footerHeight: number) {
+export function habitWidgetLayout(size: HabitWidgetSize, today: string, footerHeight: number, style?: HabitWidgetStyle) {
   const width = Math.max(140, size.width), height = Math.max(120, size.height);
-  const wide = width >= 300;
+  const wide = style === "month" ? false : width >= 300;
   const cells = habitWidgetCalendar(today, wide);
   const columns = wide ? 20 : 7, rows = Math.max(...cells.map((cell) => cell.row)) + 1;
   const labelWidth = wide ? 13 : 0, labelHeight = wide ? 0 : 15;
@@ -33,4 +33,12 @@ export function habitWidgetLayout(size: HabitWidgetSize, today: string, footerHe
     (height - 24 - 38 - 8 - footerHeight - labelHeight) / rows));
   return { wide, cells, columns, rows, step, labelWidth, labelHeight,
     gridWidth: labelWidth + columns * step, gridHeight: labelHeight + rows * step };
+}
+
+export const HABIT_WIDGET_NAMES = ["HabitWidget", "HabitMonthWidget", "HabitCompactWidget"] as const;
+export function habitWidgetStyleForName(name?: string): HabitWidgetStyle | undefined {
+  return name === "HabitCompactWidget" ? "compact" : name === "HabitMonthWidget" ? "month" : undefined;
+}
+export function habitWidgetNameForStyle(style: HabitWidgetStyle) {
+  return style === "compact" ? "HabitCompactWidget" : style === "month" ? "HabitMonthWidget" : "HabitWidget";
 }
