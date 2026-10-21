@@ -33,7 +33,7 @@ export function renderHabitWidget(habit?: Habit, error = "", size: HabitWidgetSi
     : settings.type === "quit" ? done ? "Mark slip" : "Undo slip" : done ? "Undo completion" : "Mark done";
   const targetProgress = habit.targetDays ? `${stats.total}/${habit.targetDays} days` : "";
   const footer = Boolean(error || count || checklist || (style === "compact" && targetProgress));
-  const layout = habitWidgetLayout(size, today, footer ? 27 : 0, style);
+  const layout = habitWidgetLayout(size, today, footer ? 30 : 0, style);
   const { step, labelWidth, labelHeight, cells, wide, gridWidth, gridHeight } = layout;
   const gap = Math.max(2, step * .2), box = step - gap;
   const dayLabels = ["S", "M", "T", "W", "T", "F", "S"];
@@ -94,9 +94,9 @@ export function renderHabitWidget(habit?: Habit, error = "", size: HabitWidgetSi
     <FlexWidget style={{ flex: 1, width: "match_parent", alignItems: "center", justifyContent: "center", marginTop: 8 }}>
       <SvgWidget svg={svg} style={{ width: gridWidth, height: gridHeight }} />
     </FlexWidget>
-    {footer && <FlexWidget style={{ width: "match_parent", height: 27, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-      {count && scheduled && <FlexWidget clickAction="HABIT_MINUS" accessibilityLabel={`Subtract ${settings.step}`} style={{ width: 25, height: 25, borderRadius: 12, backgroundColor: "#202020", alignItems: "center", justifyContent: "center", marginRight: 6 }}>
-        <SvgWidget svg={actionIcon("minus", tint)} style={{ width: 16, height: 16 }} />
+    {footer && <FlexWidget style={{ width: "match_parent", height: 30, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+      {count && scheduled && <FlexWidget clickAction="HABIT_MINUS" accessibilityLabel={`Subtract ${settings.step}`} style={{ width: 30, height: 30, borderRadius: 15, borderWidth: 1.5, borderColor: tint, backgroundColor: done ? tint : "#080808", alignItems: "center", justifyContent: "center", marginRight: 6 }}>
+        <SvgWidget svg={actionIcon("minus", done ? accentInk(tint) : tint)} style={{ width: 21, height: 21 }} />
       </FlexWidget>}
       <FlexWidget style={{ flex: 1 }}><TextWidget text={detail} maxLines={1} truncate="END" style={{ color: error ? "#fca5a5" : "#999999", fontSize: 9 }} /></FlexWidget>
     </FlexWidget>}
