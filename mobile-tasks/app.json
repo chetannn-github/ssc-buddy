@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "SSC Buddy",
-    "slug": "hhh",
+    "slug": "huijppop",
     "scheme": "sscbuddy",
     "version": "1.0.0",
     "icon": "./assets/auth.png",
@@ -82,9 +82,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "4e954818-ce97-4adb-a83d-b5c477589744"
+        "projectId": "8a2463ba-e253-446c-9ba8-2d7fd9ef9313"
       }
     },
-    "owner": "gggggvs-team"
+    "owner": "vghjhjms-team"
   }
 }
