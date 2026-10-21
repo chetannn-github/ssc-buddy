@@ -611,9 +611,10 @@ html, body, #root {
 .pinned-target i { display:block; height:100%; background:var(--habit-color); border-radius:inherit; transition:width 300ms ease; }
 @media(prefers-reduced-motion:reduce) { .pinned-target i { transition:none; } }
 
-/* Reserve the same title space for one- and two-line compact habit names. */
+/* Keep compact streak/check controls close to the title, including wrapped names. */
 .pinned-compact { padding:14px 16px 12px; }
-.pinned-compact .pinned-heading { height:46px; align-items:flex-start; }
+.pinned-compact .pinned-heading { min-height:24px; align-items:flex-start; }
+.pinned-compact .pinned-compact-bottom { align-items:flex-start; padding-top:12px; }
 .pinned-compact .pinned-target { margin-top:5px; font-size:9px; line-height:1.2; }
 .pinned-compact .pinned-target>div { margin-top:4px; }
 .pinned-compact .pinned-count { margin-top:3px; font-size:9px; }
@@ -747,3 +748,12 @@ html, body, #root {
 .android-task-filter-highlight { position:absolute; inset:0 auto 0 0; width:50%; border-radius:8px; background:var(--accent); pointer-events:none; transition:transform 260ms ease-in-out; }
 .android-task-filter-highlight.on-due { transform:translateX(100%); }
 @media(prefers-reduced-motion:reduce) { .android-task-filter-highlight { transition:none; } }
+
+/* Destructive confirmations share the reference's plain text actions and dark card. */
+.destructive-modal { background:rgba(0,0,0,.78); }
+.destructive-modal .delete-dialog { width:min(82%,350px); min-height:174px; display:flex; flex-direction:column; gap:0; padding:24px; border:0; border-radius:28px; background:#181818; box-shadow:none; }
+.destructive-modal .delete-dialog h2 { margin:0; color:#fbfbf8; font:700 20px/1.3 "Manrope",sans-serif; letter-spacing:normal; }
+.destructive-modal .delete-dialog .dialog-actions { display:flex; justify-content:flex-end; gap:24px; margin-top:32px; }
+.destructive-modal .delete-dialog .secondary, .destructive-modal .delete-dialog .danger-primary { width:auto; min-height:44px; padding:0; border:0; border-radius:0; color:#fafaf7; background:transparent; font-size:15px; font-weight:600; box-shadow:none; }
+.destructive-modal .delete-dialog .danger-primary { color:#ff003b; }
+.destructive-modal .delete-dialog button:disabled { opacity:.4; }

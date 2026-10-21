@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { DestructiveDialog } from "../components/DestructiveDialog";
 import { UppercaseTextInput as TextInput } from "../components/UppercaseTextInput";
 import { useAndroidBack } from "../hooks/use-android-back";
 import { ReattemptModeButton } from "../components/ReattemptModeButton";
@@ -1386,6 +1387,7 @@ function History({
   const [chapter, setChapter] = useState("All chapters");
   const [filterMenu, setFilterMenu] = useState<"subject" | "chapter" | null>(null);
   const [selected, setSelected] = useState<{ record: Record; attempts: Record[] } | null>(null);
+  const [confirmAttemptDelete, setConfirmAttemptDelete] = useState(false);
   useAndroidBack(() => {
     if (filterMenu) setFilterMenu(null);
     else onBack();
@@ -1463,19 +1465,19 @@ function History({
   };
   if (selected)
     return (
+      <>
       <HistoryDetail
         subjects={bankSubjects}
         record={selected.record}
         attempts={selected.attempts}
         onSelectAttempt={(record) => setSelected({ record, attempts: selected.attempts })}
         onBack={() => setSelected(null)}
-        onDelete={() => {
-          onDelete(selected.record.id);
-          setSelected(null);
-        }}
+        onDelete={() => setConfirmAttemptDelete(true)}
         onReattempt={() => onReattempt(selected.record)}
         onReevaluate={() => reevaluate(selected.record)}
       />
+      <DestructiveDialog visible={confirmAttemptDelete} title="Are you sure you want to delete this attempt?" confirmLabel="Yes, delete" onCancel={() => setConfirmAttemptDelete(false)} onConfirm={() => { onDelete(selected.record.id); setConfirmAttemptDelete(false); setSelected(null); }} />
+      </>
     );
   return (
     <View style={s.page}>
@@ -2232,22 +2234,7 @@ function QuestionBank({
             );
           })()}
         </ScrollView>
-        <Modal transparent visible={deleting !== null} animationType="fade" statusBarTranslucent onRequestClose={() => setDeleting(null)}>
-          <Pressable style={s.backdrop} onPress={() => setDeleting(null)}>
-            <Pressable accessibilityViewIsModal style={s.dialog} onPress={() => undefined}>
-              <Text style={s.deleteQuestionTitle}>Delete question?</Text>
-              <View style={s.deleteQuestionActions}>
-                <Pressable accessibilityRole="button" style={s.outline} onPress={() => setDeleting(null)}><Text style={s.outlineText}>Cancel</Text></Pressable>
-                <Pressable accessibilityRole="button" style={s.deleteQuestionButton} onPress={() => {
-                  if (!deleting) return;
-                  const target = deleting;
-                  setDeleting(null);
-                  onDeleteQuestion(target.exerciseId, target.questionId);
-                }}><Text style={s.deleteQuestionButtonText}>Delete</Text></Pressable>
-              </View>
-            </Pressable>
-          </Pressable>
-        </Modal>
+        <DestructiveDialog visible={deleting !== null} title="Are you sure you want to delete this question?" confirmLabel="Yes, delete" onCancel={() => setDeleting(null)} onConfirm={() => { if (!deleting) return; const target = deleting; setDeleting(null); onDeleteQuestion(target.exerciseId, target.questionId); }} />
       </View>
     );
   return (
@@ -2405,7 +2392,7 @@ function BankDropdown({
 }
 
 const s = StyleSheet.create({
-  page: { flex: 1, backgroundColor: colors.background },
+  page: { flex: 1, backgroundColor: "transparent" },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",

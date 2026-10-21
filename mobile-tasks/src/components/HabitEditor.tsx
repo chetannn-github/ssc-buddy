@@ -1,3 +1,4 @@
+import { AccentBackdrop } from "./AccentBackdrop";
 import { UppercaseTextInput as TextInput } from "./UppercaseTextInput";
 import { colors } from "../theme";
 import { createThemedStyles } from "../theme";
@@ -307,8 +308,8 @@ export function HabitEditor({
         if (!busy) onClose();
       }}
     >
-      <StatusBar hidden />
-      <SafeAreaView style={s.page} edges={["left", "right", "bottom"]}>
+      <StatusBar hidden style="light" />
+      <SafeAreaView style={s.page} edges={["top", "left", "right", "bottom"]}><AccentBackdrop />
         <KeyboardAvoidingView
           style={s.page}
           behavior={Platform.OS === "ios" ? "padding" : "height"}

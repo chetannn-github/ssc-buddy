@@ -1,3 +1,5 @@
+import { DestructiveDialog } from "./src/components/DestructiveDialog";
+import { AccentBackdrop } from "./src/components/AccentBackdrop";
 import { launchImages } from "./src/lib/launch-images";
 import { LaunchMotivation } from "./src/components/LaunchMotivation";
 import { UppercaseTextInput as TextInput } from "./src/components/UppercaseTextInput";
@@ -855,7 +857,7 @@ export default function App() {
           void ExpoSplashScreen.hideAsync().catch(() => undefined);
         }}
       >
-        <StatusBar hidden />
+        <StatusBar hidden style="light" />
         <SplashScreen />
       </SafeAreaProvider>
     );
@@ -868,8 +870,8 @@ export default function App() {
     }
     return (
       <SafeAreaProvider>
-        <StatusBar hidden />
-        <AuthScreen onAuthenticated={() => undefined} />
+        <StatusBar hidden style="light" />
+        <View style={{ flex: 1, backgroundColor: colors.background }}><AccentBackdrop /><SafeAreaView style={{ flex: 1, backgroundColor: "transparent" }} edges={["top", "left", "right"]}><AuthScreen onAuthenticated={() => undefined} /></SafeAreaView></View>
       </SafeAreaProvider>
     );
   }
@@ -883,8 +885,9 @@ export default function App() {
   const dailyRankAction = widgetRank !== null && <Pressable accessibilityRole="button" accessibilityLabel="Open weekly leaderboard" onPress={() => setLeaderboardOpen(true)} style={styles.taskRank}>{widgetRank <= 3 ? <Image source={rankMedals[widgetRank - 1]} style={styles.taskRankMedal} /> : <MaterialCommunityIcons name="trophy" size={15} color="#fcd34d" />}<RollingMetric value={widgetRank} prefix="#" color="#e4e4e7" fontSize={12} /></Pressable>;
   return (
     <SafeAreaProvider>
-      <SafeAreaView style={[styles.safe, { backgroundColor: appTab === "habits" && !leaderboardOpen && !quickRecallOpen ? "#000000" : colors.background }]} edges={["top", "left", "right"]} onTouchStart={() => resetBottomNavigation()}>
-      <StatusBar hidden />
+      <View style={{ flex: 1, backgroundColor: colors.background }}><AccentBackdrop />
+      <SafeAreaView style={[styles.safe, { backgroundColor: "transparent" }]} edges={["top", "left", "right"]} onTouchStart={() => resetBottomNavigation()}>
+      <StatusBar hidden style="light" />
       {leaderboardOpen ? <LeaderboardScreen user={user} tasks={tasks} onClose={() => setLeaderboardOpen(false)} /> : quickRecallOpen ? <QuickRecallScreen user={user} onClose={() => setQuickRecallOpen(false)} onGoProfile={() => { setQuickRecallOpen(false); setAppTab("profile"); }} /> : appTab === "profile" ? (
         <ProfileScreen
           user={user}
@@ -923,9 +926,7 @@ export default function App() {
         <ProgressScreen user={user} onBack={() => { setTrackTab("Mock Test"); setAppTab("track"); }} />
       ) : appTab === "tasks" ? (
         <>
-      <ScrollView stickyHeaderIndices={[0]} contentContainerStyle={[styles.content, styles.tasksContent]}>
-        {[
-            <View key="tasks-sticky" style={styles.tasksSticky}>
+      <View style={styles.tasksSticky}>
             <View>
             <DailySectionHeader section="tasks" today={today} selected={activeTaskDate} tasks={tasks}
               weekEnd={dailyWeekEnd} onWeekEndChange={setDailyWeekEnd} onSelect={selectDailyDate}
@@ -935,8 +936,9 @@ export default function App() {
             <TaskOverview total={todaySummary.total} due={dueTasks.length} percent={todaySummary.percent}
               dueOnly={taskDueOnly} onFilterChange={setTaskDueOnly}
               studyTime={<RollingDuration minutes={todaySummary.minutes} fontSize={12} />} />
-            </View>,
-            <View key="tasks-list" style={styles.tasksList}>
+            </View>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.content, styles.tasksContent]}>
+            <View style={styles.tasksList}>
             {visibleTasks.length === 0 ? (
                 taskDueOnly && todayTasks.length > 0 ? <View style={{padding:22}}><Text style={styles.muted}>All tasks complete for this day.</Text></View> : isTaskHistory ? <View style={{padding:22}}><Text style={styles.muted}>No tasks recorded for this day.</Text></View> : <Empty onPress={openNew} />
             ) : (
@@ -959,8 +961,7 @@ export default function App() {
                 />
               ))
             )}
-            </View>,
-        ]}
+            </View>
       </ScrollView>
       <Modal transparent visible={editor !== null} animationType="fade" onRequestClose={() => { if (!taskActionLoading) { setSubjectMenuOpen(false); setTypeMenuOpen(false); setEditor(null); } }}>
         <KeyboardAvoidingView style={styles.backdrop} behavior={Platform.OS === "ios" ? "padding" : "height"}>
@@ -1055,19 +1056,7 @@ export default function App() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
-      <Modal transparent visible={deletingTask !== null} animationType="fade" onRequestClose={() => setDeletingTask(null)}>
-        <Pressable style={styles.deleteBackdrop} onPress={() => setDeletingTask(null)}>
-          <Pressable style={styles.deleteDialog} onPress={() => undefined}>
-            <View style={styles.deleteIcon}><MaterialCommunityIcons name="trash-can-outline" size={21} color="#fda4af" /></View>
-            <Text style={styles.deleteTitle}>Delete task?</Text>
-            <Text numberOfLines={2} style={styles.deleteCopy}>“{deletingTask?.name}” will be permanently removed.</Text>
-            <View style={styles.deleteActions}>
-              <Pressable style={styles.deleteCancel} onPress={() => setDeletingTask(null)}><Text style={styles.deleteCancelText}>Keep task</Text></Pressable>
-              <Pressable disabled={taskActionLoading} style={[styles.deleteConfirm, taskActionLoading && styles.actionDisabled]} onPress={() => void confirmDelete()}>{taskActionLoading ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.deleteConfirmText}>Delete</Text>}</Pressable>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
+      <DestructiveDialog visible={deletingTask !== null} title="Are you sure you want to delete this task?" busy={taskActionLoading} confirmLabel="Yes, delete" onCancel={() => setDeletingTask(null)} onConfirm={confirmDelete} />
         </>
       ) : (
         <ComingSoonScreen title={activeAppTab.label} />
@@ -1098,6 +1087,7 @@ export default function App() {
         }}
       />
       </SafeAreaView>
+      </View>
     </SafeAreaProvider>
   );
 }
@@ -1269,8 +1259,8 @@ const styles = createThemedStyles({
   tabText: { color: "#71717a", fontSize: 13, fontWeight: "600" },
   tabTextActive: { color: "#fafafa" },
   content: { position: "relative", padding: 20, gap: 12, paddingBottom: 60 },
-  tasksContent: { paddingTop: 0 },
-  tasksSticky: { backgroundColor: "#000000", paddingTop: 16, paddingBottom: 12 },
+  tasksContent: { paddingTop: 12 },
+  tasksSticky: { backgroundColor: "transparent", paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12 },
   tasksList: { backgroundColor: "#141414", borderWidth: 1, borderColor: "#292929", borderRadius: 14, overflow: "hidden" },
   heroHeadingActions: { flexDirection: "row", alignItems: "center", gap: 8 },
   livePoints: { flexDirection: "row", alignItems: "center", gap: 3 },

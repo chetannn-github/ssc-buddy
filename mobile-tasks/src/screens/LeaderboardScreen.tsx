@@ -418,7 +418,7 @@ export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { 
 }
 
 const s = createThemedStyles({
-  page: { flex: 1, backgroundColor: colors.background },
+  page: { flex: 1, backgroundColor: "transparent" },
   header: {
     height: 58,
     paddingHorizontal: 18,

@@ -195,7 +195,7 @@ function Brand() {
 }
 
 const styles = createThemedStyles({
-  page: { flex: 1, backgroundColor: colors.background }, pageWide: { flexDirection: "row" },
+  page: { flex: 1, backgroundColor: "transparent" }, pageWide: { flexDirection: "row" },
   mobileBackground: { ...StyleSheet.absoluteFill, width: "100%", height: "100%", opacity: 0.13 },
   mobileScrim: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(16,16,16,0.73)" },
   visual: { flex: 1, minHeight: 580, backgroundColor: "#171717" }, visualImage: { opacity: 0.35 },

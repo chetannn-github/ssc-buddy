@@ -59,7 +59,7 @@ export function renderHabitWidget(habit?: Habit, error = "", size: HabitWidgetSi
     <FlexWidget style={{ width: "match_parent", height: narrowCompact ? 44 : 52, marginTop: compactTitleOffset, flexDirection: "column", justifyContent: "flex-end" }}>
       <TextWidget text={habit.name} maxLines={2} truncate="END" style={{ color: "#fafafa", fontSize: narrowCompact ? 16 : 19, fontWeight: "bold" }} />
     </FlexWidget>
-    <FlexWidget style={{ flex: 1 }} />
+    <FlexWidget style={narrowCompact ? { flex: 1 } : { height: 8 }} />
     <FlexWidget style={{ width: "match_parent", flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
       <FlexWidget style={{ flex: 1, flexDirection: "column" }}>
         <FlexWidget style={{ flexDirection: "row", alignItems: "center" }}>

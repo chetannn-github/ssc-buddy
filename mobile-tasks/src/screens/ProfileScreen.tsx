@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { DestructiveDialog } from "../components/DestructiveDialog";
 import { createThemedStyles, setAppAccent, useAppAccent } from "../theme";
 import { APP_ACCENTS, accentInk, type AppAccent } from "../domain/app-accent";
 import { DropdownChevron } from "../components/DropdownChevron";
@@ -814,35 +815,7 @@ export function ProfileScreen({
             </Pressable>
           </Pressable>
         </Modal>
-        <Modal
-          transparent
-          visible={confirmLogout}
-          animationType="fade"
-          onRequestClose={() => setConfirmLogout(false)}
-        >
-          <Pressable style={styles.modalBackdrop} onPress={() => setConfirmLogout(false)}>
-            <Pressable style={styles.confirmDialog} onPress={() => undefined}>
-              <View style={styles.confirmHeader}>
-                <View style={styles.confirmIcon}>
-                  <MaterialCommunityIcons name="logout" size={18} color="#fca5a5" />
-                </View>
-                <Pressable hitSlop={10} onPress={() => setConfirmLogout(false)}>
-                  <MaterialCommunityIcons name="close" size={20} color={colors.subdued} />
-                </Pressable>
-              </View>
-              <Text style={styles.confirmTitle}>Sign out?</Text>
-              <Text style={styles.confirmCopy}>You can sign back in anytime.</Text>
-              <View style={styles.confirmActions}>
-                <Pressable style={styles.cancelButton} onPress={() => setConfirmLogout(false)}>
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
-                </Pressable>
-                <Pressable style={styles.logoutConfirm} onPress={onLogout}>
-                  <Text style={styles.logoutConfirmText}>Sign out</Text>
-                </Pressable>
-              </View>
-            </Pressable>
-          </Pressable>
-        </Modal>
+        <DestructiveDialog visible={confirmLogout} title="Are you sure you want to sign out?" confirmLabel="Yes, sign out" onCancel={() => setConfirmLogout(false)} onConfirm={onLogout} />
         <Modal
           transparent
           visible={editing}
@@ -1707,14 +1680,14 @@ function EditField({
 }
 
 const styles: Record<string, any> = createThemedStyles({
-  page: { flex: 1, backgroundColor: colors.background },
+  page: { flex: 1, backgroundColor: "transparent" },
   publicBackRow: { height: 38, paddingHorizontal: 15, justifyContent: "flex-end" },
   profileTop: {
     zIndex: 5,
     paddingHorizontal: 11,
     paddingTop: 10,
     paddingBottom: 6,
-    backgroundColor: colors.background,
+    backgroundColor: "transparent",
   },
   bodyScroll: { flex: 1 },
   content: { paddingHorizontal: 11, paddingTop: 10, paddingBottom: 112 },

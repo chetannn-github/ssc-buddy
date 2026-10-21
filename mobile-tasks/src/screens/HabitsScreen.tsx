@@ -1,3 +1,4 @@
+import { DestructiveDialog } from "../components/DestructiveDialog";
 import { scheduleSavedHabitReminders } from "../hooks/use-habit-reminders";
 import { UppercaseTextInput as TextInput } from "../components/UppercaseTextInput";
 import { colors } from "../theme";
@@ -631,45 +632,7 @@ export function HabitsScreen({ user, widgetRequest, onWidgetRequestHandled, onSw
           </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
-      <Modal
-        transparent
-        visible={!!deleting}
-        animationType="fade"
-        onRequestClose={() => {
-          if (!busy) setDeleting(null);
-        }}
-      >
-        <Pressable
-          style={s.backdrop}
-          onPress={() => {
-            if (!busy) setDeleting(null);
-          }}
-        >
-          <Pressable accessibilityViewIsModal onPress={() => undefined} style={s.dialog}>
-            <Text style={s.dialogTitle}>Delete habit?</Text>
-            <Text style={s.muted}>Remove “{deleting?.name}” and its history?</Text>
-            {!!message && <Text style={s.error}>{message}</Text>}
-            <View style={s.actions}>
-              <Pressable disabled={busy} onPress={() => setDeleting(null)}>
-                <Text style={s.muted}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                disabled={busy}
-                style={[s.add, { backgroundColor: "#ef334f" }]}
-                onPress={() => {
-                  if (deleting)
-                    void act(
-                      () => remove(deleting.id),
-                      () => setDeleting(null),
-                    );
-                }}
-              >
-                <Text style={{ color: "white", fontWeight: "800" }}>Delete</Text>
-              </Pressable>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
+      <DestructiveDialog visible={!!deleting} title="Are you sure you want to delete this habit?" busy={busy} error={message} confirmLabel="Yes, delete" onCancel={() => setDeleting(null)} onConfirm={() => deleting ? act(() => remove(deleting.id), () => setDeleting(null)) : undefined} />
     </View>
   );
 }
@@ -785,7 +748,7 @@ const s = createThemedStyles({
   habitMenu: { position: "absolute", borderRadius: 13, padding: 4, backgroundColor: "#0e0e0e", borderWidth: 1, borderColor: "#262626", elevation: 12, overflow: "hidden" },
   habitMenuItem: { flexDirection: "row", alignItems: "center", gap: 11, paddingHorizontal: 12, paddingVertical: 13 },
   habitMenuText: { flex: 1, flexShrink: 1, color: colors.text, fontSize: 14, fontWeight: "600" },
-  page: { flex: 1, backgroundColor: "#000" },
+  page: { flex: 1, backgroundColor: "transparent" },
   content: { padding: 20, gap: 20, paddingBottom: 110, paddingTop: 0 },
   header: { flexDirection: "row", alignItems: "center", gap: 8 },
   title: { flex: 1, color: "white", fontSize: 21, fontWeight: "800" },
