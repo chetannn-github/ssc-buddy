@@ -69,7 +69,7 @@ export function HabitWidgetConfiguration(props: WidgetConfigurationScreenProps) 
       if (getFirebaseAuth().currentUser?.uid !== uid) throw new Error("Sign in again");
       await cacheWidgetHabits(uid, habits);
       await bindHabitWidget(props.widgetInfo.widgetId, uid, selected);
-      props.renderWidget(await habitWidgetView(props.widgetInfo.widgetId, uid, "", false));
+      props.renderWidget(await habitWidgetView(props.widgetInfo.widgetId, uid, "", false, props.widgetInfo));
       props.setResult("ok");
     } catch {
       setError("Could not add widget. Try again.");

@@ -17,6 +17,7 @@ type Notifications = Pick<
   | "AndroidImportance"
   | "SchedulableTriggerInputTypes"
 >;
+export type NativeNotifications = Notifications;
 export const IS_EXPO_GO =
   Constants.appOwnership === "expo" || Constants.executionEnvironment === "storeClient";
 let cached: Notifications | null | undefined;

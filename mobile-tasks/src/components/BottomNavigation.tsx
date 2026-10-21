@@ -1,6 +1,7 @@
-import { createThemedStyles } from "../theme";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { createThemedStyles, useAppAccent } from "../theme";
+import { accentInk } from "../domain/app-accent";
 import { BlurView } from "expo-blur";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Image as ExpoImage } from "expo-image";
 import { useEffect, useRef, useState } from "react";
 import { Animated, Image, type ImageSourcePropType, Pressable, StyleSheet, Text, View } from "react-native";
@@ -9,25 +10,12 @@ import { tabs, type TabKey } from "../navigation/tabs";
 import { resetBottomNavigation, subscribeBottomNavigation } from "../navigation/bottomNavigationVisibility";
 import { TRACK_TARGET_FRAME_DELAYS, trackTargetFrames } from "./trackTargetFrames";
 
-const PASTEL_TONES = [
-  { icon: "#fbcfe8", halo: "rgba(251,207,232,.42)" },
-  { icon: "#bfdbfe", halo: "rgba(191,219,254,.42)" },
-  { icon: "#bbf7d0", halo: "rgba(187,247,208,.42)" },
-  { icon: "#fde68a", halo: "rgba(253,230,138,.42)" },
-  { icon: "#ddd6fe", halo: "rgba(221,214,254,.42)" },
-  { icon: "#fecdd3", halo: "rgba(254,205,211,.42)" },
-] as const;
-
 const ANIMATED_ICON_DURATION: Partial<Record<TabKey, number>> = {
   tasks: 2050,
   track: 2540,
   practice: 3150,
   progress: 2050,
 };
-
-function randomPastelTone() {
-  return PASTEL_TONES[Math.floor(Math.random() * PASTEL_TONES.length)];
-}
 
 function animatedIconSource(tab: TabKey, isPlaying: boolean) {
   if (tab === "tasks") return isPlaying
@@ -60,6 +48,8 @@ export function BottomNavigation({
   habitsEnabled = true,
   profileAvatar,
 }: Props) {
+  const accent = useAppAccent();
+  const ink = accentInk(accent);
   const [visible, setVisible] = useState(true);
   const [trackFramesReady, setTrackFramesReady] = useState(false);
   const height = useRef(new Animated.Value(84)).current;
@@ -90,16 +80,14 @@ export function BottomNavigation({
   return (
     <Animated.View pointerEvents={visible ? "auto" : "none"} style={[styles.container, { height }]}>
       <View style={styles.wrap}>
-        <BlurView
-          intensity={36}
-          tint="dark"
-          style={styles.glass}
-        >
+        <BlurView intensity={36} tint="dark" style={styles.glass}>
           {visibleTabs.map((tab) => (
             <NavigationItem
               key={tab.key}
               tab={tab}
               active={tab.key === activeTab}
+              ink={ink}
+              accent={accent}
               profileAvatar={profileAvatar}
               trackFramesReady={trackFramesReady}
               onPress={() => {
@@ -114,7 +102,7 @@ export function BottomNavigation({
   );
 }
 
-function NavigationItem({ tab, active, onPress, profileAvatar, trackFramesReady }: { tab: (typeof tabs)[number]; active: boolean; onPress: () => void; profileAvatar?: ImageSourcePropType; trackFramesReady: boolean }) {
+function NavigationItem({ tab, active, onPress, profileAvatar, trackFramesReady, ink, accent }: { accent: string; ink: string; tab: (typeof tabs)[number]; active: boolean; onPress: () => void; profileAvatar?: ImageSourcePropType; trackFramesReady: boolean }) {
   const scale = useRef(new Animated.Value(1)).current;
   const labelOpacity = useRef(new Animated.Value(active ? 1 : 0.6)).current;
   const baseAnimationDuration = ANIMATED_ICON_DURATION[tab.key];
@@ -122,14 +110,12 @@ function NavigationItem({ tab, active, onPress, profileAvatar, trackFramesReady 
   const animationDuration = tab.key === "track" && !trackFramesReady ? undefined : baseAnimationDuration;
   const canPlayAnimatedIcon = Boolean(animationDuration);
   const [playAnimatedIcon, setPlayAnimatedIcon] = useState(active && canPlayAnimatedIcon);
-  const [pastelTone, setPastelTone] = useState(randomPastelTone);
   const [trackFrameIndex, setTrackFrameIndex] = useState(trackTargetFrames.length - 1);
   useEffect(() => {
     if (!active || !canPlayAnimatedIcon) {
       setPlayAnimatedIcon(false);
       return;
     }
-    setPastelTone(randomPastelTone());
     setPlayAnimatedIcon(true);
     const timeout = setTimeout(() => setPlayAnimatedIcon(false), animationDuration);
     return () => clearTimeout(timeout);
@@ -180,7 +166,7 @@ function NavigationItem({ tab, active, onPress, profileAvatar, trackFramesReady 
   }, [active, hasAnimatedIcon, labelOpacity, scale]);
   return (
     <Pressable accessibilityRole="tab" accessibilityState={{ selected: active }} accessibilityLabel={tab.label} onPress={onPress} style={styles.item}>
-      <Animated.View pointerEvents="none" style={[styles.iconWrap, active && tab.key !== "profile" && { backgroundColor: pastelTone.halo }, { transform: [{ scale }] }]}>
+      <Animated.View pointerEvents="none" style={[styles.iconWrap, active && tab.key !== "profile" && { backgroundColor: accent }, { transform: [{ scale }] }]}>
         {tab.key === "profile" && profileAvatar ? (
           <Image source={profileAvatar} style={[styles.profileAvatarIcon, !active && styles.profileAvatarIconInactive]} />
         ) : hasAnimatedIcon ? (
@@ -191,11 +177,11 @@ function NavigationItem({ tab, active, onPress, profileAvatar, trackFramesReady 
             autoplay
             contentFit="contain"
             transition={0}
-            style={[styles.animatedNavIcon, { tintColor: active ? "#f4f4f5" : "rgba(228,228,231,.72)" }, !active && styles.animatedNavIconInactive]}
+            style={[styles.animatedNavIcon, { tintColor: active ? ink : "rgba(228,228,231,.72)" }, !active && styles.animatedNavIconInactive]}
             accessibilityLabel={tab.label}
           />
         ) : (
-          <MaterialCommunityIcons name={(active ? tab.activeIcon : tab.icon) as never} size={20} color={active ? "#f4f4f5" : "rgba(228,228,231,.62)"} />
+          <MaterialCommunityIcons name={(active ? tab.activeIcon : tab.icon) as never} size={20} color={active ? tab.key === "profile" ? "#f4f4f5" : ink : "rgba(228,228,231,.62)"} />
         )}
       </Animated.View>
       <Animated.Text pointerEvents="none" style={[styles.label, active && styles.labelActive, { opacity: labelOpacity }]}>{tab.label}</Animated.Text>

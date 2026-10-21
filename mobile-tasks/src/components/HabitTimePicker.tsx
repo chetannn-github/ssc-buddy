@@ -1,3 +1,4 @@
+import { accentInk } from "../domain/app-accent";
 import { clockValueFromPoint } from "../domain/clock-hand";
 import { useRef, useState } from "react";
 import { Modal, Pressable, Text, TextInput, View } from "react-native";
@@ -171,10 +172,10 @@ export function HabitTimePicker({
                     style={{
                       paddingHorizontal: 9,
                       paddingVertical: 8,
-                      backgroundColor: pm === isPM ? "#124dba" : "#000",
+                      backgroundColor: pm === isPM ? tint : "#000",
                     }}
                   >
-                    <Text style={{ color: "white", fontWeight: "700" }}>{isPM ? "PM" : "AM"}</Text>
+                    <Text style={{ color: pm === isPM ? accentInk(tint) : "white", fontWeight: "700" }}>{isPM ? "PM" : "AM"}</Text>
                   </Pressable>
                 ))}
               </View>

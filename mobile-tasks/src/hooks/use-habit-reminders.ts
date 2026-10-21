@@ -1,5 +1,5 @@
 import { cacheWidgetHabits } from "../widgets/habit-widget-store";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { AppState, Platform } from "react-native";
 import {
   getNativeNotifications,
@@ -8,25 +8,24 @@ import {
 } from "../lib/native-notifications";
 import { useHabits } from "./use-habits";
 import { habitDay, habitDue, habitEntry, normalizeHabitSettings } from "../domain/habits";
+import {
+  ensureHabitNotificationPermission,
+  HABIT_NOTIFICATION_CHANNEL,
+} from "../lib/habit-notification-permissions";
 export async function requestHabitReminders() {
   // Save the preference in Expo Go without invoking incompatible channel APIs.
   if (IS_EXPO_GO) return;
   const Notifications = getNativeNotifications();
   if (!Notifications) throw new Error(NOTIFICATION_BUILD_MESSAGE);
-  if (Platform.OS === "android")
-    await Notifications.setNotificationChannelAsync("habits", {
-      name: "Habit reminders",
-      importance: Notifications.AndroidImportance.DEFAULT,
-    });
-  const existing = await Notifications.getPermissionsAsync();
-  const permission = existing.granted ? existing : await Notifications.requestPermissionsAsync();
-  if (!permission.granted)
+  if (!(await ensureHabitNotificationPermission(Notifications, Platform.OS === "android", true)))
     throw new Error("Allow notifications in your phone settings to enable reminders.");
 }
 // Rebuild only our alarms. A serialized chain prevents older snapshots replacing newer schedules.
 let queue = Promise.resolve();
 export function useHabitReminders(uid?: string, enabled = true) {
   const { habits, loading, error } = useHabits(uid);
+  const permissionAttempt = useRef({ uid, attempted: false });
+  if (permissionAttempt.current.uid !== uid) permissionAttempt.current = { uid, attempted: false };
   useEffect(() => {
     if (!loading && !error) void cacheWidgetHabits(uid, habits).catch(() => undefined);
   }, [uid, habits, loading, error]);
@@ -39,7 +38,21 @@ export function useHabitReminders(uid?: string, enabled = true) {
         .catch(() => undefined)
         .then(async () => {
           if (!active) return;
+          if (uid && enabled && !loading && !error) {
+            const hasReminders = habits.some((habit) => {
+              const settings = normalizeHabitSettings(habit.settings);
+              return settings.reminder ||
+                (settings.tracking === "checklist" && settings.checklist.some((item) => item.reminder));
+            });
+            if (hasReminders) {
+              const ask = !permissionAttempt.current.attempted && AppState.currentState === "active";
+              if (ask) permissionAttempt.current.attempted = true;
+              const allowed = await ensureHabitNotificationPermission(Notifications, Platform.OS === "android", ask);
+              if (!active || !allowed) return;
+            }
+          }
           const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+          if (!active) return;
           for (const item of scheduled)
             if (
               item.content.data?.["source"] === "ssc-buddy-habit" &&
@@ -54,11 +67,6 @@ export function useHabitReminders(uid?: string, enabled = true) {
             !(await Notifications.getPermissionsAsync()).granted
           )
             return;
-          if (Platform.OS === "android")
-            await Notifications.setNotificationChannelAsync("habits", {
-              name: "Habit reminders",
-              importance: Notifications.AndroidImportance.DEFAULT,
-            });
           let count = 0;
           for (let offset = 0; offset < 30 && count < 60; offset++) {
             for (const habit of habits) {
@@ -103,7 +111,7 @@ export function useHabitReminders(uid?: string, enabled = true) {
                   trigger: {
                     type: Notifications.SchedulableTriggerInputTypes.DATE,
                     date,
-                    channelId: "habits",
+                    channelId: HABIT_NOTIFICATION_CHANNEL,
                   },
                 });
                 count++;
@@ -111,7 +119,7 @@ export function useHabitReminders(uid?: string, enabled = true) {
             }
           }
         });
-      void queue.catch(() => undefined);
+      void queue.catch((error) => console.warn("Habit reminder scheduling failed:", error));
     };
     sync();
     const subscription = AppState.addEventListener("change", (state) => {

@@ -1,3 +1,4 @@
+import type { HabitWidgetSize } from "../domain/habit-widget-layout";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import { Platform } from "react-native";
@@ -78,10 +79,10 @@ export async function refreshHabitWidgets(uid?: string) {
   const { requestWidgetUpdate } = require("react-native-android-widget");
   await requestWidgetUpdate({
     widgetName: "HabitWidget",
-    renderWidget: (info: { widgetId: number }) => habitWidgetView(info.widgetId, uid, "", false),
+    renderWidget: (info: { widgetId: number; width: number; height: number }) => habitWidgetView(info.widgetId, uid, "", false, info),
   });
 }
-export async function habitWidgetView(id: number, uid?: string, error = "", fetchCloud = true) {
+export async function habitWidgetView(id: number, uid?: string, error = "", fetchCloud = true, size?: HabitWidgetSize) {
   const { renderHabitWidget } = require("./HabitWidget"),
     binding = await readJSON(key(id));
   if (!uid || binding?.uid !== uid || getFirebaseAuth().currentUser?.uid !== uid)
@@ -99,7 +100,7 @@ export async function habitWidgetView(id: number, uid?: string, error = "", fetc
       /* Use the last account-scoped cache offline. */
     }
   }
-  return renderHabitWidget(habit, error);
+  return renderHabitWidget(habit, error, size);
 }
 export async function actOnHabitWidget(id: number, uid: string, action: string) {
   const binding = await readJSON(key(id));

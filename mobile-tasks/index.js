@@ -73,7 +73,7 @@ if (supportsAndroidWidgets) {
       if (widgetAction === "WIDGET_CLICK" && user && clickAction?.startsWith("HABIT_")) {
         try { await actOnHabitWidget(widgetInfo.widgetId, user.uid, clickAction); } catch { error = "Could not save. Tap to retry."; }
       }
-      renderWidget(await habitWidgetView(widgetInfo.widgetId, user?.uid, error)); return;
+      renderWidget(await habitWidgetView(widgetInfo.widgetId, user?.uid, error, true, widgetInfo)); return;
     }
     if (widgetInfo.widgetName === "TimerWidget") {
       if (widgetAction === "WIDGET_DELETED") { await removeTimerWidget(widgetInfo.widgetId); return; }
