@@ -9,12 +9,14 @@ export async function ensureHabitNotificationPermission(
   askPermission: boolean,
 ) {
   if (android) {
-    await notifications.setNotificationChannelAsync(HABIT_NOTIFICATION_CHANNEL, {
+    const channel = await notifications.setNotificationChannelAsync(HABIT_NOTIFICATION_CHANNEL, {
       name: "Habit reminders",
       importance: notifications.AndroidImportance.HIGH,
       sound: "default",
       vibrationPattern: [0, 200, 100, 200],
     });
+    if (channel && channel.importance === notifications.AndroidImportance.NONE)
+      throw new Error("Habit reminders are blocked. Open phone Settings → Notifications → SSC Buddy → Habit reminders and allow them.");
   }
   let permission = await notifications.getPermissionsAsync();
   if (!permission.granted && permission.canAskAgain && askPermission) {

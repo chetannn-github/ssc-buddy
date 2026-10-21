@@ -306,7 +306,7 @@ export default function App() {
     });
     return () => { if (midnightTimer) clearTimeout(midnightTimer); appStateSubscription.remove(); };
   }, []);
-  useHabitReminders(user?.uid, profileSettings?.habitsEnabled !== false);
+  useHabitReminders(user?.uid, profileSettings?.habitsEnabled !== false, authReady && uiSettingsReady);
   const activeAppTab = tabs.find((item) => item.key === appTab) ?? tabs[0];
   // Task-only users can build their own subject list without creating a syllabus.
   const subjectOptions = [...new Set(tasks.map((task) => task.subject).filter(Boolean))];

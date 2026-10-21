@@ -677,3 +677,64 @@ test("habit widget style persists per instance, including compact pins and legac
   await api.habitWidgetView(93, "alice", "", false);
   assert.equal(renderCalls.at(-1)[3], "compact");
 });
+
+
+const reminderPlanExports = {};
+vm.runInNewContext(ts.transpileModule(await readFile(new URL("../mobile-tasks/src/domain/habit-reminder-plan.ts", import.meta.url), "utf8"), {
+  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
+}).outputText, { exports: reminderPlanExports, Date, require: () => sharedDomain });
+const schedulerExports = {};
+vm.runInNewContext(ts.transpileModule(await readFile(new URL("../mobile-tasks/src/lib/habit-reminder-scheduler.ts", import.meta.url), "utf8"), {
+  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
+}).outputText, { exports: schedulerExports, Date, Set, Map, require: () => ({ HABIT_NOTIFICATION_CHANNEL: "habits" }) });
+const reminderNow = new Date("2026-10-21T08:00:00");
+const reminderHabit = (id, time = "09:00") => ({ id, name: id, color: "purple", createdAt: "2026-01-01T00:00:00Z", completedDates: [], settings: sharedDomain.normalizeHabitSettings({ reminder: time }) });
+function schedulerHarness() {
+  const alarms = new Map(), writes = [], cancelled = [];
+  let fail = false;
+  const notifications = {
+    SchedulableTriggerInputTypes: { DATE: "date" },
+    getAllScheduledNotificationsAsync: async () => [...alarms.values()],
+    scheduleNotificationAsync: async alarm => { if (fail) throw new Error("Alarm failed"); writes.push(alarm.identifier); alarms.set(alarm.identifier, alarm); },
+    cancelScheduledNotificationAsync: async id => { cancelled.push(id); alarms.delete(id); },
+  };
+  return { notifications, alarms, writes, cancelled, fail: () => { fail = true; } };
+}
+test("reminder alarms are chronological, account-scoped and stable across habit snapshots", () => {
+  const habits = [reminderHabit("late", "21:00"), reminderHabit("early")];
+  const plan = reminderPlanExports.habitReminderPlan(habits, "alice", reminderNow);
+  assert.equal(plan.length, 60);
+  assert.equal(plan[0].habitId, "early");
+  assert.ok(plan.every((alarm, i) => !i || alarm.at >= plan[i - 1].at));
+  assert.equal(plan[0].identifier, reminderPlanExports.habitReminderPlan([...habits].reverse(), "alice", reminderNow)[0].identifier);
+  assert.notEqual(plan[0].identifier, reminderPlanExports.habitReminderPlan(habits, "bob", reminderNow)[0].identifier);
+});
+test("habit completion removes today's reminder without disturbing future alarms", () => {
+  const habit = reminderHabit("read");
+  habit.completedDates = ["2026-10-21"];
+  const plan = reminderPlanExports.habitReminderPlan([habit], "alice", reminderNow);
+  assert.equal(new Date(plan[0].at).getDate(), 22);
+});
+test("unchanged reminder snapshots preserve alarms without cancellation or rescheduling", async () => {
+  const h = schedulerHarness();
+  const plan = reminderPlanExports.habitReminderPlan([reminderHabit("read")], "alice", reminderNow);
+  await schedulerExports.reconcileHabitReminders(h.notifications, plan, "alice");
+  const writes = h.writes.length;
+  await schedulerExports.reconcileHabitReminders(h.notifications, plan, "alice");
+  assert.equal(h.writes.length, writes);
+  assert.equal(h.cancelled.length, 0);
+});
+test("failed replacement keeps working alarms; obsolete reminders and other notifications stay isolated", async () => {
+  const h = schedulerHarness();
+  const old = reminderPlanExports.habitReminderPlan([reminderHabit("read")], "alice", reminderNow);
+  await schedulerExports.reconcileHabitReminders(h.notifications, old, "alice");
+  h.alarms.set("music", { identifier: "music", content: { data: { source: "music" } } });
+  h.fail();
+  const next = reminderPlanExports.habitReminderPlan([reminderHabit("read", "10:00")], "alice", reminderNow);
+  await assert.rejects(schedulerExports.reconcileHabitReminders(h.notifications, next, "alice"), /Alarm failed/);
+  assert.equal(h.cancelled.length, 0);
+  assert.ok(h.alarms.has(old[0].identifier));
+  await schedulerExports.reconcileHabitReminders(h.notifications, [], "alice");
+  assert.ok(h.alarms.has("music"));
+  assert.equal(h.alarms.size, 1);
+});
