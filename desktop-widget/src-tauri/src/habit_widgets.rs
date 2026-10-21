@@ -18,10 +18,10 @@ pub struct HabitPin {
 }
 impl HabitPin {
   fn min_size(&self) -> (f64, f64) {
-    match self.style.as_str() { "recall" => (400., 340.), "tasks" => (340., 400.), _ => (220., 160.) }
+    match self.style.as_str() { "recall" => (400., 300.), "tasks" => (340., 400.), _ => (220., 160.) }
   }
   fn max_size(&self) -> (f64, f64) {
-    match self.style.as_str() { "recall" => (400., 600.), "tasks" => (340., 500.), _ => (430., 420.) }
+    match self.style.as_str() { "recall" => (400., 420.), "tasks" => (340., 500.), _ => (430., 420.) }
   }
   fn label(&self) -> String {
     let mut hash = DefaultHasher::new();
@@ -203,6 +203,10 @@ pub fn restore(app: &AppHandle) {
     .and_then(|dir| std::fs::read(dir.join("habit-widgets.json")).ok())
     .and_then(|data| serde_json::from_slice::<Vec<HabitPin>>(&data).ok()).unwrap_or_default();
   let mut pins: Vec<_> = stored.into_iter().filter(HabitPin::valid).take(30).collect();
+  for pin in &mut pins {
+    // Migrate the previous default while preserving manually chosen heights.
+    if pin.style == "recall" && (pin.height - 475.).abs() < 1. { pin.height = 380.; }
+  }
   for pin in &mut pins { if pin.desktop_id.is_none() { pin.desktop_id = virtual_desktop::active().or_else(|| app.get_webview_window("main").and_then(|window| virtual_desktop::current(&window))); } }
   if let Ok(mut state) = app.state::<HabitPins>().0.lock() { *state = pins.clone(); }
   for pin in pins { if let Err(error) = open(app, &pin) { eprintln!("Could not restore habit widget: {error}"); } }
@@ -213,7 +217,7 @@ pub fn restore(app: &AppHandle) {
 #[tauri::command]
 pub async fn pin_habit_widget(app: AppHandle, window: WebviewWindow, uid: String, habit_id: String, style: String) -> Result<(), String> {
   if window.label() != "main" { return Err("Open widgets from the main window.".into()); }
-  let (width, height) = match style.as_str() { "month" => (260., 260.), "compact" => (250., 180.), "recall" => (400., 475.), "tasks" => (340., 475.), _ => (430., 220.) };
+  let (width, height) = match style.as_str() { "month" => (260., 260.), "compact" => (250., 180.), "recall" => (400., 380.), "tasks" => (340., 475.), _ => (430., 220.) };
   let pin = HabitPin { uid, habit_id, style, x: None, y: None, width, height, desktop_id: virtual_desktop::active().or_else(|| virtual_desktop::current(&window)) };
   if !pin.valid() { return Err("Invalid habit widget.".into()); }
   keep_on_saved_desktops(&app);

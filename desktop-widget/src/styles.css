@@ -720,3 +720,12 @@ html, body, #root {
 /* Secondary habit widget labels stay muted, including animated progress digits. */
 .pinned-habit .pinned-streak small, .pinned-habit .pinned-target>span { color:#777; }
 .pinned-habit .pinned-target>span * { color:inherit; }
+
+@media(max-height:400px) {
+  .recall-desktop-card { padding:10px 12px; }
+  .recall-desktop-card .recall-widget-drag { padding-bottom:8px; margin-bottom:8px; }
+  .recall-desktop-card .quick-setup { gap:9px 10px; }
+  .recall-desktop-card .quick-setup>label { gap:4px; }
+  .recall-desktop-card .quick-setup>.primary { min-height:36px; }
+  .recall-desktop-card .quick-state { min-height:180px; }
+}
