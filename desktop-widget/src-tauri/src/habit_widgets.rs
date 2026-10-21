@@ -18,7 +18,7 @@ pub struct HabitPin {
 }
 impl HabitPin {
   fn min_size(&self) -> (f64, f64) {
-    match self.style.as_str() { "recall" => (400., 400.), "tasks" => (340., 400.), _ => (220., 160.) }
+    match self.style.as_str() { "recall" => (400., 340.), "tasks" => (340., 400.), _ => (220., 160.) }
   }
   fn max_size(&self) -> (f64, f64) {
     match self.style.as_str() { "recall" => (400., 600.), "tasks" => (340., 500.), _ => (430., 420.) }

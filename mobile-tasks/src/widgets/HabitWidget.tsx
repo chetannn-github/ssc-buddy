@@ -48,22 +48,24 @@ export function renderHabitWidget(habit?: Habit, error = "", size: HabitWidgetSi
   const subtitle = wide ? "Last 20 weeks" : new Date(today + "T12:00:00").toLocaleDateString(undefined, { month: "long" });
   const detail = error || (count ? `${entry.count}/${settings.dailyGoal}${settings.unit ? " " + settings.unit : ""}`
     : checklist ? `${checks.length}/${settings.checklist.length} · ${label}` : habit.targetDays ? `${stats.total}/${habit.targetDays} days` : "");
+  const narrowCompact = size.width < 160;
+  const compactButton = narrowCompact ? 40 : 48;
   if (style === "compact") return <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: "sscbuddy://habits" }}
     accessibilityLabel={`${habit.name}, streak ${stats.streak}, ${done ? "completed" : "incomplete"} today`}
-    style={{ width: "match_parent", height: "match_parent", backgroundColor: "#080808", borderRadius: 24, padding: 14, flexDirection: "column" }}>
-    <TextWidget text={habit.name} maxLines={2} truncate="END" style={{ color: "#fafafa", fontSize: 19, fontWeight: "bold" }} />
+    style={{ width: "match_parent", height: "match_parent", backgroundColor: "#080808", borderRadius: 24, padding: narrowCompact ? 10 : 14, flexDirection: "column" }}>
+    <TextWidget text={habit.name} maxLines={2} truncate="END" style={{ color: "#fafafa", fontSize: narrowCompact ? 16 : 19, fontWeight: "bold" }} />
     <FlexWidget style={{ flex: 1 }} />
     <FlexWidget style={{ width: "match_parent", flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
       <FlexWidget style={{ flex: 1, flexDirection: "column" }}>
         <FlexWidget style={{ flexDirection: "row", alignItems: "center" }}>
-          <TextWidget text={String(stats.streak)} style={{ color: "#fafafa", fontSize: 32, fontWeight: "bold" }} />
-          <SvgWidget svg={flame(tint)} style={{ width: 23, height: 26, marginLeft: 3 }} />
+          <TextWidget text={String(stats.streak)} style={{ color: "#fafafa", fontSize: narrowCompact ? 27 : 32, fontWeight: "bold" }} />
+          <SvgWidget svg={flame(tint)} style={{ width: narrowCompact ? 18 : 23, height: narrowCompact ? 21 : 26, marginLeft: 3 }} />
         </FlexWidget>
         <TextWidget text={settings.frequency === "period" ? settings.period === "week" ? "WEEKS" : "MONTHS" : stats.streak === 1 ? "DAY" : "DAYS"} style={{ color: "#999999", fontSize: 11, marginTop: 2 }} />
       </FlexWidget>
       <FlexWidget clickAction={action} clickActionData={{ uri: "sscbuddy://habits" }} accessibilityLabel={label}
-        style={{ width: 48, height: 48, borderRadius: 24, borderWidth: 1.5, borderColor: tint, backgroundColor: done ? tint : "#080808", alignItems: "center", justifyContent: "center" }}>
-        <SvgWidget svg={actionIcon(count || (checklist && !done) ? "plus" : "check", done ? accentInk(tint) : tint)} style={{ width: 33, height: 33 }} />
+        style={{ width: compactButton, height: compactButton, borderRadius: compactButton / 2, borderWidth: 1.5, borderColor: tint, backgroundColor: done ? tint : "#080808", alignItems: "center", justifyContent: "center" }}>
+        <SvgWidget svg={actionIcon(count || (checklist && !done) ? "plus" : "check", done ? accentInk(tint) : tint)} style={{ width: narrowCompact ? 27 : 33, height: narrowCompact ? 27 : 33 }} />
       </FlexWidget>
     </FlexWidget>
     {footer && <TextWidget text={detail} maxLines={1} truncate="END" style={{ color: error ? "#fca5a5" : "#999999", fontSize: 9, marginTop: 8 }} />}
