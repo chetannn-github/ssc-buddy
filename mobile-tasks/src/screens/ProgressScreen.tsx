@@ -10,7 +10,7 @@ import { reportVerticalScroll } from "../navigation/bottomNavigationVisibility";
 import type { User } from "firebase/auth";
 import { appendTrackerTest, deleteTrackerTest, watchTrackerSections, watchTrackerTests } from "../lib/firebase";
 
-const ScrollView = (props: any) => <NativeScrollView {...props} scrollEventThrottle={16} onScroll={(event) => { if (!props.horizontal) reportVerticalScroll(event.nativeEvent.contentOffset.y); props.onScroll?.(event); }} />;
+const ScrollView = (props: any) => <NativeScrollView {...props} scrollEventThrottle={16} onScroll={(event) => { if (!props.horizontal) reportVerticalScroll(event.nativeEvent.contentOffset.y, event.nativeEvent); props.onScroll?.(event); }} />;
 
 type Category = MockTestLog["type"];
 const categories: Category[] = ["Sectional", "Pre", "Mains"];

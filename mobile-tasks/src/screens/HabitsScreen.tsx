@@ -142,7 +142,7 @@ export function HabitsScreen({ user, onSwitchToTasks, selectedDate, onSelectDate
         stickyHeaderIndices={[0]}
         contentContainerStyle={s.content}
         scrollEventThrottle={16}
-        onScroll={(event) => reportVerticalScroll(event.nativeEvent.contentOffset.y)}
+        onScroll={(event) => reportVerticalScroll(event.nativeEvent.contentOffset.y, event.nativeEvent)}
       >
         <View style={{ backgroundColor: "#000000", paddingTop: 16, paddingBottom: 12 }}>
         <DailySectionHeader section="habits" today={today} selected={selected} tasks={dateTasks}

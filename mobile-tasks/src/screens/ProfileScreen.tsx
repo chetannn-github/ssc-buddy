@@ -51,7 +51,7 @@ const ScrollView = (props: any) => (
     {...props}
     scrollEventThrottle={16}
     onScroll={(event) => {
-      if (!props.horizontal) reportVerticalScroll(event.nativeEvent.contentOffset.y);
+      if (!props.horizontal) reportVerticalScroll(event.nativeEvent.contentOffset.y, event.nativeEvent);
       props.onScroll?.(event);
     }}
   />

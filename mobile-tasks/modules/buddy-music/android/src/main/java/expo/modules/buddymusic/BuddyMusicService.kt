@@ -59,12 +59,12 @@ class BuddyMusicService : MediaSessionService() {
   }
 
   private fun updateButtons() {
-    val repeatOne = player.repeatMode == Player.REPEAT_MODE_ONE
+    val repeatEnabled = player.repeatMode == Player.REPEAT_MODE_ONE
     val buttons = listOf(
       CommandButton.Builder(CommandButton.ICON_PREVIOUS).setDisplayName("Previous song").setPlayerCommand(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM).setSlots(CommandButton.SLOT_BACK).build(),
       CommandButton.Builder(CommandButton.ICON_NEXT).setDisplayName("Next song").setPlayerCommand(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM).setSlots(CommandButton.SLOT_FORWARD).build(),
-      CommandButton.Builder(if (repeatOne) CommandButton.ICON_REPEAT_ONE else CommandButton.ICON_REPEAT_ALL)
-        .setDisplayName(if (repeatOne) "Repeat one: on" else "Repeat playlist")
+      CommandButton.Builder(CommandButton.ICON_REPEAT_ALL)
+        .setDisplayName(if (repeatEnabled) "Repeat: on" else "Repeat: off")
         .setSessionCommand(SessionCommand(REPEAT, Bundle.EMPTY)).setSlots(CommandButton.SLOT_OVERFLOW).build()
     )
     session?.setCustomLayout(buttons)

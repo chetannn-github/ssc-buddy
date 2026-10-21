@@ -13,7 +13,7 @@ import { colors } from "../theme";
 import { reportVerticalScroll } from "../navigation/bottomNavigationVisibility";
 import { migrateTrackerSections, syncTrackerSections, watchTrackerSections } from "../lib/firebase";
 
-const ScrollView = (props: { [key: string]: any; onTouchStart?: (event: any) => void; onTouchEnd?: (event: any) => void }) => <NativeScrollView {...props} scrollEventThrottle={16} onScroll={(event) => { if (!props.horizontal) reportVerticalScroll(event.nativeEvent.contentOffset.y); props.onScroll?.(event); }} />;
+const ScrollView = (props: { [key: string]: any; onTouchStart?: (event: any) => void; onTouchEnd?: (event: any) => void }) => <NativeScrollView {...props} scrollEventThrottle={16} onScroll={(event) => { if (!props.horizontal) reportVerticalScroll(event.nativeEvent.contentOffset.y, event.nativeEvent); props.onScroll?.(event); }} />;
 
 type Chapter = { id: string; name: string; total: number; completed: number };
 type Subject = { id: string; name: string; target: number; chapters: Chapter[] };

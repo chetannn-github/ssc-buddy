@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { Animated, Image, type ImageSourcePropType, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { tabs, type TabKey } from "../navigation/tabs";
-import { resetBottomNavigation, subscribeBottomNavigation } from "../navigation/bottomNavigationVisibility";
+import { BOTTOM_NAVIGATION_HEIGHT, resetBottomNavigation, subscribeBottomNavigation } from "../navigation/bottomNavigationVisibility";
 import { TRACK_TARGET_FRAME_DELAYS, trackTargetFrames } from "./trackTargetFrames";
 
 const ANIMATED_ICON_DURATION: Partial<Record<TabKey, number>> = {
@@ -52,7 +52,7 @@ export function BottomNavigation({
   const ink = accentInk(accent);
   const [visible, setVisible] = useState(true);
   const [trackFramesReady, setTrackFramesReady] = useState(false);
-  const height = useRef(new Animated.Value(84)).current;
+  const height = useRef(new Animated.Value(BOTTOM_NAVIGATION_HEIGHT)).current;
   const visibleTabs = tabs.filter(
     (tab) =>
       (tab.key !== "practice" || practiceSessionEnabled) &&
@@ -75,7 +75,7 @@ export function BottomNavigation({
     return () => { mounted = false; };
   }, []);
   useEffect(() => {
-    Animated.timing(height, { toValue: visible ? 84 : 0, duration: 180, useNativeDriver: false }).start();
+    Animated.timing(height, { toValue: visible ? BOTTOM_NAVIGATION_HEIGHT : 0, duration: 180, useNativeDriver: false }).start();
   }, [height, visible]);
   return (
     <Animated.View pointerEvents={visible ? "auto" : "none"} style={[styles.container, { height }]}>

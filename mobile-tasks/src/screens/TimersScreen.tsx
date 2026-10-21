@@ -72,7 +72,7 @@ export function TimersScreen({ user, widgetRequest = 0 }: { user: User | null; w
   const sorted = [...timers].sort((a, b) => Number(dateCountdown(a.targetAt, now).reached) - Number(dateCountdown(b.targetAt, now).reached) || Date.parse(a.targetAt) - Date.parse(b.targetAt));
   return <View style={s.page}>
     <View style={s.header}><View style={{ flex: 1 }}><Text style={s.eyebrow}>IMPORTANT DATES</Text><Text style={s.title}>Timers</Text></View><Pressable accessibilityRole="button" disabled={!user || busy} onPress={() => open()} style={s.add}><MaterialCommunityIcons name="plus" size={18} color={colors.accentDeep} /><Text style={s.addText}>Add timer</Text></Pressable></View>
-    <ScrollView contentContainerStyle={s.content} scrollEventThrottle={16} onScroll={(event) => reportVerticalScroll(event.nativeEvent.contentOffset.y)}>
+    <ScrollView contentContainerStyle={s.content} scrollEventThrottle={16} onScroll={(event) => reportVerticalScroll(event.nativeEvent.contentOffset.y, event.nativeEvent)}>
       {!user ? <Text style={s.emptyCopy}>Sign in to save your important dates.</Text> : loading ? <ActivityIndicator style={{ marginTop: 50 }} color={colors.accent} /> : error ? <View style={s.empty}><Text style={s.error}>{error}</Text><Pressable style={s.add} onPress={retry}><Text style={s.addText}>Try again</Text></Pressable></View> : sorted.length ? <View style={s.cardGrid} onLayout={event => setGridWidth(event.nativeEvent.layout.width)}>{sorted.map((timer) => {
         const dial = timerDial(timer, now);
       const color = timerColors.get(timer.id)!;

@@ -2,7 +2,7 @@
 
 Local Expo module, automatically linked from mobile-tasks/modules. Requires a new development/EAS Android build; Expo Go and older APKs keep the Expo Audio fallback. No new JavaScript dependency is required. Media3 1.9.0 matches expo-audio 57.
 
-BuddyMusicService owns ExoPlayer, the playlist, audio focus and MediaSession. Playback/automatic next continue without JS timers. Notifications publish title, artist, artwork, previous/next, play/pause, seeking and a repeat-one/playlist custom action. Notification taps use sscbuddy://music and restore the active track. Closing the player stops and clears playback; minimizing keeps it playing. Switching away from the music component pauses playback.
+BuddyMusicService owns ExoPlayer, the playlist, audio focus and MediaSession. Playback/automatic next continue without JS timers. Notifications publish title, artist, artwork, previous/next, play/pause, seeking and a repeat toggle with a normal repeat icon (on loops the current song continuously; off advances through the playlist). Notification taps use sscbuddy://music and restore the active track. Closing the player stops and clears playback; minimizing keeps it playing. Switching away from the music component pauses playback.
 
 Android System UI decides notification layout and which custom actions appear. OEM Island/Live Alerts may consume this media session; visibility depends on the phone/OS and is not guaranteed. This does not create an overlay or claim proprietary OEM integration.
 

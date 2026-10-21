@@ -114,7 +114,7 @@ function manifestationCompletionKey(userId?: string) {
   return `${MANIFESTATION_COMPLETION_PREFIX}:${userId ?? "local"}`;
 }
 
-const ScrollView = (props: any) => <NativeScrollView {...props} scrollEventThrottle={16} onScroll={(event) => { if (!props.horizontal) reportVerticalScroll(event.nativeEvent.contentOffset.y); props.onScroll?.(event); }} />;
+const ScrollView = (props: any) => <NativeScrollView {...props} scrollEventThrottle={16} onScroll={(event) => { if (!props.horizontal) reportVerticalScroll(event.nativeEvent.contentOffset.y, event.nativeEvent); props.onScroll?.(event); }} />;
 
 function AnimatedMetric({ value, format = (next: number) => String(next) }: { value: number; format?: (value: number) => string }) {
   const animated = useRef(new Animated.Value(0)).current;

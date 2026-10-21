@@ -64,7 +64,7 @@ class BuddyMusicModule : Module() {
       require(array.length() > 0 && index >= 0 && index < array.length()) { "Invalid music queue" }
       val items = (0 until array.length()).map { position ->
         val track = array.getJSONObject(position)
-        val metadata = MediaMetadata.Builder().setTitle(track.getString("title")).setArtist("SSC Buddy").setAlbumTitle(track.optString("album", "Music"))
+        val metadata = MediaMetadata.Builder().setTitle(track.getString("title")).setAlbumTitle(track.optString("album", "Music"))
         track.optString("artwork").takeIf { it.isNotBlank() }?.let { metadata.setArtworkUri(Uri.parse(it)) }
         MediaItem.Builder().setMediaId(track.getString("id")).setUri(track.getString("url")).setMediaMetadata(metadata.build()).build()
       }
