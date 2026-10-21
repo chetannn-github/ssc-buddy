@@ -1,3 +1,4 @@
+import { LaunchMotivation } from "./src/components/LaunchMotivation";
 import { UppercaseTextInput as TextInput } from "./src/components/UppercaseTextInput";
 import { setAppAccent, useAppAccent } from "./src/theme";
 import { createThemedStyles } from "./src/theme";
@@ -242,6 +243,12 @@ export default function App() {
   const [timerWidgetRequest, setTimerWidgetRequest] = useState(0);
   const [habitWidgetRequest, setHabitWidgetRequest] = useState<{ id: string; uid?: string } | null>(null);
   const initialWidgetUrlRead = useRef(false);
+  const externalLaunch = useRef(false);
+  const [showLaunchMotivation, setShowLaunchMotivation] = useState(false);
+  const [launchImage] = useState(() => {
+    const images = Object.values(avatarAssets);
+    return images[Math.floor(Math.random() * images.length)];
+  });
   const [trackTab, setTrackTab] = useState<"Syllabus" | "Revision" | "Mock Test">("Syllabus");
   const [dailyManifestation, setDailyManifestation] = useState("");
   const [manifestationEntry, setManifestationEntry] = useState("");
@@ -488,6 +495,7 @@ export default function App() {
   useEffect(() => {
     if (!tasksLoaded) return;
     const openCompletionFromWidget = (url: string | null) => {
+      if (url) { externalLaunch.current = true; setShowLaunchMotivation(false); }
       if (url?.startsWith("sscbuddy://habits")) {
         setAppTab("habits");
         if (url.startsWith("sscbuddy://habits/checklist?")) {
@@ -523,13 +531,34 @@ export default function App() {
       setSpent(String(task.minutesSpent ?? 60));
       setCompletion(task);
     };
+    const HabitNotifications = getNativeNotifications();
+    const notification = HabitNotifications?.addNotificationResponseReceivedListener(response => {
+      externalLaunch.current = true;
+      setShowLaunchMotivation(false);
+      const url = response.notification.request.content.data?.["url"];
+      if (typeof url === "string") openCompletionFromWidget(url);
+      void HabitNotifications?.clearLastNotificationResponseAsync().catch(() => undefined);
+    });
     if (!initialWidgetUrlRead.current) {
       initialWidgetUrlRead.current = true;
-      void Linking.getInitialURL().then(openCompletionFromWidget).catch(() => undefined);
+      // Decide only after both launch sources settle, avoiding a motivational
+      // image flashing over widget and media-notification destinations.
+      void Promise.all([
+        Linking.getInitialURL().catch(() => null),
+        HabitNotifications?.getLastNotificationResponseAsync().catch(() => null) ?? Promise.resolve(null),
+      ]).then(([url, response]) => {
+        if (url || response) {
+          externalLaunch.current = true;
+          setShowLaunchMotivation(false);
+          if (url) openCompletionFromWidget(url);
+          else {
+            const notificationUrl = response?.notification.request.content.data?.["url"];
+            if (typeof notificationUrl === "string") openCompletionFromWidget(notificationUrl);
+          }
+          if (response) void HabitNotifications?.clearLastNotificationResponseAsync().catch(() => undefined);
+        } else if (!externalLaunch.current) setShowLaunchMotivation(true);
+      });
     }
-    const HabitNotifications = getNativeNotifications();
-    const notification = HabitNotifications?.addNotificationResponseReceivedListener(response => { const url = response.notification.request.content.data?.["url"]; if (typeof url === "string") { openCompletionFromWidget(url); void HabitNotifications?.clearLastNotificationResponseAsync().catch(() => undefined); } });
-    if (HabitNotifications) void HabitNotifications.getLastNotificationResponseAsync().then(response => { const url = response?.notification.request.content.data?.["url"]; if (typeof url === "string") { openCompletionFromWidget(url); void HabitNotifications.clearLastNotificationResponseAsync().catch(() => undefined); } }).catch(() => undefined);
     const subscription = Linking.addEventListener("url", ({ url }) => openCompletionFromWidget(url));
     return () => { subscription.remove(); notification?.remove(); };
   }, [tasks, tasksLoaded]);
@@ -1014,7 +1043,8 @@ export default function App() {
       <MediaOverlay user={user} mode={mediaMode} musicOpenRequest={musicOpenRequest} onClose={() => setMediaMode(null)} />
       {celebratedStreak !== null && <StreakCelebration streak={celebratedStreak} onClose={() => setCelebratedStreak(null)} />}
       {celebratedLevel !== null && <LevelCelebration level={celebratedLevel} onClose={() => setCelebratedLevel(null)} />}
-      {user && <WeeklyAwardCelebration uid={user.uid} enabled={!dailyManifestation && celebratedStreak === null && celebratedLevel === null} />}
+      {user && <WeeklyAwardCelebration uid={user.uid} enabled={!showLaunchMotivation && !dailyManifestation && celebratedStreak === null && celebratedLevel === null} />}
+      {showLaunchMotivation && !dailyManifestation && celebratedStreak === null && celebratedLevel === null && <LaunchMotivation source={launchImage} onClose={() => setShowLaunchMotivation(false)} />}
       <DailyManifestationDialog
         phrase={dailyManifestation}
         entry={manifestationEntry}
