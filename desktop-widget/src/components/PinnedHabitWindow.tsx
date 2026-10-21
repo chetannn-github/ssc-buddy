@@ -2,7 +2,7 @@ import { HeatmapCell } from "./HeatmapCell";
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import NumberFlow from "@number-flow/react";
-import { Check, Flame, ListChecks, LoaderCircle, Plus, Trash2, X } from "lucide-react";
+import { Check, Flame, ListChecks, LoaderCircle, Minus, Plus, Trash2, X } from "lucide-react";
 import type { User } from "firebase/auth";
 import { observeAuth } from "../lib/firebase";
 import { useHabits, useHabitToday } from "../lib/habits";

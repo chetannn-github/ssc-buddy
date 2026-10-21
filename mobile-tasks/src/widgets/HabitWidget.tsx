@@ -34,13 +34,13 @@ export function renderHabitWidget(habit?: Habit, error = "", size: HabitWidgetSi
   const targetProgress = habit.targetDays ? `${stats.total}/${habit.targetDays} days` : "";
   const footer = Boolean(error || count || checklist || (style === "compact" && targetProgress));
   const layout = habitWidgetLayout(size, today, footer ? 30 : 0, style);
-  const { step, labelWidth, labelHeight, cells, wide, gridWidth, gridHeight } = layout;
+  const { step, columnStep, labelWidth, labelHeight, cells, wide, gridWidth, gridHeight } = layout;
   const gap = Math.max(2, step * .2), box = step - gap;
   const dayLabels = ["S", "M", "T", "W", "T", "F", "S"];
-  const labels = dayLabels.map((day, index) => `<text x="${wide ? 2 : (index + .5) * step}" y="${wide ? (index + .65) * step : 10}" fill="#777777" font-family="sans-serif" font-size="${wide ? Math.min(9, step * .65) : 9}" text-anchor="${wide ? "start" : "middle"}">${day}</text>`).join("");
+  const labels = dayLabels.map((day, index) => `<text x="${wide ? 2 : index * columnStep + step / 2}" y="${wide ? (index + .65) * step : 10}" fill="#777777" font-family="sans-serif" font-size="${wide ? Math.min(9, step * .65) : 9}" text-anchor="${wide ? "start" : "middle"}">${day}</text>`).join("");
   const boxes = cells.map((cell) => {
     const intensity = cell.future ? 0 : habitIntensity(habit, cell.key);
-    const x = labelWidth + cell.column * step + gap / 2, y = labelHeight + cell.row * step + gap / 2;
+    const x = labelWidth + cell.column * columnStep + gap / 2, y = labelHeight + cell.row * step + gap / 2;
     return `<rect x="${x}" y="${y}" width="${box}" height="${box}" rx="${Math.min(3, box * .22)}" fill="${tint}" fill-opacity="${cell.future ? .035 : intensity > 0 ? .35 + .65 * intensity : wide ? .12 : .025}"${!wide && intensity === 0 ? ` stroke="${cell.future ? "#333333" : tint}" stroke-opacity=".45" stroke-width="1"` : ""}/>`;
   }).join("");
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${gridWidth}" height="${gridHeight}" viewBox="0 0 ${gridWidth} ${gridHeight}">${labels}${boxes}</svg>`;
@@ -53,7 +53,7 @@ export function renderHabitWidget(habit?: Habit, error = "", size: HabitWidgetSi
   const compactTitleOffset = narrowCompact ? Math.max(0, Math.min(18, size.height - 150)) : 0;
   if (style === "compact") return <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: habitUri }}
     accessibilityLabel={`${habit.name}, streak ${stats.streak}, ${done ? "completed" : "incomplete"} today`}
-    style={{ width: "match_parent", height: "match_parent", backgroundColor: "#080808", borderRadius: 24, padding: narrowCompact ? 10 : 14, flexDirection: "column" }}>
+    style={{ width: "match_parent", height: "match_parent", backgroundColor: "#080808", borderRadius: 24, padding: narrowCompact ? 10 : 14, paddingBottom: narrowCompact ? 10 + Math.max(0, Math.min(12, size.height - 160)) : 14, flexDirection: "column" }}>
     <TextWidget text={habit.name} maxLines={2} truncate="END" style={{ color: "#fafafa", fontSize: narrowCompact ? 16 : 19, fontWeight: "bold", marginTop: compactTitleOffset }} />
     <FlexWidget style={{ flex: 1 }} />
     <FlexWidget style={{ width: "match_parent", flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>

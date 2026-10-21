@@ -26,7 +26,7 @@ export function AndroidTasksWidget({ tasks, today, selectedDate, dueOnly, rank, 
       </button>;
     })}</div>
     <div className="android-task-overview">
-      <div><small>Filter</small><div className="android-task-filter">{[false, true].map(due => <button key={String(due)} aria-pressed={dueOnly === due} onClick={() => onFilterChange(due)}>{due ? `Due (${model.due.length})` : `All (${model.summary.total})`}</button>)}</div></div>
+      <div><small>Filter</small><div className="android-task-filter"><span aria-hidden="true" className={`android-task-filter-highlight${dueOnly ? " on-due" : ""}`} />{[false, true].map(due => <button key={String(due)} aria-pressed={dueOnly === due} onClick={() => onFilterChange(due)}>{due ? `Due (${model.due.length})` : `All (${model.summary.total})`}</button>)}</div></div>
       <div className="android-task-meter"><small>Task Meter</small><strong><NumberFlow value={model.summary.percent} suffix="%" /></strong></div>
     </div>
     <div className="android-task-study">Study time&nbsp; {formatMinutes(model.summary.minutes)}</div>

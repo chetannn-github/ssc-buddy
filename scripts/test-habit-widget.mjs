@@ -124,3 +124,12 @@ test("all checklist widget types open the exact account-scoped habit without mar
     }
   }
 });
+
+
+test("short wide monthly widgets spread square cells across the full chart width", () => {
+  const layout = habitWidgetLayout({ width: 290, height: 210 }, "2026-10-21", 30, "month");
+  assert.equal(layout.gridWidth, 266);
+  assert.ok(layout.columnStep > layout.step);
+  assert.ok(Math.abs(6 * layout.columnStep + layout.step - layout.gridWidth) < .001);
+  assert.ok(layout.gridHeight + 24 + 38 + 8 + 30 <= 210);
+});

@@ -648,9 +648,9 @@ html, body, #root {
 .android-task-dates svg { display:block; width:32px; height:32px; }
 .android-task-overview { display:flex; flex:0 0 auto; align-items:center; justify-content:space-between; margin-top:16px; }
 .android-task-overview small { color:#777; font-size:10px; margin-bottom:5px; }
-.android-task-filter { display:flex; border:1px solid #292929; border-radius:9px; overflow:hidden; }
-.android-task-filter button { width:63px; height:28px; padding:0; border:0; color:#fafafa; background:#000; font-size:11px; }
-.android-task-filter button[aria-pressed="true"] { color:var(--accent-ink); background:var(--accent); }
+.android-task-filter { position:relative; isolation:isolate; display:flex; border:1px solid #292929; border-radius:9px; overflow:hidden; }
+.android-task-filter button { position:relative; z-index:1; width:63px; height:28px; padding:0; border:0; color:#fafafa; background:transparent; font-size:11px; }
+.android-task-filter button[aria-pressed="true"] { color:var(--accent-ink); }
 .android-task-meter { display:flex; flex-direction:column; align-items:flex-end; }
 .android-task-meter strong { display:flex; align-items:center; height:28px; padding:0 10px; border:1px solid #292929; border-radius:9px; font-size:15px; font-weight:700; color:#fafafa; }
 .android-task-study { flex:0 0 auto; color:#a1a1aa; font-size:10px; margin:8px 0; }
@@ -733,3 +733,17 @@ html, body, #root {
 /* Use the same animated border liquid as the main calendar at widget scale. */
 .android-task-dates .date-ring { width:32px; height:32px; }
 .android-task-dates .date-ring b { font-size:12px; }
+
+.pinned-mark-controls { display:flex; align-items:center; gap:8px; flex:0 0 auto; }
+.pinned-mark-controls .habit-mark { flex:0 0 auto; }
+.pinned-mark-controls .pinned-minus { animation:none; }
+
+/* Preserve the original small footer control and placement; match only the visual treatment. */
+.pinned-count .pinned-minus { display:grid; place-items:center; padding:0; border:1px solid var(--habit-color); background:var(--habit-soft); color:var(--habit-color); }
+.pinned-count .pinned-minus svg { width:14px; height:14px; }
+.pinned-compact .pinned-count .pinned-minus svg { width:12px; height:12px; }
+.pinned-count .pinned-minus:disabled { opacity:.4; }
+
+.android-task-filter-highlight { position:absolute; inset:0 auto 0 0; width:50%; border-radius:8px; background:var(--accent); pointer-events:none; transition:transform 260ms ease-in-out; }
+.android-task-filter-highlight.on-due { transform:translateX(100%); }
+@media(prefers-reduced-motion:reduce) { .android-task-filter-highlight { transition:none; } }

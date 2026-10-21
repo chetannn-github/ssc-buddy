@@ -31,8 +31,11 @@ export function habitWidgetLayout(size: HabitWidgetSize, today: string, footerHe
   const labelWidth = wide ? 13 : 0, labelHeight = wide ? 0 : 15;
   const step = Math.max(5, Math.min((width - 24 - labelWidth) / columns,
     (height - 24 - 38 - 8 - footerHeight - labelHeight) / rows));
-  return { wide, cells, columns, rows, step, labelWidth, labelHeight,
-    gridWidth: labelWidth + columns * step, gridHeight: labelHeight + rows * step };
+  // Spread monthly columns across the available width while keeping cells square.
+  const gridWidth = width - 24;
+  const columnStep = (gridWidth - labelWidth - step) / (columns - 1);
+  return { wide, cells, columns, rows, step, columnStep, labelWidth, labelHeight,
+    gridWidth, gridHeight: labelHeight + rows * step };
 }
 
 export const HABIT_WIDGET_NAMES = ["HabitWidget", "HabitMonthWidget", "HabitCompactWidget"] as const;
