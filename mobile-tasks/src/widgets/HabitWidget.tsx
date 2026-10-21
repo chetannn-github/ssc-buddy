@@ -56,7 +56,9 @@ export function renderHabitWidget(habit?: Habit, error = "", size: HabitWidgetSi
   if (style === "compact") return <FlexWidget clickAction="OPEN_URI" clickActionData={{ uri: habitUri }}
     accessibilityLabel={`${habit.name}, streak ${stats.streak}, ${done ? "completed" : "incomplete"} today`}
     style={{ width: "match_parent", height: "match_parent", backgroundColor: "#080808", borderRadius: 24, padding: narrowCompact ? 10 : 14, paddingBottom: narrowCompact ? 10 + Math.max(0, Math.min(12, size.height - 160)) : 14, flexDirection: "column" }}>
-    <TextWidget text={habit.name} maxLines={2} truncate="END" style={{ color: "#fafafa", fontSize: narrowCompact ? 16 : 19, fontWeight: "bold", marginTop: compactTitleOffset }} />
+    <FlexWidget style={{ width: "match_parent", height: narrowCompact ? 44 : 52, marginTop: compactTitleOffset, flexDirection: "column", justifyContent: "flex-end" }}>
+      <TextWidget text={habit.name} maxLines={2} truncate="END" style={{ color: "#fafafa", fontSize: narrowCompact ? 16 : 19, fontWeight: "bold" }} />
+    </FlexWidget>
     <FlexWidget style={{ flex: 1 }} />
     <FlexWidget style={{ width: "match_parent", flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
       <FlexWidget style={{ flex: 1, flexDirection: "column" }}>
