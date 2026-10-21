@@ -1,3 +1,4 @@
+import { launchImages } from "./src/lib/launch-images";
 import { LaunchMotivation } from "./src/components/LaunchMotivation";
 import { UppercaseTextInput as TextInput } from "./src/components/UppercaseTextInput";
 import { setAppAccent, useAppAccent } from "./src/theme";
@@ -246,8 +247,7 @@ export default function App() {
   const externalLaunch = useRef(false);
   const [showLaunchMotivation, setShowLaunchMotivation] = useState(false);
   const [launchImage] = useState(() => {
-    const images = Object.values(avatarAssets);
-    return images[Math.floor(Math.random() * images.length)];
+    return launchImages[Math.floor(Math.random() * launchImages.length)];
   });
   const [trackTab, setTrackTab] = useState<"Syllabus" | "Revision" | "Mock Test">("Syllabus");
   const [dailyManifestation, setDailyManifestation] = useState("");

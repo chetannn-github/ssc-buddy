@@ -4,7 +4,7 @@
   "private": true,
   "main": "index.js",
   "scripts": {
-    "prepare-media": "node scripts/sync-media.mjs",
+    "prepare-media": "node scripts/sync-media.mjs && node scripts/sync-launch-images.mjs",
     "prestart": "pnpm run prepare-media",
     "preandroid": "pnpm run prepare-media",
     "eas-build-pre-install": "pnpm run prepare-media",
