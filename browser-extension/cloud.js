@@ -10,14 +10,36 @@ export function createCloud() {
   const auth = initializeAuth(app, { persistence: indexedDBLocalPersistence });
   const ready = new Promise(resolve => { const stop = onAuthStateChanged(auth, () => { stop(); resolve(); }); });
   const root = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(config.projectId)}/databases/(default)/documents`;
-  async function request(relative, options = {}, expectedUid) {
+  async function request(relative, options = {}, expectedUid, publicUsername) {
     await ready; const user = auth.currentUser; if (!user || (expectedUid && user.uid !== expectedUid)) throw Error('Sign in to your SSC Buddy account.');
     const token = await user.getIdToken();
-    const response = await fetch(`${root}/users/${encodeURIComponent(user.uid)}/${relative}`, { ...options, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...options.headers }, signal: AbortSignal.timeout(8000), cache: 'no-store' });
+    const url = publicUsername ? `${root}/publicProfiles/${encodeURIComponent(publicUsername)}${relative}` : `${root}/users/${encodeURIComponent(user.uid)}/${relative}`;
+    const response = await fetch(url, { ...options, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...options.headers }, signal: AbortSignal.timeout(8000), cache: 'no-store' });
     if (response.status === 404 && !options.method) return null;
     const result = await response.json();
     if (!response.ok) { const error = new Error(response.status === 403 ? 'Sign in with your SSC Buddy account.' : 'Could not connect. Please try again.'); error.status = response.status; throw error; }
     return result;
+  }
+  async function publishFocus(date, timeZone, uid) {
+    const profileDocument = await request('profile/current', {}, uid);
+    const username = String(profileDocument ? decodeDocument(profileDocument).username ?? '' : '').trim().toLowerCase();
+    if (!/^[a-z0-9._]{3,24}$/.test(username)) return;
+    const dayDocument = await request('studyFocusDays/' + date, {}, uid);
+    const total = Number(dayDocument ? decodeDocument(dayDocument).totalMilliseconds : 0) || 0;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const document = await request('', {}, uid, username);
+      const value = document ? decodeDocument(document) : null;
+      if (value?.uid !== uid) return;
+      if (Number(value.focusDays?.[date] ?? -1) >= total && value.focusTimeZone === timeZone) return;
+      const focusDays = { ...value.focusDays, [date]: Math.max(Number(value.focusDays?.[date]) || 0, total) };
+      const condition = 'currentDocument.updateTime=' + encodeURIComponent(document.updateTime);
+      const fields = encode({ focusDays, focusTimeZone: timeZone || 'UTC' }).mapValue.fields;
+      try {
+        await request('?updateMask.fieldPaths=focusDays&updateMask.fieldPaths=focusTimeZone&' + condition, { method: 'PATCH', body: JSON.stringify({ fields }) }, uid, username);
+        return;
+      } catch (error) { if (![409, 412].includes(error.status)) throw error; }
+    }
+    throw Error('Could not share focus time. Please try again.');
   }
   async function recordFocus(session, time = Date.now()) {
     const uid = auth.currentUser?.uid;
@@ -36,6 +58,7 @@ export function createCloud() {
         catch (error) { if (![409, 412].includes(error.status)) throw error; }
       }
       if (!saved) throw Error('Could not save focus time. Please try again.');
+      await publishFocus(slice.date, session.timeZone || 'UTC', uid);
     }
   }
   async function editSelection(domain, remove) {

@@ -1,4 +1,5 @@
 import { ProfileStudyLock } from "@/components/profile/ProfileStudyLock";
+import { PublicFocusTime } from "@/components/profile/PublicFocusTime";
 import { AccentPicker } from "@/components/profile/AccentPicker";
 import { applyWebAccent, normalizeAppAccent, type AppAccent } from "@/lib/app-accent";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
@@ -1277,6 +1278,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
           </section>
 
           {!readOnly && authUser && <ProfileStudyLock key={authUser.uid} uid={authUser.uid} />}
+          {readOnly && publicProfile && <PublicFocusTime uid={publicProfile.uid} username={publicProfile.username} />}
 
           <div className="space-y-3">
             <TargetProgress

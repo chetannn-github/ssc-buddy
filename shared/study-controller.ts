@@ -28,6 +28,21 @@ function watchStudyFocusDay(db: Firestore, uid: string, date: string, callback: 
   }, error);
 }
 function sessionIsActive(session: StudySession | null | undefined, time = Date.now()) { return !!session && (session.paused === true || session.endsAt > time); }
+async function publishStudyFocusDay(db: Firestore, uid: string, date: string, timeZone = studyTimeZone()) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+  await runTransaction(db, async transaction => {
+    const day = (await transaction.get(doc(db, ...studyFocusPath(uid, date)))).data();
+    const profile = (await transaction.get(doc(db, "users", uid, "profile", "current"))).data();
+    const username = typeof profile?.["username"] === "string" ? profile["username"].trim().toLowerCase() : "";
+    if (!/^[a-z0-9._]{3,24}$/.test(username)) return;
+    const reference = doc(db, "publicProfiles", username);
+    const published = (await transaction.get(reference)).data();
+    if (published?.["uid"] !== uid) return;
+    const total = Math.max(0, Number(day?.["totalMilliseconds"]) || 0);
+    if (published["focusDays"]?.[date] === total && published["focusTimeZone"] === timeZone) return;
+    transaction.set(reference, { focusDays: { [date]: total }, focusTimeZone: timeZone, updatedAt: serverTimestamp() }, { merge: true });
+  });
+}
 async function prepareFocusCredits(transaction: Transaction, db: Firestore, uid: string, session: FocusSession | null | undefined, time: number) {
   const credits = await Promise.all(focusSlices(session, time, true).map(async slice => {
     const reference = doc(db, ...studyFocusPath(uid, slice.date));
@@ -35,9 +50,27 @@ async function prepareFocusCredits(transaction: Transaction, db: Firestore, uid:
     const next = creditFocusDay(value, session!.id, slice.milliseconds);
     return { reference, value, next, date: slice.date };
   }));
+  const profile = credits.length ? (await transaction.get(doc(db, "users", uid, "profile", "current"))).data() : null;
+  const username = typeof profile?.["username"] === "string" ? profile["username"].trim().toLowerCase() : "";
+  const publicReference = /^[a-z0-9._]{3,24}$/.test(username) ? doc(db, "publicProfiles", username) : null;
+  const publicData = publicReference ? (await transaction.get(publicReference)).data() : null;
   return () => { for (const { reference, value, next, date } of credits) {
     if (next.totalMilliseconds !== value?.totalMilliseconds) transaction.set(reference, { version: 1, date, ...next, updatedAt: serverTimestamp() });
-  } };
+  }
+    if (publicReference && publicData?.["uid"] === uid) transaction.set(publicReference, {
+      focusDays: Object.fromEntries(credits.map(({ date, next }) => [date, next.totalMilliseconds])),
+      focusTimeZone: session?.timeZone || studyTimeZone(), updatedAt: serverTimestamp(),
+    }, { merge: true });
+  };
+}
+function watchPublicStudyFocus(db: Firestore, uid: string, username: string, callback: (value: { days: Record<string, number>; timeZone: string }) => void, error: (error: Error) => void) {
+  if (!/^[a-z0-9._]{3,24}$/.test(username.trim().toLowerCase())) { callback({ days: {}, timeZone: studyTimeZone() }); return () => {}; }
+  return onSnapshot(doc(db, "publicProfiles", username.trim().toLowerCase()), snapshot => {
+    const value = snapshot.data();
+    let timeZone = value?.["uid"] === uid ? value?.["focusTimeZone"] || studyTimeZone() : studyTimeZone();
+    try { new Intl.DateTimeFormat("en-US", { timeZone }); } catch { timeZone = studyTimeZone(); }
+    callback({ days: value?.["uid"] === uid ? Object.fromEntries(Object.entries(value["focusDays"] ?? {}).filter(([date, total]) => /^\d{4}-\d{2}-\d{2}$/.test(date) && typeof total === "number" && Number.isFinite(total) && total >= 0)) as Record<string, number> : {}, timeZone });
+  }, error);
 }
 async function recordStudyFocus(db: Firestore, uid: string, session: FocusSession, time = Date.now()) {
   if (!focusSlices(session, time, true).length) return;
@@ -76,7 +109,7 @@ async function pauseStudySession(db: Firestore, uid: string, source = "windows")
     const current = (await transaction.get(reference)).data() as StudyControl | undefined, session = current?.session;
     const now = Date.now();
     if (!session || session.paused || session.endsAt <= now) throw Error("There is no running focus session to pause.");
-    const credit = await prepareFocusCredits(transaction, db, uid, session, now); credit();
+    const credit = await prepareFocusCredits(transaction, db, uid, { ...session, paused: true, pausedAt: now }, now); credit();
     transaction.set(reference, { ...current, version: 1, revision: randomUUID(), source, session: { ...session, paused: true, pausedAt: now, remainingMs: session.endsAt - now }, updatedAt: serverTimestamp() });
   });
 }
@@ -102,7 +135,7 @@ async function applyOverlayBreak(db: Firestore, uid: string, action: OverlayBrea
     let next = session;
     if (action.paused && !session.paused) {
       if (action.at >= session.endsAt) throw Error("Your focus session already ended.");
-      const credit = await prepareFocusCredits(transaction, db, uid, session, action.at); credit();
+      const credit = await prepareFocusCredits(transaction, db, uid, { ...session, paused: true, pausedAt: action.at }, action.at); credit();
       next = { ...session, paused: true, pausedAt: action.at, remainingMs: session.endsAt - action.at };
     } else if (!action.paused && session.paused) {
       const remainingMs = session.remainingMs ?? 0;
@@ -113,5 +146,5 @@ async function applyOverlayBreak(db: Firestore, uid: string, action: OverlayBrea
     return next;
   });
 }
-return { watchStudyControl, watchStudyDevices, watchStudyFocusDay, recordStudyFocus, startStudySession, saveStudyWebsites, pauseStudySession, resumeStudySession, applyOverlayBreak };
+return { watchStudyControl, watchStudyDevices, watchStudyFocusDay, watchPublicStudyFocus, publishStudyFocusDay, recordStudyFocus, startStudySession, saveStudyWebsites, pauseStudySession, resumeStudySession, applyOverlayBreak };
 }

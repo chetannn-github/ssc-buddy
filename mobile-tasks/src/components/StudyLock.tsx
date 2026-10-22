@@ -4,8 +4,8 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import Svg, { Circle, Line } from "react-native-svg";
 import * as Crypto from "expo-crypto";
 import { collection, doc, onSnapshot, runTransaction, serverTimestamp } from "firebase/firestore";
-import { createStudyController, normalizeStudyDomain, type StudyControl, type StudyDevice } from "../../../shared/study-controller";
-import { emptyFocusDay, focusDayKey, todayFocusMilliseconds, formatFocusTime, type FocusDay } from "../../../shared/study-focus";
+import { createStudyController, normalizeStudyDomain, type StudyControl } from "../../../shared/study-controller";
+import { emptyFocusDay, focusDayKey, formatFocusTime, todayFocusMilliseconds, type FocusDay } from "../../../shared/study-focus";
 import { getFirebaseFirestore } from "../lib/firebase";
 import { useAppAccent } from "../theme";
 import { accentInk } from "../domain/app-accent";
@@ -23,28 +23,27 @@ const remaining = (end: number, now: number) => {
 export function StudyLock({ uid }: { uid: string }) {
   const accent = useAppAccent();
   const [open, setOpen] = useState(false), [picking, setPicking] = useState(false);
-  const [control, setControl] = useState<StudyControl | null>(null), [devices, setDevices] = useState<StudyDevice[]>([]);
+  const [control, setControl] = useState<StudyControl | null>(null);
   const [now, setNow] = useState(Date.now()), [minutes, setMinutes] = useState(25);
   const [website, setWebsite] = useState(""), [busy, setBusy] = useState(false), [error, setError] = useState("");
   const [focusData, setFocusData] = useState<FocusDay>(emptyFocusDay);
   const date = focusDayKey(now, control?.session?.timeZone);
   useEffect(() => controller.watchStudyFocusDay(getFirebaseFirestore(), uid, date, setFocusData, () => setError("Could not load today's focus time.")), [uid, date]);
+  useEffect(() => { void controller.publishStudyFocusDay(getFirebaseFirestore(), uid, date, control?.session?.timeZone).catch(() => {}); }, [uid, date, focusData.totalMilliseconds, Math.floor(now / 60000)]);
   const todayFocus = todayFocusMilliseconds(focusData, control?.session ?? null, now);
   const [ready, setReady] = useState(false);
   useEffect(() => {
-    let stopControl = () => {}, stopDevices = () => {};
+    let stopControl = () => {};
     const failed = () => { setError("Could not load your focus session. Please try again."); setReady(false); };
     try {
       const db = getFirebaseFirestore();
       stopControl = controller.watchStudyControl(db, uid, value => { setControl(value); setReady(true); }, failed);
-      stopDevices = controller.watchStudyDevices(db, uid, setDevices, failed);
     } catch { failed(); }
     const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => { stopControl(); stopDevices(); clearInterval(timer); };
+    return () => { stopControl(); clearInterval(timer); };
   }, [uid]);
   const session = control?.session && (control.session.paused || control.session.endsAt > now) ? control.session : null;
   const domains = session?.domains ?? control?.allowedDomains ?? [];
-  const connected = devices.filter(device => now - device.lastSeenAt < 90000);
   const run = async (action: () => Promise<void>) => {
     if (busy) return;
     setBusy(true); setError("");
@@ -56,9 +55,7 @@ export function StudyLock({ uid }: { uid: string }) {
   return <>
     <Pressable accessibilityRole="button" accessibilityLabel="Focus Lock" style={s.profileTrigger} onPress={() => setOpen(true)}>
       <View style={s.profileLock}>{icon("lock-outline", 18, session ? accent : "#eee")}{session && <ActiveLockDot color={accent} />}</View><Text style={s.profileLabel}>Focus Lock</Text>
-      <View style={s.profileFocus}>
-        <Text style={s.profileFocusTime}>Today · {formatFocusTime(todayFocus)}</Text>
-      </View>
+      <View style={s.profileFocus}><Text style={s.profileFocusTime}>Today · {formatFocusTime(todayFocus)}</Text></View>
     </Pressable>
     <Modal transparent visible={open} animationType="fade" statusBarTranslucent onRequestClose={close}>
       <KeyboardAvoidingView style={s.overlay} behavior={Platform.OS === "ios" ? "padding" : "height"}>
@@ -66,8 +63,6 @@ export function StudyLock({ uid }: { uid: string }) {
         <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} style={s.dialog} contentContainerStyle={s.dialogContent}>
           {picking && !session ? <StudyClock minutes={minutes} accent={accent} onCancel={() => setPicking(false)} onSave={value => { setMinutes(value); setPicking(false); }} /> : <>
             <View style={s.heading}><Text accessibilityRole="header" style={s.title}>Focus Lock</Text><Pressable accessibilityRole="button" accessibilityLabel="Close Focus Lock dialog" hitSlop={10} onPress={close}>{icon("close", 19)}</Pressable></View>
-            {!session && <View style={s.connection}>{icon("monitor", 12)}<View style={[s.dot, { backgroundColor: connected.length ? accent : "#777" }]} /><Text style={s.connectionText}>{connected.length ? `${connected.length} connected` : "No browser connected"}</Text></View>}
-            {!session && <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 15 }}><Text style={s.muted}>Today's focus</Text><Text style={{ color: "#ddd", fontSize: 11, fontWeight: "600" }}>{formatFocusTime(todayFocus)}</Text></View>}
             {!ready && !error && <ActivityIndicator color={accent} />}
             <DeviceFocusSetup />
             {session ? <>
@@ -138,7 +133,7 @@ const s = StyleSheet.create({
   profileTrigger: { flexDirection: "row", alignItems: "center", gap: 9, padding: 15, borderRadius: 18, backgroundColor: "#1b1b1b", marginTop: 12 }, profileLabel: { color: "#fafaf7", fontSize: 13, fontWeight: "600" }, profileHint: { marginLeft: "auto", color: "#888", fontSize: 11 },
   overlay: { flex: 1, justifyContent: "center", alignItems: "center", padding: 12, backgroundColor: "#000b" }, dialog: { flexGrow: 0, width: "100%", maxWidth: 365, maxHeight: "92%", borderRadius: 24, backgroundColor: "#000" }, dialogContent: { padding: 18 }, heading: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }, title: { color: "#fafaf7", fontSize: 17, fontWeight: "700" },
   connection: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 5, marginTop: 10, marginBottom: 18, paddingVertical: 5, paddingHorizontal: 8, borderRadius: 20, backgroundColor: "#ffffff08" }, connectionText: { color: "#999", fontSize: 10 }, dot: { width: 5, height: 5, borderRadius: 3 }, liveTime: { fontSize: 48, fontWeight: "700", textAlign: "center", marginVertical: 16, fontVariant: ["tabular-nums"] },
-  websiteHeading: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 9 }, websiteTitle: { color: "#eee", fontSize: 12, fontWeight: "600" }, muted: { color: "#888", fontSize: 10 }, entry: { flexDirection: "row", alignItems: "center", gap: 8, paddingLeft: 10, borderRadius: 13, backgroundColor: "#242424" }, input: { flex: 1, minWidth: 0, fontSize: 12, color: "#eee", paddingVertical: 11 }, add: { padding: 10 }, chips: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 9, marginBottom: 12 }, chip: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 6, paddingHorizontal: 9, borderRadius: 20, backgroundColor: "#ffffff0b" }, chipText: { color: "#ddd", fontSize: 11 },
+  websiteHeading: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 20, marginBottom: 9 }, websiteTitle: { color: "#eee", fontSize: 12, fontWeight: "600" }, muted: { color: "#888", fontSize: 10 }, entry: { flexDirection: "row", alignItems: "center", gap: 8, paddingLeft: 10, borderRadius: 13, backgroundColor: "#242424" }, input: { flex: 1, minWidth: 0, fontSize: 12, color: "#eee", paddingVertical: 11 }, add: { padding: 10 }, chips: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 9, marginBottom: 12 }, chip: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 6, paddingHorizontal: 9, borderRadius: 20, backgroundColor: "#ffffff0b" }, chipText: { color: "#ddd", fontSize: 11 },
   duration: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#242424", borderRadius: 14, padding: 13, marginVertical: 12 }, durationLabel: { color: "#ddd", fontSize: 12 }, durationValue: { marginLeft: "auto", color: "#eee", fontSize: 12, fontWeight: "600" }, primary: { alignItems: "center", justifyContent: "center", minHeight: 40, borderRadius: 24, backgroundColor: "#f9fcf5", padding: 11, marginTop: 4 }, primaryText: { color: "#111", fontSize: 12, fontWeight: "700" }, secondary: { alignItems: "center", justifyContent: "center", minHeight: 40, borderRadius: 24, backgroundColor: "#242424", padding: 11, marginTop: 12 }, secondaryText: { color: "#fafaf7", fontSize: 12, fontWeight: "700" }, error: { color: "#ff8495", fontSize: 11, lineHeight: 17, marginTop: 9 },
   digits: { flexDirection: "row", justifyContent: "center", marginTop: 20, marginBottom: 18, gap: 9 }, digitGroup: { flexDirection: "row", alignItems: "flex-start", gap: 9 }, digit: { width: 82, height: 66, borderRadius: 12, backgroundColor: "#333", alignItems: "center", justifyContent: "center", textAlign: "center", fontSize: 36, fontWeight: "700" }, digitText: { color: "#fff", fontSize: 36, fontWeight: "700" }, digitLabel: { color: "#999", fontSize: 10, marginTop: 6, textAlign: "center" }, colon: { color: "#ccc", fontSize: 36, lineHeight: 66 }, clock: { width: 220, height: 220, borderRadius: 110, backgroundColor: "#333", alignSelf: "center" }, clockNumber: { position: "absolute", width: 34, height: 34, alignItems: "center", justifyContent: "center" }, clockActions: { flexDirection: "row", alignItems: "center", gap: 22, marginTop: 20, paddingVertical: 8 }, clockAction: { fontSize: 14, fontWeight: "600" },
 });

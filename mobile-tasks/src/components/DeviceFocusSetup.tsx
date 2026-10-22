@@ -19,7 +19,7 @@ export function DeviceFocusSetup() {
     const timer = setInterval(refresh, 3000);
     return () => { listener.remove(); clearInterval(timer); };
   }, []);
-  if (!supportsDeviceFocus) return <Text style={{ color: "#999", fontSize: 11, marginVertical: 12 }}>Update the app to enable app blocking.</Text>;
+  if (!supportsDeviceFocus) return null;
   return <View style={{ padding: 14, marginVertical: 12, borderRadius: 14, backgroundColor: "#171717", gap: 8, maxWidth: 340 }}>
     <Text style={{ color: "#eee", fontWeight: "600" }}>Device focus {enabled ? "· On" : ""}</Text>
     {enabled && connected === false && <Text style={{ color: "#ff8495", fontSize: 11 }}>Reconnect app blocking</Text>}

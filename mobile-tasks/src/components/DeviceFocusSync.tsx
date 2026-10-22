@@ -17,6 +17,7 @@ export function DeviceFocusSync({ user }: { user: User | null }) {
     let disposed = false, ready = !user, session: StudySession | null = null, image = "", syncingBreaks = false;
     const sync = () => { if (!disposed && ready) void syncDeviceFocusState(session, accent, image).catch(() => {}); };
     if (!user) { sync(); return; }
+    let creditedCheckpoint = "";
     const syncBreaks = async () => {
       if (disposed || syncingBreaks || !ready) return;
       syncingBreaks = true;
@@ -29,6 +30,13 @@ export function DeviceFocusSync({ user }: { user: User | null }) {
           actions = await readFocusBreaks();
         }
         sync();
+        if (!disposed && session && !session.paused) {
+          const checkpoint = `${session.id}:${Math.floor(Math.min(Date.now(), session.endsAt) / 60000)}`;
+          if (checkpoint !== creditedCheckpoint) {
+            await controller.recordStudyFocus(getFirebaseFirestore(), user.uid, session);
+            creditedCheckpoint = checkpoint;
+          }
+        }
       } catch { /* Durable local breaks retry when the app/network is available. */ }
       finally { syncingBreaks = false; }
     };

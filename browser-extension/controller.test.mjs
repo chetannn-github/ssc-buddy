@@ -2,6 +2,40 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createStudyController } from '../shared/study-controller.ts';
 import { normalizeStudyDomain, studyControlPath, studyDevicesPath } from '../shared/study-lock.ts';
+test('public focus shares only daily totals and preserves profile data across credit retries', async () => {
+  const documents = new Map(), writes = [];
+  documents.set('users/student/profile/current', { username: 'student' });
+  documents.set('publicProfiles/student', { uid: 'student', name: 'Student', focusDays: { '2026-10-20': 60000 } });
+  const api = {
+    doc: (_db, ...parts) => parts.join('/'), collection: () => '', serverTimestamp: () => null,
+    onSnapshot: (ref, callback) => { assert.equal(ref, 'publicProfiles/student', 'visitors never read private focus documents'); callback({ data: () => documents.get(ref) }); return () => {}; },
+    runTransaction: async (_db, work) => {
+      let written = false;
+      return work({
+        get: async ref => { assert.equal(written, false); return { data: () => documents.get(ref) }; },
+        set: (ref, value, options) => {
+          written = true; writes.push({ ref, value });
+          documents.set(ref, options?.merge ? { ...documents.get(ref), ...value, focusDays: { ...documents.get(ref)?.focusDays, ...value.focusDays } } : value);
+        },
+      });
+    },
+  };
+  const controller = createStudyController(api);
+  const session = { id: 'focus', startedAt: Date.parse('2026-10-21T10:00:00Z'), endsAt: Date.parse('2026-10-21T10:03:00Z'), timeZone: 'UTC', domains: ['private.example'] };
+  await controller.recordStudyFocus({}, 'student', session, session.endsAt);
+  await controller.recordStudyFocus({}, 'student', session, session.endsAt);
+  const profile = documents.get('publicProfiles/student');
+  assert.equal(profile.name, 'Student');
+  assert.deepEqual(profile.focusDays, { '2026-10-20': 60000, '2026-10-21': 180000 });
+  documents.set('users/student/studyFocusDays/2026-10-19', { totalMilliseconds: 90000 });
+  await controller.publishStudyFocusDay({}, 'student', '2026-10-19', 'UTC');
+  assert.equal(documents.get('publicProfiles/student').focusDays['2026-10-19'], 90000, 'previously saved focus is published without starting a new session');
+  for (const write of writes.filter(write => write.ref === 'publicProfiles/student')) assert.deepEqual(Object.keys(write.value).sort(), ['focusDays', 'focusTimeZone', 'updatedAt']);
+  let shown;
+  controller.watchPublicStudyFocus({}, 'student', 'student', value => { shown = value; }, assert.fail);
+  assert.equal(shown.days['2026-10-21'], 180000);
+  assert.equal(shown.timeZone, 'UTC');
+});
 test('offline overlay break replay preserves restrictions, remaining time and retry-safe focus credits', async () => {
   const documents = new Map();
   const api = {

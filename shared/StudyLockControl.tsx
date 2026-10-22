@@ -5,6 +5,7 @@ import { watchStudyControl, watchStudyDevices, watchStudyFocusDay, recordStudyFo
 import { emptyFocusDay, focusDayKey, todayFocusMilliseconds, formatFocusTime, type FocusDay } from "./study-focus";
 import { SlotTime } from "./SlotTime";
 import { StudyDurationPicker } from "./StudyDurationPicker";
+import { publishStudyFocusDay } from "./study-lock";
 import { Clock3, Globe2, MonitorUp, Monitor, Pause, Play, Plus, LockKeyhole, X } from "lucide-react";
 type Session = { endsAt: number; domains: string[]; paused?: boolean; remainingMs?: number };
 type Status = { session: Session | null; connected: number; protected: number };
@@ -21,7 +22,7 @@ export function StudyLockControl({ uid, desktop = false, profile = false, getDat
   const [focusSession, setFocusSession] = useState<StudySession | null>(null);
   const lastFinalCredit = useRef("");
   const date = focusDayKey(now, focusSession?.timeZone);
-  const checkpoint = Math.floor(now / 60000), ended = !!focusSession && now >= focusSession.endsAt;
+  const checkpoint = Math.floor(now / 60000), ended = !!focusSession && !focusSession.paused && now >= focusSession.endsAt;
   useEffect(() => {
     setFocusData(emptyFocusDay());
     return watchStudyFocusDay(getDatabase(), uid, date, setFocusData, () => setError("Could not load today's focus time."));
@@ -31,6 +32,7 @@ export function StudyLockControl({ uid, desktop = false, profile = false, getDat
     void recordStudyFocus(getDatabase(), uid, focusSession).then(() => { if (ended) lastFinalCredit.current = focusSession.id; }).catch(() => { /* Retry the next checkpoint, including after reconnect. */ });
   }, [uid, focusSession?.id, checkpoint, ended, getDatabase]);
   const todayFocus = todayFocusMilliseconds(focusData, focusSession, now);
+  useEffect(() => { void publishStudyFocusDay(getDatabase(), uid, date, focusSession?.timeZone).catch(() => {}); }, [uid, date, focusData.totalMilliseconds, checkpoint, getDatabase]);
   const resizeSequence = useRef(Promise.resolve());
   useEffect(() => {
     if (!desktop || !onResize) return;
@@ -47,7 +49,7 @@ export function StudyLockControl({ uid, desktop = false, profile = false, getDat
       setStatus({ session, connected: connected.length, protected: session ? connected.filter(device => device.sessionId === session.id && !device.error).length : 0 });
     };
     const failed = (e: Error) => setError(/firebase/i.test(e.message) ? "Could not load your focus session. Please try again." : e.message);
-    const stopControl = watchStudyControl(db, uid, value => { control = value; setFocusSession(value?.session && !value.session.paused ? value.session : null); if (Array.isArray(value?.allowedDomains)) setDomains(value.allowedDomains.slice(0, 3).join("\n")); refresh(); }, failed);
+    const stopControl = watchStudyControl(db, uid, value => { control = value; setFocusSession(value?.session ?? null); if (Array.isArray(value?.allowedDomains)) setDomains(value.allowedDomains.slice(0, 3).join("\n")); refresh(); }, failed);
     const stopDevices = watchStudyDevices(db, uid, value => { devices = value; refresh(); }, failed);
     const timer = setInterval(refresh, 1000);
     return () => { stopControl(); stopDevices(); clearInterval(timer); };

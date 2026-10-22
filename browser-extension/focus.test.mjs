@@ -2,6 +2,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { creditFocusDay, emptyFocusDay, focusSlices, focusDayKey, todayFocusMilliseconds, formatFocusTime } from '../shared/study-focus.ts';
 const session = (start, end, id = 'session') => ({ id, startedAt: Date.parse(start), endsAt: Date.parse(end), timeZone: 'Asia/Kolkata' });
+test('paused sessions keep exact seconds and never count break time during later sync', () => {
+  const value = session('2026-10-22T10:00:00+05:30', '2026-10-22T11:00:00+05:30');
+  const paused = { ...value, paused: true, pausedAt: value.startedAt + 45000 };
+  assert.deepEqual(focusSlices(paused, value.endsAt + 3600000, true), [{ date: '2026-10-22', milliseconds: 45000 }]);
+});
 test('daily focus counts elapsed time only and caps at the deadline', () => {
   const value = session('2026-10-22T10:00:00+05:30', '2026-10-22T11:00:00+05:30');
   assert.deepEqual(focusSlices(value, value.startedAt - 1), []);

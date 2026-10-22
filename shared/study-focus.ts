@@ -1,4 +1,4 @@
-export type FocusSession = { id: string; startedAt: number; endsAt: number; timeZone?: string };
+export type FocusSession = { id: string; startedAt: number; endsAt: number; timeZone?: string; paused?: boolean; pausedAt?: number };
 export type FocusDay = { totalMilliseconds: number; sessionCredits: Record<string, number> };
 export const emptyFocusDay = (): FocusDay => ({ totalMilliseconds: 0, sessionCredits: {} });
 export const studyTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
@@ -10,7 +10,7 @@ export function focusDayKey(time = Date.now(), timeZone = studyTimeZone()) {
 export function focusSlices(session: FocusSession | null | undefined, time = Date.now(), checkpoint = false) {
   if (!session || typeof session.id !== "string" || !session.id || !Number.isSafeInteger(session.startedAt) || !Number.isSafeInteger(session.endsAt) || session.endsAt <= session.startedAt || session.endsAt - session.startedAt > 720 * 60000) return [];
   const zone = session.timeZone || studyTimeZone();
-  const end = Math.min(time, session.endsAt), slices: { date: string; milliseconds: number }[] = [];
+  const end = Math.min(time, session.endsAt, session.paused ? session.pausedAt ?? session.startedAt : session.endsAt), slices: { date: string; milliseconds: number }[] = [];
   let start = session.startedAt;
   while (start < end) {
     const date = focusDayKey(start, zone);
@@ -21,7 +21,7 @@ export function focusSlices(session: FocusSession | null | undefined, time = Dat
       boundary = high;
     }
     const elapsed = boundary - start;
-    const milliseconds = checkpoint && boundary === end && end < session.endsAt ? Math.floor(elapsed / 60000) * 60000 : elapsed;
+    const milliseconds = checkpoint && boundary === end && end < session.endsAt && !session.paused ? Math.floor(elapsed / 60000) * 60000 : elapsed;
     if (milliseconds > 0) slices.push({ date, milliseconds });
     start = boundary;
   }

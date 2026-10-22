@@ -259,7 +259,7 @@ export async function saveProfileWithUsername(user: User, fields: Record<string,
     if (claimedUsername.exists() && claimedBy !== user.uid) throw new Error("This username is already taken.");
     transaction.set(nextUsernameRef, { uid: user.uid, username, updatedAt: serverTimestamp() }, { merge: true });
     transaction.set(profileRef, { ...fields, username, updatedAt: serverTimestamp() }, { merge: true });
-    transaction.set(nextPublicProfileRef, { ...publicProfileFields(user, username, fields), updatedAt: serverTimestamp() });
+    transaction.set(nextPublicProfileRef, { ...publicProfileFields(user, username, fields), updatedAt: serverTimestamp() }, { merge: true });
     if (currentUsernameRef && previousClaim?.data()?.uid === user.uid) transaction.delete(currentUsernameRef);
     if (previousPublicProfileRef) transaction.delete(previousPublicProfileRef);
   });

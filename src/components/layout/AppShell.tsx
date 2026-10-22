@@ -1178,7 +1178,9 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
         if (!files.length || files.includes(missingAvatar)) return;
         const current = loadPracticeProfile();
         if (!current || current.avatar !== missingAvatar) return;
-        const next = { ...current, avatar: files[Math.floor(Math.random() * files.length)] };
+        const avatar = files[Math.floor(Math.random() * files.length)];
+        if (!avatar) return;
+        const next = { ...current, avatar };
         savePracticeProfile(next);
         setProfile(next);
         if (next.username) await saveProfileWithUsername(authUser, next);
