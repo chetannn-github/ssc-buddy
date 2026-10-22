@@ -757,3 +757,6 @@ html, body, #root {
 .destructive-modal .delete-dialog .secondary, .destructive-modal .delete-dialog .danger-primary { width:auto; min-height:44px; padding:0; border:0; border-radius:0; color:#fafaf7; background:transparent; font-size:15px; font-weight:600; box-shadow:none; }
 .destructive-modal .delete-dialog .danger-primary { color:#ff003b; }
 .destructive-modal .delete-dialog button:disabled { opacity:.4; }
+
+/* Each native window clips its moving halo to its own card. */
+.widget, .pinned-habit { position:relative; isolation:isolate; --glow-accent:var(--accent); }

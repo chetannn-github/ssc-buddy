@@ -1,0 +1,49 @@
+/* Decorative overlay keeps the halo visible over each screen's dark surfaces. */
+.accent-top-glow {
+  position: absolute;
+  inset: 0 0 auto;
+  height: min(490px, 100%);
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+  user-select: none;
+  z-index: 2;
+  mix-blend-mode: screen;
+}
+.accent-top-glow::before {
+  content: "";
+  position: absolute;
+  --halo-color: var(--glow-accent, var(--app-accent, #ffe000));
+  top: 0;
+  left: 50%;
+  width: min(82%, 600px);
+  aspect-ratio: 3 / 2;
+  border-radius: 50%;
+  background: linear-gradient(219deg,
+    color-mix(in srgb, var(--halo-color) 85%, #000),
+    var(--halo-color) 73%);
+  box-shadow: 20px 10px clamp(60px, 16vw, 180px)
+    color-mix(in srgb, var(--halo-color) 28%, transparent);
+  filter: blur(clamp(24px, 6vw, 76px));
+  transform: translate(-50%, -72%);
+  opacity: 0.48;
+  animation: accent-top-drift 50s ease-in-out infinite;
+}
+.web-accent-top-glow {
+  position: fixed;
+  height: min(490px, 70vh);
+  border-radius: 0;
+  z-index: 20;
+}
+@keyframes accent-top-drift {
+  0%, 100% { transform: translate(calc(-50% - 14px), calc(-72% - 4px)); opacity: 0.45; }
+  50% { transform: translate(calc(-50% + 14px), calc(-72% + 6px)); opacity: 0.52; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .accent-top-glow::before { animation: none; }
+}
+
+.profile-settings-scroll,
+.profile-settings-scroll * { scrollbar-width: none; }
+.profile-settings-scroll::-webkit-scrollbar,
+.profile-settings-scroll *::-webkit-scrollbar { display: none; }

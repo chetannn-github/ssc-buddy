@@ -1,3 +1,4 @@
+import "../../src/components/layout/accent-top-glow.css";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import NumberFlow from "@number-flow/react";
@@ -243,6 +244,7 @@ function App() {
   if (pinnedDesktop && user.uid !== window.__SSC_HABIT_WIDGET__?.uid) return <main className="widget"><p>Sign in to the original account in the main window.</p><button onClick={() => void removeDesktopHabit()}>Remove widget</button></main>;
 
   return <main onContextMenu={pinnedTasks ? event => { event.preventDefault(); setRecallMenu({ x: Math.max(6, Math.min(innerWidth - 180, event.clientX)), y: Math.max(6, Math.min(innerHeight - 60, event.clientY)) }); } : pinnedRecall ? event => event.preventDefault() : undefined} className={`widget ${pinnedRecall ? "recall-desktop-card" : pinnedTasks ? "tasks-desktop-card" : ""} ${leaderboardOpen ? "leaderboard-open" : ""} ${quickRecallOpen && quickRecallSession ? "recall-question-open" : ""}`}>
+    <div aria-hidden="true" className="accent-top-glow" />
     {pinnedRecall && <div className="recall-widget-drag" data-tauri-drag-region onContextMenu={event => { event.preventDefault(); setRecallMenu({ x: Math.max(6, Math.min(innerWidth - 180, event.clientX)), y: Math.max(6, Math.min(innerHeight - 60, event.clientY)) }); }}><span>{pinnedTasks ? <Check size={14} /> : <Sparkles size={14} />}{pinnedTasks ? "Daily Tasks" : "Quick Recall"}</span></div>}
     {!!pinError && <p role="alert" className="habit-error">{pinError}</p>}
     {recallMenu && <div className="task-context-dismiss" onPointerDown={() => setRecallMenu(null)}><div role="menu" className="task-context-menu" style={{ left: recallMenu.x, top: recallMenu.y }} onPointerDown={event => event.stopPropagation()}><button role="menuitem" onClick={() => { setRecallMenu(null); void (pinnedDesktop ? removeDesktopHabit() : pinDesktopRecall(user.uid)).catch(error => setPinError(String(error))); }}>{pinnedDesktop ? "Remove widget" : "Add desktop widget"}</button></div></div>}

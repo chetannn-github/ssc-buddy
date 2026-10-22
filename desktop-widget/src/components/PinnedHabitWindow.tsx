@@ -4,15 +4,16 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import NumberFlow from "@number-flow/react";
 import { Check, Flame, ListChecks, LoaderCircle, Minus, Plus, Trash2, X } from "lucide-react";
 import type { User } from "firebase/auth";
-import { observeAuth } from "../lib/firebase";
+import { observeAuth, watchProfileAccent } from "../lib/firebase";
 import { useHabits, useHabitToday } from "../lib/habits";
 import { removeDesktopHabit, responsiveHabitStyle, type DesktopHabitPin } from "../lib/desktop-habit-widgets";
 import { HABIT_COLORS, habitEntry, habitIntensity, habitIsComplete, habitScheduled, habitStats, normalizeHabitSettings } from "../../../mobile-tasks/src/domain/habits";
 import { habitWidgetCalendar } from "../../../mobile-tasks/src/domain/habit-widget-layout";
-import { accentInk } from "../../../mobile-tasks/src/domain/app-accent";
+import { accentInk, normalizeAppAccent } from "../../../mobile-tasks/src/domain/app-accent";
 
 export function PinnedHabitWindow({ pin }: { pin: DesktopHabitPin }) {
   const [user, setUser] = useState<User | null>(null), [ready, setReady] = useState(false);
+  const [glowAccent, setGlowAccent] = useState(normalizeAppAccent(undefined));
   const [error, setError] = useState(""), [checklist, setChecklist] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const card = useRef<HTMLElement>(null);
@@ -80,8 +81,13 @@ export function PinnedHabitWindow({ pin }: { pin: DesktopHabitPin }) {
 
   useEffect(() => { document.body.classList.add("pinned-habit-body"); return () => document.body.classList.remove("pinned-habit-body"); }, []);
   useEffect(() => observeAuth(next => { setUser(next); setReady(true); setChecklist(false); setError(""); }), []);
+  useEffect(() => {
+    setGlowAccent(normalizeAppAccent(undefined));
+    if (!user || user.uid !== pin.uid) return;
+    return watchProfileAccent(user, (value) => setGlowAccent(normalizeAppAccent(value)));
+  }, [user?.uid, pin.uid]);
   const tint = habit ? HABIT_COLORS[habit.color] : "#ffe000";
-  const style = { "--accent": tint, "--accent-ink": accentInk(tint), "--habit-color": tint, "--habit-ink": accentInk(tint), "--habit-soft": tint + "22" } as CSSProperties;
+  const style = { "--glow-accent": glowAccent, "--accent": tint, "--accent-ink": accentInk(tint), "--habit-color": tint, "--habit-ink": accentInk(tint), "--habit-soft": tint + "22" } as CSSProperties;
   const remove = () => { void removeDesktopHabit().catch(() => setError("Could not remove widget. Try again.")); };
   const openMenu = (event: React.MouseEvent) => {
     event.preventDefault();
@@ -100,8 +106,8 @@ export function PinnedHabitWindow({ pin }: { pin: DesktopHabitPin }) {
       <button autoFocus role="menuitem" onClick={() => { setMenu(null); remove(); }}><Trash2 size={15} />Remove widget</button>
     </div>
   </div>;
-  if (!ready || api.loading) return <main className="pinned-habit" style={style} onContextMenu={openMenu}><div className="pinned-tools"><span data-tauri-drag-region></span></div><div className="pinned-placeholder"><LoaderCircle className="spin" aria-label="Loading habit" /></div>{contextMenu}</main>;
-  if (!habit) return <main className="pinned-habit" style={style} onContextMenu={openMenu}><div className="pinned-tools"><span data-tauri-drag-region></span></div><div className="pinned-placeholder"><p>{!user || user.uid !== pin.uid ? "Sign in to the original account from the main window." : api.error || "This habit is no longer available."}</p>{api.error && <button onClick={api.retry}>Retry</button>}{error && <p role="alert">{error}</p>}</div>{contextMenu}</main>;
+  if (!ready || api.loading) return <main className="pinned-habit" style={style} onContextMenu={openMenu}><div aria-hidden="true" className="accent-top-glow" /><div className="pinned-tools"><span data-tauri-drag-region></span></div><div className="pinned-placeholder"><LoaderCircle className="spin" aria-label="Loading habit" /></div>{contextMenu}</main>;
+  if (!habit) return <main className="pinned-habit" style={style} onContextMenu={openMenu}><div aria-hidden="true" className="accent-top-glow" /><div className="pinned-tools"><span data-tauri-drag-region></span></div><div className="pinned-placeholder"><p>{!user || user.uid !== pin.uid ? "Sign in to the original account from the main window." : api.error || "This habit is no longer available."}</p>{api.error && <button onClick={api.retry}>Retry</button>}{error && <p role="alert">{error}</p>}</div>{contextMenu}</main>;
   const settings = normalizeHabitSettings(habit.settings), stats = habitStats(habit, today), entry = habitEntry(habit, today);
   const done = habitIsComplete(habit, today), available = habitScheduled(habit, today);
   const update = (action: Parameters<typeof api.updateDay>[2]) => { setError(""); void api.updateDay(habit.id, today, action).catch(() => setError("Could not save. Try again.")); };
@@ -111,7 +117,7 @@ export function PinnedHabitWindow({ pin }: { pin: DesktopHabitPin }) {
   const cells = displayStyle === "compact" ? [] : habitWidgetCalendar(today, displayStyle === "heatmap");
   const wide = displayStyle === "heatmap", step = wide ? 16 : 25, labelX = wide ? 13 : 0, labelY = wide ? 0 : 16;
   const columns = wide ? 20 : 7, rows = Math.max(0, ...cells.map(c => c.row)) + 1;
-  return <main ref={card} className={`pinned-habit pinned-${displayStyle}`} style={style} onContextMenu={openMenu}>
+  return <main ref={card} className={`pinned-habit pinned-${displayStyle}`} style={style} onContextMenu={openMenu}><div aria-hidden="true" className="accent-top-glow" />
     <div className="pinned-tools"><span data-tauri-drag-region title="Drag widget"></span></div>
     <div className="pinned-heading"><h1 data-tauri-drag-region>{habit.name}</h1>{displayStyle !== "compact" && streak}</div>
     {displayStyle === "compact" ? <div className="pinned-compact-bottom">{streak}{markButton}</div> : <>
