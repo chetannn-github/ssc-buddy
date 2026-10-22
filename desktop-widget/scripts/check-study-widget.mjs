@@ -43,7 +43,7 @@ try {
   await page.route('https://**',route=>route.abort());
   await page.goto(`http://localhost:${server.httpServer.address().port}/study-preview`);
   console.log("Preview loaded");
-  await page.getByRole('button',{name:'Set up session'}).waitFor().catch(async e=>{console.error(await page.locator("body").innerHTML());throw e;});
+  await page.locator('.study-desktop-content').waitFor().catch(async e=>{console.error(await page.locator("body").innerHTML());throw e;});
   assert.equal(await page.locator('.study-desktop-time').textContent(),'Ready to focus');
   assert.equal(await page.locator('.study-desktop-card').evaluate(el=>getComputedStyle(el).getPropertyValue('--accent').trim()),'#ff666e');
   assert.equal(await page.locator('.study-desktop-sites').count(),0);
@@ -53,11 +53,11 @@ try {
   for(const width of [360,280,260]){
     await page.setViewportSize({width,height:width===360?190:150});
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
-    assert.ok(await page.locator('.study-desktop-footer').evaluate(el=>el.getBoundingClientRect().bottom<=innerHeight));
+    assert.ok(await page.locator('.study-desktop-content').evaluate(el=>el.getBoundingClientRect().bottom<=innerHeight));
   }
   await page.setViewportSize({width:360,height:190});
   await page.screenshot({path:path.join(root,'dist/study-widget-ready.png')});
-  await page.getByRole('button',{name:'Set up session'}).click();
+  await page.locator('.study-desktop-content').click();
   await page.setViewportSize({width:360,height:520});
   await page.getByRole('button',{name:'Focus time',exact:false}).last().click();
   await page.getByRole('button',{name:'40 minutes',exact:true}).click();
@@ -67,7 +67,7 @@ try {
   await page.locator('.browser-study-live-time').waitFor();
   await page.getByRole('button',{name:'Close Focus Lock',exact:true}).click();
   await page.setViewportSize({width:360,height:190});
-  await page.getByRole('button',{name:'View session'}).waitFor();
+  await page.locator('.study-desktop-content').waitFor();
   assert.match(await page.locator('.study-desktop-time').textContent(),/^(40:00|39:5\d)$/);
   await page.waitForTimeout(1200);
   const beforeConnect=await page.locator('.study-desktop-time').textContent();
