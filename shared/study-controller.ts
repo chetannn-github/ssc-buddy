@@ -1,7 +1,7 @@
 import { creditFocusDay, emptyFocusDay, focusSlices, studyTimeZone, type FocusDay, type FocusSession } from "./study-focus.ts";
 import { splitSelection } from "./study-selection.ts";
 import type { collection, doc, onSnapshot, runTransaction, serverTimestamp, Firestore, Transaction } from "firebase/firestore";
-export type StudySession = { id: string; startedAt: number; endsAt: number; domains: string[]; timeZone?: string };
+export type StudySession = { id: string; startedAt: number; endsAt: number; domains: string[]; timeZone?: string; paused?: boolean; pausedAt?: number; remainingMs?: number };
 export type StudyControl = { version: 1; revision: string; session: StudySession | null; source: string; allowedDomains?: string[] };
 export type StudyDevice = { id: string; label: string; sessionId: string | null; lastSeenAt: number; error: string };
 export const studyControlPath = (uid: string) => ["users", uid, "studyLock", "current"] as const;
@@ -26,6 +26,7 @@ function watchStudyFocusDay(db: Firestore, uid: string, date: string, callback: 
     callback(value ? { totalMilliseconds: Number(value["totalMilliseconds"]) || 0, sessionCredits: value["sessionCredits"] ?? {} } : emptyFocusDay());
   }, error);
 }
+function sessionIsActive(session: StudySession | null | undefined, time = Date.now()) { return !!session && (session.paused === true || session.endsAt > time); }
 async function prepareFocusCredits(transaction: Transaction, db: Firestore, uid: string, session: FocusSession | null | undefined, time: number) {
   const credits = await Promise.all(focusSlices(session, time, true).map(async slice => {
     const reference = doc(db, ...studyFocusPath(uid, slice.date));
@@ -48,7 +49,7 @@ async function startStudySession(db: Firestore, uid: string, minutes: number, va
   const reference = doc(db, ...studyControlPath(uid));
   await runTransaction(db, async transaction => {
     const current = (await transaction.get(reference)).data();
-    if (current?.["session"]?.endsAt > Date.now()) throw Error("The current focus session is locked until its timer ends.");
+    if (sessionIsActive(current?.["session"])) throw Error("The current focus session is locked until its timer ends.");
     const startedAt = Date.now();
     const creditPrevious = await prepareFocusCredits(transaction, db, uid, current?.["session"], startedAt);
     creditPrevious();
@@ -60,12 +61,32 @@ async function saveStudyWebsites(db: Firestore, uid: string, values: string[], s
   const reference = doc(db, ...studyControlPath(uid));
   await runTransaction(db, async transaction => {
     const current = (await transaction.get(reference)).data();
-    if (current?.["session"]?.endsAt > Date.now()) throw Error("Websites are locked during your session.");
+    if (sessionIsActive(current?.["session"])) throw Error("Websites are locked during your session.");
     const creditPrevious = await prepareFocusCredits(transaction, db, uid, current?.["session"], Date.now());
     creditPrevious();
     transaction.set(reference, { version: 1, revision: randomUUID(), session: null, allowedDomains: domains, source, updatedAt: serverTimestamp() });
   });
 }
+async function pauseStudySession(db: Firestore, uid: string, source = "windows") {
+  const reference = doc(db, ...studyControlPath(uid));
+  await runTransaction(db, async transaction => {
+    const current = (await transaction.get(reference)).data() as StudyControl | undefined, session = current?.session;
+    const now = Date.now();
+    if (!session || session.paused || session.endsAt <= now) throw Error("There is no running focus session to pause.");
+    const credit = await prepareFocusCredits(transaction, db, uid, session, now); credit();
+    transaction.set(reference, { ...current, version: 1, revision: randomUUID(), source, session: { ...session, paused: true, pausedAt: now, remainingMs: session.endsAt - now }, updatedAt: serverTimestamp() });
+  });
+}
+async function resumeStudySession(db: Firestore, uid: string, source = "windows") {
+  const reference = doc(db, ...studyControlPath(uid));
+  await runTransaction(db, async transaction => {
+    const current = (await transaction.get(reference)).data() as StudyControl | undefined, paused = current?.session;
+    const remainingMs = Number(paused?.remainingMs);
+    if (!paused?.paused || !Number.isSafeInteger(remainingMs) || remainingMs < 1 || remainingMs > 720 * 60000) throw Error("There is no paused focus session to resume.");
+    const startedAt = Date.now();
+    transaction.set(reference, { ...current, version: 1, revision: randomUUID(), source, session: { id: randomUUID(), startedAt, endsAt: startedAt + remainingMs, domains: paused.domains, timeZone: paused.timeZone }, updatedAt: serverTimestamp() });
+  });
+}
 
-return { watchStudyControl, watchStudyDevices, watchStudyFocusDay, recordStudyFocus, startStudySession, saveStudyWebsites };
+return { watchStudyControl, watchStudyDevices, watchStudyFocusDay, recordStudyFocus, startStudySession, saveStudyWebsites, pauseStudySession, resumeStudySession };
 }

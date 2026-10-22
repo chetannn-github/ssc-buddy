@@ -27,7 +27,7 @@ export function startWorker(cloud) {
     await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: RULE_IDS, addRules: rulesFor(session, chrome.runtime.getURL('blocked.html')) });
     await chrome.storage.local.set({ study: { session, revision, uid } });
     await chrome.alarms.clear('study-end');
-    if (session) await chrome.alarms.create('study-end', { when: session.endsAt });
+    if (session && !session.paused) await chrome.alarms.create('study-end', { when: session.endsAt });
     await chrome.action.setBadgeText({ text: session ? 'ON' : '' });
     await chrome.action.setBadgeBackgroundColor({ color: '#577c3e' });
   }
@@ -44,7 +44,10 @@ export function startWorker(cloud) {
     if (locked && saved.uid === uid) {
       const oldItems = locked.domains;
       const nextItems = session ? session.domains : [];
-      if (!session || session.id !== locked.id || session.startedAt !== locked.startedAt || session.endsAt !== locked.endsAt || oldItems.some(item => !nextItems.includes(item))) throw Error('Your session stays locked until its timer ends.');
+      const sameSites = session && oldItems.length === session.domains.length && oldItems.every(item => session.domains.includes(item));
+      const paused = !locked.paused && session?.paused && session.id === locked.id && session.startedAt === locked.startedAt && session.endsAt === locked.endsAt && sameSites;
+      const resumed = locked.paused && session && !session.paused && sameSites;
+      if (!paused && !resumed && (!session || session.id !== locked.id || session.startedAt !== locked.startedAt || session.endsAt !== locked.endsAt || Boolean(session.paused) !== Boolean(locked.paused) || Number(session.remainingMs ?? 0) !== Number(locked.remainingMs ?? 0) || oldItems.some(item => !nextItems.includes(item)))) throw Error('Your session stays locked until its timer ends.');
     }
     const domains = (session?.domains ?? packet.allowedDomains ?? []).slice(0, 3);
     await chrome.storage.local.set({ websiteDraft: { uid, domains } });
@@ -73,7 +76,7 @@ export function startWorker(cloud) {
       // hold a browser locked beyond its deadline, including while offline.
       if (cloud.recordFocus) {
         try {
-          if (packet.session) await cloud.recordFocus(packet.session);
+          if (packet.session && !packet.session.paused) await cloud.recordFocus(packet.session);
           const { pendingFocus = [] } = await chrome.storage.local.get('pendingFocus');
           for (const entry of pendingFocus.filter(entry => entry.uid === user.uid)) {
             if (cloud.user()?.uid !== user.uid) break;

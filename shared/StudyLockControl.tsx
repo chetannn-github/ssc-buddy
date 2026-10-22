@@ -1,15 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Firestore } from "firebase/firestore";
-import { watchStudyControl, watchStudyDevices, watchStudyFocusDay, recordStudyFocus, type StudySession, startStudySession, type StudyControl, type StudyDevice, normalizeStudyDomain, saveStudyWebsites } from "./study-lock";
+import { watchStudyControl, watchStudyDevices, watchStudyFocusDay, recordStudyFocus, type StudySession, startStudySession, type StudyControl, type StudyDevice, normalizeStudyDomain, saveStudyWebsites, pauseStudySession, resumeStudySession } from "./study-lock";
 import { emptyFocusDay, focusDayKey, todayFocusMilliseconds, formatFocusTime, type FocusDay } from "./study-focus";
 import { SlotTime } from "./SlotTime";
 import { StudyDurationPicker } from "./StudyDurationPicker";
 import { Clock3, Globe2, MonitorUp, Monitor, Plus, LockKeyhole, X } from "lucide-react";
-type Session = { endsAt: number; domains: string[] };
+type Session = { endsAt: number; domains: string[]; paused?: boolean; remainingMs?: number };
 type Status = { session: Session | null; connected: number; protected: number };
-const remaining = (endsAt: number) => {
-  const seconds = Math.max(0, Math.ceil((endsAt - Date.now()) / 1000));
+const remaining = (session: Session | number) => {
+  const seconds = Math.max(0, Math.ceil((typeof session === "number" ? session - Date.now() : session.paused ? Number(session.remainingMs) || 0 : session.endsAt - Date.now()) / 1000));
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 };
 export function StudyLockControl({ uid, desktop = false, profile = false, getDatabase, source = "windows", onResize, onPin, lockedImage, onPracticeSession }: { uid: string; desktop?: boolean; profile?: boolean; getDatabase: () => Firestore; source?: string; onResize?: (expanded: boolean) => Promise<void>; onPin?: () => Promise<void>; lockedImage?: string; onPracticeSession?: () => void }) {
@@ -42,12 +42,12 @@ export function StudyLockControl({ uid, desktop = false, profile = false, getDat
     const db = getDatabase(); let control: StudyControl | null = null, devices: StudyDevice[] = [];
     const refresh = () => {
       setNow(Date.now());
-      const session = control?.session && control.session.endsAt > Date.now() ? control.session : null;
+      const session = control?.session && (control.session.paused || control.session.endsAt > Date.now()) ? control.session : null;
       const connected = devices.filter(device => Date.now() - device.lastSeenAt < 90000);
       setStatus({ session, connected: connected.length, protected: session ? connected.filter(device => device.sessionId === session.id && !device.error).length : 0 });
     };
     const failed = (e: Error) => setError(/firebase/i.test(e.message) ? "Could not load your focus session. Please try again." : e.message);
-    const stopControl = watchStudyControl(db, uid, value => { control = value; setFocusSession(value?.session ?? null); if (Array.isArray(value?.allowedDomains)) setDomains(value.allowedDomains.slice(0, 3).join("\n")); refresh(); }, failed);
+    const stopControl = watchStudyControl(db, uid, value => { control = value; setFocusSession(value?.session && !value.session.paused ? value.session : null); if (Array.isArray(value?.allowedDomains)) setDomains(value.allowedDomains.slice(0, 3).join("\n")); refresh(); }, failed);
     const stopDevices = watchStudyDevices(db, uid, value => { devices = value; refresh(); }, failed);
     const timer = setInterval(refresh, 1000);
     return () => { stopControl(); stopDevices(); clearInterval(timer); };
@@ -85,21 +85,22 @@ export function StudyLockControl({ uid, desktop = false, profile = false, getDat
   return <>
     {desktop ? <section ref={desktopTrigger} className="study-desktop-content" role="button" tabIndex={0} aria-label={session ? "Open active Focus Lock session" : "Set up Focus Lock"} onClick={() => setOpen(true)} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setOpen(true); } }}>
       <div className="study-desktop-heading"><span data-tauri-drag-region><LockKeyhole size={14} />Focus Lock</span></div>
-      <div className="study-desktop-summary"><span className="study-desktop-daily">Today's focus time <b>{formatFocusTime(todayFocus)}</b></span><strong className={`study-desktop-time ${session ? "is-running" : ""}`}>{session ? <SlotTime value={remaining(session.endsAt)} /> : "Ready to focus"}</strong></div>
+      <div className="study-desktop-summary"><span className="study-desktop-daily">Today's focus time <b>{formatFocusTime(todayFocus)}</b></span><strong className={`study-desktop-time ${session ? "is-running" : ""}`}>{session ? <SlotTime value={remaining(session)} /> : "Ready to focus"}</strong></div>
     </section> : <button ref={trigger} className={`browser-study-trigger ${profile ? "study-profile-trigger" : "icon-button"} ${session ? "active" : ""}`} aria-label="Focus Lock" title={session ? `Focus Lock - ${remaining(session.endsAt)}` : "Focus Lock"} onClick={() => setOpen(true)}><LockKeyhole size={17} />{profile && <><span>Focus Lock</span><small>Today · {formatFocusTime(todayFocus)}</small></>}{session && !profile && <i aria-hidden="true" />}</button>}
 
     {open && createPortal(<div className="browser-study-overlay" onPointerDown={event => { event.stopPropagation(); if (event.target === event.currentTarget) setOpen(false); }} onContextMenu={e => e.stopPropagation()}>
-      <section ref={dialog} className={`browser-study-dialog ${session && !pickingTime ? "is-running" : ""} ${session && lockedImage ? "focus-lock-visual" : ""}`} role="dialog" aria-modal="true" aria-labelledby="browser-study-title">
+      <section ref={dialog} className={`browser-study-dialog ${desktop ? "study-desktop-dialog" : ""} ${session && !pickingTime ? "is-running" : ""} ${session && lockedImage ? "focus-lock-visual" : ""}`} role="dialog" aria-modal="true" aria-labelledby="browser-study-title">
         {session && lockedImage && <div className="focus-lock-image"><img src={lockedImage} alt="Focus motivation" /></div>}
         <div className="focus-lock-dialog-content">
         {pickingTime && !session ? <StudyDurationPicker minutes={Number(minutes)} onCancel={() => setPickingTime(false)} onConfirm={value => { setMinutes(String(value)); setPickingTime(false); }} /> : <>
         <div className="browser-study-heading"><h2 id="browser-study-title">Focus Lock</h2>{onPin && <button aria-label="Add Focus Lock desktop widget" title="Add desktop widget" disabled={busy} onClick={() => void run(() => onPin())}><MonitorUp size={17} /></button>}<button aria-label="Close Focus Lock" onClick={() => setOpen(false)}><X size={18} /></button></div>
         {source !== "web" && <div className={`browser-study-connection ${status?.connected ? "connected" : ""}`} role="status"><Monitor size={12} /><i /><span>{status?.connected ? `${status.connected} connected` : "No browser connected"}</span></div>}
-        <div className="study-focus-today"><span>Today's focus</span><strong>{formatFocusTime(todayFocus)}</strong></div>
+        {(!desktop || !session) && <div className="study-focus-today"><span>Today's focus</span><strong>{formatFocusTime(todayFocus)}</strong></div>}
         {session ? <>
           {lockedImage && <><p className="focus-lock-eyebrow">ONE SESSION. ONE STEP CLOSER.</p><h3 className="focus-lock-message">Your goals deserve this time.</h3></>}
-          <div className="browser-study-live-time"><SlotTime value={remaining(session.endsAt)} /></div>
-          {source === "web" ? (onPracticeSession && <button className="focus-lock-recall" onClick={() => { setOpen(false); onPracticeSession(); }}>Practice session</button>) : <div className="browser-study-domains">{session.domains.map(domain => lockedImage ? <a key={domain} href={`https://${domain}`} className="focus-lock-site" rel="noreferrer"><span className="focus-lock-site-icon">{domain.replace(/^www\./, "").charAt(0).toUpperCase()}</span><strong>{domain}</strong><span aria-hidden="true">&#8599;</span></a> : <span key={domain} title={domain}>{domain}</span>)}</div>}
+          <div className="browser-study-live-time"><SlotTime value={remaining(session)} /></div>
+          <button className="browser-study-secondary study-pause-button" disabled={busy} onClick={() => void run(() => session.paused ? resumeStudySession(getDatabase(), uid, source) : pauseStudySession(getDatabase(), uid, source))}>{busy ? "Please wait…" : session.paused ? "Resume focus" : "Take a break"}</button>
+          {source === "web" ? (onPracticeSession && <button className="focus-lock-recall" onClick={() => { setOpen(false); onPracticeSession(); }}>Practice session</button>) : !desktop && <div className="browser-study-domains">{session.domains.map(domain => lockedImage ? <a key={domain} href={`https://${domain}`} className="focus-lock-site" rel="noreferrer"><span className="focus-lock-site-icon">{domain.replace(/^www\./, "").charAt(0).toUpperCase()}</span><strong>{domain}</strong><span aria-hidden="true">&#8599;</span></a> : <span key={domain} title={domain}>{domain}</span>)}</div>}
         </> : <>
           <div className="study-websites"><h3>Allowed websites <small>{websites.length}/3</small></h3>
             <div className="study-domain-entry"><Globe2 size={15} /><input aria-label="Website domain" value={website} onChange={event => setWebsite(event.target.value)} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); addWebsite(); } }} placeholder="parmar.com" spellCheck={false} autoCapitalize="none" /><button aria-label="Add website" disabled={!website.trim() || busy || websites.length >= 3} onClick={addWebsite}><Plus size={17} /></button></div>
