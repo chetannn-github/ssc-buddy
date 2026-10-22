@@ -11,6 +11,7 @@ type FocusModule = {
   consumeFocusRecall?: () => Promise<boolean>;
   readFocusBreaks?: () => Promise<string>;
   acknowledgeFocusBreak?: (id: string) => Promise<void>;
+  configureFocusImages?: (localFiles: string, manifest: string) => Promise<void>;
 };
 const native = Platform.OS === "android" ? requireOptionalNativeModule<FocusModule>("BuddyMusic") : null;
 export const supportsDeviceFocus = !!native?.getFocusLockStatus;
@@ -23,3 +24,4 @@ export const openDeviceFocusSettings = () => native?.openFocusLockSettings?.() ?
 export const consumeFocusRecall = () => native?.consumeFocusRecall?.() ?? Promise.resolve(false);
 export const readFocusBreaks = async (): Promise<OverlayBreak[]> => JSON.parse(await native?.readFocusBreaks?.() ?? "[]");
 export const acknowledgeFocusBreak = (id: string) => native?.acknowledgeFocusBreak?.(id) ?? Promise.resolve();
+export const configureDeviceFocusImages = (localFiles: string[], manifest: string) => native?.configureFocusImages?.(JSON.stringify(localFiles), manifest) ?? Promise.resolve();

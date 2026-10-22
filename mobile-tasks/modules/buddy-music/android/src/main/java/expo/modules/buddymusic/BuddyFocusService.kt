@@ -15,6 +15,7 @@ import android.os.Looper
 import android.os.Build
 import android.provider.Settings
 import android.telecom.TelecomManager
+import android.media.AudioManager
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
@@ -42,6 +43,10 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
   private var renderedTime = ""
   private var foreground = ""
   private var protectionState = ""
+  private var motivation: ImageView? = null
+  private var lastImageRotation = -60000L
+  private var imageBusy = false
+  private val imageWorker = java.util.concurrent.Executors.newSingleThreadExecutor()
   private lateinit var preferences: SharedPreferences
   private val essentials = mutableSetOf<String>()
   private val ticker = object : Runnable {
@@ -53,6 +58,7 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
       }
       enforce()
       updateTimer()
+      rotateMotivation()
       handler.postDelayed(this, if (overlay == null) 1000 else 250)
     }
   }
@@ -62,6 +68,7 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
     preferences.edit().remove("overlayError").apply()
     preferences.registerOnSharedPreferenceChangeListener(this)
     essentials.addAll(setOf(packageName, "android", "com.android.systemui", "com.android.settings", "com.android.permissioncontroller", "com.google.android.permissioncontroller", "com.android.phone", "com.android.server.telecom", "com.android.emergency", "com.google.android.dialer", "com.android.dialer", "com.samsung.android.dialer", "com.android.contacts", "com.google.android.contacts", "com.samsung.android.app.contacts"))
+    essentials.addAll(setOf("com.android.incallui", "com.samsung.android.incallui"))
     runCatching { (getSystemService(TELECOM_SERVICE) as? TelecomManager)?.defaultDialerPackage?.let(essentials::add) }
     val intents = listOf(Intent(Intent.ACTION_DIAL, Uri.parse("tel:")), Intent(Intent.ACTION_VIEW).setType("vnd.android.cursor.dir/contact"))
     intents.forEach { intent -> packageManager.queryIntentActivities(intent, 0).forEach { essentials.add(it.activityInfo.packageName) } }
@@ -76,22 +83,42 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
     // Ignore events emitted by our own accessibility overlay.
     if (target == packageName && overlay != null) return
     // Keep the focus screen in place while Android displays transient system UI.
-    if (target == "com.android.systemui" && overlay != null) return
+    if (target == "com.android.systemui") {
+      if (isRinging()) hide()
+      return // Preserve the underlying app so its lock returns after ringing stops.
+    }
     this@BuddyFocusService.foreground = target
     enforce()
   }
   override fun onSharedPreferenceChanged(shared: SharedPreferences?, key: String?) { handler.post { hide(); enforce() } }
   private fun enforce() {
-    if (!FocusAppPolicy.blocks(foreground, System.currentTimeMillis(), restrictionDeadline(), essentials, preferences.getStringSet("allowed", emptySet()).orEmpty())) { hide(); return }
+    if (!FocusAppPolicy.blocks(foreground, System.currentTimeMillis(), restrictionDeadline(), essentials, preferences.getStringSet("allowed", emptySet()).orEmpty(), isRinging())) { hide(); return }
     if (overlay != null) return
     show(foreground)
   }
+  private fun isRinging() = runCatching { (getSystemService(AUDIO_SERVICE) as AudioManager).mode == AudioManager.MODE_RINGTONE }.getOrDefault(false)
   private fun restrictionDeadline(): Long = if (preferences.getBoolean("paused", false) && !preferences.getString("session", "").isNullOrEmpty()) Long.MAX_VALUE else preferences.getLong("endsAt", 0)
   private fun text(value: String, size: Float, tint: Int = Color.WHITE) = TextView(this).apply {
     text = value; textSize = size; setTextColor(tint); gravity = Gravity.CENTER
     setPadding(dp(10), dp(8), dp(10), dp(8))
   }
   private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
+  private fun rotateMotivation() {
+    if (motivation == null) return
+    val now = android.os.SystemClock.elapsedRealtime()
+    if (imageBusy || now - lastImageRotation < 60000) return
+    imageBusy = true; lastImageRotation = now
+    imageWorker.execute {
+      val bitmap = runCatching {
+        val next = FocusImages.next(this, FocusImages.current(this)) ?: return@runCatching null
+        BitmapFactory.decodeFile(Uri.parse(next).path, BitmapFactory.Options().apply { inSampleSize = 2 })
+      }.getOrNull()
+      handler.post {
+        imageBusy = false
+        if (bitmap != null) motivation?.setImageBitmap(bitmap)
+      }
+    }
+  }
   private fun shortcut(label: String, intent: Intent?, iconPackage: String? = null): View {
     val tile = LinearLayout(this).apply {
       orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
@@ -186,15 +213,17 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
       orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; setPadding(dp(24), dp(24), dp(24), dp(24))
       background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(Color.argb(30, Color.red(accent), Color.green(accent), Color.blue(accent)), Color.BLACK)).apply { setColor(Color.BLACK); colors = intArrayOf(Color.rgb(Color.red(accent) / 10, Color.green(accent) / 10, Color.blue(accent) / 10), Color.BLACK) }
     }
-    val image = preferences.getString("image", "").orEmpty()
+    val image = FocusImages.current(this).ifEmpty { preferences.getString("image", "").orEmpty() }
+    val imageView = ImageView(this).apply {
+      scaleType = ImageView.ScaleType.FIT_CENTER; contentDescription = "Focus motivation"; clipToOutline = true
+      background = GradientDrawable().apply { setColor(Color.BLACK); cornerRadius = dp(20).toFloat() }
+    }
     if (image.startsWith("file:")) runCatching {
       val bitmap = BitmapFactory.decodeFile(Uri.parse(image).path, BitmapFactory.Options().apply { inSampleSize = 2 })
-      if (bitmap != null) root.addView(ImageView(this).apply {
-        setImageBitmap(bitmap); scaleType = ImageView.ScaleType.FIT_CENTER
-        contentDescription = "Focus motivation"; clipToOutline = true
-        background = GradientDrawable().apply { setColor(Color.BLACK); cornerRadius = dp(20).toFloat() }
-      }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f).apply { setMargins(0, dp(18), 0, dp(18)) })
+      if (bitmap != null) imageView.setImageBitmap(bitmap)
     }
+    motivation = imageView
+    root.addView(imageView, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f).apply { setMargins(0, dp(18), 0, dp(18)) })
     root.addView(text("Focus Lock", 16f, accent))
     root.addView(text("Your goals deserve this time.", 24f))
     timer = LinearLayout(this).apply { gravity = Gravity.CENTER }
@@ -289,11 +318,12 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
   }
   private fun hide() {
     overlay?.let { runCatching { (getSystemService(WINDOW_SERVICE) as WindowManager).removeView(it) } }
-    overlay = null; timer = null; renderedTime = ""
+    overlay = null; timer = null; motivation = null; renderedTime = ""
   }
   override fun onInterrupt() { hide() }
   override fun onDestroy() {
     connected = false
+    imageWorker.shutdownNow()
     handler.removeCallbacksAndMessages(null)
     if (::preferences.isInitialized) preferences.unregisterOnSharedPreferenceChangeListener(this)
     hide(); super.onDestroy()

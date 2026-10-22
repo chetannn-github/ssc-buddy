@@ -4,6 +4,12 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class FocusAppPolicyTest {
+  @Test fun incomingCallCanBeAnsweredAndOtherAppsBlockAgainWhenRingingStops() {
+    val essentials = setOf("phone", "incallui")
+    assertFalse(FocusAppPolicy.blocks("social.app", 10, 20, essentials, emptySet(), ringing = true))
+    assertFalse(FocusAppPolicy.blocks("incallui", 10, 20, essentials, emptySet()))
+    assertTrue(FocusAppPolicy.blocks("social.app", 10, 20, essentials, emptySet()))
+  }
   @Test fun savedDeadlineRestoresOfflineAndAfterRestartWithoutRestartingTimer() {
     val savedDeadline = 60_000L
     assertTrue(FocusAppPolicy.lockActive("saved", false, savedDeadline, 20_000))

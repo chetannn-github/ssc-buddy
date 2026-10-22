@@ -61,6 +61,9 @@ class BuddyMusicModule : Module() {
     AsyncFunction("requestFocusAdmin") {
       FocusProtection.request(requireNotNull(appContext.reactContext))
     }.runOnQueue(Queues.MAIN)
+    AsyncFunction("configureFocusImages") { localFiles: String, manifest: String ->
+      FocusImages.configure(requireNotNull(appContext.reactContext), localFiles, manifest)
+    }.runOnQueue(Queues.MAIN)
     AsyncFunction("readFocusBreaks") {
       BuddyFocusService.prefs(requireNotNull(appContext.reactContext)).getString("breakActions", "[]") ?: "[]"
     }.runOnQueue(Queues.MAIN)

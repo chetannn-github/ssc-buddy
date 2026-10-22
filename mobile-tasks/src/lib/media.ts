@@ -1,6 +1,7 @@
 // Shared web media is served by the Vite deployment. Keeping it remote avoids
 // placing the same music/videos a second time inside every Android build.
 const mediaOrigin = (process.env.EXPO_PUBLIC_MEDIA_BASE_URL ?? "https://ssc-buddy.vercel.app/media").replace(/\/$/, "");
+export const avatarManifestUrl = () => `${(process.env.EXPO_PUBLIC_AVATAR_BASE_URL ?? new URL("../avatars/", `${mediaOrigin}/`).toString()).replace(/\/$/, "")}/manifest.json`;
 import { musicCovers, musicTracks, videoTracks } from "./generated-media";
 
 export { musicTracks, videoTracks };
