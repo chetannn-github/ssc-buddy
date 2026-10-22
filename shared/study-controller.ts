@@ -27,6 +27,14 @@ function watchStudyFocusDay(db: Firestore, uid: string, date: string, callback: 
     callback(value ? { totalMilliseconds: Number(value["totalMilliseconds"]) || 0, sessionCredits: value["sessionCredits"] ?? {} } : emptyFocusDay());
   }, error);
 }
+function watchStudyFocusDays(db: Firestore, uid: string, callback: (value: Record<string, FocusDay>) => void, error: (error: Error) => void) {
+  return onSnapshot(collection(db, "users", uid, "studyFocusDays"), snapshot => {
+    callback(Object.fromEntries(snapshot.docs.map(entry => {
+      const value = entry.data();
+      return [entry.id, { totalMilliseconds: Math.max(0, Number(value["totalMilliseconds"]) || 0), sessionCredits: value["sessionCredits"] ?? {} }];
+    })));
+  }, error);
+}
 function sessionIsActive(session: StudySession | null | undefined, time = Date.now()) { return !!session && (session.paused === true || session.endsAt > time); }
 async function publishStudyFocusDay(db: Firestore, uid: string, date: string, timeZone = studyTimeZone()) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
@@ -78,7 +86,7 @@ async function recordStudyFocus(db: Firestore, uid: string, session: FocusSessio
 }
 /** Same private document contract for Windows today, and web/Android controllers later. */
 async function startStudySession(db: Firestore, uid: string, minutes: number, values: string[], source = "windows") {
-  if (!Number.isInteger(minutes) || minutes < 1 || minutes > 720 || !values.length || values.length > 3) throw Error("Choose 1–720 minutes and up to 3 websites.");
+  if (!Number.isInteger(minutes) || minutes < 1 || minutes > 720 || (!values.length && source !== "mobile") || values.length > 3) throw Error("Choose 1–720 minutes and up to 3 websites.");
   const { domains } = splitSelection(values);
   const reference = doc(db, ...studyControlPath(uid));
   return runTransaction(db, async transaction => {
@@ -146,5 +154,5 @@ async function applyOverlayBreak(db: Firestore, uid: string, action: OverlayBrea
     return next;
   });
 }
-return { watchStudyControl, watchStudyDevices, watchStudyFocusDay, watchPublicStudyFocus, publishStudyFocusDay, recordStudyFocus, startStudySession, saveStudyWebsites, pauseStudySession, resumeStudySession, applyOverlayBreak };
+return { watchStudyControl, watchStudyDevices, watchStudyFocusDay, watchStudyFocusDays, watchPublicStudyFocus, publishStudyFocusDay, recordStudyFocus, startStudySession, saveStudyWebsites, pauseStudySession, resumeStudySession, applyOverlayBreak };
 }

@@ -1,7 +1,21 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { creditFocusDay, emptyFocusDay, focusSlices, focusDayKey, todayFocusMilliseconds, formatFocusTime } from '../shared/study-focus.ts';
+import { creditFocusDay, emptyFocusDay, focusSlices, focusDayKey, todayFocusMilliseconds, formatFocusTime, rangeFocusMilliseconds } from '../shared/study-focus.ts';
 const session = (start, end, id = 'session') => ({ id, startedAt: Date.parse(start), endsAt: Date.parse(end), timeZone: 'Asia/Kolkata' });
+
+test('profile focus respects date filters, excludes breaks, and counts live credits only once', () => {
+  const value = session('2026-10-22T23:45:00+05:30', '2026-10-23T00:15:00+05:30');
+  const days = {
+    '2026-10-21': creditFocusDay(emptyFocusDay(), 'previous', 3600000),
+    '2026-10-22': creditFocusDay(emptyFocusDay(), value.id, 900000),
+    '2026-10-23': creditFocusDay(emptyFocusDay(), value.id, 300000),
+  };
+  assert.equal(rangeFocusMilliseconds(days, value, date => date === '2026-10-23', value.endsAt), 900000);
+  assert.equal(rangeFocusMilliseconds(days, value, () => true, value.endsAt), 5400000);
+  assert.equal(rangeFocusMilliseconds(days, { ...value, paused: true, pausedAt: value.startedAt + 1200000 }, date => date === '2026-10-23', value.endsAt), 300000);
+  assert.equal(rangeFocusMilliseconds(days, null, date => date === '2026-10-21'), 3600000);
+  assert.equal(rangeFocusMilliseconds({}, null, () => true), 0);
+});
 test('paused sessions keep exact seconds and never count break time during later sync', () => {
   const value = session('2026-10-22T10:00:00+05:30', '2026-10-22T11:00:00+05:30');
   const paused = { ...value, paused: true, pausedAt: value.startedAt + 45000 };

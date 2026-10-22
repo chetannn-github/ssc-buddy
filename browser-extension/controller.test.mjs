@@ -113,6 +113,13 @@ test('web and mobile share one session and preserve its active websites and dead
   assert.deepEqual(documents.get(reference).session, session);
   await assert.rejects(() => mobile.startStudySession({}, 'another-user', 25, ['one.org', 'two.org', 'three.org', 'four.org'], 'mobile'), /3 websites/);
   assert.equal(documents.has('users/another-user/studyLock/current'), false);
+  const appOnly = await mobile.startStudySession({}, 'app-only', 15, [], 'mobile');
+  assert.deepEqual(appOnly.domains, []);
+  assert.equal(appOnly.endsAt - appOnly.startedAt, 15 * 60000);
+  await mobile.pauseStudySession({}, 'app-only', 'mobile');
+  await mobile.resumeStudySession({}, 'app-only', 'mobile');
+  assert.deepEqual(documents.get('users/app-only/studyLock/current').session.domains, []);
+  await assert.rejects(() => web.startStudySession({}, 'web-empty', 15, [], 'web'), /websites/);
 });
 
 test('finished sessions are saved before the next session replaces them, and retries preserve totals', async () => {

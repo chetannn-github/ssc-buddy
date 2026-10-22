@@ -1,5 +1,8 @@
 import { ProfileStudyLock } from "@/components/profile/ProfileStudyLock";
 import { PublicFocusTime } from "@/components/profile/PublicFocusTime";
+import * as focusReader from "../../shared/study-lock";
+import { useProfileFocus } from "../../shared/use-profile-focus";
+import { getFirebaseFirestore } from "@/lib/firebase-sync";
 import { AccentPicker } from "@/components/profile/AccentPicker";
 import { applyWebAccent, normalizeAppAccent, type AppAccent } from "@/lib/app-accent";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
@@ -533,6 +536,7 @@ function TargetProgress({
   studyMinutes,
   completedTasks,
   incompleteTasks,
+  focusTime,
   range,
   onRangeChange,
   showPractice = true,
@@ -549,6 +553,7 @@ function TargetProgress({
   studyMinutes: number;
   completedTasks: number;
   incompleteTasks: number;
+  focusTime: string;
   range: ActivityRange;
   onRangeChange: (range: ActivityRange) => void;
   showPractice?: boolean;
@@ -662,11 +667,9 @@ function TargetProgress({
         ))}
         <StatCell label="Study time"><RollingDuration minutes={studyMinutes} /></StatCell>
         <StatCell label="Tasks completed">
-          <RollingNumber value={completedTasks} />
+          <RollingNumber value={completedTasks} />/{completedTasks + incompleteTasks}
         </StatCell>
-        <StatCell label="Incomplete tasks">
-          <RollingNumber value={incompleteTasks} />
-        </StatCell>
+        <StatCell label="Focus time">{focusTime}</StatCell>
       </div>}
       {!showTracker && <div className="grid grid-cols-3 divide-x divide-y divide-white/10 px-2 py-1.5 sm:divide-y-0 sm:px-3">
         <StatCell label="Study time"><RollingDuration minutes={studyMinutes} /></StatCell>
@@ -868,6 +871,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
   const importFileRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const authUser = useAuthUser();
+  const focusTime = useProfileFocus(getFirebaseFirestore, focusReader, readOnly ? publicProfile?.uid : authUser?.uid, readOnly ? publicProfile?.username : undefined, readOnly, date => isInRange(date, range));
   const resultUid = readOnly ? publicProfile?.uid : authUser?.uid;
   const medalCounts = useWeeklyMedalCounts(resultUid, dailyTasks.map((task) => task.date));
 
@@ -1293,6 +1297,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
               studyMinutes={dailyTaskTotals.studyMinutes}
               completedTasks={dailyTaskTotals.completed}
               incompleteTasks={dailyTaskTotals.incomplete}
+              focusTime={focusTime}
               range={range}
               onRangeChange={setRange}
               showPractice={profile?.practiceSessionEnabled !== false}

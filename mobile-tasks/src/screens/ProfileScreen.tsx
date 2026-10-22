@@ -1,6 +1,8 @@
 // @ts-nocheck
-import { StudyLock } from "../components/StudyLock";
+import { StudyLock, controller as focusReader } from "../components/StudyLock";
 import { PublicFocusTime } from "../components/PublicFocusTime";
+import { useProfileFocus } from "../../../shared/use-profile-focus";
+import { getFirebaseFirestore } from "../lib/firebase";
 import { DestructiveDialog } from "../components/DestructiveDialog";
 import { createThemedStyles, setAppAccent, useAppAccent } from "../theme";
 import { APP_ACCENTS, accentInk, type AppAccent } from "../domain/app-accent";
@@ -287,6 +289,7 @@ export function ProfileScreen({
     : normalizePracticeRecords(sharedPracticeRecords));
   const lastPublicDashboard = useRef(publicDashboard);
   const [range, setRange] = useState<Range>("week");
+  const focusTime = useProfileFocus(getFirebaseFirestore, focusReader, readOnly ? publicUid : user?.uid, readOnly ? profileSettings?.username : undefined, readOnly, date => withinRange(date, range));
   const [rangeOpen, setRangeOpen] = useState(false);
   const [rangeMenuVisible, setRangeMenuVisible] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
@@ -742,8 +745,8 @@ export function ProfileScreen({
                 <Stat label="Revisions" value={String(trackerRevisions)} />
                 <Stat lastColumn label="Mock tests" value={String(loggedMocks)} />
                 <Stat lastRow label="Study time" value={formatMinutes(filteredSummary.minutes)} />
-                <Stat lastRow label="Tasks completed" value={String(filteredSummary.done)} />
-                <Stat lastColumn lastRow label="Incomplete tasks" value={String(filteredSummary.total - filteredSummary.done)} />
+                <Stat lastRow label="Tasks completed" value={`${filteredSummary.done}/${filteredSummary.total}`} />
+                <Stat lastColumn lastRow label="Focus time" value={focusTime} />
               </View>
             ) : (
               <>
@@ -752,11 +755,10 @@ export function ProfileScreen({
                   <Stat lastRow label="Revisions" value={String(trackerRevisions)} />
                   <Stat lastColumn lastRow label="Mock tests" value={String(loggedMocks)} />
                 </View>}
-                {trackProgressEnabled && <Text style={[styles.cardEyebrow, styles.trackerEyebrow]}>TASKS</Text>}
                 <View style={styles.trackerGrid}>
                   <Stat lastRow label="Study time" value={formatMinutes(filteredSummary.minutes)} />
-                  <Stat lastRow label="Tasks completed" value={String(filteredSummary.done)} />
-                  <Stat lastColumn lastRow label="Incomplete tasks" value={String(filteredSummary.total - filteredSummary.done)} />
+                  <Stat lastRow label="Tasks completed" value={trackProgressEnabled ? `${filteredSummary.done}/${filteredSummary.total}` : String(filteredSummary.done)} />
+                  <Stat lastColumn lastRow label={trackProgressEnabled ? "Focus time" : "Incomplete tasks"} value={trackProgressEnabled ? focusTime : String(filteredSummary.total - filteredSummary.done)} />
                 </View>
               </>
             )}

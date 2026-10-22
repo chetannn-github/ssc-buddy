@@ -17,6 +17,8 @@ import android.provider.Settings
 import android.telecom.TelecomManager
 import android.media.AudioManager
 import android.view.Gravity
+import android.view.GestureDetector
+import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.view.WindowInsets
@@ -40,6 +42,8 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
   private val handler = Handler(Looper.getMainLooper())
   private var overlay: View? = null
   private var timer: LinearLayout? = null
+  private var breakButton: Button? = null
+  private var rebuildOverlay = false
   private var renderedTime = ""
   private var foreground = ""
   private var protectionState = ""
@@ -90,7 +94,20 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
     this@BuddyFocusService.foreground = target
     enforce()
   }
-  override fun onSharedPreferenceChanged(shared: SharedPreferences?, key: String?) { handler.post { hide(); enforce() } }
+  private val refreshOverlay = Runnable {
+    if (rebuildOverlay) { rebuildOverlay = false; hide() }
+    enforce()
+    updateBreakButton()
+    updateTimer()
+  }
+  override fun onSharedPreferenceChanged(shared: SharedPreferences?, key: String?) {
+    // Break journals, image-cache and admin metadata do not change the visible screen.
+    // Batch one preference transaction and preserve the overlay window on pause/resume.
+    if (key !in setOf("session", "allowed", "accent", "paused", "endsAt", "remainingMs")) return
+    if (key in setOf("session", "allowed", "accent")) rebuildOverlay = true
+    handler.removeCallbacks(refreshOverlay)
+    handler.post(refreshOverlay)
+  }
   private fun enforce() {
     if (!FocusAppPolicy.blocks(foreground, System.currentTimeMillis(), restrictionDeadline(), essentials, preferences.getStringSet("allowed", emptySet()).orEmpty(), isRinging())) { hide(); return }
     if (overlay != null) return
@@ -103,10 +120,10 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
     setPadding(dp(10), dp(8), dp(10), dp(8))
   }
   private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
-  private fun rotateMotivation() {
+  private fun rotateMotivation(force: Boolean = false) {
     if (motivation == null) return
     val now = android.os.SystemClock.elapsedRealtime()
-    if (imageBusy || now - lastImageRotation < 60000) return
+    if (imageBusy || (!force && now - lastImageRotation < 60000)) return
     imageBusy = true; lastImageRotation = now
     imageWorker.execute {
       val bitmap = runCatching {
@@ -215,8 +232,24 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
     }
     val image = FocusImages.current(this).ifEmpty { preferences.getString("image", "").orEmpty() }
     val imageView = ImageView(this).apply {
-      scaleType = ImageView.ScaleType.FIT_CENTER; contentDescription = "Focus motivation"; clipToOutline = true
+      scaleType = ImageView.ScaleType.FIT_CENTER; contentDescription = "Focus motivation. Double tap to change image"; clipToOutline = true
       background = GradientDrawable().apply { setColor(Color.BLACK); cornerRadius = dp(20).toFloat() }
+    }
+    val imageGestures = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
+      override fun onDown(event: MotionEvent) = true
+      override fun onDoubleTap(event: MotionEvent): Boolean { rotateMotivation(force = true); return true }
+    })
+    imageView.setOnTouchListener { _, event -> imageGestures.onTouchEvent(event) }
+    imageView.isFocusable = true
+    imageView.accessibilityDelegate = object : View.AccessibilityDelegate() {
+      override fun onInitializeAccessibilityNodeInfo(host: View, info: android.view.accessibility.AccessibilityNodeInfo) {
+        super.onInitializeAccessibilityNodeInfo(host, info)
+        info.addAction(android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK, "Change image"))
+      }
+      override fun performAccessibilityAction(host: View, action: Int, args: android.os.Bundle?): Boolean {
+        if (action == android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK) { rotateMotivation(force = true); return true }
+        return super.performAccessibilityAction(host, action, args)
+      }
     }
     if (image.startsWith("file:")) runCatching {
       val bitmap = BitmapFactory.decodeFile(Uri.parse(image).path, BitmapFactory.Options().apply { inSampleSize = 2 })
@@ -228,9 +261,8 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
     root.addView(text("Your goals deserve this time.", 24f))
     timer = LinearLayout(this).apply { gravity = Gravity.CENTER }
     root.addView(timer)
-    val label = runCatching { packageManager.getApplicationLabel(packageManager.getApplicationInfo(target, 0)).toString() }.getOrDefault("This app")
-    root.addView(text("$label is paused for your focus session", 15f, Color.LTGRAY))
     root.addView(Button(this).apply {
+      breakButton = this
       text = if (preferences.getBoolean("paused", false)) "Resume focus" else "Take a break"
       setOnClickListener {
         val now = System.currentTimeMillis()
@@ -316,9 +348,12 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
     } else value.forEachIndexed { index, char -> if (renderedTime.getOrNull(index) != char) (row.getChildAt(index) as TextSwitcher).setText(char.toString()) }
     renderedTime = value
   }
+  private fun updateBreakButton() {
+    breakButton?.text = if (preferences.getBoolean("paused", false)) "Resume focus" else "Take a break"
+  }
   private fun hide() {
     overlay?.let { runCatching { (getSystemService(WINDOW_SERVICE) as WindowManager).removeView(it) } }
-    overlay = null; timer = null; motivation = null; renderedTime = ""
+    overlay = null; timer = null; breakButton = null; motivation = null; renderedTime = ""
   }
   override fun onInterrupt() { hide() }
   override fun onDestroy() {

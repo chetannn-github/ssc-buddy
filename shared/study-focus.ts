@@ -45,3 +45,11 @@ export function formatFocusTime(milliseconds: number) {
   if (!minutes) return seconds ? `${seconds}s` : "0m";
   return minutes >= 60 ? `${Math.floor(minutes / 60)}h${minutes % 60 ? ` ${minutes % 60}m` : ""}` : `${minutes}m`;
 }
+/** Include uncredited live focus once, using the same day filter as profile stats. */
+export function rangeFocusMilliseconds(days: Record<string, FocusDay>, session: FocusSession | null, includesDay: (date: string) => boolean, now = Date.now()) {
+  let total = Object.entries(days).reduce((sum, [date, day]) => sum + (includesDay(date) ? day.totalMilliseconds : 0), 0);
+  for (const slice of focusSlices(session, now)) {
+    if (includesDay(slice.date)) total += Math.max(0, slice.milliseconds - (days[slice.date]?.sessionCredits[session!.id] ?? 0));
+  }
+  return total;
+}

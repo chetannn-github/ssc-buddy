@@ -44,7 +44,6 @@ class BuddyMusicModule : Module() {
       mapOf("enabled" to BuddyFocusService.enabled(context), "allowedCount" to prefs.getStringSet("allowed", emptySet()).orEmpty().size,
         "serviceConnected" to BuddyFocusService.connected, "lastEventAt" to BuddyFocusService.lastEventAt,
         "sessionActive" to (prefs.getLong("endsAt", 0) > System.currentTimeMillis() || prefs.getBoolean("paused", false)),
-        "adminEnabled" to FocusProtection.enabled(context), "deviceOwner" to FocusProtection.owner(context),
         "unlockAt" to prefs.getLong("endsAt", 0),
         "error" to prefs.getString("overlayError", "").orEmpty())
     }.runOnQueue(Queues.MAIN)
@@ -57,9 +56,6 @@ class BuddyMusicModule : Module() {
     AsyncFunction("openFocusLockSettings") {
       val context = requireNotNull(appContext.reactContext)
       context.startActivity(android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
-    }.runOnQueue(Queues.MAIN)
-    AsyncFunction("requestFocusAdmin") {
-      FocusProtection.request(requireNotNull(appContext.reactContext))
     }.runOnQueue(Queues.MAIN)
     AsyncFunction("configureFocusImages") { localFiles: String, manifest: String ->
       FocusImages.configure(requireNotNull(appContext.reactContext), localFiles, manifest)

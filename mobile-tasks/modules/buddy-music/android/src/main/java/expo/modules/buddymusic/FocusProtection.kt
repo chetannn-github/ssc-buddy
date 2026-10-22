@@ -9,11 +9,8 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 
-/** Optional user-approved admin; never changes credentials, wipes data or locks the device. */
-class FocusAdminReceiver : DeviceAdminReceiver() {
-  override fun onDisableRequested(context: Context, intent: Intent): CharSequence? =
-    if (FocusProtection.active(context)) "Focus Lock is active. Disabling this admin removes uninstall protection." else null
-}
+/** Retained only so updates can release admin access granted by older versions. */
+class FocusAdminReceiver : DeviceAdminReceiver()
 
 class FocusRestoreReceiver : BroadcastReceiver() {
   override fun onReceive(context: Context, intent: Intent) {
@@ -32,24 +29,17 @@ internal object FocusProtection {
     val p = BuddyFocusService.prefs(context)
     return FocusAppPolicy.lockActive(p.getString("session", "").orEmpty(), p.getBoolean("paused", false), p.getLong("endsAt", 0), System.currentTimeMillis())
   }
-  fun request(context: Context) {
-    context.startActivity(Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)
-      .putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, admin(context))
-      .putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, "Protect SSC Buddy from direct uninstall during Focus Lock. Android lets you deactivate this admin in Settings. No screen lock, password or erase permissions are requested.")
-      .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-  }
   fun reconcile(context: Context) {
     val p = BuddyFocusService.prefs(context)
     val active = active(context)
     val dpm = manager(context)
-    if (active && enabled(context)) p.edit().putBoolean("adminSession", true).apply()
-    if (owner(context) && enabled(context)) runCatching { dpm.setUninstallBlocked(admin(context), context.packageName, active) }
-      .onFailure { p.edit().putString("protectionError", "Could not update managed uninstall protection.").apply() }
-    // Ordinary admin is released at expiry, without any internet request.
-    if (!active && p.getBoolean("adminSession", false)) {
-      if (enabled(context) && !owner(context)) dpm.removeActiveAdmin(admin(context))
-      p.edit().putBoolean("adminSession", false).apply()
+    // Focus Lock no longer requests or uses device admin. Release legacy grants;
+    // the locally persisted deadline and boot restoration remain independent.
+    if (enabled(context)) runCatching {
+      if (owner(context)) dpm.setUninstallBlocked(admin(context), context.packageName, false)
+      else dpm.removeActiveAdmin(admin(context))
     }
+    if (p.contains("adminSession") || p.contains("protectionError")) p.edit().remove("adminSession").remove("protectionError").apply()
     val alarm = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
     val pending = PendingIntent.getBroadcast(context, 7319,
       Intent(context, FocusRestoreReceiver::class.java).setAction("expo.modules.buddymusic.FOCUS_EXPIRY"),
