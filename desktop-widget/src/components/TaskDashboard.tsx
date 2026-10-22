@@ -19,7 +19,7 @@ export function TaskDashboard({ uid, minimal = false, habits = [], mode = "tasks
   dueOnly: boolean; onFilterChange: (value: boolean) => void; points: Map<string, number>;
   onNew: () => void; onComplete: (task: DailyTask) => void; onReopen: (task: DailyTask) => void;
   onEdit: (task: DailyTask) => void; onDelete: (task: DailyTask) => void;
-  onReschedule?: (task: DailyTask) => void;
+  onReschedule?: (task: DailyTask, position: { x: number; y: number }) => void;
 }) {
   const tomorrow = dateKeyFromOffset(1, new Date(today + "T12:00:00"));
   const latest = mode === "tasks" && tasks.some((task) => task.date === tomorrow) ? tomorrow : today;
@@ -51,7 +51,7 @@ export function TaskDashboard({ uid, minimal = false, habits = [], mode = "tasks
   const openMenu = (event: React.MouseEvent, task: DailyTask) => {
     event.preventDefault();
     event.stopPropagation();
-    if (history && !task.completed) { onReschedule?.(task); return; }
+    if (history && !task.completed) { onReschedule?.(task, { x: event.clientX, y: event.clientY }); return; }
     if (history) return;
     setMenu({ task, x: Math.max(8, Math.min(window.innerWidth - 188, event.clientX)), y: Math.max(8, Math.min(window.innerHeight - (task.date === tomorrow ? 110 : 62), event.clientY)) });
   };

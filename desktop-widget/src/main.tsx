@@ -18,7 +18,7 @@ import { AndroidTasksWidget } from "./components/AndroidTasksWidget";
 import { TaskDashboard, TaskDateTitle } from "./components/TaskDashboard";
 import { normalizeAppAccent, accentInk } from "../../mobile-tasks/src/domain/app-accent";
 import { QuickRecallPanel } from "./components/QuickRecallPanel";
-import { CarryTaskDialog } from "../../shared/CarryTaskDialog";
+import { CarryTaskMenu, type TaskMenuPosition } from "../../shared/CarryTaskMenu";
 import { copyPastTask } from "../../shared/carry-task";
 import { useLeaderboardXp } from "../../shared/use-leaderboard-xp";
 import { leaderboardWeek, leaderboardWeekLabel, shiftLeaderboardWeek } from "../../mobile-tasks/src/domain/weekly-results";
@@ -115,9 +115,10 @@ function App() {
 
   const [complete, setComplete] = useState<DailyTask | null>(null);
   const [carryTask, setCarryTask] = useState<DailyTask | null>(null);
+  const [carryPosition, setCarryPosition] = useState<TaskMenuPosition>({ x: 8, y: 8 });
   const [carryBusy, setCarryBusy] = useState(false), [carryError, setCarryError] = useState("");
   const carryLock = useRef(false);
-  const openCarryTask = (task: DailyTask) => { setCarryError(""); setCarryTask(task); };
+  const openCarryTask = (task: DailyTask, position: TaskMenuPosition) => { setCarryError(""); setCarryPosition(position); setCarryTask(task); };
   const addPastTask = async (offset: 0 | 1) => {
     if (!user || !carryTask || carryLock.current) return;
     carryLock.current = true; setCarryBusy(true); setCarryError("");
@@ -282,7 +283,7 @@ function App() {
       onComplete={(task) => { setMinutes(String(Math.min(180, task.minutesSpent ?? 30))); setComplete(task); }}
       onReopen={(task) => void reopen(task)} onEdit={openEdit} onDelete={setDeletingTask} />{section === "habits" && <HabitDashboard uid={user.uid} api={habitApi} selected={selectedDate} today={today} dueOnly={dueOnly} />}</>}
 
-    {carryTask && <CarryTaskDialog name={carryTask.name} busy={carryBusy} error={carryError} onClose={() => setCarryTask(null)} onAdd={offset => void addPastTask(offset)} />}
+    {carryTask && <CarryTaskMenu name={carryTask.name} position={carryPosition} busy={carryBusy} error={carryError} onClose={() => setCarryTask(null)} onAdd={offset => void addPastTask(offset)} />}
     {editor && <TaskEditor draft={draft} setDraft={setDraft} subjects={taskSubjects} schedule={schedule} setSchedule={setSchedule} busy={busy} editing={editor !== "new"} onClose={() => setEditor(null)} onSave={() => void submitTask()} />}
     {complete && <CompleteDialog task={complete} minutes={minutes} setMinutes={setMinutes} busy={busy} onClose={() => setComplete(null)} onSave={() => void completeTask()} />}
     {deletingTask && <DeleteTaskDialog task={deletingTask} busy={deleting} onClose={() => setDeletingTask(null)} onConfirm={() => void confirmDelete()} />}

@@ -46,7 +46,7 @@ import {
 import { syncTaskChanges } from "@/lib/task-sync";
 import { currentWeekKey, publishLeaderboardEntry, weeklyTaskPoints } from "@/lib/leaderboard";
 import { FocusRewardRow } from "../../../shared/FocusRewardRow";
-import { CarryTaskDialog } from "../../../shared/CarryTaskDialog";
+import { CarryTaskMenu, type TaskMenuPosition } from "../../../shared/CarryTaskMenu";
 import { copyPastTask } from "../../../shared/carry-task";
 import { getFirebaseFirestore } from "@/lib/firebase-sync";
 
@@ -73,6 +73,7 @@ export function TasksWorkspace({
     [error, setError] = useState("");
   const [wideDates, setWideDates] = useState(false);
   const [carryTask, setCarryTask] = useState<DailyTask | null>(null);
+  const [carryPosition, setCarryPosition] = useState<TaskMenuPosition>({ x: 8, y: 8 });
   const [carrying, setCarrying] = useState(false);
   const carryLock = useRef(false);
   useEffect(() => {
@@ -324,7 +325,7 @@ export function TasksWorkspace({
                         setFormOpen(true);
                       }}
                       onDelete={() => setDeleting(task)}
-                      onReschedule={history && !task.completed ? () => { setError(""); setCarryTask(task); } : undefined}
+                      onReschedule={history && !task.completed ? position => { setError(""); setCarryPosition(position); setCarryTask(task); } : undefined}
                     />
                   ))
                 ) : (
@@ -347,7 +348,7 @@ export function TasksWorkspace({
             addRequest={addHabit}
           />
         )}
-        {carryTask && <CarryTaskDialog name={carryTask.name} busy={carrying} error={error} onClose={() => setCarryTask(null)} onAdd={offset => {
+        {carryTask && <CarryTaskMenu name={carryTask.name} position={carryPosition} busy={carrying} error={error} onClose={() => setCarryTask(null)} onAdd={offset => {
           if (carryLock.current) return;
           carryLock.current = true;
           setCarrying(true);
@@ -536,7 +537,7 @@ function TaskRow({
   onReopen: (id: string) => void;
   onEdit: () => void;
   onDelete: () => void;
-  onReschedule?: (() => void) | undefined;
+  onReschedule?: ((position: TaskMenuPosition) => void) | undefined;
   readOnly?: boolean;
   grouped?: boolean;
 }) {
@@ -555,8 +556,8 @@ function TaskRow({
         <div
           tabIndex={readOnly && !onReschedule ? undefined : 0}
           aria-label={onReschedule ? `${task.name}; right-click to add to today or tomorrow` : readOnly ? undefined : `${task.name}; right-click for options`}
-          onContextMenu={onReschedule ? event => { event.preventDefault(); event.stopPropagation(); onReschedule(); } : undefined}
-          onKeyDown={onReschedule ? event => { if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) { event.preventDefault(); onReschedule(); } } : undefined}
+          onContextMenu={onReschedule ? event => { event.preventDefault(); event.stopPropagation(); const bounds = event.currentTarget.getBoundingClientRect(); onReschedule({ x: event.clientX || bounds.left, y: event.clientY || bounds.bottom }); } : undefined}
+          onKeyDown={onReschedule ? event => { if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) { event.preventDefault(); const bounds = event.currentTarget.getBoundingClientRect(); onReschedule({ x: bounds.left, y: bounds.bottom }); } } : undefined}
           className={`flex items-center gap-3 py-3 transition-colors hover:bg-white/[.035] ${grouped ? "px-4 sm:px-6" : "rounded-lg border border-white/10 bg-[#121212] px-3"}`}
         >
           <button

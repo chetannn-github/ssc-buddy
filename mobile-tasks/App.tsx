@@ -289,7 +289,6 @@ export default function App() {
   const [addSubjectDialog, setAddSubjectDialog] = useState(false);
   const [completion, setCompletion] = useState<Task | null>(null);
   const [deletingTask, setDeletingTask] = useState<Task | null>(null);
-  const [carryTask, setCarryTask] = useState<Task | null>(null);
   const [spent, setSpent] = useState("60");
   const [taskActionLoading, setTaskActionLoading] = useState(false);
   const taskRowInteractionBlockedUntil = useRef(0);
@@ -849,10 +848,9 @@ export default function App() {
   };
   const remove = (id: string) => setDeletingTask(tasks.find((task) => task.id === id && task.date === dateKeyFromOffset(1)) ?? null);
   const canUseTaskRow = () => Date.now() >= taskRowInteractionBlockedUntil.current;
-  const addPastTask = (offset: 0 | 1) => {
-    const source = tasks.find(task => task.id === carryTask?.id);
+  const addPastTask = (task: Task, offset: 0 | 1) => {
+    const source = tasks.find(item => item.id === task.id);
     if (!source || source.completed || source.date >= dateKey()) {
-      setCarryTask(null);
       return;
     }
     persist([{
@@ -865,7 +863,6 @@ export default function App() {
       minutesSpent: null,
     }, ...tasks]);
     taskRowInteractionBlockedUntil.current = Date.now() + 800;
-    setCarryTask(null);
     setTaskHistoryDate(null);
     setTaskDay(offset ? "tomorrow" : "today");
   };
@@ -979,7 +976,7 @@ export default function App() {
                   key={task.id}
                   task={task}
                   compact={isTaskHistory}
-                  onReschedule={isTaskHistory && !task.completed ? () => { if (canUseTaskRow()) setCarryTask(task); } : undefined}
+                  onReschedule={isTaskHistory && !task.completed ? offset => { if (canUseTaskRow()) addPastTask(task, offset); } : undefined}
                   yellow
                   last={index === visibleTasks.length - 1}
                   points={taskPoints.get(task.id) ?? 0}
@@ -1090,20 +1087,7 @@ export default function App() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
-      <Modal transparent visible={carryTask !== null} animationType="fade" onRequestClose={() => setCarryTask(null)}>
-        <View style={styles.backdrop}>
-          <Pressable accessibilityLabel="Close add task dialog" style={StyleSheet.absoluteFill} onPress={() => setCarryTask(null)} />
-          <View accessibilityViewIsModal style={styles.sheet}>
-            <Text style={styles.sheetTitle}>Add Task Again</Text>
-            <Text style={styles.muted} numberOfLines={2}>{carryTask?.name}</Text>
-            <View style={[styles.scheduleRow, { marginTop: 20 }]}>
-              <Pressable style={[styles.primary, { flex: 1 }]} onPress={() => addPastTask(0)}><Text style={styles.primaryText}>Add to Today</Text></Pressable>
-              <Pressable style={[styles.primary, { flex: 1 }]} onPress={() => addPastTask(1)}><Text style={styles.primaryText}>Add to Tomorrow</Text></Pressable>
-            </View>
-            <Pressable style={{ alignSelf: "center", padding: 14 }} onPress={() => setCarryTask(null)}><Text style={styles.cancel}>Cancel</Text></Pressable>
-          </View>
-        </View>
-      </Modal>
+
       <DestructiveDialog visible={deletingTask !== null} title="Are you sure you want to delete this task?" busy={taskActionLoading} confirmLabel="Yes, delete" onCancel={() => setDeletingTask(null)} onConfirm={confirmDelete} />
         </>
       ) : (

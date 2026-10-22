@@ -34,6 +34,7 @@
   height: min(490px, 70vh);
   border-radius: 0;
   z-index: 20;
+  opacity: 0.3;
 }
 @keyframes accent-top-drift {
   0%, 100% { transform: translate(calc(-50% - 6px), calc(-72% - 2px)); opacity: 0.17; }

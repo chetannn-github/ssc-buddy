@@ -12,7 +12,7 @@ export function AndroidTasksWidget({ uid, headerAction, tasks, today, selectedDa
   rank: number | null; medals: string[]; points: Map<string, number>;
   onSelectDate: (date: string) => void; onFilterChange: (due: boolean) => void;
   onNew: () => void; onComplete: (task: DailyTask) => void; onReopen: (task: DailyTask) => void;
-  onReschedule?: (task: DailyTask) => void;
+  onReschedule?: (task: DailyTask, position: { x: number; y: number }) => void;
 }) {
   const model = dailyTaskWidgetModel(tasks, { date: selectedDate, dueOnly }, today);
   const date = new Date(model.selected + "T12:00:00");
@@ -37,7 +37,7 @@ export function AndroidTasksWidget({ uid, headerAction, tasks, today, selectedDa
     <FocusRewardRow uid={uid} date={model.selected} getDatabase={getFirebaseFirestore} />
     <section className="android-task-list" aria-label="Daily tasks">{model.visibleTasks.length ? model.visibleTasks.map(task => {
       const missed = !task.completed && model.selected < today, score = points.get(task.id) ?? 0;
-      return <TaskWidgetRow key={task.id} task={task} missed={missed} score={score} readOnly={model.readOnly} onComplete={onComplete} onReopen={onReopen} onContextMenu={missed && onReschedule ? event => { event.preventDefault(); event.stopPropagation(); onReschedule(task); } : undefined} />;
+      return <TaskWidgetRow key={task.id} task={task} missed={missed} score={score} readOnly={model.readOnly} onComplete={onComplete} onReopen={onReopen} onContextMenu={missed && onReschedule ? event => { event.preventDefault(); event.stopPropagation(); onReschedule(task, { x: event.clientX, y: event.clientY }); } : undefined} />;
     }) : <p className="android-task-empty">{dueOnly && model.summary.total ? "All tasks complete" : "No tasks planned"}</p>}</section>
   </>;
 }

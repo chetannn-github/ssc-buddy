@@ -12,7 +12,7 @@ type Props = {
   onReopen: () => void;
   onEdit: () => void;
   onDelete: () => void;
-  onReschedule?: () => void;
+  onReschedule?: (offset: 0 | 1) => void;
   compact?: boolean;
   grouped?: boolean;
   last?: boolean;
@@ -38,10 +38,11 @@ export function TaskRow({
   const [menu, setMenu] = useState<{ top: number; left: number } | null>(null);
   const { width, height } = useWindowDimensions();
   const canDelete = task.date === dateKeyFromOffset(1);
+  const canCarry = compact && !!onReschedule && !task.completed && task.date < dateKeyFromOffset(0);
   const openMenu = () => {
-    if (compact) return;
+    if (compact && !canCarry) return;
     row.current?.measureInWindow((x, y, rowWidth, rowHeight) => {
-      const menuHeight = canDelete ? 108 : 58;
+      const menuHeight = canCarry || canDelete ? 108 : 58;
       setMenu({
         left: Math.max(12, Math.min(width - 192, x + rowWidth - 180)),
         top: Math.max(12, Math.min(height - menuHeight - 24, y + rowHeight)),
@@ -57,7 +58,7 @@ export function TaskRow({
       <Pressable
         ref={row}
         disabled={compact && !onReschedule}
-        onLongPress={compact ? onReschedule : openMenu}
+        onLongPress={openMenu}
         delayLongPress={400}
         accessibilityHint={onReschedule ? "Long press to add this task to today or tomorrow" : compact ? undefined : "Long press for task actions"}
         style={[
@@ -150,7 +151,16 @@ export function TaskRow({
               accessibilityViewIsModal
               style={[styles.menu, { top: menu.top, left: menu.left }]}
             >
-              <Pressable
+              {canCarry ? <>
+                <Pressable accessibilityRole="button" onPress={() => act(() => onReschedule?.(0))} style={styles.menuItem}>
+                  <MaterialCommunityIcons name="calendar-today" size={18} color={colors.text} />
+                  <Text style={styles.menuText}>Add to Today</Text>
+                </Pressable>
+                <Pressable accessibilityRole="button" onPress={() => act(() => onReschedule?.(1))} style={styles.menuItem}>
+                  <MaterialCommunityIcons name="calendar-plus" size={18} color={colors.text} />
+                  <Text style={styles.menuText}>Add to Tomorrow</Text>
+                </Pressable>
+              </> : <><Pressable
                 accessibilityRole="button"
                 accessibilityLabel={`Edit ${task.name}`}
                 onPress={() => act(onEdit)}
@@ -170,6 +180,7 @@ export function TaskRow({
                   <Text style={[styles.menuText, { color: "#fca5a5" }]}>Delete</Text>
                 </Pressable>
               )}
+              </>}
             </View>
           )}
         </View>
