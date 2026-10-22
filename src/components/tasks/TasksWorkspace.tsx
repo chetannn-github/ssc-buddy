@@ -46,6 +46,8 @@ import {
 import { syncTaskChanges } from "@/lib/task-sync";
 import { currentWeekKey, publishLeaderboardEntry, weeklyTaskPoints } from "@/lib/leaderboard";
 import { FocusRewardRow } from "../../../shared/FocusRewardRow";
+import { CarryTaskDialog } from "../../../shared/CarryTaskDialog";
+import { copyPastTask } from "../../../shared/carry-task";
 import { getFirebaseFirestore } from "@/lib/firebase-sync";
 
 export function TasksWorkspace({
@@ -70,6 +72,9 @@ export function TasksWorkspace({
   const [isDeleting, setIsDeleting] = useState(false),
     [error, setError] = useState("");
   const [wideDates, setWideDates] = useState(false);
+  const [carryTask, setCarryTask] = useState<DailyTask | null>(null);
+  const [carrying, setCarrying] = useState(false);
+  const carryLock = useRef(false);
   useEffect(() => {
     const media = window.matchMedia("(min-width: 1024px)");
     const update = () => setWideDates(media.matches);
@@ -319,6 +324,7 @@ export function TasksWorkspace({
                         setFormOpen(true);
                       }}
                       onDelete={() => setDeleting(task)}
+                      onReschedule={history && !task.completed ? () => { setError(""); setCarryTask(task); } : undefined}
                     />
                   ))
                 ) : (
@@ -341,6 +347,22 @@ export function TasksWorkspace({
             addRequest={addHabit}
           />
         )}
+        {carryTask && <CarryTaskDialog name={carryTask.name} busy={carrying} error={error} onClose={() => setCarryTask(null)} onAdd={offset => {
+          if (carryLock.current) return;
+          carryLock.current = true;
+          setCarrying(true);
+          void (async () => {
+            try {
+              const source = tasks.find(task => task.id === carryTask.id);
+              if (!source) throw new Error("Task no longer exists.");
+              const target = offset ? tomorrow : today;
+              const copied = copyPastTask(source, target, today, crypto.randomUUID(), new Date().toISOString());
+              await persist([...tasks, copied]);
+              setCarryTask(null); setSelected(target); setWeekEnd(target);
+            } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not add this task. Please try again."); }
+            finally { carryLock.current = false; setCarrying(false); }
+          })();
+        }} />}
         <TaskFormDialog
           open={formOpen}
           onOpenChange={setFormOpen}
@@ -504,6 +526,7 @@ function TaskRow({
   onReopen,
   onEdit,
   onDelete,
+  onReschedule,
   readOnly = false,
   grouped = false,
 }: {
@@ -513,6 +536,7 @@ function TaskRow({
   onReopen: (id: string) => void;
   onEdit: () => void;
   onDelete: () => void;
+  onReschedule?: (() => void) | undefined;
   readOnly?: boolean;
   grouped?: boolean;
 }) {
@@ -529,8 +553,10 @@ function TaskRow({
     >
       <ContextMenuTrigger asChild disabled={readOnly}>
         <div
-          tabIndex={readOnly ? undefined : 0}
-          aria-label={readOnly ? undefined : `${task.name}; right-click for options`}
+          tabIndex={readOnly && !onReschedule ? undefined : 0}
+          aria-label={onReschedule ? `${task.name}; right-click to add to today or tomorrow` : readOnly ? undefined : `${task.name}; right-click for options`}
+          onContextMenu={onReschedule ? event => { event.preventDefault(); event.stopPropagation(); onReschedule(); } : undefined}
+          onKeyDown={onReschedule ? event => { if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) { event.preventDefault(); onReschedule(); } } : undefined}
           className={`flex items-center gap-3 py-3 transition-colors hover:bg-white/[.035] ${grouped ? "px-4 sm:px-6" : "rounded-lg border border-white/10 bg-[#121212] px-3"}`}
         >
           <button

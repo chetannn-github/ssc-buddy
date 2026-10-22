@@ -423,7 +423,7 @@ export function HabitEditor({
         </fieldset></div>
         <footer className="relative z-10 bg-[#121212] flex shrink-0 items-center justify-end gap-3 border-t border-white/10 px-5 py-4 sm:px-6">
           <button type="button" disabled={busy} onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-zinc-400 hover:bg-white/5">Cancel</button>
-          <button type="submit" disabled={busy || !canSave} aria-busy={busy} className="inline-flex items-center gap-2 rounded-lg px-5 py-2 text-sm font-semibold disabled:opacity-40" style={{ backgroundColor: tint, color: accentInk(tint) }}>
+          <button type="submit" disabled={busy || !canSave} aria-busy={busy} className="inline-flex items-center gap-2 rounded-lg bg-[#f9fcf5] px-5 py-2 text-sm font-semibold text-[#111111] disabled:opacity-40">
             {busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}{busy ? "Saving…" : habit ? "Save changes" : "Create habit"}
           </button>
         </footer>

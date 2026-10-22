@@ -144,7 +144,7 @@ export function HabitsPanel({
                   <button
                     type="button"
                     onClick={() => setEditing("new")}
-                    className="mt-5 rounded-full bg-[#ffe000] px-6 py-3 font-semibold text-black"
+                    className="mt-5 rounded-full bg-[#f9fcf5] px-6 py-3 font-semibold text-[#111111]"
                   >
                     ＋ Add habit
                   </button>

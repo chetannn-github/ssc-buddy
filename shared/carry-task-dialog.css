@@ -1,0 +1,11 @@
+.carry-task-dialog{width:min(380px,calc(100vw - 32px));box-sizing:border-box;padding:24px;border:1px solid #ffffff1a;border-radius:20px;background:#121212;color:#fafafa;font-family:inherit;box-shadow:0 24px 80px #0008}
+.carry-task-dialog::backdrop{background:#000b}
+.carry-task-dialog h2{margin:0 0 12px;font-size:18px;font-weight:700}
+.carry-task-dialog p{margin:0 0 20px;color:#a1a1aa;font-size:13px;line-height:1.6;overflow-wrap:anywhere}
+.carry-task-actions{display:flex;gap:8px}
+.carry-task-dialog button{min-height:42px;padding:10px 12px;border:0;border-radius:10px;font:inherit;font-size:12px;font-weight:600;cursor:pointer}
+.carry-task-actions>button{flex:1;background:#f9fcf5;color:#111}
+.carry-task-dialog .carry-task-cancel{display:block;margin:12px auto 0;background:transparent;color:#a1a1aa}
+.carry-task-dialog button:disabled{opacity:.5;cursor:wait}
+.carry-task-dialog button:focus-visible{outline:2px solid #f9fcf5;outline-offset:3px}
+.carry-task-dialog .carry-task-error{color:#fca5a5}

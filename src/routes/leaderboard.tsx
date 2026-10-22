@@ -9,6 +9,8 @@ import { loadDailyTasks } from "@/lib/daily-tasks";
 import { loadPracticeProfile } from "@/lib/profile";
 import { useLeaderboardWeek, validLeaderboardWeek } from "@/lib/weekly-results";
 import { WeeklyResultControls } from "@/components/WeeklyResultControls";
+import { useLeaderboardXp } from "../../shared/use-leaderboard-xp";
+import { getFirebaseFirestore } from "@/lib/firebase-sync";
 
 export const Route = createFileRoute("/leaderboard")({
   validateSearch: (search: Record<string, unknown>): { week?: string } => {
@@ -18,12 +20,6 @@ export const Route = createFileRoute("/leaderboard")({
   component: Leaderboard,
 });
 
-function xpMeta(entry: LeaderboardEntry) {
-  const xp = Number(entry.xp) || 0;
-  const level = Number.isFinite(Number(entry.level)) ? Number(entry.level) : xp < 0 ? 0 : 1;
-  return { xp, level };
-}
-
 function Leaderboard() {
   const user = useAuthUser();
   const navigate = useNavigate();
@@ -32,6 +28,7 @@ function Leaderboard() {
   const currentWeek = useLeaderboardWeek();
   const search = Route.useSearch();
   const week = search.week ?? currentWeek;
+  const currentXp = useLeaderboardXp(entries, week, currentWeek, getFirebaseFirestore, user?.uid, loadDailyTasks());
 
   useEffect(() => {
     if (!user) return;
@@ -49,11 +46,11 @@ function Leaderboard() {
     {isSyncing ? <div className="flex min-h-48 flex-col items-center justify-center gap-3 text-sm text-zinc-500"><LoaderCircle className="h-5 w-5 animate-spin text-emerald-400" /><span>Syncing leaderboard...</span></div> : <>{entries.map((entry, index) => {
       const medal = ["/gold-medal.png", "/silver-medal.png", "/bronze-medal.png"][index];
       const points = Number(entry.points) || 0;
-      const { xp, level } = xpMeta(entry);
+      const xp = currentXp[entry.uid];
       return <button key={entry.uid} onClick={() => void navigate({ to: "/weekly-stats/$username", params: { username: entry.username }, search: { week } })} className="flex w-full items-center gap-3 rounded-xl border border-white/10 bg-white/[0.025] px-4 py-3 text-left transition-colors hover:bg-white/[0.07]">
         <span className="grid w-7 place-items-center">{medal ? <img src={medal} alt={`Rank ${index + 1}`} className="h-6 w-6 object-contain" /> : <span className="font-mono text-sm text-zinc-500"><RollingNumber value={index + 1} prefix="#" /></span>}</span>
         <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full bg-white/10 text-xs font-semibold text-zinc-300">{entry.avatar ? <img src={`/avatars/${encodeURIComponent(entry.avatar)}`} className="h-full w-full object-cover" /> : entry.name.slice(0, 1).toUpperCase()}</span>
-        <div className="min-w-0 flex-1"><p className="truncate font-medium">{entry.uid === user?.uid ? "You" : entry.name}</p><p className="truncate text-xs text-zinc-500">Lv. <RollingNumber value={level} /> · <RollingNumber value={xp} prefix={xp > 0 ? "+" : ""} suffix=" XP" /></p></div>
+        <div className="min-w-0 flex-1"><p className="truncate font-medium">{entry.uid === user?.uid ? "You" : entry.name}</p><p className="truncate text-xs text-zinc-500">{xp ? <>Lv. <RollingNumber value={xp.level} /> · <RollingNumber value={xp.xp} prefix={xp.xp > 0 ? "+" : ""} suffix=" XP" /></> : "Current XP unavailable"}</p></div>
         <strong className={`font-mono ${points > 0 ? "text-emerald-300" : points < 0 ? "text-red-300" : "text-zinc-500"}`}><RollingNumber value={points} prefix={points > 0 ? "+" : ""} suffix=" pts" /></strong>
       </button>;
     })}{!entries.length && <p className="py-12 text-center text-sm text-zinc-500">{week === currentWeek ? "No activity this week yet." : "No saved results for this week."}</p>}</>}

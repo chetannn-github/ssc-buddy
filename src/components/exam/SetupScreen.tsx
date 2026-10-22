@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { AnimatedChoices } from "../../../shared/AnimatedChoices";
 import { Check, Copy, Upload } from "lucide-react";
 import { QUESTION_JSON_PROMPT } from "../../../mobile-tasks/src/domain/question-json-prompt";
 import { parseQuestionsJson as parseQuestionExerciseJson } from "../../../mobile-tasks/src/domain/question-import";
@@ -598,19 +599,7 @@ export function SetupScreen({
               }}
               placeholder="Duration (minutes)"
             />
-            <div className="flex flex-wrap gap-2">
-              {PRESETS.map((p) => (
-                <Button
-                  key={p}
-                  type="button"
-                  size="sm"
-                  variant={Number(minutes) === p ? "default" : "outline"}
-                  onClick={() => setMinutes(String(p))}
-                >
-                  {p} min
-                </Button>
-              ))}
-            </div>
+            <AnimatedChoices label="Practice duration" options={PRESETS.map(value => ({ value: String(value), label: `${value} min` }))} value={String(Number(minutes))} onChange={setMinutes} />
           </div>
 
           {!isAllExercises && (
@@ -667,51 +656,18 @@ export function SetupScreen({
           Questions
         </Label>
         {!isAllExercises && (
-          <div className="flex flex-wrap gap-2">
+          <div className="grid gap-2 sm:grid-cols-2">
             {isJsonExercise && (
-              <>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={questionOrder === "sequential" ? "default" : "outline"}
-                  onClick={() => setQuestionOrder("sequential")}
-                >
-                  Sequential
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={questionOrder === "random" ? "default" : "outline"}
-                  onClick={() => {
-                    setQuestionOrder("random");
-                    setCountMode("fixed");
-                    setStartNumber("1");
-                    setQuestionCount((current) =>
-                      String(Math.min(Number(current) || 1, orderedJsonQuestions?.length ?? 1)),
-                    );
-                  }}
-                >
-                  Random
-                </Button>
-              </>
+              <AnimatedChoices label="Question order" options={[{ value: "sequential", label: "Sequential" }, { value: "random", label: "Random" }]} value={questionOrder} onChange={value => {
+                setQuestionOrder(value as "sequential" | "random");
+                if (value === "random") {
+                  setCountMode("fixed");
+                  setStartNumber("1");
+                  setQuestionCount(current => String(Math.min(Number(current) || 1, orderedJsonQuestions?.length ?? 1)));
+                }
+              }} />
             )}
-            <Button
-              type="button"
-              size="sm"
-              variant={countMode === "unlimited" ? "default" : "outline"}
-              onClick={() => setCountMode("unlimited")}
-              disabled={isJsonExercise && questionOrder === "random"}
-            >
-              Unlimited
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant={countMode === "fixed" ? "default" : "outline"}
-              onClick={() => setCountMode("fixed")}
-            >
-              Fixed count
-            </Button>
+            <AnimatedChoices label="Question count mode" options={[{ value: "unlimited", label: "Unlimited", disabled: isJsonExercise && questionOrder === "random" }, { value: "fixed", label: "Fixed count" }]} value={countMode} onChange={value => setCountMode(value as "unlimited" | "fixed")} />
           </div>
         )}
         {isAllExercises || countMode === "fixed" ? (

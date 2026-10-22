@@ -155,8 +155,8 @@ header, .toolbar, footer, .task { display: flex; align-items: center; } header {
 
 /* Authentication shares the same blue accent as the task widget and mobile app. */
 .desktop-auth .auth-kicker { color: var(--accent); }
-.desktop-auth .auth-primary { color: var(--accent-ink); background: var(--accent); }
-.desktop-auth .auth-primary:hover:not(:disabled) { background: var(--accent); }
+.desktop-auth .auth-primary { color: #111111; background: #f9fcf5; }
+.desktop-auth .auth-primary:hover:not(:disabled) { background: #e9ece5; }
 .desktop-auth .auth-inputs input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(96, 165, 250, .12); }
 .desktop-auth .auth-switch:hover { color: var(--accent); }
 
@@ -372,7 +372,8 @@ header, .toolbar, footer, .task { display: flex; align-items: center; } header {
 .date-title-muted { color: #777; }
 .header-actions { gap: 6px; flex-shrink: 0; }
 .window-drag { min-width: 0; }
-.primary, .icon-button, .schedule button.active, .chip.active { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.primary, .icon-button { background: #f9fcf5; border-color: #f9fcf5; color: #111111; }
+.schedule button.active, .chip.active { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .quick-recall-trigger:hover { border-color: var(--accent-border); background: var(--accent-soft); color: var(--accent); }
 .task-calendar { flex: 0 0 auto; padding-top: 9px; padding-bottom: 12px; }
 .date-week-nav { display: flex; align-items: center; justify-content: space-between; height: 28px; margin-bottom: 10px; }
@@ -520,7 +521,15 @@ html, body, #root {
 
 .habit-icon { flex:0 0 auto; display:grid; place-items:center; width:34px; height:34px; border-radius:50%; background:var(--habit-soft); color:var(--habit-color); }
 .habit-icon svg { width:20px; height:20px; }
-.primary .spin, .auth-primary .spin { color:var(--accent-ink); }
+.primary .spin { color:#111111; }
+.auth-primary .spin { color:#111111; }
+.leaderboard-week-controls{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0 12px}
+.leaderboard-week-controls>div{display:flex;flex-direction:column;align-items:center;gap:5px;text-align:center}
+.leaderboard-week-controls strong{font-size:12px;color:#eee}.leaderboard-week-controls small{font-size:9px;color:#999}
+.leaderboard-week-controls button{border:0;background:transparent;color:#ddd;padding:6px;font-size:20px}.leaderboard-week-controls>div>button{font-size:10px;color:#86efac}
+.leaderboard-week-controls button:disabled{opacity:.3;cursor:default}
+.leaderboard-back{display:flex;align-items:center;gap:6px;margin-bottom:12px;padding:6px 0;border:0;background:transparent;color:#aaa;font-size:11px}
+.leaderboard-current-xp{font-size:11px;color:#c4b5fd;margin-bottom:8px}
 
 /* Scroll remains available in every widget pane without visible scrollbars. */
 .widget, .widget * { scrollbar-width:none; }
@@ -657,7 +666,7 @@ html, body, #root {
 .android-task-study { flex:0 0 auto; color:#a1a1aa; font-size:10px; margin:8px 0; }
 .android-task-list { flex:1; min-height:48px; overflow-y:auto; overflow-x:hidden; scrollbar-width:none; overscroll-behavior:contain; }
 .android-task-row { display:flex; align-items:center; width:100%; padding:9px 10px; border:0; border-bottom:1px solid #292929; border-radius:0; background:#141414; text-align:left; }
-.android-task-row:disabled { opacity:1; cursor:default; }
+.android-task-row:disabled,.android-task-row[aria-disabled=true] { opacity:1; cursor:default; }
 .android-task-row:not(:disabled):hover { background:#1b1b1b; }
 .android-task-check { width:25px; height:25px; flex:0 0 25px; margin-right:10px; }
 .android-task-copy { flex:1; min-width:0; }

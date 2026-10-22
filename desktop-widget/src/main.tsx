@@ -18,6 +18,11 @@ import { AndroidTasksWidget } from "./components/AndroidTasksWidget";
 import { TaskDashboard, TaskDateTitle } from "./components/TaskDashboard";
 import { normalizeAppAccent, accentInk } from "../../mobile-tasks/src/domain/app-accent";
 import { QuickRecallPanel } from "./components/QuickRecallPanel";
+import { CarryTaskDialog } from "../../shared/CarryTaskDialog";
+import { copyPastTask } from "../../shared/carry-task";
+import { useLeaderboardXp } from "../../shared/use-leaderboard-xp";
+import { leaderboardWeek, leaderboardWeekLabel, shiftLeaderboardWeek } from "../../mobile-tasks/src/domain/weekly-results";
+import { getFirebaseFirestore } from "./lib/firebase";
 
 // Daily-task remove controls use the same minimal close mark as web and mobile.
 const Trash2 = X;
@@ -99,12 +104,32 @@ function App() {
   const [accent, setAccent] = useState(() => normalizeAppAccent(undefined));
   const [recallCount, setRecallCount] = useState<RecallQuestionCount>(3);
   const [calendarDay, setCalendarDay] = useState(todayKey());
+  const currentLeaderboardWeek = leaderboardWeek(new Date(calendarDay + "T12:00:00"));
+  const [historyWeek, setHistoryWeek] = useState<string | null>(null);
+  const leaderboardSelectedWeek = historyWeek ?? currentLeaderboardWeek;
+  const [leaderboardLoading, setLeaderboardLoading] = useState(false);
   useEffect(() => {
     setWidgetRank(null);
     if (user && pinnedTasks) return watchLeaderboardRank(user, setWidgetRank);
   }, [user?.uid, pinnedTasks, calendarDay]);
 
   const [complete, setComplete] = useState<DailyTask | null>(null);
+  const [carryTask, setCarryTask] = useState<DailyTask | null>(null);
+  const [carryBusy, setCarryBusy] = useState(false), [carryError, setCarryError] = useState("");
+  const carryLock = useRef(false);
+  const openCarryTask = (task: DailyTask) => { setCarryError(""); setCarryTask(task); };
+  const addPastTask = async (offset: 0 | 1) => {
+    if (!user || !carryTask || carryLock.current) return;
+    carryLock.current = true; setCarryBusy(true); setCarryError("");
+    try {
+      const source = tasks.find(task => task.id === carryTask.id);
+      if (!source) throw new Error("Task no longer exists.");
+      const target = offset ? tomorrowKey() : todayKey();
+      await saveTask(user, copyPastTask(source, target, todayKey(), makeTaskId(), new Date().toISOString()));
+      setCarryTask(null); setSelectedDate(target);
+    } catch (error) { setCarryError(error instanceof Error ? error.message : "Could not add this task. Please try again."); }
+    finally { carryLock.current = false; setCarryBusy(false); }
+  };
   const [minutes, setMinutes] = useState("30");
   const [deletingTask, setDeletingTask] = useState<DailyTask | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -148,8 +173,9 @@ function App() {
   }, [user?.uid]);
   useEffect(() => {
     if (!user || !leaderboardOpen) return;
-    return watchWeeklyLeaderboard(setLeaderboardRows);
-  }, [leaderboardOpen, user?.uid]);
+    setLeaderboardLoading(true); setLeaderboardRows([]);
+    return watchWeeklyLeaderboard(rows => { setLeaderboardRows(rows); setLeaderboardLoading(false); }, leaderboardSelectedWeek);
+  }, [leaderboardOpen, user?.uid, leaderboardSelectedWeek]);
 
   const today = calendarDay;
   const previousToday = useRef(today);
@@ -251,37 +277,48 @@ function App() {
     {!!pinError && <p role="alert" className="habit-error">{pinError}</p>}
     {recallMenu && <div className="task-context-dismiss" onPointerDown={() => setRecallMenu(null)}><div role="menu" className="task-context-menu" style={{ left: recallMenu.x, top: recallMenu.y }} onPointerDown={event => event.stopPropagation()}><button role="menuitem" onClick={() => { setRecallMenu(null); void (pinnedDesktop ? removeDesktopHabit() : pinDesktopRecall(user.uid)).catch(error => setPinError(String(error))); }}>{pinnedDesktop ? "Remove widget" : "Add desktop widget"}</button></div></div>}
     <header hidden={quickRecallOpen || pinnedTasks}><div className={`window-drag ${leaderboardOpen ? "leaderboard-title" : ""}`}><div className="header-title-row">{leaderboardOpen && <button className="leaderboard-header-back" aria-label="Back to tasks" onClick={() => setLeaderboardOpen(false)}><ArrowLeft size={17} /></button>}<h1>{leaderboardOpen ? "Weekly leaderboard" : quickRecallOpen ? "Quick Recall" : <TaskDateTitle date={selectedDate} today={today} />}</h1></div></div>{!leaderboardOpen && (quickRecallOpen ? <button className="quick-recall-trigger" onClick={() => { setQuickRecallOpen(false); setQuickRecallSession(null); }}><ArrowLeft size={16} /><span>Tasks</span></button> : <div className="header-actions"><BrowserStudyLock key={user.uid} uid={user.uid} /><div className={`streak-pill ${streak > 0 ? "active" : ""}`}><Flame size={16} fill="currentColor" /><span><WidgetNumber value={streak} /></span></div><button className="quick-recall-trigger" aria-label="Quick Recall" title="Quick Recall · right-click to add desktop widget" onContextMenu={event => { event.preventDefault(); setRecallMenu({ x: Math.max(6, Math.min(innerWidth - 180, event.clientX)), y: Math.max(6, Math.min(innerHeight - 60, event.clientY)) }); }} onClick={() => void openQuickRecall()}><Sparkles size={16} /><span>Recall</span></button>{section === "tasks" && <button className="icon-button" aria-label="Add task" onClick={openNew}><Plus size={18} /></button>}</div>)}</header>
-    {pinnedTasks ? <AndroidTasksWidget uid={user.uid} headerAction={<BrowserStudyLock key={user.uid} uid={user.uid} />} tasks={tasks} today={today} selectedDate={selectedDate} dueOnly={dueOnly} rank={widgetRank} medals={medalImages} points={taskPoints} onSelectDate={setSelectedDate} onFilterChange={setDueOnly} onNew={openNew} onComplete={task => { setMinutes(String(Math.min(180, task.minutesSpent ?? 30))); setComplete(task); }} onReopen={task => void reopen(task)} /> : leaderboardOpen ? <LeaderboardPanel rows={leaderboardRows} currentUserId={user.uid} /> : quickRecallOpen ? quickRecallSession ? <QuickRecallPanel subjects={quickRecallSeed?.subjects as any} onPruned={(questions) => setQuickRecallSession((current) => current ? { ...current, questions } : current)} session={quickRecallSession} loading={quickRecallLoading} onAnswered={(question, choice, index, correct) => { if (user) { void recordQuickRecallAnswer(user, question, correct).catch(() => undefined); void recordQuickRecallPractice(user, { runId: `${quickRecallSession?.runId ?? "quick-recall"}:${index}`, date: todayKey(), startedAt: quickRecallSession?.startedAt ?? new Date().toISOString(), questions: [question], answers: [choice] }).catch(() => undefined); } }} onBack={() => { localStorage.removeItem(progressKey); setQuickRecallSession(null); }} onRestart={() => { setQuickRecallSession(null); }} /> : <QuickRecallSetup widget={pinnedRecall} questionCount={recallCount} onQuestionCountChange={setRecallCount} seed={quickRecallSeed} loading={quickRecallLoading} scope={quickRecallScope} onScopeChange={setQuickRecallScope} onBack={() => { if (!pinnedRecall) setQuickRecallOpen(false); }} onStart={() => quickRecallSeed && setQuickRecallSession(createQuickRecallSession(quickRecallSeed, quickRecallScope, recallCount))} /> : <><div className="workspace-section-row">{!pinnedTasks && <div className="workspace-section-toggle" data-section={section} role="group" aria-label="Tasks or habits">{(["tasks", "habits"] as const).map(item => <button key={item} aria-pressed={section === item} onClick={() => { setSection(item); if (item === "habits" && selectedDate > today) setSelectedDate(today); }}>{item === "tasks" ? "Tasks" : "Habits"}</button>)}</div>}{!pinnedDesktop && section === "tasks" && <button className="tasks-pin-option" aria-label="Add Tasks widget" title="Add Tasks widget" onClick={() => { void pinDesktopTasks(user.uid).catch(error => setPinError(String(error))); }}><MonitorUp size={17} /></button>}</div><TaskDashboard uid={user.uid} minimal={pinnedTasks} mode={section} habits={habitApi.habits} tasks={tasks} today={today} selectedDate={pinnedTasks ? today : selectedDate} onSelectDate={setSelectedDate}
-      dueOnly={pinnedTasks ? false : dueOnly} onFilterChange={setDueOnly} points={taskPoints} onNew={openNew}
+    {pinnedTasks ? <AndroidTasksWidget uid={user.uid} headerAction={<BrowserStudyLock key={user.uid} uid={user.uid} />} tasks={tasks} today={today} selectedDate={selectedDate} dueOnly={dueOnly} rank={widgetRank} medals={medalImages} points={taskPoints} onReschedule={openCarryTask} onSelectDate={setSelectedDate} onFilterChange={setDueOnly} onNew={openNew} onComplete={task => { setMinutes(String(Math.min(180, task.minutesSpent ?? 30))); setComplete(task); }} onReopen={task => void reopen(task)} /> : leaderboardOpen ? <LeaderboardPanel rows={leaderboardRows} currentUserId={user.uid} viewerTasks={tasks} week={leaderboardSelectedWeek} currentWeek={currentLeaderboardWeek} loading={leaderboardLoading} onWeekChange={week => setHistoryWeek(week === currentLeaderboardWeek ? null : week)} /> : quickRecallOpen ? quickRecallSession ? <QuickRecallPanel subjects={quickRecallSeed?.subjects as any} onPruned={(questions) => setQuickRecallSession((current) => current ? { ...current, questions } : current)} session={quickRecallSession} loading={quickRecallLoading} onAnswered={(question, choice, index, correct) => { if (user) { void recordQuickRecallAnswer(user, question, correct).catch(() => undefined); void recordQuickRecallPractice(user, { runId: `${quickRecallSession?.runId ?? "quick-recall"}:${index}`, date: todayKey(), startedAt: quickRecallSession?.startedAt ?? new Date().toISOString(), questions: [question], answers: [choice] }).catch(() => undefined); } }} onBack={() => { localStorage.removeItem(progressKey); setQuickRecallSession(null); }} onRestart={() => { setQuickRecallSession(null); }} /> : <QuickRecallSetup widget={pinnedRecall} questionCount={recallCount} onQuestionCountChange={setRecallCount} seed={quickRecallSeed} loading={quickRecallLoading} scope={quickRecallScope} onScopeChange={setQuickRecallScope} onBack={() => { if (!pinnedRecall) setQuickRecallOpen(false); }} onStart={() => quickRecallSeed && setQuickRecallSession(createQuickRecallSession(quickRecallSeed, quickRecallScope, recallCount))} /> : <><div className="workspace-section-row">{!pinnedTasks && <div className="workspace-section-toggle" data-section={section} role="group" aria-label="Tasks or habits">{(["tasks", "habits"] as const).map(item => <button key={item} aria-pressed={section === item} onClick={() => { setSection(item); if (item === "habits" && selectedDate > today) setSelectedDate(today); }}>{item === "tasks" ? "Tasks" : "Habits"}</button>)}</div>}{!pinnedDesktop && section === "tasks" && <button className="tasks-pin-option" aria-label="Add Tasks widget" title="Add Tasks widget" onClick={() => { void pinDesktopTasks(user.uid).catch(error => setPinError(String(error))); }}><MonitorUp size={17} /></button>}</div><TaskDashboard uid={user.uid} minimal={pinnedTasks} mode={section} habits={habitApi.habits} tasks={tasks} today={today} selectedDate={pinnedTasks ? today : selectedDate} onSelectDate={setSelectedDate}
+      dueOnly={pinnedTasks ? false : dueOnly} onFilterChange={setDueOnly} points={taskPoints} onNew={openNew} onReschedule={openCarryTask}
       onComplete={(task) => { setMinutes(String(Math.min(180, task.minutesSpent ?? 30))); setComplete(task); }}
       onReopen={(task) => void reopen(task)} onEdit={openEdit} onDelete={setDeletingTask} />{section === "habits" && <HabitDashboard uid={user.uid} api={habitApi} selected={selectedDate} today={today} dueOnly={dueOnly} />}</>}
 
+    {carryTask && <CarryTaskDialog name={carryTask.name} busy={carryBusy} error={carryError} onClose={() => setCarryTask(null)} onAdd={offset => void addPastTask(offset)} />}
     {editor && <TaskEditor draft={draft} setDraft={setDraft} subjects={taskSubjects} schedule={schedule} setSchedule={setSchedule} busy={busy} editing={editor !== "new"} onClose={() => setEditor(null)} onSave={() => void submitTask()} />}
     {complete && <CompleteDialog task={complete} minutes={minutes} setMinutes={setMinutes} busy={busy} onClose={() => setComplete(null)} onSave={() => void completeTask()} />}
     {deletingTask && <DeleteTaskDialog task={deletingTask} busy={deleting} onClose={() => setDeletingTask(null)} onConfirm={() => void confirmDelete()} />}
   </main>;
 }
 
-function LeaderboardPanel({ rows, currentUserId }: { rows: Record<string, unknown>[]; currentUserId: string }) {
+function LeaderboardPanel({ rows, currentUserId, viewerTasks, week, currentWeek, loading, onWeekChange }: { rows: Record<string, unknown>[]; currentUserId: string; viewerTasks: DailyTask[]; week: string; currentWeek: string; loading: boolean; onWeekChange: (week: string) => void }) {
   const [selectedEntry, setSelected] = useState<Record<string, unknown> | null>(null);
   const selected = rows.find((row) => row.uid === selectedEntry?.uid) ?? selectedEntry;
   const [selectedDate, setSelectedDate] = useState(todayKey());
+  useEffect(() => { setSelected(null); setSelectedDate(week === currentWeek ? todayKey() : ALL_LEADERBOARD_DAYS); }, [week, currentWeek]);
+  const xpByUser = useLeaderboardXp(rows.map(row => ({ ...row, uid: String(row.uid ?? "") })), week, currentWeek, getFirebaseFirestore, currentUserId, viewerTasks);
+  const weekControls = <div className="leaderboard-week-controls"><button type="button" aria-label="Previous week" onClick={() => onWeekChange(shiftLeaderboardWeek(week, -1))}>‹</button><div><strong>{week === currentWeek ? "This week · Live" : "Weekly results"}</strong><small>{leaderboardWeekLabel(week)}</small>{week !== currentWeek && <button type="button" onClick={() => onWeekChange(currentWeek)}>Back to this week</button>}</div><button type="button" aria-label="Next week" disabled={week >= currentWeek} onClick={() => onWeekChange(shiftLeaderboardWeek(week, 1))}>›</button></div>;
   const position = selected ? rows.findIndex((row) => row.uid === selected.uid) + 1 : 0;
   const displayName = (row: Record<string, unknown>) => String(row.uid ?? "") === currentUserId ? "You" : String(row.name ?? "Student");
   if (selected) {
-    const tasks = (Array.isArray(selected.leaderboardTasks) ? selected.leaderboardTasks as Record<string, unknown>[] : []).map((task) => ({ ...task, name: String(task.name ?? "Task"), subject: String(task.subject ?? "Other"), type: String(task.type ?? "Other"), date: String(task.date ?? ""), completed: Boolean(task.completed), points: Number(task.points) || 0, minutesSpent: Number(task.minutesSpent) || 0 }));
+    const taskSource: Record<string, unknown>[] = Array.isArray(selected.leaderboardTasks)
+      ? selected.leaderboardTasks
+      : Array.isArray(selected.completedTasks)
+        ? selected.completedTasks.map(task => ({ ...task, date: week === currentWeek ? todayKey() : week, completed: true, points: 10 }))
+        : [];
+    const tasks = taskSource.map((task) => ({ ...task, name: String(task.name ?? "Task"), subject: String(task.subject ?? "Other"), type: String(task.type ?? "Other"), date: String(task.date ?? ""), completed: Boolean(task.completed), points: Number(task.points) || 0, minutesSpent: Number(task.minutesSpent) || 0 }));
     const inactiveDates = Array.isArray(selected.inactiveDates) ? selected.inactiveDates.map(String) : [];
-    const dates = [ALL_LEADERBOARD_DAYS, ...[...new Set([todayKey(), ...inactiveDates, ...Object.keys((selected.focusDays ?? {}) as Record<string, number>), ...tasks.map((task) => task.date).filter(Boolean)])].sort().reverse()];
-    const activeDate = dates.includes(selectedDate) ? selectedDate : todayKey();
+    const dates = [ALL_LEADERBOARD_DAYS, ...[...new Set([...(week === currentWeek ? [todayKey()] : []), ...inactiveDates, ...Object.keys((selected.focusDays ?? {}) as Record<string, number>), ...tasks.map((task) => task.date).filter(Boolean)])].sort().reverse()];
+    const activeDate = dates.includes(selectedDate) ? selectedDate : week === currentWeek ? todayKey() : ALL_LEADERBOARD_DAYS;
     const stats = leaderboardPeriodStats({ points: Number(selected.points) || 0, completed: Number(selected.completed) || 0, studyMinutes: Number(selected.studyMinutes) || 0, focusDays: (selected.focusDays ?? {}) as Record<string, number>, inactiveDates }, tasks, activeDate);
     const visibleTasks = leaderboardPeriodTasks(tasks, inactiveDates, activeDate, (selected.focusDays ?? {}) as Record<string, number>);
     return <section className="leaderboard-panel leaderboard-detail">
+      {weekControls}<button type="button" className="leaderboard-back" onClick={() => setSelected(null)}><ArrowLeft size={15} />Back to leaderboard</button>
+      <div className="leaderboard-current-xp">{xpByUser[String(selected.uid)] ? <>Lv. <WidgetNumber value={xpByUser[String(selected.uid)]!.level} /> · <WidgetNumber value={xpByUser[String(selected.uid)]!.xp} suffix=" XP" /></> : "Current XP unavailable"}</div>
       <div className="leaderboard-detail-head"><span className="leaderboard-avatar">{avatarSource(selected.avatar) ? <img src={avatarSource(selected.avatar)} alt="" /> : displayName(selected).slice(0, 1).toUpperCase()}</span><b>{displayName(selected)}</b><span className="leaderboard-detail-rank"><RankMark rank={position} /> #{position}</span><div className="leaderboard-summary"><div><strong className={stats.points > 0 ? "positive" : stats.points < 0 ? "negative" : "neutral"}><WidgetNumber value={stats.points} prefix={stats.points > 0 ? "+" : ""} /></strong><small>Points</small></div><div><strong><WidgetNumber value={stats.completed} />/<WidgetNumber value={stats.completed + stats.notCompleted} /></strong><small>Tasks completed</small></div><div><strong><WidgetDuration minutes={stats.studyMinutes} /></strong><small>Study time</small></div><div><strong><WidgetDuration minutes={Math.floor(stats.focusMilliseconds / 60000)} /></strong><small>Focus time</small></div></div></div>
-      {dates.length > 0 && <div className="leaderboard-day-filter"><SelectMenu value={activeDate} options={dates} onChange={setSelectedDate} optionLabel={(date) => date === ALL_LEADERBOARD_DAYS ? "This week" : date === todayKey() ? "Today" : new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { day: "numeric", month: "short" })} /></div>}
+      {dates.length > 0 && <div className="leaderboard-day-filter"><SelectMenu value={activeDate} options={dates} onChange={setSelectedDate} optionLabel={(date) => date === ALL_LEADERBOARD_DAYS ? "Full week" : date === todayKey() ? "Today" : new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { day: "numeric", month: "short" })} /></div>}
 <div className="leaderboard-task-list">{visibleTasks.length ? visibleTasks.map((task, index) => <article className={`leaderboard-task ${task.completed ? "done" : "pending"} ${String(task.date ?? "") === todayKey() ? "current" : ""}`} key={`${String(task.name)}-${index}`}><span>{task.completed ? <Check size={14} /> : <X size={14} />}</span><div><b>{String(task.name ?? "Task")}</b><small>{String(task.subject ?? "Other")} · {String(task.type ?? "Other")}{Number(task.minutesSpent) > 0 ? ` · ${formatMinutes(Number(task.minutesSpent))}` : ""}</small></div><em className={Number(task.points) > 0 ? "positive" : Number(task.points) < 0 ? "negative" : "neutral"}><WidgetNumber value={Number(task.points) || 0} prefix={Number(task.points) > 0 ? "+" : ""} /></em></article>) : <div className="leaderboard-empty"><span>{activeDate === ALL_LEADERBOARD_DAYS ? "No tasks this week." : "No tasks for this day."}</span></div>}</div>
     </section>;
   }
-  return <section className="leaderboard-panel">{rows.length ? <div className="leaderboard-list">{rows.map((row, index) => { const rank = index + 1; const isYou = String(row.uid ?? "") === currentUserId; const name = displayName(row); const avatar = avatarSource(row.avatar); const completed = Math.max(0, Number(row.completed) || 0); const minutes = Math.max(0, Number(row.studyMinutes) || 0); const points = Number(row.points) || 0; return <button className={`leaderboard-row ${isYou ? "you" : ""}`} key={String(row.uid ?? index)} onClick={() => { setSelectedDate(todayKey()); setSelected(row); }}><span className={`leaderboard-rank top-${rank}`}><RankMark rank={rank} /></span><span className="leaderboard-avatar">{avatar ? <img src={avatar} alt="" /> : name.slice(0, 1).toUpperCase()}</span><span className="leaderboard-copy"><b>{name}</b><small><WidgetNumber value={completed} /> completed · <WidgetDuration minutes={minutes} /> study</small></span><strong className={`leaderboard-points ${points > 0 ? "positive" : points < 0 ? "negative" : "neutral"}`}><WidgetNumber value={points} prefix={points > 0 ? "+" : ""} suffix=" pts" /></strong></button>; })}</div> : <div className="leaderboard-empty"><Trophy size={20} /><span>Leaderboard is loading…</span></div>}</section>;
+  return <section className="leaderboard-panel">{weekControls}{loading ? <div className="leaderboard-empty">Syncing leaderboard…</div> : rows.length ? <div className="leaderboard-list">{rows.map((row, index) => { const rank = index + 1; const isYou = String(row.uid ?? "") === currentUserId; const name = displayName(row); const avatar = avatarSource(row.avatar); const points = Number(row.points) || 0; return <button className={`leaderboard-row ${isYou ? "you" : ""}`} key={String(row.uid ?? index)} onClick={() => { setSelectedDate(week === currentWeek ? todayKey() : ALL_LEADERBOARD_DAYS); setSelected(row); }}><span className={`leaderboard-rank top-${rank}`}><RankMark rank={rank} /></span><span className="leaderboard-avatar">{avatar ? <img src={avatar} alt="" /> : name.slice(0, 1).toUpperCase()}</span><span className="leaderboard-copy"><b>{name}</b><small>{xpByUser[String(row.uid)] ? <>Lv. <WidgetNumber value={xpByUser[String(row.uid)]!.level} /> · <WidgetNumber value={xpByUser[String(row.uid)]!.xp} suffix=" XP" /></> : "Current XP unavailable"}</small></span><strong className={`leaderboard-points ${points > 0 ? "positive" : points < 0 ? "negative" : "neutral"}`}><WidgetNumber value={points} prefix={points > 0 ? "+" : ""} suffix=" pts" /></strong></button>; })}</div> : <div className="leaderboard-empty"><Trophy size={20} /><span>{week === currentWeek ? "No activity this week yet." : "No saved results for this week."}</span></div>}</section>;
 }
 
 function QuickRecallSetup({ widget = false, questionCount, onQuestionCountChange, seed, loading, scope, onScopeChange, onStart, onBack }: { widget?: boolean; questionCount: RecallQuestionCount; onQuestionCountChange: (count: RecallQuestionCount) => void; seed: QuickRecallSeed | null; loading: boolean; scope: QuickRecallScope; onScopeChange: (scope: QuickRecallScope) => void; onStart: () => void; onBack: () => void }) {

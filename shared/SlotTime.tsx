@@ -10,5 +10,5 @@ function SlotDigit({ value }: { value: string }) {
 export function SlotTime({ value }: { value: string }) {
   return <span aria-label={value} className="focus-slot-time">{Array.from(value, (digit, index) => /\d/.test(digit)
     ? <SlotDigit key={value.length - index} value={digit} />
-    : <span key={value.length - index} className="focus-slot-separator">{digit}</span>)}</span>;
+    : <span key={value.length - index} className="focus-slot-separator">{digit === " " ? "\u00a0" : digit}</span>)}</span>;
 }

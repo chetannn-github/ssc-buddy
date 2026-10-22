@@ -1094,11 +1094,11 @@ export default function App() {
         <View style={styles.backdrop}>
           <Pressable accessibilityLabel="Close add task dialog" style={StyleSheet.absoluteFill} onPress={() => setCarryTask(null)} />
           <View accessibilityViewIsModal style={styles.sheet}>
-            <Text style={styles.sheetTitle}>Add task to</Text>
+            <Text style={styles.sheetTitle}>Add Task Again</Text>
             <Text style={styles.muted} numberOfLines={2}>{carryTask?.name}</Text>
             <View style={[styles.scheduleRow, { marginTop: 20 }]}>
-              <Pressable style={[styles.primary, { flex: 1 }]} onPress={() => addPastTask(0)}><Text style={styles.primaryText}>Today</Text></Pressable>
-              <Pressable style={[styles.primary, { flex: 1 }]} onPress={() => addPastTask(1)}><Text style={styles.primaryText}>Tomorrow</Text></Pressable>
+              <Pressable style={[styles.primary, { flex: 1 }]} onPress={() => addPastTask(0)}><Text style={styles.primaryText}>Add to Today</Text></Pressable>
+              <Pressable style={[styles.primary, { flex: 1 }]} onPress={() => addPastTask(1)}><Text style={styles.primaryText}>Add to Tomorrow</Text></Pressable>
             </View>
             <Pressable style={{ alignSelf: "center", padding: 14 }} onPress={() => setCarryTask(null)}><Text style={styles.cancel}>Cancel</Text></Pressable>
           </View>

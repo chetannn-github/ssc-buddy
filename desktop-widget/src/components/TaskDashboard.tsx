@@ -14,11 +14,12 @@ export function TaskDateTitle({ date, today }: { date: string; today: string }) 
 }
 import { habitScheduled, habitDue, habitIntensity, type Habit } from "../../../mobile-tasks/src/domain/habits";
 
-export function TaskDashboard({ uid, minimal = false, habits = [], mode = "tasks", tasks, today, selectedDate, onSelectDate, dueOnly, onFilterChange, points, onNew, onComplete, onReopen, onEdit, onDelete }: {
+export function TaskDashboard({ uid, minimal = false, habits = [], mode = "tasks", tasks, today, selectedDate, onSelectDate, dueOnly, onFilterChange, points, onNew, onComplete, onReopen, onEdit, onDelete, onReschedule }: {
   uid?: string; minimal?: boolean; habits?: Habit[]; mode?: "tasks" | "habits"; tasks: DailyTask[]; today: string; selectedDate: string; onSelectDate: (date: string) => void;
   dueOnly: boolean; onFilterChange: (value: boolean) => void; points: Map<string, number>;
   onNew: () => void; onComplete: (task: DailyTask) => void; onReopen: (task: DailyTask) => void;
   onEdit: (task: DailyTask) => void; onDelete: (task: DailyTask) => void;
+  onReschedule?: (task: DailyTask) => void;
 }) {
   const tomorrow = dateKeyFromOffset(1, new Date(today + "T12:00:00"));
   const latest = mode === "tasks" && tasks.some((task) => task.date === tomorrow) ? tomorrow : today;
@@ -49,6 +50,8 @@ export function TaskDashboard({ uid, minimal = false, habits = [], mode = "tasks
   const move = (amount: number) => { const next = dateKeyFromOffset(amount, new Date(weekEnd + "T12:00:00")); setWeekEnd(next > latest ? latest : next); };
   const openMenu = (event: React.MouseEvent, task: DailyTask) => {
     event.preventDefault();
+    event.stopPropagation();
+    if (history && !task.completed) { onReschedule?.(task); return; }
     if (history) return;
     setMenu({ task, x: Math.max(8, Math.min(window.innerWidth - 188, event.clientX)), y: Math.max(8, Math.min(window.innerHeight - (task.date === tomorrow ? 110 : 62), event.clientY)) });
   };
@@ -73,7 +76,7 @@ export function TaskDashboard({ uid, minimal = false, habits = [], mode = "tasks
       <div className="task-study-time" style={mode === "habits" ? { visibility: "hidden" } : undefined}><Clock3 size={13} /><span>Study time</span><NumberFlow value={Math.floor(summary.minutes / 60)} suffix="h" /><NumberFlow value={summary.minutes % 60} suffix="m" /></div>
     </section>}
     {mode === "tasks" && <FocusRewardRow uid={uid} date={selectedDate} getDatabase={getFirebaseFirestore} />}
-    {mode === "tasks" && <section className="task-list android-task-list main-shared-task-list" aria-label="Daily tasks">{visible.length ? visible.map(task => <TaskWidgetRow key={task.id} task={task} missed={history && !task.completed} score={minimal ? 0 : points.get(task.id) ?? 0} readOnly={history} onComplete={onComplete} onReopen={onReopen} onContextMenu={minimal ? undefined : event => openMenu(event, task)} />) : <p className="android-task-empty">{dueOnly && daily.length ? "All tasks complete" : "No tasks planned"}</p>}</section>}
+    {mode === "tasks" && <section className="task-list android-task-list main-shared-task-list" aria-label="Daily tasks">{visible.length ? visible.map(task => <TaskWidgetRow key={task.id} task={task} missed={history && !task.completed} score={minimal ? 0 : points.get(task.id) ?? 0} readOnly={history} onComplete={onComplete} onReopen={onReopen} onContextMenu={event => openMenu(event, task)} />) : <p className="android-task-empty">{dueOnly && daily.length ? "All tasks complete" : "No tasks planned"}</p>}</section>}
     {menu && <div className="task-context-dismiss" onPointerDown={() => setMenu(null)}><div role="menu" className="task-context-menu" style={{ left: menu.x, top: menu.y }} onPointerDown={(event) => event.stopPropagation()}>
       <button role="menuitem" onClick={() => { onEdit(menu.task); setMenu(null); }}><Pencil size={17} />Edit Task</button>
       {menu.task.date === tomorrow && <button role="menuitem" className="danger" onClick={() => { onDelete(menu.task); setMenu(null); }}><Trash2 size={17} />Delete</button>}

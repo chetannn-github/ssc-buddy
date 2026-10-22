@@ -5,7 +5,7 @@
 .browser-study-dialog{scrollbar-width:none}.browser-study-dialog::-webkit-scrollbar,.study-domain-chips::-webkit-scrollbar{display:none}.study-domain-chips{scrollbar-width:none}
 
 
-.study-profile-trigger{display:flex;align-items:center;gap:9px;width:100%;margin:0;padding:15px 17px;border:0;border-radius:18px;background:#1b1b1b;color:#fafaf7;font-size:13px;font-weight:600}.study-profile-trigger>small{margin-left:auto;font-size:11px;color:#888}.study-profile-trigger.active>small{color:var(--accent)}
+.study-profile-trigger{display:flex;align-items:center;gap:9px;width:100%;margin:0;padding:15px 17px;border:0;border-radius:18px;background:#1b1b1b;color:#fafaf7;font-size:13px;font-weight:600}.study-profile-trigger>small{margin-left:auto;font-size:11px;color:#ddd}
 
 .study-focus-today{display:flex;justify-content:space-between;gap:12px;margin:0 0 15px;color:#888;font-size:11px}.study-focus-today strong{color:#ddd;font-weight:600}
 .web-focus-lock .browser-study-heading h2{font-size:25px;letter-spacing:-.035em}
