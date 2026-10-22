@@ -1,4 +1,5 @@
 import { HeatmapCell } from "./HeatmapCell";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import NumberFlow from "@number-flow/react";
@@ -12,6 +13,7 @@ import { habitWidgetCalendar } from "../../../mobile-tasks/src/domain/habit-widg
 import { accentInk, normalizeAppAccent } from "../../../mobile-tasks/src/domain/app-accent";
 
 export function PinnedHabitWindow({ pin }: { pin: DesktopHabitPin }) {
+  const reducedMotion = useReducedMotion();
   const [user, setUser] = useState<User | null>(null), [ready, setReady] = useState(false);
   const [glowAccent, setGlowAccent] = useState(normalizeAppAccent(undefined));
   const [error, setError] = useState(""), [checklist, setChecklist] = useState(false);
@@ -129,11 +131,29 @@ export function PinnedHabitWindow({ pin }: { pin: DesktopHabitPin }) {
     {habit.targetDays && <div className="pinned-target" aria-label={`${stats.total} of ${habit.targetDays} challenge days completed`}><span><NumberFlow value={stats.total} />/{habit.targetDays} days</span><div><i style={{ width: `${stats.progress * 100}%` }} /></div></div>}
     {settings.tracking === "count" && <div className="pinned-count"><button disabled={!available} aria-label="Subtract count" onClick={() => update({ type: "increment", amount: -settings.step })}>−</button><span><NumberFlow value={entry.count} />/{settings.dailyGoal} {settings.unit}</span></div>}
     {!!error && <p role="alert" className="habit-error">{error}</p>}
-    {checklist && <div className="pinned-checklist" role="dialog" aria-modal="true" aria-label={`${habit.name} checklist`}>
+    <AnimatePresence initial={false}>
+    {checklist && <motion.div className="pinned-checklist" role="dialog" aria-modal="true" aria-label={`${habit.name} checklist`}
+      initial={{ opacity: reducedMotion ? 1 : 0, y: reducedMotion ? 0 : 10, scale: reducedMotion ? 1 : .985 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: reducedMotion ? 1 : 0, y: reducedMotion ? 0 : 6, scale: reducedMotion ? 1 : .99 }}
+      transition={{ duration: reducedMotion ? 0 : .26, ease: [.22, 1, .36, 1] }}>
       <div className="pinned-checklist-header"><b data-tauri-drag-region>{habit.name}</b><span className="pinned-checklist-score">{settings.checklist.filter(item => entry.checks.includes(item.id)).length}/{settings.checklist.length}</span><button onClick={() => setChecklist(false)} aria-label="Close checklist"><X size={16} /></button></div>
-      <div className="pinned-checklist-items">{settings.checklist.map(item => <button key={item.id} className={`habit-check-item ${entry.checks.includes(item.id) ? "checked" : ""}`} disabled={!available} onClick={() => update({ type: "check", id: item.id })}><span>{item.title}</span><i><Check size={15} /></i></button>)}</div>
+      <div className="pinned-checklist-items">{settings.checklist.map(item => {
+        const checked = entry.checks.includes(item.id);
+        return <motion.button key={item.id} className={`habit-check-item ${checked ? "checked" : ""}`} aria-pressed={checked} disabled={!available}
+          whileTap={reducedMotion || !available ? undefined : { scale: .985 }}
+          onClick={() => update({ type: "check", id: item.id })}>
+          <span>{item.title}</span>
+          <motion.i initial={false} animate={{ scale: reducedMotion ? 1 : checked ? [1, .85, 1.15, 1] : 1 }} transition={{ duration: reducedMotion ? 0 : .3 }}>
+            <motion.svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <motion.path d="M20 6 9 17 4 12" initial={false} animate={{ pathLength: checked ? 1 : 0, opacity: checked ? 1 : 0 }} transition={{ duration: reducedMotion ? 0 : .22, ease: "easeOut" }} />
+            </motion.svg>
+          </motion.i>
+        </motion.button>;
+      })}</div>
       {!!error && <p role="alert" className="habit-error">{error}</p>}
-    </div>}
+    </motion.div>}
+    </AnimatePresence>
     {contextMenu}
   </main>;
 }

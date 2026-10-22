@@ -19,6 +19,8 @@
         "height": 475,
         "minWidth": 350,
         "minHeight": 360,
+        "maxWidth": 520,
+        "maxHeight": 700,
         "alwaysOnTop": false,
         "alwaysOnBottom": true,
         "resizable": true,
@@ -39,7 +41,10 @@
     "targets": ["nsis"],
     "windows": {
       "nsis": {
-        "displayLanguageSelector": false
+        "displayLanguageSelector": false,
+        "installerHooks": "installer-hooks.nsh",
+        "sidebarImage": "icons/installer-sidebar.bmp",
+        "installerIcon": "icons/icon.ico"
       }
     }
   }

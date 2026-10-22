@@ -704,6 +704,8 @@ html, body, #root {
 .pinned-checklist .habit-check-item>span { min-width:0; flex:1; line-height:1.4; overflow-wrap:anywhere; }
 .pinned-checklist .habit-check-item>i { flex:0 0 auto; display:grid; place-items:center; width:24px; height:24px; border-radius:50%; background:var(--habit-soft); color:var(--habit-color); }
 .pinned-checklist .habit-check-item.checked>i { background:var(--habit-color); color:var(--habit-ink); }
+.pinned-checklist .habit-check-item, .pinned-checklist .habit-check-item>i { transition:background-color 220ms ease, border-color 220ms ease, color 220ms ease; }
+@media(prefers-reduced-motion:reduce) { .pinned-checklist .habit-check-item, .pinned-checklist .habit-check-item>i { transition:none; } }
 .pinned-checklist .habit-check-item.checked>i svg { color:inherit; }
 
 /* A full-width SVG viewport with its natural aspect ratio keeps every cell square. */
@@ -717,6 +719,16 @@ html, body, #root {
 .heatmap-liquid-wave { animation:heatmap-wave 3.4s linear infinite; }
 @keyframes heatmap-wave { to { transform:translateX(-100px); } }
 @media(prefers-reduced-motion:reduce) { .heatmap-liquid-wave { animation:none; }.heatmap-liquid-level { transition:none; } }
+.heatmap-cell-bubble { fill:#fff; fill-opacity:.25; stroke:#fff; stroke-width:2.5; opacity:0; animation:heatmap-cell-bubble-rise 3.8s linear infinite; animation-delay:-1.2s; }
+.heatmap-cell-bubble-second { animation-duration:4.6s; animation-delay:-3.4s; }
+.heatmap-cell-bubble-third { animation-duration:5.2s; animation-delay:-2.3s; }
+@keyframes heatmap-cell-bubble-rise {
+  0% { transform:translate(0,0); opacity:0; }
+  12% { opacity:.95; }
+  75% { opacity:.85; }
+  100% { transform:translate(5px,var(--heatmap-bubble-rise,-96px)); opacity:0; }
+}
+@media(prefers-reduced-motion:reduce) { .heatmap-cell-bubble { animation:none; transform:translate(0,calc(var(--heatmap-bubble-rise,-96px) / 2)); opacity:.7; } }
 
 /* Secondary habit widget labels stay muted, including animated progress digits. */
 .pinned-habit .pinned-streak small, .pinned-habit .pinned-target>span { color:#777; }
