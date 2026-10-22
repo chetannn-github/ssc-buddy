@@ -36,6 +36,7 @@ export function createThemedStyles<T extends StyleSheet.NamedStyles<T> | StyleSh
   });
 }
 export const colors = {
+  button: "#f9fcf5", buttonInk: "#111111",
   background: "#000000", surface: "#1b1b1b", surfaceRaised: "#242424",
   border: "#303030", text: "#fafafa", muted: "#a1a1aa", subdued: "#71717a",
   get accent() { return currentAccent; },

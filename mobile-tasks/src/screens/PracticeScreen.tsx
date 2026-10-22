@@ -3,6 +3,7 @@ import { DestructiveDialog } from "../components/DestructiveDialog";
 import { UppercaseTextInput as TextInput } from "../components/UppercaseTextInput";
 import { useAndroidBack } from "../hooks/use-android-back";
 import { ReattemptModeButton } from "../components/ReattemptModeButton";
+import { AnimatedTimeChips } from "../components/AnimatedTimeChips";
 import { createThemedStyles } from "../theme";
 import { DropdownChevron } from "../components/DropdownChevron";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -910,19 +911,7 @@ export function PracticeScreen({ user, onOpenQuickRecall, focusLocked = false }:
             placeholder="Minutes"
             placeholderTextColor={colors.subdued}
           />
-          <View style={[s.presetRow, s.timingPresetRow]}>
-            {[15, 30, 45, 60].map((value) => (
-              <Pressable
-                key={value}
-                onPress={() => setMinutes(String(value))}
-                style={[s.preset, s.timingPreset, Number(minutes) === value && s.presetActive]}
-              >
-                <Text allowFontScaling={false} style={[s.presetText, s.timingPresetText, Number(minutes) === value && s.presetTextActive]}>
-                  {value}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
+          <AnimatedTimeChips options={[15, 30, 45, 60]} value={Number(minutes)} onChange={value => setMinutes(String(value))} color={colors.accent} ink={colors.accentDeep} muted={colors.muted} background="#151515" borderColor="#303030" radius={10} gap={6} height={32} textStyle={s.presetText} style={s.timingPresetRow} />
           {!isAllExercises && <><TextInput
             value={start}
             onChangeText={(value) => {
@@ -944,35 +933,24 @@ export function PracticeScreen({ user, onOpenQuickRecall, focusLocked = false }:
         <View style={s.configDivider} />
         <View style={s.configSection}>
           <Text style={s.label}>QUESTIONS</Text>
-          {isQuestionExercise && !isAllExercises && <View style={s.modeRow}>
-            <Pressable onPress={() => setRandom(false)} style={[s.mode, !random && s.modeActive]}>
-              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} style={[s.modeText, !random && s.modeTextActive]}>Sequential</Text>
-            </Pressable>
-            <Pressable
-              disabled={!exercise?.questions?.length}
-              onPress={() => {
-                setRandom(true);
+          {isQuestionExercise && !isAllExercises && <AnimatedTimeChips
+            options={[0, 1]} labels={["Sequential", "Random"]} value={random ? 1 : 0}
+            disabledOptions={exercise?.questions?.length ? [] : [1]}
+            onChange={value => {
+              setRandom(value === 1);
+              if (value === 1) {
                 setFixed(true);
                 setStart("1");
-                setRandomSeed((seed) => seed + 1);
-              }}
-              style={[s.mode, random && s.modeActive, !exercise?.questions?.length && s.disabled]}
-            >
-              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} style={[s.modeText, random && s.modeTextActive]}>Random</Text>
-            </Pressable>
-          </View>}
-          {!isAllExercises && <View style={s.modeRow}>
-            <Pressable
-              disabled={random}
-              onPress={() => setFixed(false)}
-              style={[s.mode, !fixed && s.modeActive, random && s.disabled]}
-            >
-              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} style={[s.modeText, !fixed && s.modeTextActive]}>Unlimited</Text>
-            </Pressable>
-            <Pressable onPress={() => setFixed(true)} style={[s.mode, fixed && s.modeActive]}>
-              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} style={[s.modeText, fixed && s.modeTextActive]}>Fixed count</Text>
-            </Pressable>
-          </View>}
+                setRandomSeed(seed => seed + 1);
+              }
+            }}
+            color={colors.accent} ink={colors.accentDeep} muted={colors.muted} background="#151515" borderColor="#303030" radius={10} gap={7} height={34} textStyle={s.modeText} style={s.modeRow}
+          />}
+          {!isAllExercises && <AnimatedTimeChips
+            options={[0, 1]} labels={["Unlimited", "Fixed count"]} value={fixed ? 1 : 0}
+            disabledOptions={random ? [0] : []} onChange={value => setFixed(value === 1)}
+            color={colors.accent} ink={colors.accentDeep} muted={colors.muted} background="#151515" borderColor="#303030" radius={10} gap={7} height={34} textStyle={s.modeText} style={s.modeRow}
+          />}
           {(isAllExercises || fixed) && (
             <TextInput
               value={count}
@@ -1004,7 +982,7 @@ export function PracticeScreen({ user, onOpenQuickRecall, focusLocked = false }:
         <MarkingCard embedded marking={bank.marking} onSave={(marking) => saveBank({ ...bank, marking })} />
         <Pressable disabled={!canContinue} style={[s.primary, s.setupContinue, !canContinue && s.disabled]} onPress={begin}>
           <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72} style={[s.primaryText, s.primaryWideText]}>Continue to instructions</Text>
-          <MaterialCommunityIcons name="arrow-right" size={19} color={colors.accentDeep} />
+          <MaterialCommunityIcons name="arrow-right" size={19} color={colors.buttonInk} />
         </Pressable>
         </View>
       </ScrollView>
@@ -1165,7 +1143,7 @@ function KeyScreen({
           style={[s.primary, (!complete || saving) && s.disabled]}
           onPress={onSave}
         >
-          {saving ? <ActivityIndicator size="small" color={colors.accentDeep} /> : <Text style={s.primaryText}>Save answer key</Text>}
+          {saving ? <ActivityIndicator size="small" color={colors.buttonInk} /> : <Text style={s.primaryText}>Save answer key</Text>}
         </Pressable>
       </ScrollView>
     </View>
@@ -1276,7 +1254,7 @@ function Instructions({
           </Text>
         </View>
         <Pressable style={s.primary} onPress={onStart}>
-          <MaterialCommunityIcons name="play" color={colors.accentDeep} size={18} />
+          <MaterialCommunityIcons name="play" color={colors.buttonInk} size={18} />
           <Text style={s.primaryText}>Start test</Text>
         </Pressable>
       </ScrollView>
@@ -1700,7 +1678,7 @@ function HistoryDetail({
             <Text style={s.detailActionText}>Recheck</Text>
           </Pressable>}
           <Pressable onPress={onReattempt} style={s.detailPrimaryAction}>
-            <MaterialCommunityIcons name="reload" size={15} color={colors.accentDeep} />
+            <MaterialCommunityIcons name="reload" size={15} color={colors.buttonInk} />
             <Text style={s.detailPrimaryText}>{isQuickRecallRecord(record) ? "Practice again" : "Reattempt"}</Text>
           </Pressable>
         </View>
@@ -2590,7 +2568,7 @@ const s = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 14,
     borderRadius: 14,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.button,
   },
   setupContinue: { minHeight: 46, marginTop: 13 },
   primarySmall: {
@@ -2599,9 +2577,9 @@ const s = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 15,
     paddingVertical: 11,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.button,
   },
-  primaryText: { color: colors.accentDeep, fontFamily: "Manrope_800ExtraBold", fontSize: 13 },
+  primaryText: { color: colors.buttonInk, fontFamily: "Manrope_800ExtraBold", fontSize: 13 },
   primaryWideText: { flexShrink: 1, textAlign: "center" },
   back: { color: colors.muted, fontFamily: "Manrope_700Bold", fontSize: 13 },
   keyRow: {
@@ -2794,8 +2772,8 @@ const s = StyleSheet.create({
   detailActions: { flexDirection: "row", gap: 7 },
   detailAction: { flex: 1, minHeight: 38, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, borderRadius: 10, borderWidth: 1, borderColor: "#484848", backgroundColor: "rgba(255,255,255,.02)" },
   detailActionText: { color: colors.text, fontSize: 10, fontWeight: "800" },
-  detailPrimaryAction: { flex: 1.1, minHeight: 38, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, borderRadius: 10, backgroundColor: colors.accent },
-  detailPrimaryText: { color: colors.accentDeep, fontSize: 10, fontWeight: "900" },
+  detailPrimaryAction: { flex: 1.1, minHeight: 38, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, borderRadius: 10, backgroundColor: colors.button },
+  detailPrimaryText: { color: colors.buttonInk, fontSize: 10, fontWeight: "900" },
   solutionMode: {
     flexDirection: "row",
     alignItems: "center",

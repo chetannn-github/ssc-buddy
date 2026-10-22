@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createStudyController } from '../shared/study-controller.ts';
 import { normalizeStudyDomain, studyControlPath, studyDevicesPath } from '../shared/study-lock.ts';
+import { MAX_STUDY_WEBSITES } from '../shared/study-selection.ts';
 test('public focus shares only daily totals and preserves profile data across credit retries', async () => {
   const documents = new Map(), writes = [];
   documents.set('users/student/profile/current', { username: 'student' });
@@ -35,6 +36,20 @@ test('public focus shares only daily totals and preserves profile data across cr
   controller.watchPublicStudyFocus({}, 'student', 'student', value => { shown = value; }, assert.fail);
   assert.equal(shown.days['2026-10-21'], 180000);
   assert.equal(shown.timeZone, 'UTC');
+  const leaderboardPath = 'leaderboards/2026-10-19/entries/student';
+  documents.set(leaderboardPath, { ...documents.get(leaderboardPath), points: 20, xp: 495, completed: 2 });
+  const long = { ...session, id: 'long', endsAt: session.startedAt + 3600000 };
+  await controller.recordStudyFocus({}, 'student', long, long.endsAt);
+  await controller.recordStudyFocus({}, 'student', long, long.endsAt);
+  const leaderboard = documents.get(leaderboardPath);
+  assert.equal(leaderboard.focusXp, 6);
+  assert.equal(leaderboard.focusDays['2026-10-21'], 3780000);
+  assert.equal(leaderboard.points, 20, 'focus publication preserves task points');
+  assert.equal(leaderboard.xp, 495, 'focus publication preserves task XP');
+  assert.equal(leaderboard.completed, 2);
+  const count = writes.length;
+  await controller.publishStudyFocusDay({}, 'student', '2026-10-21', 'UTC');
+  assert.equal(writes.length, count, 'unchanged totals do not repeatedly write rewards');
 });
 test('offline overlay break replay preserves restrictions, remaining time and retry-safe focus credits', async () => {
   const documents = new Map();
@@ -111,7 +126,7 @@ test('web and mobile share one session and preserve its active websites and dead
   await assert.rejects(() => web.startStudySession({}, 'same-user', 30, ['example.org'], 'web'), /locked/);
   await assert.rejects(() => mobile.saveStudyWebsites({}, 'same-user', [], 'mobile'), /locked/);
   assert.deepEqual(documents.get(reference).session, session);
-  await assert.rejects(() => mobile.startStudySession({}, 'another-user', 25, ['one.org', 'two.org', 'three.org', 'four.org'], 'mobile'), /3 websites/);
+  await assert.rejects(() => mobile.startStudySession({}, 'another-user', 25, Array.from({ length: MAX_STUDY_WEBSITES + 1 }, (_, index) => `study${index}.example`), 'mobile'), new RegExp(`${MAX_STUDY_WEBSITES} websites`));
   assert.equal(documents.has('users/another-user/studyLock/current'), false);
   const appOnly = await mobile.startStudySession({}, 'app-only', 15, [], 'mobile');
   assert.deepEqual(appOnly.domains, []);
@@ -120,6 +135,21 @@ test('web and mobile share one session and preserve its active websites and dead
   await mobile.resumeStudySession({}, 'app-only', 'mobile');
   assert.deepEqual(documents.get('users/app-only/studyLock/current').session.domains, []);
   await assert.rejects(() => web.startStudySession({}, 'web-empty', 15, [], 'web'), /websites/);
+  for (const limit of [0, 1, 2]) {
+    const uid = `app-limit-${limit}`;
+    const selected = await mobile.startStudySession({}, uid, 15, [], 'mobile', limit);
+    assert.equal(selected.appLimit, limit);
+    await mobile.pauseStudySession({}, uid, 'mobile');
+    await mobile.resumeStudySession({}, uid, 'mobile');
+    const resumed = documents.get(`users/${uid}/studyLock/current`).session;
+    assert.equal(resumed.appLimit, limit);
+    assert.equal(resumed.lockId, selected.id);
+    const paused = await mobile.applyOverlayBreak({}, uid, { id: `pause-${limit}`, lockId: resumed.lockId, at: resumed.startedAt + 1, paused: true });
+    const overlayResumed = await mobile.applyOverlayBreak({}, uid, { id: `resume-${limit}`, lockId: resumed.lockId, at: resumed.startedAt + 2, paused: false });
+    assert.equal(paused.appLimit, limit);
+    assert.equal(overlayResumed.appLimit, limit);
+  }
+  await assert.rejects(() => mobile.startStudySession({}, 'invalid-limit', 15, [], 'mobile', 3), /0, 1 or 2/);
 });
 
 test('finished sessions are saved before the next session replaces them, and retries preserve totals', async () => {

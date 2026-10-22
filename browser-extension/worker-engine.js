@@ -1,6 +1,6 @@
 import { validSession, rulesFor, allowed, normalizeWebsite, RULE_IDS } from './policy.js';
 function blockedTarget(value) { try { const hash = new URL(value).hash; const raw = hash.startsWith('#site=') ? hash.slice(6) : hash.startsWith('#youtube=') ? hash.slice(9) : ''; const url = new URL(/^https?:\/\//.test(raw) ? raw : decodeURIComponent(raw)); return ['http:', 'https:'].includes(url.protocol) ? url.href : null; } catch { return null; } }
-import { isSocialHost, websiteDomain } from '../shared/study-selection.ts';
+import { MAX_STUDY_WEBSITES, isSocialHost, websiteDomain } from '../shared/study-selection.ts';
 function userError(error) {
   const code = error?.code;
   if (['auth/invalid-credential','auth/wrong-password','auth/user-not-found','auth/invalid-email','auth/missing-password'].includes(code)) return 'Check your email and password.';
@@ -50,7 +50,7 @@ export function startWorker(cloud) {
       const resumed = session && !session.paused && sameSites && session.lockId === (locked.lockId ?? locked.id) && session.startedAt >= locked.startedAt && session.endsAt - session.startedAt <= (locked.paused ? locked.remainingMs : locked.endsAt - locked.startedAt);
       if (!paused && !resumed && (!session || session.id !== locked.id || session.startedAt !== locked.startedAt || session.endsAt !== locked.endsAt || Boolean(session.paused) !== Boolean(locked.paused) || Number(session.remainingMs ?? 0) !== Number(locked.remainingMs ?? 0) || oldItems.some(item => !nextItems.includes(item)))) throw Error('Your session stays locked until its timer ends.');
     }
-    const domains = (session?.domains ?? packet.allowedDomains ?? []).slice(0, 3);
+    const domains = (session?.domains ?? packet.allowedDomains ?? []).slice(0, MAX_STUDY_WEBSITES);
     await chrome.storage.local.set({ websiteDraft: { uid, domains } });
     const { study } = await get();
     if (study?.uid !== uid || study?.revision !== packet.revision || JSON.stringify(study?.session ?? null) !== JSON.stringify(session)) {
@@ -143,11 +143,11 @@ export function startWorker(cloud) {
       const { websiteDraft } = await chrome.storage.local.get('websiteDraft');
       const user = cloud.user();
       const ownDraft = !!user?.uid && websiteDraft?.uid === user.uid ? websiteDraft : null;
-      const domains = current ? current.domains : ownDraft?.domains ?? [];
+      const domains = (current ? current.domains : ownDraft?.domains ?? []).slice(0, MAX_STUDY_WEBSITES);
       const target = blockedTarget(sender.url), host = target ? new URL(target).hostname : '';
       const currentSite = sender.url.startsWith(chrome.runtime.getURL('popup.html')) ? await currentWebsite() : null;
-      if (currentSite) { currentSite.canAdd = !!cloud.user() && currentSite.canAdd && domains.length < 3 && !domains.includes(currentSite.domain); delete currentSite.url; delete currentSite.tabId; }
-      return { session: current, domains, currentSite, blockedSite: host ? { domain: host, canAdd: !!current && domains.length < 3 && !isSocialHost(host) } : null, user, connected: Date.now() - lastSync < 65000, error };
+      if (currentSite) { currentSite.canAdd = !!cloud.user() && currentSite.canAdd && domains.length < MAX_STUDY_WEBSITES && !domains.includes(currentSite.domain); delete currentSite.url; delete currentSite.tabId; }
+      return { session: current, domains, currentSite, blockedSite: host ? { domain: host, canAdd: !!current && domains.length < MAX_STUDY_WEBSITES && !isSocialHost(host) } : null, user, connected: Date.now() - lastSync < 65000, error };
     })().then(result => reply({ ok: true, ...result }), e => reply({ ok: false, error: userError(e) }));
     return true;
   });

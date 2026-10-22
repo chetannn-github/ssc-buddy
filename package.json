@@ -18,6 +18,7 @@
     "test:floating-player": "node --test scripts/test-floating-player.mjs",
     "test:leaderboard-period": "node --test scripts/test-leaderboard-period.mjs",
     "test:weekly-results": "node --test scripts/test-weekly-results.mjs",
+    "test:focus-widget": "node --test scripts/test-focus-timer-widget.mjs",
     "test:heatmap-layout": "node --test scripts/test-heatmap-layout.mjs",
     "test:water-motion": "node --test scripts/test-water-motion.mjs",
     "test:heatmap-colors": "node --test scripts/test-heatmap-colors.mjs",

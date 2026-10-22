@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { startWorker } from './worker-engine.js';
 import { encode, decodeDocument } from './firestore-codec.js';
+import { MAX_STUDY_WEBSITES } from '../shared/study-selection.ts';
 const wait = async check => { for(let i=0;i<100;i++){ if(check()) return; await new Promise(r=>setTimeout(r,5)); } throw Error('Worker did not settle'); };
 test('Firebase Firestore REST values preserve the shared session contract', () => {
   const value={version:1,revision:'one',session:{id:'s',startedAt:1000,endsAt:61000,domains:['chatgpt.com']}};
@@ -44,7 +45,7 @@ test('cloud-driven rules acknowledge after enforcement and survive Firebase outa
     activeUrl=chrome.runtime.getURL('blocked.html')+'#site='+encodeURIComponent('https://instagram.com/reels/');
     assert.equal((await message('status')).currentSite.canAdd,false);
     assert.equal((await message('current-add')).ok,false);
-    activeUrl='https://www.youtube.com/shorts/shorts00001';assert.equal((await message('status')).currentSite.canAdd,true);
+    activeUrl='https://www.youtube.com/shorts/shorts00001';assert.equal((await message('status')).currentSite.canAdd,data.study.session.domains.length < MAX_STUDY_WEBSITES);
     activeUrl='chrome://settings/';assert.equal((await message('status')).currentSite,null);
     const acknowledged=acks.length;
     packet={...packet,revision:'early-stop',session:null};await message('sync');assert.equal(data.study.session.id,'session');assert.equal(rules.length,2);

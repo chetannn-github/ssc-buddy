@@ -14,7 +14,7 @@ export function RollingNumber({
 
 export function RollingDuration({ minutes }: { minutes: number }) {
   const hours = Math.floor(minutes / 60);
-  const remainder = minutes % 60;
+  const remainder = Math.floor(minutes) % 60;
   return (
     <span className="inline-flex items-center justify-center gap-1 tabular-nums">
       {hours > 0 && <RollingNumber key="hours" value={hours} suffix="h" />}

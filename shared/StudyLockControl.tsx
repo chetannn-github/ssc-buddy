@@ -6,6 +6,7 @@ import { emptyFocusDay, focusDayKey, todayFocusMilliseconds, formatFocusTime, ty
 import { SlotTime } from "./SlotTime";
 import { StudyDurationPicker } from "./StudyDurationPicker";
 import { publishStudyFocusDay } from "./study-lock";
+import { MAX_STUDY_WEBSITES } from "./study-selection";
 import { Clock3, Globe2, MonitorUp, Monitor, Pause, Play, Plus, LockKeyhole, X } from "lucide-react";
 type Session = { endsAt: number; domains: string[]; paused?: boolean; remainingMs?: number };
 type Status = { session: Session | null; connected: number; protected: number };
@@ -49,7 +50,7 @@ export function StudyLockControl({ uid, desktop = false, profile = false, getDat
       setStatus({ session, connected: connected.length, protected: session ? connected.filter(device => device.sessionId === session.id && !device.error).length : 0 });
     };
     const failed = (e: Error) => setError(/firebase/i.test(e.message) ? "Could not load your focus session. Please try again." : e.message);
-    const stopControl = watchStudyControl(db, uid, value => { control = value; setFocusSession(value?.session ?? null); if (Array.isArray(value?.allowedDomains)) setDomains(value.allowedDomains.slice(0, 3).join("\n")); refresh(); }, failed);
+    const stopControl = watchStudyControl(db, uid, value => { control = value; setFocusSession(value?.session ?? null); if (Array.isArray(value?.allowedDomains)) setDomains(value.allowedDomains.slice(0, MAX_STUDY_WEBSITES).join("\n")); refresh(); }, failed);
     const stopDevices = watchStudyDevices(db, uid, value => { devices = value; refresh(); }, failed);
     const timer = setInterval(refresh, 1000);
     return () => { stopControl(); stopDevices(); clearInterval(timer); };
@@ -69,12 +70,12 @@ export function StudyLockControl({ uid, desktop = false, profile = false, getDat
     window.addEventListener("keydown", key, true);
     return () => { window.removeEventListener("keydown", key, true); (desktop ? desktopTrigger.current : trigger.current)?.focus(); };
   }, [open, pickingTime]);
-  const websites = domains.split(/[\n,]+/).map(value => value.trim()).filter(Boolean);
+  const websites = domains.split(/[\n,]+/).map(value => value.trim()).filter(Boolean).slice(0, MAX_STUDY_WEBSITES);
   const addWebsite = () => {
     if (!website.trim()) return;
     try {
       const domain = normalizeStudyDomain(website.trim());
-      if (websites.length >= 3 && !websites.includes(domain)) throw Error("Maximum 3 websites per session.");
+      if (websites.length >= MAX_STUDY_WEBSITES && !websites.includes(domain)) throw Error(`Maximum ${MAX_STUDY_WEBSITES} websites per session.`);
       const next = [...new Set([...websites, domain])].join("\n");
       setDomains(next); setWebsite(""); setError(""); localStorage.setItem(`ssc-browser-allowlist:${uid}`, next);
       void run(() => saveStudyWebsites(getDatabase(), uid, next.split("\n").filter(Boolean), source));
@@ -102,10 +103,10 @@ export function StudyLockControl({ uid, desktop = false, profile = false, getDat
           {lockedImage && <><p className="focus-lock-eyebrow">ONE SESSION. ONE STEP CLOSER.</p><h3 className="focus-lock-message">Your goals deserve this time.</h3></>}
           <div className="browser-study-live-time"><SlotTime value={remaining(session)} /></div>
           <button className="browser-study-secondary study-pause-button" disabled={busy} onClick={() => void run(() => session.paused ? resumeStudySession(getDatabase(), uid, source) : pauseStudySession(getDatabase(), uid, source))}>{busy ? "Please wait…" : session.paused ? "Resume focus" : "Take a break"}</button>
-          {source === "web" ? (onPracticeSession && <button className="focus-lock-recall" onClick={() => { setOpen(false); onPracticeSession(); }}>Practice session</button>) : source !== "windows" && !desktop && <div className="browser-study-domains">{session.domains.map(domain => lockedImage ? <a key={domain} href={`https://${domain}`} className="focus-lock-site" rel="noreferrer"><span className="focus-lock-site-icon">{domain.replace(/^www\./, "").charAt(0).toUpperCase()}</span><strong>{domain}</strong><span aria-hidden="true">&#8599;</span></a> : <span key={domain} title={domain}>{domain}</span>)}</div>}
+          {source === "web" ? (onPracticeSession && <button className="focus-lock-recall" onClick={() => { setOpen(false); onPracticeSession(); }}>Practice session</button>) : source !== "windows" && !desktop && <div className="browser-study-domains">{session.domains.slice(0, MAX_STUDY_WEBSITES).map(domain => lockedImage ? <a key={domain} href={`https://${domain}`} className="focus-lock-site" rel="noreferrer"><span className="focus-lock-site-icon">{domain.replace(/^www\./, "").charAt(0).toUpperCase()}</span><strong>{domain}</strong><span aria-hidden="true">&#8599;</span></a> : <span key={domain} title={domain}>{domain}</span>)}</div>}
         </> : <>
-          <div className="study-websites"><h3>Allowed websites <small>{websites.length}/3</small></h3>
-            <div className="study-domain-entry"><Globe2 size={15} /><input aria-label="Website domain" value={website} onChange={event => setWebsite(event.target.value)} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); addWebsite(); } }} placeholder="parmar.com" spellCheck={false} autoCapitalize="none" /><button aria-label="Add website" disabled={!website.trim() || busy || websites.length >= 3} onClick={addWebsite}><Plus size={17} /></button></div>
+          <div className="study-websites"><h3>Allowed websites <small>{websites.length}/{MAX_STUDY_WEBSITES}</small></h3>
+            <div className="study-domain-entry"><Globe2 size={15} /><input aria-label="Website domain" value={website} onChange={event => setWebsite(event.target.value)} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); addWebsite(); } }} placeholder="parmar.com" spellCheck={false} autoCapitalize="none" /><button aria-label="Add website" disabled={!website.trim() || busy || websites.length >= MAX_STUDY_WEBSITES} onClick={addWebsite}><Plus size={17} /></button></div>
             <div className="study-domain-chips">{websites.map(domain => <span key={domain} title={domain}>{domain}<button aria-label={`Remove ${domain}`} onClick={() => { const next = websites.filter(value => value !== domain).join("\n"); setDomains(next); localStorage.setItem(`ssc-browser-allowlist:${uid}`, next); void run(() => saveStudyWebsites(getDatabase(), uid, next.split("\n").filter(Boolean))); }}><X size={12} /></button></span>)}</div>
           </div>
           <button className="study-duration-trigger" onClick={() => setPickingTime(true)}><Clock3 size={17} /><span>Focus time</span><strong>{Number(minutes) >= 60 ? `${Math.floor(Number(minutes) / 60)}h ${Number(minutes) % 60 ? `${Number(minutes) % 60}m` : ""}` : `${minutes} min`}</strong></button>

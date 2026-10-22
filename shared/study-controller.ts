@@ -1,7 +1,8 @@
 import { creditFocusDay, emptyFocusDay, focusSlices, studyTimeZone, type FocusDay, type FocusSession } from "./study-focus.ts";
-import { splitSelection } from "./study-selection.ts";
+import { MAX_STUDY_WEBSITES, splitSelection } from "./study-selection.ts";
+import { focusLeaderboardPatch, focusWeek } from "./focus-rewards.ts";
 import type { collection, doc, onSnapshot, runTransaction, serverTimestamp, Firestore, Transaction } from "firebase/firestore";
-export type StudySession = { id: string; lockId?: string; startedAt: number; endsAt: number; domains: string[]; timeZone?: string; paused?: boolean; pausedAt?: number; remainingMs?: number };
+export type StudySession = { id: string; lockId?: string; startedAt: number; endsAt: number; domains: string[]; timeZone?: string; paused?: boolean; pausedAt?: number; remainingMs?: number; appLimit?: number };
 export type StudyControl = { version: 1; revision: string; session: StudySession | null; source: string; allowedDomains?: string[]; overlayBreakId?: string };
 export type OverlayBreak = { id: string; lockId: string; at: number; paused: boolean };
 export type StudyDevice = { id: string; label: string; sessionId: string | null; lastSeenAt: number; error: string };
@@ -47,8 +48,14 @@ async function publishStudyFocusDay(db: Firestore, uid: string, date: string, ti
     const published = (await transaction.get(reference)).data();
     if (published?.["uid"] !== uid) return;
     const total = Math.max(0, Number(day?.["totalMilliseconds"]) || 0);
-    if (published["focusDays"]?.[date] === total && published["focusTimeZone"] === timeZone) return;
-    transaction.set(reference, { focusDays: { [date]: total }, focusTimeZone: timeZone, updatedAt: serverTimestamp() }, { merge: true });
+    const leaderboardReference = doc(db, "leaderboards", focusWeek(date), "entries", uid);
+    const leaderboard = (await transaction.get(leaderboardReference)).data();
+    const days = { ...published["focusDays"], [date]: total };
+    const patch = focusLeaderboardPatch(uid, profile!, date, days);
+    if (published["focusDays"]?.[date] !== total || published["focusTimeZone"] !== timeZone)
+      transaction.set(reference, { focusDays: { [date]: total }, focusTimeZone: timeZone, updatedAt: serverTimestamp() }, { merge: true });
+    if (leaderboard?.["focusXp"] !== patch.focusXp || Object.entries(patch.focusDays).some(([day, value]) => leaderboard?.["focusDays"]?.[day] !== value))
+      transaction.set(leaderboardReference, { ...patch, updatedAt: serverTimestamp() }, { merge: true });
   });
 }
 async function prepareFocusCredits(transaction: Transaction, db: Firestore, uid: string, session: FocusSession | null | undefined, time: number) {
@@ -65,10 +72,14 @@ async function prepareFocusCredits(transaction: Transaction, db: Firestore, uid:
   return () => { for (const { reference, value, next, date } of credits) {
     if (next.totalMilliseconds !== value?.totalMilliseconds) transaction.set(reference, { version: 1, date, ...next, updatedAt: serverTimestamp() });
   }
-    if (publicReference && publicData?.["uid"] === uid) transaction.set(publicReference, {
+    if (publicReference && publicData?.["uid"] === uid) {
+      const days = { ...publicData["focusDays"], ...Object.fromEntries(credits.map(({ date, next }) => [date, next.totalMilliseconds])) };
+      for (const { date } of credits) transaction.set(doc(db, "leaderboards", focusWeek(date), "entries", uid), { ...focusLeaderboardPatch(uid, profile!, date, days), updatedAt: serverTimestamp() }, { merge: true });
+      transaction.set(publicReference, {
       focusDays: Object.fromEntries(credits.map(({ date, next }) => [date, next.totalMilliseconds])),
       focusTimeZone: session?.timeZone || studyTimeZone(), updatedAt: serverTimestamp(),
     }, { merge: true });
+    }
   };
 }
 function watchPublicStudyFocus(db: Firestore, uid: string, username: string, callback: (value: { days: Record<string, number>; timeZone: string }) => void, error: (error: Error) => void) {
@@ -85,8 +96,9 @@ async function recordStudyFocus(db: Firestore, uid: string, session: FocusSessio
   await runTransaction(db, async transaction => { const commit = await prepareFocusCredits(transaction, db, uid, session, time); commit(); });
 }
 /** Same private document contract for Windows today, and web/Android controllers later. */
-async function startStudySession(db: Firestore, uid: string, minutes: number, values: string[], source = "windows") {
-  if (!Number.isInteger(minutes) || minutes < 1 || minutes > 720 || (!values.length && source !== "mobile") || values.length > 3) throw Error("Choose 1–720 minutes and up to 3 websites.");
+async function startStudySession(db: Firestore, uid: string, minutes: number, values: string[], source = "windows", appLimit = 2) {
+  if (!Number.isInteger(appLimit) || appLimit < 0 || appLimit > 2) throw Error("Choose 0, 1 or 2 allowed apps.");
+  if (!Number.isInteger(minutes) || minutes < 1 || minutes > 720 || (!values.length && source !== "mobile") || values.length > MAX_STUDY_WEBSITES) throw Error(`Choose 1–720 minutes and up to ${MAX_STUDY_WEBSITES} websites.`);
   const { domains } = splitSelection(values);
   const reference = doc(db, ...studyControlPath(uid));
   return runTransaction(db, async transaction => {
@@ -95,7 +107,7 @@ async function startStudySession(db: Firestore, uid: string, minutes: number, va
     const startedAt = Date.now();
     const creditPrevious = await prepareFocusCredits(transaction, db, uid, current?.["session"], startedAt);
     creditPrevious();
-    const session: StudySession = { id: randomUUID(), startedAt, endsAt: startedAt + minutes * 60000, domains, timeZone: studyTimeZone() };
+    const session: StudySession = { id: randomUUID(), startedAt, endsAt: startedAt + minutes * 60000, domains, timeZone: studyTimeZone(), ...(source === "mobile" ? { appLimit } : {}) };
     transaction.set(reference, { version: 1, revision: randomUUID(), session, allowedDomains: domains, source, updatedAt: serverTimestamp() });
     return session;
   });
@@ -128,7 +140,7 @@ async function resumeStudySession(db: Firestore, uid: string, source = "windows"
     const remainingMs = Number(paused?.remainingMs);
     if (!paused?.paused || !Number.isSafeInteger(remainingMs) || remainingMs < 1 || remainingMs > 720 * 60000) throw Error("There is no paused focus session to resume.");
     const startedAt = Date.now();
-    transaction.set(reference, { ...current, version: 1, revision: randomUUID(), source, session: { id: randomUUID(), lockId: paused.lockId ?? paused.id, startedAt, endsAt: startedAt + remainingMs, domains: paused.domains, timeZone: paused.timeZone }, updatedAt: serverTimestamp() });
+    transaction.set(reference, { ...current, version: 1, revision: randomUUID(), source, session: { id: randomUUID(), lockId: paused.lockId ?? paused.id, startedAt, endsAt: startedAt + remainingMs, domains: paused.domains, timeZone: paused.timeZone, ...(paused.appLimit !== undefined ? { appLimit: paused.appLimit } : {}) }, updatedAt: serverTimestamp() });
   });
 }
 
@@ -148,7 +160,7 @@ async function applyOverlayBreak(db: Firestore, uid: string, action: OverlayBrea
     } else if (!action.paused && session.paused) {
       const remainingMs = session.remainingMs ?? 0;
       if (remainingMs < 1 || action.at < (session.pausedAt ?? session.startedAt)) throw Error("Invalid resume time.");
-      next = { id: randomUUID(), lockId: session.lockId ?? session.id, startedAt: action.at, endsAt: action.at + remainingMs, domains: session.domains, timeZone: session.timeZone ?? studyTimeZone() };
+      next = { id: randomUUID(), lockId: session.lockId ?? session.id, startedAt: action.at, endsAt: action.at + remainingMs, domains: session.domains, timeZone: session.timeZone ?? studyTimeZone(), ...(session.appLimit !== undefined ? { appLimit: session.appLimit } : {}) };
     }
     transaction.set(reference, { ...current, session: next, overlayBreakId: action.id, revision: randomUUID(), source: "mobile-overlay", updatedAt: serverTimestamp() });
     return next;

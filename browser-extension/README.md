@@ -2,7 +2,9 @@
 
 Load the extracted folder in Chrome or Edge using Extensions > Developer mode > Load unpacked, then sign in with your SSC Buddy account. Reload an existing installation after updating these files.
 
-Add up to three website domains, such as parmar.com, using the extension or task widget. Add current website uses your active tab. Set focus time with the clock picker and start from either place.
+Add website domains, such as parmar.com, using the extension or task widget. Add current website uses your active tab. Set focus time with the clock picker and start from either place.
+
+The website limit is configured once in `MAX_STUDY_WEBSITES` in `shared/study-selection.ts`. Rebuild the web app, extension and Windows widgets after changing it.
 
 During a session, selected websites cannot be removed or replaced. Unused slots can be filled. Other websites unlock at the scheduled deadline. There is no early-stop control. Existing cached sessions continue through temporary connection failures.
 

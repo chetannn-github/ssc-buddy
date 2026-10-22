@@ -53,6 +53,9 @@ class BuddyMusicModule : Module() {
     AsyncFunction("syncFocusState") { id: String, endsAt: Double, accent: String, paused: Boolean, remainingMs: Double, image: String ->
       BuddyFocusService.sync(requireNotNull(appContext.reactContext), id, endsAt, accent, paused, remainingMs, image)
     }.runOnQueue(Queues.MAIN)
+    AsyncFunction("syncFocusStateWithLimit") { id: String, endsAt: Double, accent: String, paused: Boolean, remainingMs: Double, image: String, appLimit: Int ->
+      BuddyFocusService.sync(requireNotNull(appContext.reactContext), id, endsAt, accent, paused, remainingMs, image, appLimit)
+    }.runOnQueue(Queues.MAIN)
     AsyncFunction("openFocusLockSettings") {
       val context = requireNotNull(appContext.reactContext)
       context.startActivity(android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))

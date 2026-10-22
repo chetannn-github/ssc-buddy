@@ -55,15 +55,24 @@ test("an unmarked today keeps yesterday's streak; a missed full day breaks it", 
   assert.equal(habitStats(value, "2026-03-01").streak, 2);
   assert.equal(habitStats(value, "2026-03-02").streak, 0);
 });
-test("challenge progress counts distinct completed days, not elapsed days or future marks", () => {
+test("challenge progress follows the current streak while total keeps distinct completed days", () => {
   const value = habit(["2026-01-01", "2026-01-01", "2026-01-03", "2027-01-01"], 2);
   assert.deepEqual(habitStats(value, "2026-01-03"), {
     streak: 1,
     total: 2,
     markedToday: true,
-    progress: 1,
+    progress: 1 / 2,
   });
   assert.equal(habitStats(habit(["2026-01-01"], null), "2026-01-01").progress, 0);
+});
+
+test("challenge progress resets with a broken streak and caps at the target", () => {
+  const value = habit(["2026-01-01", "2026-01-02"], 2);
+  assert.equal(habitStats(value, "2026-01-02").progress, 1);
+  assert.equal(habitStats(value, "2026-01-03").progress, 1);
+  assert.equal(habitStats(value, "2026-01-04").progress, 0);
+  assert.equal(habitStats({ ...value, completedDates: [...value.completedDates, "2026-01-04"] }, "2026-01-04").progress, 1 / 2);
+  assert.equal(habitStats(habit(["2026-01-01", "2026-01-02", "2026-01-03"], 2), "2026-01-03").progress, 1);
 });
 test("unmarking today reverses progress and restores yesterday's consecutive streak", () => {
   const days = ["2026-04-03", "2026-04-04", "2026-04-05"];

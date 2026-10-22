@@ -1,7 +1,7 @@
 import { ProfileStudyLock } from "@/components/profile/ProfileStudyLock";
 import { PublicFocusTime } from "@/components/profile/PublicFocusTime";
 import * as focusReader from "../../shared/study-lock";
-import { useProfileFocus } from "../../shared/use-profile-focus";
+import { useProfileFocusData } from "../../shared/use-profile-focus";
 import { getFirebaseFirestore } from "@/lib/firebase-sync";
 import { AccentPicker } from "@/components/profile/AccentPicker";
 import { applyWebAccent, normalizeAppAccent, type AppAccent } from "@/lib/app-accent";
@@ -871,7 +871,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
   const importFileRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const authUser = useAuthUser();
-  const focusTime = useProfileFocus(getFirebaseFirestore, focusReader, readOnly ? publicProfile?.uid : authUser?.uid, readOnly ? publicProfile?.username : undefined, readOnly, date => isInRange(date, range));
+  const focusData = useProfileFocusData(getFirebaseFirestore, focusReader, readOnly ? publicProfile?.uid : authUser?.uid, readOnly ? publicProfile?.username : undefined, readOnly, date => isInRange(date, range));
   const resultUid = readOnly ? publicProfile?.uid : authUser?.uid;
   const medalCounts = useWeeklyMedalCounts(resultUid, dailyTasks.map((task) => task.date));
 
@@ -1001,7 +1001,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
       incomplete: tasks.length - completed.length,
     };
   }, [dailyTasks, range]);
-  const xpSummary = useMemo(() => getXpSummary(dailyTasks), [dailyTasks]);
+  const xpSummary = useMemo(() => getXpSummary(dailyTasks, focusData.totalPoints), [dailyTasks, focusData.totalPoints]);
   const xpNextLabel = xpSummary.level === 0 ? "Reach 0 XP to begin" : `${Math.max(0, xpSummary.nextLevelXp - xpSummary.xp)} XP to Level ${xpSummary.level + 1}`;
   const xpTimelineStart = Math.max(0, xpSummary.level - 3);
   const xpTimelineLevels = Array.from({ length: 6 }, (_, index) => xpTimelineStart + index);
@@ -1297,7 +1297,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
               studyMinutes={dailyTaskTotals.studyMinutes}
               completedTasks={dailyTaskTotals.completed}
               incompleteTasks={dailyTaskTotals.incomplete}
-              focusTime={focusTime}
+              focusTime={focusData.text}
               range={range}
               onRangeChange={setRange}
               showPractice={profile?.practiceSessionEnabled !== false}

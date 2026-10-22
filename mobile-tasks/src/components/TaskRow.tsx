@@ -12,6 +12,7 @@ type Props = {
   onReopen: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onReschedule?: () => void;
   compact?: boolean;
   grouped?: boolean;
   last?: boolean;
@@ -24,6 +25,7 @@ export function TaskRow({
   onReopen,
   onEdit,
   onDelete,
+  onReschedule,
   compact = false,
   grouped = false,
   last = false,
@@ -54,10 +56,10 @@ export function TaskRow({
     <View>
       <Pressable
         ref={row}
-        disabled={compact}
-        onLongPress={openMenu}
+        disabled={compact && !onReschedule}
+        onLongPress={compact ? onReschedule : openMenu}
         delayLongPress={400}
-        accessibilityHint={compact ? undefined : "Long press for task actions"}
+        accessibilityHint={onReschedule ? "Long press to add this task to today or tomorrow" : compact ? undefined : "Long press for task actions"}
         style={[
           styles.task,
           task.completed && styles.completed,

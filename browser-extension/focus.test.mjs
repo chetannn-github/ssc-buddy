@@ -1,7 +1,20 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { focusPoints, focusRewardTotal, focusWeek, weeklyFocus } from '../shared/focus-rewards.ts';
 import { creditFocusDay, emptyFocusDay, focusSlices, focusDayKey, todayFocusMilliseconds, formatFocusTime, rangeFocusMilliseconds } from '../shared/study-focus.ts';
 const session = (start, end, id = 'session') => ({ id, startedAt: Date.parse(start), endsAt: Date.parse(end), timeZone: 'Asia/Kolkata' });
+
+test('focus rewards use completed ten-minute blocks and stay within calendar weeks', () => {
+  assert.equal(focusPoints(599999), 0);
+  assert.equal(focusPoints(600000), 1);
+  assert.equal(focusPoints(Infinity), 0);
+  assert.equal(focusPoints(-1), 0);
+  assert.equal(focusRewardTotal({ '2026-10-18': 900000, '2026-10-19': 900000 }), 2);
+  assert.deepEqual(weeklyFocus({ '2026-10-18': 3600000, '2026-10-19': 900000 }, '2026-10-19'), { focusMilliseconds: 900000, focusPoints: 1 });
+  assert.equal(focusWeek('2026-10-18'), '2026-10-12');
+  assert.equal(focusWeek('2026-10-19'), '2026-10-19');
+  assert.equal(focusWeek('2026-02-30'), '');
+});
 
 test('profile focus respects date filters, excludes breaks, and counts live credits only once', () => {
   const value = session('2026-10-22T23:45:00+05:30', '2026-10-23T00:15:00+05:30');

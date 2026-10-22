@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { StudyLock, controller as focusReader } from "../components/StudyLock";
 import { PublicFocusTime } from "../components/PublicFocusTime";
-import { useProfileFocus } from "../../../shared/use-profile-focus";
+import { useProfileFocusData } from "../../../shared/use-profile-focus";
 import { getFirebaseFirestore } from "../lib/firebase";
 import { DestructiveDialog } from "../components/DestructiveDialog";
 import { createThemedStyles, setAppAccent, useAppAccent } from "../theme";
@@ -244,7 +244,9 @@ export function ProfileScreen({
   const name = profileReady
     ? profileName.trim() || user?.displayName?.trim() || user?.email?.split("@")[0] || "Student"
     : "";
-  const xpSummary = useMemo(() => getXpSummary(tasks), [tasks]);
+  const [range, setRange] = useState<Range>("week");
+  const focusData = useProfileFocusData(getFirebaseFirestore, focusReader, readOnly ? publicUid : user?.uid, readOnly ? profileSettings?.username : undefined, readOnly, date => withinRange(date, range));
+  const xpSummary = useMemo(() => getXpSummary(tasks, focusData.totalPoints), [tasks, focusData.totalPoints]);
   const xpTimelineStart = Math.max(0, xpSummary.level - 3);
   const xpTimelineLevels = Array.from({ length: 6 }, (_, index) => xpTimelineStart + index);
   const isInitialProfileSetup = !profileSettings?.username;
@@ -288,8 +290,6 @@ export function ProfileScreen({
     ? normalizePracticeRecords(Array.isArray(publicDashboard?.records) ? publicDashboard.records as Record<string, any>[] : [])
     : normalizePracticeRecords(sharedPracticeRecords));
   const lastPublicDashboard = useRef(publicDashboard);
-  const [range, setRange] = useState<Range>("week");
-  const focusTime = useProfileFocus(getFirebaseFirestore, focusReader, readOnly ? publicUid : user?.uid, readOnly ? profileSettings?.username : undefined, readOnly, date => withinRange(date, range));
   const [rangeOpen, setRangeOpen] = useState(false);
   const [rangeMenuVisible, setRangeMenuVisible] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
@@ -746,7 +746,7 @@ export function ProfileScreen({
                 <Stat lastColumn label="Mock tests" value={String(loggedMocks)} />
                 <Stat lastRow label="Study time" value={formatMinutes(filteredSummary.minutes)} />
                 <Stat lastRow label="Tasks completed" value={`${filteredSummary.done}/${filteredSummary.total}`} />
-                <Stat lastColumn lastRow label="Focus time" value={focusTime} />
+                <Stat lastColumn lastRow label="Focus time" value={focusData.text} />
               </View>
             ) : (
               <>
@@ -758,7 +758,7 @@ export function ProfileScreen({
                 <View style={styles.trackerGrid}>
                   <Stat lastRow label="Study time" value={formatMinutes(filteredSummary.minutes)} />
                   <Stat lastRow label="Tasks completed" value={trackProgressEnabled ? `${filteredSummary.done}/${filteredSummary.total}` : String(filteredSummary.done)} />
-                  <Stat lastColumn lastRow label={trackProgressEnabled ? "Focus time" : "Incomplete tasks"} value={trackProgressEnabled ? focusTime : String(filteredSummary.total - filteredSummary.done)} />
+                  <Stat lastColumn lastRow label={trackProgressEnabled ? "Focus time" : "Incomplete tasks"} value={trackProgressEnabled ? focusData.text : String(filteredSummary.total - filteredSummary.done)} />
                 </View>
               </>
             )}
@@ -1013,7 +1013,7 @@ export function ProfileScreen({
                   onPress={() => void saveProfileChanges()}
                 >
                   {savingProfile ? (
-                    <ActivityIndicator size="small" color={colors.accentDeep} />
+                    <ActivityIndicator size="small" color={colors.buttonInk} />
                   ) : (
                     <Text style={styles.saveProfileText}>Save profile</Text>
                   )}
@@ -2115,9 +2115,9 @@ const styles: Record<string, any> = createThemedStyles({
     borderRadius: 11,
     paddingHorizontal: 13,
     paddingVertical: 9,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.button,
   },
-  saveProfileText: { color: colors.accentDeep, fontWeight: "600" },
+  saveProfileText: { color: colors.buttonInk, fontWeight: "600" },
   weeklyScore: { borderRadius: 8, paddingHorizontal: 6, paddingVertical: 3 },
   weeklyScorePositive: { backgroundColor: "rgba(74,222,128,.12)" },
   weeklyScoreNegative: { backgroundColor: "rgba(248,113,113,.12)" },

@@ -49,6 +49,7 @@
         "react-native-android-widget",
         {
           "widgets": [
+            { "name": "FocusTimerWidget", "label": "Focus Timer", "description": "Today's focus time. Tap to open Focus Lock.", "minWidth": "110dp", "minResizeWidth": "110dp", "minHeight": "110dp", "minResizeHeight": "110dp", "targetCellWidth": 2, "targetCellHeight": 2, "resizeMode": "horizontal|vertical", "updatePeriodMillis": 1800000 },
             { "name": "HabitWidget", "label": "Habit Heatmap", "description": "Habit heatmap with monthly or 20-week history and streak", "minWidth": "140dp", "minResizeWidth": "140dp", "minHeight": "170dp", "targetCellWidth": 2, "targetCellHeight": 2, "resizeMode": "horizontal|vertical", "updatePeriodMillis": 1800000, "widgetFeatures": "reconfigurable" },
             { "name": "HabitMonthWidget", "label": "Habit Month", "description": "Monthly habit calendar and streak", "minWidth": "140dp", "minResizeWidth": "140dp", "minHeight": "170dp", "targetCellWidth": 2, "targetCellHeight": 2, "resizeMode": "horizontal|vertical", "updatePeriodMillis": 1800000, "widgetFeatures": "reconfigurable" },
             { "name": "HabitCompactWidget", "label": "Habit Compact", "description": "Compact habit name, streak and mark button", "minWidth": "110dp", "minHeight": "140dp", "targetCellWidth": 2, "targetCellHeight": 2, "resizeMode": "horizontal|vertical", "updatePeriodMillis": 1800000, "widgetFeatures": "reconfigurable" },

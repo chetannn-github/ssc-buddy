@@ -45,6 +45,8 @@ import {
 } from "@/lib/daily-tasks";
 import { syncTaskChanges } from "@/lib/task-sync";
 import { currentWeekKey, publishLeaderboardEntry, weeklyTaskPoints } from "@/lib/leaderboard";
+import { FocusRewardRow } from "../../../shared/FocusRewardRow";
+import { getFirebaseFirestore } from "@/lib/firebase-sync";
 
 export function TasksWorkspace({
   initialSection = "tasks",
@@ -282,6 +284,7 @@ export function TasksWorkspace({
               </>
             )}
           </div>
+          {!isHabits && <FocusRewardRow uid={user?.uid} date={selected} getDatabase={getFirebaseFirestore} />}
           {!isHabits && (
             <>
               {error && (

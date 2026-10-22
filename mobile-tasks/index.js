@@ -66,6 +66,14 @@ if (supportsAndroidWidgets) {
   };
 
   registerWidgetTaskHandler(async ({ widgetInfo, widgetAction, clickAction, clickActionData, renderWidget }) => {
+    if (widgetInfo.widgetName === "FocusTimerWidget") {
+      if (widgetAction === "WIDGET_DELETED") return;
+      const user = await getWidgetUser();
+      const { focusTimerWidgetView } = require("./src/widgets/focus-timer-widget-store");
+      const { renderFocusTimerWidget } = require("./src/widgets/FocusTimerWidget");
+      renderWidget(renderFocusTimerWidget(await focusTimerWidgetView(user?.uid)));
+      return;
+    }
     if (["HabitWidget", "HabitMonthWidget", "HabitCompactWidget"].includes(widgetInfo.widgetName)) {
       if (widgetAction === "WIDGET_DELETED") { await removeHabitWidget(widgetInfo.widgetId); return; }
       const user = await getWidgetUser(); let error = "";

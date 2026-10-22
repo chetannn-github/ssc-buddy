@@ -34,12 +34,12 @@ const inactiveCalendarDays = (tasks: Pick<Task, "completed" | "date" | "createdA
   return inactiveDays;
 };
 
-export function getXpSummary(tasks: Pick<Task, "completed" | "date" | "minutesSpent" | "createdAt">[]): XpSummary {
+export function getXpSummary(tasks: Pick<Task, "completed" | "date" | "minutesSpent" | "createdAt">[], focusXp = 0): XpSummary {
   const today = todayKey();
   const completed = tasks.filter((task) => task.completed);
   const minutes = completed.reduce((total, task) => total + Math.max(0, Number(task.minutesSpent) || 0), 0);
   const overdue = tasks.filter((task) => !task.completed && task.date < today).length;
   const inactiveDays = inactiveCalendarDays(tasks, today);
   const xp = completed.length * 10 + Math.floor(minutes / 10) - overdue * 5 - inactiveDays * 50;
-  return summarizeXp(xp);
+  return summarizeXp(xp + Math.max(0, focusXp));
 }

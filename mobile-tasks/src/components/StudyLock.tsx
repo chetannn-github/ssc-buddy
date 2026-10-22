@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Alert, Animated, Easing, ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { AccessibilityInfo, Alert, Animated, Easing, ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import Svg, { Circle, Line } from "react-native-svg";
 import * as Crypto from "expo-crypto";
@@ -7,12 +7,14 @@ import { collection, doc, onSnapshot, runTransaction, serverTimestamp } from "fi
 import { createStudyController, type StudyControl } from "../../../shared/study-controller";
 import { emptyFocusDay, focusDayKey, formatFocusTime, todayFocusMilliseconds, type FocusDay } from "../../../shared/study-focus";
 import { getFirebaseFirestore } from "../lib/firebase";
-import { useAppAccent } from "../theme";
+import { colors, useAppAccent } from "../theme";
 import { accentInk } from "../domain/app-accent";
 import { SlotTime } from "./SlotTime";
 import { DeviceFocusSetup } from "./DeviceFocusSetup";
+import { AnimatedTimeChips } from "./AnimatedTimeChips";
 import { deviceFocusStatus, openDeviceFocusSettings, supportsDeviceFocus, syncDeviceFocusState } from "../lib/native-focus-lock";
 import { clockValueFromPoint } from "../domain/clock-hand";
+import { MAX_STUDY_WEBSITES } from "../../../shared/study-selection";
 
 // Use the mobile app's SDK instance and native UUID source with the shared contract.
 export const controller = createStudyController({ collection, doc, onSnapshot, runTransaction, serverTimestamp }, () => Crypto.randomUUID());
@@ -20,11 +22,35 @@ const remaining = (end: number, now: number) => {
   const seconds = Math.max(0, Math.ceil((end - now) / 1000));
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 };
-export function StudyLock({ uid }: { uid: string }) {
+export function StudyLock({ uid, taskButton = false, openRequest = 0, onRequestOpened }: { uid: string; taskButton?: boolean; openRequest?: number; onRequestOpened?: () => void }) {
   const accent = useAppAccent();
   const [open, setOpen] = useState(false), [picking, setPicking] = useState(false);
+  useEffect(() => { if (openRequest) { setOpen(true); onRequestOpened?.(); } }, [openRequest, onRequestOpened]);
   const [control, setControl] = useState<StudyControl | null>(null);
   const [now, setNow] = useState(Date.now()), [minutes, setMinutes] = useState(25);
+  const [appLimit, setAppLimit] = useState(2);
+  const [reducedMotion, setReducedMotion] = useState(false);
+  useEffect(() => {
+    let active = true;
+    void AccessibilityInfo.isReduceMotionEnabled().then(value => { if (active) setReducedMotion(value); }).catch(() => undefined);
+    const listener = AccessibilityInfo.addEventListener("reduceMotionChanged", setReducedMotion);
+    return () => { active = false; listener.remove(); };
+  }, []);
+  const appLimitSlide = useRef(new Animated.Value(2 * 46)).current;
+  useEffect(() => {
+    if (reducedMotion) {
+      appLimitSlide.setValue(appLimit * 46);
+      return;
+    }
+    const animation = Animated.timing(appLimitSlide, {
+      toValue: appLimit * 46,
+      duration: 240,
+      easing: Easing.inOut(Easing.cubic),
+      useNativeDriver: true,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [appLimit, appLimitSlide, reducedMotion]);
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const [focusData, setFocusData] = useState<FocusDay>(emptyFocusDay);
   const date = focusDayKey(now, control?.session?.timeZone);
@@ -43,7 +69,7 @@ export function StudyLock({ uid }: { uid: string }) {
     return () => { stopControl(); clearInterval(timer); };
   }, [uid]);
   const session = control?.session && (control.session.paused || control.session.endsAt > now) ? control.session : null;
-  const domains = session?.domains ?? control?.allowedDomains ?? [];
+  const domains = (session?.domains ?? control?.allowedDomains ?? []).slice(0, MAX_STUDY_WEBSITES);
   const run = async (action: () => Promise<void>) => {
     if (busy) return;
     setBusy(true); setError("");
@@ -53,10 +79,12 @@ export function StudyLock({ uid }: { uid: string }) {
   const close = () => { if (picking) setPicking(false); else setOpen(false); };
   const icon = (name: React.ComponentProps<typeof MaterialCommunityIcons>["name"], size = 17, tint = "#999") => <MaterialCommunityIcons name={name} size={size} color={tint} />;
   return <>
-    <Pressable accessibilityRole="button" accessibilityLabel="Focus Lock" style={s.profileTrigger} onPress={() => setOpen(true)}>
+    {taskButton ? <Pressable accessibilityRole="button" accessibilityLabel={session ? "Open focus timer" : "Start Focus"} style={s.taskStart} onPress={() => setOpen(true)}>
+      {icon("timer-outline", 19, "#111")}<Text style={s.taskStartText}>{session ? `${session.paused ? "Focus paused" : "Focus"} · ${remaining(session.paused ? now + (session.remainingMs ?? 0) : session.endsAt, now)}` : "Start Focus"}</Text>
+    </Pressable> : <Pressable accessibilityRole="button" accessibilityLabel="Focus Lock" style={s.profileTrigger} onPress={() => setOpen(true)}>
       <View style={s.profileLock}>{icon("lock-outline", 18, session ? accent : "#eee")}{session && <ActiveLockDot color={accent} />}</View><Text style={s.profileLabel}>Focus Lock</Text>
-      <View style={s.profileFocus}><Text style={s.profileFocusTime}>Today · {formatFocusTime(todayFocus)}</Text></View>
-    </Pressable>
+      <View style={s.profileFocus}><Text style={s.profileFocusTime}>Today · </Text><SlotTime value={formatFocusTime(todayFocus)} color="#ddd" size={12} weight="600" compact /></View>
+    </Pressable>}
     <Modal transparent visible={open} animationType="fade" statusBarTranslucent onRequestClose={close}>
       <KeyboardAvoidingView style={s.overlay} behavior={Platform.OS === "ios" ? "padding" : "height"}>
         <Pressable style={StyleSheet.absoluteFill} accessibilityLabel="Close Focus Lock" onPress={close} />
@@ -69,8 +97,26 @@ export function StudyLock({ uid }: { uid: string }) {
               <SlotTime value={remaining(session.paused ? now + (session.remainingMs ?? 0) : session.endsAt, now)} color={accent} />
               <Pressable accessibilityRole="button" accessibilityLabel={session.paused ? "Resume focus" : "Take a break"} disabled={busy} style={[s.secondary, busy && { opacity: 0.45 }]} onPress={() => void run(() => session.paused ? controller.resumeStudySession(getFirebaseFirestore(), uid, "mobile") : controller.pauseStudySession(getFirebaseFirestore(), uid, "mobile"))}><Text style={s.secondaryText}>{session.paused ? "Resume focus" : "Take a break"}</Text></Pressable>
             </> : <>
-              <Pressable accessibilityRole="button" accessibilityLabel="Focus time" style={s.duration} disabled={busy} onPress={() => setPicking(true)}>{icon("clock-outline", 17)}<Text style={s.durationLabel}>Focus time</Text><Text style={s.durationValue}>{minutes >= 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60 ? `${minutes % 60}m` : ""}` : `${minutes} min`}</Text></Pressable>
-              <View style={s.quickTimes}>{[15, 30, 60, 90].map(value => <Pressable key={value} accessibilityRole="button" accessibilityLabel={`${value} minutes`} accessibilityState={{ selected: minutes === value, disabled: busy }} disabled={busy} onPress={() => setMinutes(value)} style={[s.quickTime, minutes === value && { backgroundColor: accent }]}><Text style={[s.quickTimeText, minutes === value && { color: accentInk(accent) }]}>{value} min</Text></Pressable>)}</View>
+              <Pressable accessibilityRole="button" accessibilityLabel="Focus time" style={s.duration} disabled={busy} onPress={() => setPicking(true)}>{icon("clock-outline", 17)}<Text style={s.durationLabel}>Focus time</Text><View style={s.durationValue}><SlotTime value={minutes >= 60 ? `${Math.floor(minutes / 60)}h${minutes % 60 ? ` ${minutes % 60}m` : ""}` : `${minutes} min`} color="#eee" size={12} weight="600" compact /></View></Pressable>
+              <AnimatedTimeChips options={[15, 30, 60, 90]} value={minutes} onChange={setMinutes} disabled={busy} suffix=" min" color={accent} ink={accentInk(accent)} style={s.quickTimes} />
+              <View style={s.appLimitRow}>
+                <Text style={s.durationLabel}>Allowed apps</Text>
+                <View style={s.appLimitOptions}>
+                  <Animated.View pointerEvents="none" style={[s.appLimitIndicator, { transform: [{ translateX: appLimitSlide }] }]} />
+                  {[0, 1, 2].map(value => {
+                    const range = [(value - 1) * 46, value * 46, (value + 1) * 46];
+                    const selectedOpacity = appLimitSlide.interpolate({ inputRange: range, outputRange: [0, 1, 0], extrapolate: "clamp" });
+                    return (
+                    <Pressable key={value} accessibilityRole="button" accessibilityLabel={`${value} extra allowed apps`} accessibilityState={{ selected: appLimit === value, disabled: busy }} disabled={busy} onPress={() => setAppLimit(value)} style={s.appLimitOption}>
+                      <Animated.View pointerEvents="none" accessible={false} style={{ transform: [{ scale: appLimitSlide.interpolate({ inputRange: range, outputRange: [1, 1.1, 1], extrapolate: "clamp" }) }] }}>
+                        <Animated.Text style={[s.quickTimeText, { opacity: appLimitSlide.interpolate({ inputRange: range, outputRange: [1, 0, 1], extrapolate: "clamp" }) }]}>{value}</Animated.Text>
+                        <Animated.Text style={[s.quickTimeText, s.appLimitSelectedText, { opacity: selectedOpacity }]}>{value}</Animated.Text>
+                      </Animated.View>
+                    </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
               <Pressable accessibilityRole="button" accessibilityLabel="Start Focus Lock" disabled={busy || !ready} style={[s.primary, (busy || !ready) && { opacity: 0.4 }]} onPress={() => void run(async () => {
                 if (Platform.OS === "android" && supportsDeviceFocus && !(await deviceFocusStatus()).enabled) {
                   Alert.alert("Enable app blocking", "Turn on SSC Buddy Focus Lock in Accessibility settings, then return to start.", [
@@ -79,7 +125,7 @@ export function StudyLock({ uid }: { uid: string }) {
                   ]);
                   return;
                 }
-                const started = await controller.startStudySession(getFirebaseFirestore(), uid, minutes, domains, "mobile");
+                const started = await controller.startStudySession(getFirebaseFirestore(), uid, minutes, domains, "mobile", appLimit);
                 await syncDeviceFocusState(started, accent, "");
               })}>{busy ? <ActivityIndicator color="#111" /> : <Text style={s.primaryText}>Start Focus Lock</Text>}</Pressable>
             </>}
@@ -124,13 +170,20 @@ function ActiveLockDot({ color }: { color: string }) {
 }
 
 const s = StyleSheet.create({
+  taskStart: { alignSelf: "center", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 48, minWidth: 180, paddingHorizontal: 28, borderRadius: 28, backgroundColor: "#f9fcf5" },
+  taskStartText: { color: "#111", fontSize: 14, fontWeight: "700", fontVariant: ["tabular-nums"] },
+  appLimitRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 18 },
+  appLimitOptions: { flexDirection: "row", gap: 6, padding: 4, borderRadius: 24, backgroundColor: "#202020" },
+  appLimitIndicator: { position: "absolute", left: 4, top: 4, width: 40, height: 36, borderRadius: 20, backgroundColor: colors.button },
+  appLimitOption: { width: 40, minHeight: 36, borderRadius: 20, alignItems: "center", justifyContent: "center" },
+  appLimitSelectedText: { position: "absolute", top: 0, left: 0, right: 0, textAlign: "center", color: colors.buttonInk },
   quickTimes: { flexDirection: "row", gap: 8, marginBottom: 16 },
   quickTime: { flex: 1, minHeight: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: "#202020" },
   quickTimeText: { color: "#c6c6c6", fontSize: 12, fontWeight: "600" },
   profileLock: { flexDirection: "row", alignItems: "center", gap: 3 },
   activeLockDot: { width: 4, height: 4, borderRadius: 2 },
   profileFocusTime: { color: "#ddd", fontSize: 12, fontWeight: "600", fontVariant: ["tabular-nums"] },
-  profileFocus: { marginLeft: "auto", alignItems: "flex-end", gap: 3 },
+  profileFocus: { marginLeft: "auto", flexDirection: "row", alignItems: "center" },
   profileTrigger: { flexDirection: "row", alignItems: "center", gap: 9, padding: 15, borderRadius: 18, backgroundColor: "#1b1b1b", marginTop: 12 }, profileLabel: { color: "#fafaf7", fontSize: 13, fontWeight: "600" }, profileHint: { marginLeft: "auto", color: "#888", fontSize: 11 },
   overlay: { flex: 1, justifyContent: "center", alignItems: "center", padding: 12, backgroundColor: "#000b" }, dialog: { flexGrow: 0, width: "100%", maxWidth: 365, maxHeight: "92%", borderRadius: 24, backgroundColor: "#000" }, dialogContent: { padding: 18 }, heading: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }, title: { color: "#fafaf7", fontSize: 17, fontWeight: "700" },
   connection: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 5, marginTop: 10, marginBottom: 18, paddingVertical: 5, paddingHorizontal: 8, borderRadius: 20, backgroundColor: "#ffffff08" }, connectionText: { color: "#999", fontSize: 10 }, dot: { width: 5, height: 5, borderRadius: 3 }, liveTime: { fontSize: 48, fontWeight: "700", textAlign: "center", marginVertical: 16, fontVariant: ["tabular-nums"] },

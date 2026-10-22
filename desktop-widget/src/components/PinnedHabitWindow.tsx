@@ -122,7 +122,7 @@ export function PinnedHabitWindow({ pin }: { pin: DesktopHabitPin }) {
         {cells.map(cell => <HeatmapCell key={cell.key} x={labelX + cell.column * step + 1} y={labelY + cell.row * step + 1} size={step - 2} color={tint} intensity={habitIntensity(habit, cell.key)} future={cell.future} />)}
       </svg></div><div className="pinned-footer"><small>{wide ? "Last 20 weeks" : new Date(today + "T12:00:00").toLocaleDateString(undefined, { month: "long" })}</small>{markButton}</div>
     </>}
-    {habit.targetDays && <div className="pinned-target" aria-label={`${stats.total} of ${habit.targetDays} challenge days completed`}><span><NumberFlow value={stats.total} />/{habit.targetDays} days</span><div><i style={{ width: `${stats.progress * 100}%` }} /></div></div>}
+    {habit.targetDays && <div className="pinned-target" aria-label={`${stats.streak} of ${habit.targetDays} challenge days completed`}><span><NumberFlow value={stats.streak} />/{habit.targetDays} days</span><div><i style={{ width: `${stats.progress * 100}%` }} /></div></div>}
     {settings.tracking === "count" && <div className="pinned-count"><button disabled={!available} aria-label="Subtract count" onClick={() => update({ type: "increment", amount: -settings.step })}>−</button><span><NumberFlow value={entry.count} />/{settings.dailyGoal} {settings.unit}</span></div>}
     {!!error && <p role="alert" className="habit-error">{error}</p>}
     <AnimatePresence initial={false}>

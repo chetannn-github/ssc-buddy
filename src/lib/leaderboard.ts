@@ -7,7 +7,7 @@ import { getXpSummary } from "@/lib/xp";
 import { leaderboardWeek, resolveWeeklyResults } from "../../mobile-tasks/src/domain/weekly-results";
 
 export type LeaderboardTask = { name: string; subject?: string; type?: string; minutesSpent?: number; completed: boolean; date: string; points: number };
-export type LeaderboardEntry = { uid: string; username: string; name: string; avatar?: string; points: number; xp?: number; level?: number; completed: number; overdue: number; inactiveDays: number; inactiveDates?: string[]; studyMinutes: number; week: string; leaderboardTasks?: LeaderboardTask[]; completedTasks?: Array<{ name: string; subject?: string }> };
+export type LeaderboardEntry = { uid: string; username: string; name: string; avatar?: string; points: number; xp?: number; level?: number; completed: number; overdue: number; inactiveDays: number; inactiveDates?: string[]; studyMinutes: number; week: string; focusDays?: Record<string, number>; focusXp?: number; focusMilliseconds?: number; focusPoints?: number; leaderboardTasks?: LeaderboardTask[]; completedTasks?: Array<{ name: string; subject?: string }> };
 const day = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 export const currentWeekKey = leaderboardWeek;
 export function weeklyScore(tasks: DailyTask[], week = currentWeekKey()) {

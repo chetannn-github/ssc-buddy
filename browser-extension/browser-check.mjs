@@ -6,6 +6,7 @@ import path from 'node:path';
 import http from 'node:http';
 import assert from 'node:assert/strict';
 import { encode, decodeDocument } from './firestore-codec.js';
+import { MAX_STUDY_WEBSITES } from '../shared/study-selection.ts';
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const extension = path.resolve('browser-extension/dist/ssc-buddy-study-lock');
 const profile = await fs.mkdtemp(path.join(os.tmpdir(), 'ssc-study-cloud-test-'));
@@ -55,19 +56,19 @@ try {
   await popup.locator('#login button.is-loading').waitFor();
   await popup.waitForFunction(()=>document.querySelector('#login').hidden && !document.querySelector('#website-editor').hidden);
   await popup.locator('#website-domain').fill('parmar.com'); await popup.locator('#website-add').click();
-  await popup.waitForFunction(()=>document.querySelector('#website-count').textContent==='1/3');
+  await popup.waitForFunction(limit=>document.querySelector('#website-count').textContent==='1/'+limit, MAX_STUDY_WEBSITES);
   assert.deepEqual(control.allowedDomains,['parmar.com']);
   await popup.getByRole('button',{name:'Remove parmar.com'}).click();
-  await popup.waitForFunction(()=>document.querySelector('#website-count').textContent==='0/3');
+  await popup.waitForFunction(limit=>document.querySelector('#website-count').textContent==='0/'+limit, MAX_STUDY_WEBSITES);
   const currentTab=await context.newPage();await currentTab.goto(`http://study.example:${port}/`);await currentTab.bringToFront();
   await popup.evaluate(()=>document.querySelector('#reconnect').click());
   await popup.waitForFunction(()=>document.querySelector('#add-current').textContent.includes('study.example'));
   await popup.evaluate(()=>document.querySelector('#add-current').click());
   await popup.locator('#add-current.is-loading').waitFor();
-  await popup.waitForFunction(()=>document.querySelector('#website-count').textContent==='1/3');
+  await popup.waitForFunction(limit=>document.querySelector('#website-count').textContent==='1/'+limit, MAX_STUDY_WEBSITES);
   assert.deepEqual(control.allowedDomains,['study.example']);
   await currentTab.close();await popup.bringToFront();
-  await popup.getByRole('button',{name:'Remove study.example'}).click();await popup.waitForFunction(()=>document.querySelector('#website-count').textContent==='0/3');
+  await popup.getByRole('button',{name:'Remove study.example'}).click();await popup.waitForFunction(limit=>document.querySelector('#website-count').textContent==='0/'+limit, MAX_STUDY_WEBSITES);
   const existing=await context.newPage();await existing.goto(`http://blocked.example:${port}/`);
   control={version:1,revision:'draft-start',session:null,allowedDomains:['study.example']};
   await popup.locator('#reconnect').click();
@@ -81,9 +82,9 @@ try {
   assert.equal(control.source,'extension');await existing.waitForURL(url=>url.href.startsWith(base+'blocked.html'));await existing.locator('#motivation').evaluate(image=>image.decode());
   for(let i=0;i<100&&!acknowledgements.some(ack=>ack.sessionId===control.session.id);i++) await new Promise(resolve=>setTimeout(resolve,20));
   assert.ok(acknowledgements.some(ack=>ack.sessionId===control.session.id));
-  for(const domain of ['parmar.com','example.org']){await popup.locator('#website-domain').fill(domain);await popup.locator('#website-add').click();await popup.waitForFunction(expected=>Array.from(document.querySelectorAll('#sites strong')).some(node=>node.textContent===expected),domain);}
+  for(const domain of Array.from({length:MAX_STUDY_WEBSITES-1},(_,index)=>`study${index}.example`)){await popup.locator('#website-domain').fill(domain);await popup.locator('#website-add').click();await popup.waitForFunction(expected=>Array.from(document.querySelectorAll('#sites strong')).some(node=>node.textContent===expected),domain);}
   assert.equal(await popup.locator('#website-add').isDisabled(),true);
-  assert.equal(control.session.domains.length,3);
+  assert.equal(control.session.domains.length,MAX_STUDY_WEBSITES);
   const study=await context.newPage();await study.goto(`http://study.example:${port}/`);assert.equal(await study.locator('h1').textContent(),'Allowed study page');
   const denied=await context.newPage();await denied.goto(`http://blocked.example:${port}/`);assert.ok(denied.url().startsWith(base+'blocked.html'));
   await denied.screenshot({path:path.join(extension,'..','blocked-preview.png'),fullPage:true});
@@ -104,5 +105,5 @@ try {
   const total=()=>Array.from(focusDocuments.values()).reduce((sum,doc)=>sum+decodeDocument(doc).totalMilliseconds,0);
   assert.equal(total(),expected,'all elapsed time is saved after offline expiry');
   await reopened.locator('#reconnect').click();assert.equal(total(),expected,'repeated sync does not count focus twice');
-  console.log('PASS: daily focus saved after offline expiry with no double counting; real Edge signed-out login, sign-in loading, current website Add, shared clock picker, max 3 websites, allowed/blocked websites, offline restart and timed expiry. No production data changed.');
+  console.log('PASS: daily focus saved after offline expiry with no double counting; real Edge signed-out login, sign-in loading, current website Add, shared clock picker, shared website limit, allowed/blocked websites, offline restart and timed expiry. No production data changed.');
 } finally {await context?.close();await new Promise(resolve=>server.close(resolve));}

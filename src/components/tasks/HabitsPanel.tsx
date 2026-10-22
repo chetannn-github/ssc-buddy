@@ -255,7 +255,7 @@ export function HabitsPanel({
                           <>
                             <div className="mt-4 h-1 overflow-hidden rounded-full bg-white/5">
                               <div
-                                className="h-full rounded-full transition-all"
+                                className="h-full rounded-full transition-[width] duration-[450ms] ease-in-out motion-reduce:transition-none"
                                 style={{
                                   width: stats.progress * 100 + "%",
                                   backgroundColor: tint,
@@ -263,8 +263,8 @@ export function HabitsPanel({
                               />
                             </div>
                             <p className="mt-2 text-xs" style={{ color: tint }}>
-                              {stats.total}/{habit.targetDays} days
-                              {stats.total >= habit.targetDays ? " · Challenge complete!" : ""}
+                              {stats.streak}/{habit.targetDays} days
+                              {stats.streak >= habit.targetDays ? " · Challenge complete!" : ""}
                             </p>
                           </>
                         )}

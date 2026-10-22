@@ -1,3 +1,6 @@
+import { weeklyFocus } from "../../../shared/focus-rewards";
+import { summarizeXp } from "./xp-levels";
+
 const dateKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 
 export function leaderboardWeek(now = new Date()) {
@@ -27,7 +30,7 @@ export function leaderboardWeekLabel(week: string) {
   return `${format(start)} – ${format(end)}`;
 }
 
-type RankedEntry = { uid: string; points?: number; studyMinutes?: number; completed?: number };
+type RankedEntry = { uid: string; points?: number; studyMinutes?: number; completed?: number; week?: string; xp?: number; focusDays?: Record<string, number>; focusXp?: number; taskPoints?: number; taskXp?: number };
 type WeeklyTask = { date: string; completed: boolean; minutesSpent?: number | null; points?: number };
 type ResultEntry = RankedEntry & { leaderboardTasks?: WeeklyTask[] };
 
@@ -57,6 +60,7 @@ export function finalizeWeeklyEntry<T extends ResultEntry>(entry: T, week: strin
     inactiveDates, inactiveDays: inactiveDates.length,
     studyMinutes: creditedMinutes,
     points: leaderboardTasks.reduce((total, task) => total + task.points, 0) - inactiveDates.length * 50,
+    taskPoints: leaderboardTasks.reduce((total, task) => total + task.points, 0) - inactiveDates.length * 50,
   };
 }
 
@@ -65,7 +69,12 @@ export function resolveWeeklyResults<T extends ResultEntry>(entries: T[], week: 
 }
 
 export function rankWeeklyEntries<T extends RankedEntry>(entries: T[]): T[] {
-  return [...entries].sort((a, b) => (Number(b.points) || 0) - (Number(a.points) || 0)
+  return entries.map(entry => {
+    if (!entry.focusDays) return entry;
+    const taskPoints = entry.taskPoints ?? (Number(entry.points) || 0), taskXp = entry.taskXp ?? (Number(entry.xp) || 0);
+    const focus = weeklyFocus(entry.focusDays, entry.week ?? leaderboardWeek());
+    return { ...entry, taskPoints, taskXp, ...focus, points: taskPoints + focus.focusPoints, xp: taskXp + (Number(entry.focusXp) || focus.focusPoints), level: summarizeXp(taskXp + (Number(entry.focusXp) || focus.focusPoints)).level, completed: entry.completed ?? 0, studyMinutes: entry.studyMinutes ?? 0 };
+  }).sort((a, b) => (Number(b.points) || 0) - (Number(a.points) || 0)
     || (Number(b.studyMinutes) || 0) - (Number(a.studyMinutes) || 0)
     || (Number(b.completed) || 0) - (Number(a.completed) || 0)
     || a.uid.localeCompare(b.uid));
@@ -77,7 +86,7 @@ export function weeklyAward(entries: ResultEntry[], uid: string, week: string, n
   const ranked = resolveWeeklyResults(entries, week, now);
   const index = ranked.findIndex((entry) => entry.uid === uid);
   const entry = ranked[index];
-  if (!entry || index > 2 || !(Number(entry.completed) > 0 || Number(entry.studyMinutes) > 0)) return null;
+  if (!entry || index > 2 || !(Number(entry.completed) > 0 || Number(entry.studyMinutes) > 0 || weeklyFocus(entry.focusDays, week).focusMilliseconds > 0)) return null;
   return { week, rank: index + 1, points: Number(entry.points) || 0 };
 }
 

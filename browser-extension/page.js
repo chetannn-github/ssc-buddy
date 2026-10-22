@@ -1,4 +1,7 @@
+import { MAX_STUDY_WEBSITES } from '../shared/study-selection.ts';
+
 const $ = id => document.getElementById(id);
+if ($('website-count')) $('website-count').textContent = `0/${MAX_STUDY_WEBSITES}`;
 if ($('motivation')) {
   $('motivation').classList.add('image-loading');
   try {
@@ -22,9 +25,9 @@ async function action(button, label, work) {
     if (button) { button.textContent = previous; button.classList.remove('is-loading'); }
     controls.forEach(([node, disabled]) => { node.disabled = disabled; });
     busy = false; document.querySelector('main')?.removeAttribute('aria-busy');
-    if ($('website-add')) $('website-add').disabled = slots >= 3;
-    if ($('website-domain')) $('website-domain').disabled = slots >= 3;
-    if ($('add-current')) $('add-current').disabled = !canAddCurrent || slots >= 3;
+    if ($('website-add')) $('website-add').disabled = slots >= MAX_STUDY_WEBSITES;
+    if ($('website-domain')) $('website-domain').disabled = slots >= MAX_STUDY_WEBSITES;
+    if ($('add-current')) $('add-current').disabled = !canAddCurrent || slots >= MAX_STUDY_WEBSITES;
     if ($('start-button')) $('start-button').disabled = slots === 0 || !!session;
   }
 }
@@ -80,9 +83,9 @@ async function refresh(type = 'status', extra = {}) {
     if ($('website-editor')) {
       const domains = result.domains ?? session?.domains ?? [];
       $('website-editor').hidden = !result.user;
-      $('website-count').textContent = domains.length + '/3';
-      $('website-add').disabled = busy || domains.length >= 3;
-      $('website-domain').disabled = domains.length >= 3;
+      $('website-count').textContent = domains.length + '/' + MAX_STUDY_WEBSITES;
+      $('website-add').disabled = busy || domains.length >= MAX_STUDY_WEBSITES;
+      $('website-domain').disabled = domains.length >= MAX_STUDY_WEBSITES;
       const site = result.currentSite;
       canAddCurrent = !!site?.canAdd;
       $('add-current').hidden = !site || !result.user;

@@ -4,7 +4,9 @@ import test from "node:test";
 import ts from "typescript";
 
 const source = await readFile(new URL("../mobile-tasks/src/domain/weekly-results.ts", import.meta.url), "utf8");
-const compiled = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
+const compiled = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText
+  .replaceAll('"../../../shared/focus-rewards"', JSON.stringify(new URL('../shared/focus-rewards.ts', import.meta.url).href))
+  .replaceAll('"./xp-levels"', JSON.stringify(new URL('../mobile-tasks/src/domain/xp-levels.ts', import.meta.url).href));
 const { leaderboardWeek, shiftLeaderboardWeek, rankWeeklyEntries, weeklyAward, weeklyAwardSeenKey, validLeaderboardWeek, finalizeWeeklyEntry, resolveWeeklyResults, completedLeaderboardWeeks, countWeeklyMedals } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}`);
 
 test("Sunday to Monday changes the week and retains the previous result key", () => {
@@ -124,4 +126,18 @@ test("medal history includes intervening weeks and excludes the live week", () =
   assert.deepEqual(completedLeaderboardWeeks(["2026-10-02", "2026-10-19"], "2026-10-19"), ["2026-09-28", "2026-10-05", "2026-10-12"]);
   assert.deepEqual(completedLeaderboardWeeks([], "2026-10-19"), ["2026-10-12"]);
   assert.deepEqual(completedLeaderboardWeeks(["invalid", "2026-10-25"], "2026-10-19"), ["2026-10-12"]);
+});
+
+test("focus rewards improve rank and XP once, including after re-ranking and week closure", () => {
+  const focus = { uid: "focus", week: "2026-10-12", points: 10, xp: 495, completed: 1, studyMinutes: 0, focusXp: 6, focusDays: { "2026-10-18": 3600000 }, leaderboardTasks: [done] };
+  const rival = { uid: "rival", points: 14, completed: 1 };
+  const ranked = resolveWeeklyResults([rival, focus], "2026-10-12", monday);
+  assert.equal(ranked[0].uid, "focus");
+  assert.equal(ranked[0].points, 16);
+  assert.equal(ranked[0].xp, 501);
+  assert.equal(ranked[0].level, 2);
+  assert.deepEqual(resolveWeeklyResults(ranked, "2026-10-12", monday), ranked);
+  assert.deepEqual(rankWeeklyEntries(ranked), ranked);
+  assert.equal(focus.points, 10, "raw task score is preserved");
+  assert.equal(weeklyAward([{ uid: "only-focus", week: "2026-10-12", focusDays: { "2026-10-18": 3600000 } }], "only-focus", "2026-10-12", monday).points, 6);
 });

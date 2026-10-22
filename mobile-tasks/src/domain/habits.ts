@@ -109,7 +109,7 @@ export function habitStats(habit: Habit, today = habitDay()) {
     streak,
     total: days.size,
     markedToday: days.has(today),
-    progress: habit.targetDays ? Math.min(1, days.size / habit.targetDays) : 0,
+    progress: habit.targetDays ? Math.min(1, streak / habit.targetDays) : 0,
   };
 }
 /** A continuous calendar: Sunday is row 0, each following Sunday starts a column. */

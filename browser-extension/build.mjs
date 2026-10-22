@@ -5,7 +5,9 @@ import { build, loadEnv } from 'vite';
 const root = path.dirname(fileURLToPath(import.meta.url));
 const out = path.join(root, 'dist', 'ssc-buddy-study-lock');
 await fs.mkdir(path.join(out, 'images'), { recursive: true });
-for (const name of ['manifest.json', 'page.js', 'popup.html', 'blocked.html', 'ui.css', 'README.md']) await fs.copyFile(path.join(root, name), path.join(out, name));
+for (const name of ['manifest.json', 'popup.html', 'blocked.html', 'ui.css', 'README.md']) await fs.copyFile(path.join(root, name), path.join(out, name));
+// Bundle the page so its slot counter and controls use the shared website limit.
+await build({ configFile: false, root, build: { outDir: out, emptyOutDir: false, target: 'chrome120', lib: { entry: path.join(root, 'page.js'), formats: ['es'], fileName: () => 'page.js' }, rollupOptions: { output: { inlineDynamicImports: true } } } });
 const env = { ...loadEnv('production', path.join(root, '..'), 'VITE_'), ...loadEnv('production', path.join(root, '..', 'desktop-widget'), 'VITE_'), ...process.env };
 const config = Object.fromEntries([['apiKey','API_KEY'],['authDomain','AUTH_DOMAIN'],['projectId','PROJECT_ID'],['appId','APP_ID']].map(([key,suffix]) => [key, env[`VITE_FIREBASE_${suffix}`]]));
 if (Object.values(config).some(value => !value)) throw Error('Missing SSC Buddy Firebase configuration.');

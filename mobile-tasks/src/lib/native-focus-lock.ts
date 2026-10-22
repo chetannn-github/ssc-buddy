@@ -6,6 +6,7 @@ type FocusModule = {
   getFocusLockStatus?: () => Promise<{ enabled: boolean; allowedCount: number; serviceConnected?: boolean; sessionActive?: boolean; unlockAt?: number; error?: string }>;
   syncFocusLock?: (id: string, endsAt: number, accent: string) => Promise<void>;
   syncFocusState?: (id: string, endsAt: number, accent: string, paused: boolean, remainingMs: number, image: string) => Promise<void>;
+  syncFocusStateWithLimit?: (id: string, endsAt: number, accent: string, paused: boolean, remainingMs: number, image: string, appLimit: number) => Promise<void>;
   openFocusLockSettings?: () => Promise<void>;
   consumeFocusRecall?: () => Promise<boolean>;
   readFocusBreaks?: () => Promise<string>;
@@ -16,7 +17,7 @@ const native = Platform.OS === "android" ? requireOptionalNativeModule<FocusModu
 export const supportsDeviceFocus = !!native?.getFocusLockStatus;
 export const deviceFocusStatus = () => native?.getFocusLockStatus?.() ?? Promise.resolve({ enabled: false, allowedCount: 0 });
 export const syncDeviceFocus = (id: string, endsAt: number, accent: string) => native?.syncFocusLock?.(id, endsAt, accent) ?? Promise.resolve();
-export const syncDeviceFocusState = (session: StudySession | null, accent: string, image: string) => native?.syncFocusState?.(session?.lockId ?? session?.id ?? "", session?.endsAt ?? 0, accent, session?.paused === true, session?.remainingMs ?? 0, image) ?? syncDeviceFocus(session?.lockId ?? session?.id ?? "", session?.endsAt ?? 0, accent);
+export const syncDeviceFocusState = (session: StudySession | null, accent: string, image: string) => native?.syncFocusStateWithLimit?.(session?.lockId ?? session?.id ?? "", session?.endsAt ?? 0, accent, session?.paused === true, session?.remainingMs ?? 0, image, session?.appLimit ?? 2) ?? native?.syncFocusState?.(session?.lockId ?? session?.id ?? "", session?.endsAt ?? 0, accent, session?.paused === true, session?.remainingMs ?? 0, image) ?? syncDeviceFocus(session?.lockId ?? session?.id ?? "", session?.endsAt ?? 0, accent);
 export const openDeviceFocusSettings = () => native?.openFocusLockSettings?.() ?? Promise.resolve();
 export const consumeFocusRecall = () => native?.consumeFocusRecall?.() ?? Promise.resolve(false);
 export const readFocusBreaks = async (): Promise<OverlayBreak[]> => JSON.parse(await native?.readFocusBreaks?.() ?? "[]");

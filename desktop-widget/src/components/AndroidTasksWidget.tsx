@@ -1,11 +1,13 @@
+import { FocusRewardRow } from "../../../shared/FocusRewardRow";
+import { getFirebaseFirestore } from "../lib/firebase";
 import { DateRing } from "./DateRing";
 import NumberFlow from "@number-flow/react";
 import { dailyTaskWidgetModel } from "../../../mobile-tasks/src/domain/daily-task-widget";
 import { formatMinutes, summarizeTasks } from "../../../mobile-tasks/src/domain/tasks";
 import type { DailyTask } from "../lib/firebase";
 
-export function AndroidTasksWidget({ headerAction, tasks, today, selectedDate, dueOnly, rank, medals, points, onSelectDate, onFilterChange, onNew, onComplete, onReopen }: {
-  headerAction?: React.ReactNode;
+export function AndroidTasksWidget({ uid, headerAction, tasks, today, selectedDate, dueOnly, rank, medals, points, onSelectDate, onFilterChange, onNew, onComplete, onReopen }: {
+  uid?: string; headerAction?: React.ReactNode;
   tasks: DailyTask[]; today: string; selectedDate: string; dueOnly: boolean;
   rank: number | null; medals: string[]; points: Map<string, number>;
   onSelectDate: (date: string) => void; onFilterChange: (due: boolean) => void;
@@ -31,6 +33,7 @@ export function AndroidTasksWidget({ headerAction, tasks, today, selectedDate, d
       <div className="android-task-meter"><small>Task Meter</small><strong><NumberFlow value={model.summary.percent} suffix="%" /></strong></div>
     </div>
     <div className="android-task-study">Study time&nbsp; {formatMinutes(model.summary.minutes)}</div>
+    <FocusRewardRow uid={uid} date={model.selected} getDatabase={getFirebaseFirestore} />
     <section className="android-task-list" aria-label="Daily tasks">{model.visibleTasks.length ? model.visibleTasks.map(task => {
       const missed = !task.completed && model.selected < today, score = points.get(task.id) ?? 0;
       return <TaskWidgetRow key={task.id} task={task} missed={missed} score={score} readOnly={model.readOnly} onComplete={onComplete} onReopen={onReopen} />;

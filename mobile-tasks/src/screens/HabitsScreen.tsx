@@ -26,6 +26,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { HabitEditor } from "../components/HabitEditor";
+import { HabitProgressFill } from "../components/HabitProgressFill";
 import { useHabits, useHabitToday } from "../hooks/use-habits";
 import {
   HABIT_COLORS,
@@ -317,18 +318,11 @@ export function HabitsScreen({ user, widgetRequest, onWidgetRequestHandled, onSw
                   {!!habit.targetDays && (
                     <>
                       <View style={s.track}>
-                        <View
-                          style={{
-                            height: "100%",
-                            width: (stats.progress * 100 + "%") as `${number}%`,
-                            backgroundColor: tint,
-                            borderRadius: 4,
-                          }}
-                        />
+                        <HabitProgressFill progress={stats.progress} color={tint} />
                       </View>
                       <Text style={[s.copy, { color: tint }]}>
-                        {stats.total}/{habit.targetDays} days
-                        {stats.total >= habit.targetDays ? " · Challenge complete!" : ""}
+                        {stats.streak}/{habit.targetDays} days
+                        {stats.streak >= habit.targetDays ? " · Challenge complete!" : ""}
                       </Text>
                     </>
                   )}
@@ -859,7 +853,7 @@ const s = createThemedStyles({
     marginTop: 16,
   },
   add: {
-    backgroundColor: colors.accent,
+    backgroundColor: colors.button,
     paddingHorizontal: 18,
     paddingVertical: 12,
     borderRadius: 12,

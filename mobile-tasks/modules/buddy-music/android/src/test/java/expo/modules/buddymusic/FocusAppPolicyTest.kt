@@ -4,6 +4,17 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class FocusAppPolicyTest {
+  @Test fun selectedAppLimitSupportsZeroOneAndTwo() {
+    assertTrue(FocusAppPolicy.allow("study", 10, 20, emptySet(), 0).isEmpty())
+    val first = FocusAppPolicy.allow("study", 10, 20, emptySet(), 1)
+    assertEquals(setOf("study"), first)
+    assertEquals(first, FocusAppPolicy.allow("calculator", 10, 20, first, 1))
+    assertEquals(setOf("study", "calculator"), FocusAppPolicy.allow("calculator", 10, 20, first, 2))
+    assertEquals(0, FocusAppPolicy.appLimit(-1))
+    assertEquals(2, FocusAppPolicy.appLimit(10))
+    assertFalse(FocusAppPolicy.blocks("phone", 10, 20, setOf("phone", "buddy"), emptySet()))
+    assertTrue(FocusAppPolicy.blocks("study", 10, 20, setOf("phone", "buddy"), emptySet()))
+  }
   @Test fun incomingCallCanBeAnsweredAndOtherAppsBlockAgainWhenRingingStops() {
     val essentials = setOf("phone", "incallui")
     assertFalse(FocusAppPolicy.blocks("social.app", 10, 20, essentials, emptySet(), ringing = true))

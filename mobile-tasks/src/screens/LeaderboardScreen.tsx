@@ -60,7 +60,7 @@ function RollingLeaderboardNumber({ value, prefix = "", suffix = "", color = col
 }
 function RollingLeaderboardDuration({ minutes }: { minutes: number }) {
   const hours = Math.floor(minutes / 60);
-  const remainder = minutes % 60;
+  const remainder = Math.floor(minutes) % 60;
   return <View style={{ flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 2 }}>
     {hours > 0 && <RollingLeaderboardNumber key="hours" value={hours} suffix="h" fontSize={16} />}
     {(hours === 0 || remainder > 0) && <RollingLeaderboardNumber key="minutes" value={remainder} suffix="m" fontSize={16} />}
@@ -225,9 +225,10 @@ export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { 
   }, [membersKey, user?.uid]);
   const currentXpFor = (row: any) => {
     if (!row) return null;
-    if (row.uid === user?.uid) return getXpSummary(viewerTasks);
+    if (row.focusDays && typeof row.xp === "number") return xpMeta(row);
+    if (row.uid === user?.uid) return getXpSummary(viewerTasks, Number(row.focusXp) || 0);
     const tasks = profileTasks.key === membersKey ? profileTasks.values[row.uid] : null;
-    if (tasks) return getXpSummary(tasks);
+    if (tasks) return getXpSummary(tasks, Number(row.focusXp) || 0);
     const current = selectedWeek === currentWeek ? row : currentEntries.week === currentWeek ? currentEntries.values[row.uid] : null;
     return current && typeof current.xp === "number" && Number.isFinite(current.xp) ? xpMeta(current) : null;
   };
@@ -266,17 +267,17 @@ export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { 
   const inactiveDates = useMemo(() => Array.isArray(selected?.inactiveDates) ? selected.inactiveDates : [], [selected]);
   const dates = useMemo(
     () =>
-      [ALL_LEADERBOARD_DAYS, ...Array.from(new Set([...(selectedWeek === currentWeek ? [dayKey()] : []), ...inactiveDates, ...tasks.map((task: any) => task.date).filter(Boolean)]))
+      [ALL_LEADERBOARD_DAYS, ...Array.from(new Set([...(selectedWeek === currentWeek ? [dayKey()] : []), ...inactiveDates, ...Object.keys(selected?.focusDays ?? {}), ...tasks.map((task: any) => task.date).filter(Boolean)]))
         .sort()
         .reverse()],
-    [inactiveDates, tasks, selectedWeek, currentWeek],
+    [inactiveDates, tasks, selectedWeek, currentWeek, selected?.focusDays],
   );
   if (publicEntry) return <PublicProfileView entry={publicEntry} viewerUser={user} viewerTasks={viewerTasks} onBack={() => setPublicEntry(null)} onOpenWeeklyStats={() => { setSelected(publicEntry); setSelectedDate(selectedWeek === currentWeek ? dayKey() : ALL_LEADERBOARD_DAYS); setPublicEntry(null); }} />;
   if (selected) {
     const stats = leaderboardPeriodStats(selected, tasks, selectedDate);
     const rank = rows.findIndex((row) => row.uid === selected.uid) + 1;
     const medal = medalAssets[rank - 1];
-    const tasksForDay = leaderboardPeriodTasks(tasks, inactiveDates, selectedDate);
+    const tasksForDay = leaderboardPeriodTasks(tasks, inactiveDates, selectedDate, selected?.focusDays);
     const taskList = tasksForDay.length ? (
       tasksForDay.map((task: any, index: number) => {
         const overdue = !task.completed && String(task.date ?? "") < dayKey();
@@ -294,7 +295,7 @@ export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { 
               </Text>
               {meta ? <Text style={s.taskMeta} numberOfLines={1}>{meta}</Text> : null}
             </View>
-            {task.points !== 0 && <Text
+            {(task.points !== 0 || task.focus) && <Text
               style={[
                 s.taskPoints,
                 task.points < 0 ? s.taskPenalty : task.points === 0 ? s.taskNeutral : undefined,
@@ -342,16 +343,16 @@ export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { 
               <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={s.profileStatLabel}>Points</Text>
             </View>
             <View style={s.profileStat}>
-              <View style={{ alignItems: "center" }}><RollingLeaderboardNumber value={stats.completed} /></View>
-              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={s.profileStatLabel}>Completed</Text>
-            </View>
-            <View style={s.profileStat}>
-              <View style={{ alignItems: "center" }}><RollingLeaderboardNumber value={stats.notCompleted} /></View>
-              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={s.profileStatLabel}>Not completed</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center" }}><RollingLeaderboardNumber value={stats.completed} /><Text style={{ color: colors.text, fontSize: 18, fontWeight: "800" }}>/</Text><RollingLeaderboardNumber value={stats.completed + stats.notCompleted} /></View>
+              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={s.profileStatLabel}>Tasks completed</Text>
             </View>
             <View style={s.profileStat}>
               <RollingLeaderboardDuration minutes={stats.studyMinutes} />
               <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={s.profileStatLabel}>Study time</Text>
+            </View>
+            <View style={s.profileStat}>
+              <RollingLeaderboardDuration minutes={Math.floor(stats.focusMilliseconds / 60000)} />
+              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={s.profileStatLabel}>Focus time</Text>
             </View>
           </View>
           <View style={{ alignSelf: "stretch", flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 14 }}>

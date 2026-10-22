@@ -806,7 +806,7 @@ const s = createThemedStyles({
     alignItems: "center",
     gap: 20,
   },
-  next: { backgroundColor: colors.accent, flex: 1, alignItems: "center", borderRadius: 40, padding: 18 },
+  next: { backgroundColor: colors.button, flex: 1, alignItems: "center", borderRadius: 40, padding: 18 },
   overlay: {
     flex: 1,
     backgroundColor: "#000a",

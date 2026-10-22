@@ -33,7 +33,7 @@ import android.content.Intent;
 public final class UnlockQuizReceiver extends BroadcastReceiver {
   @Override public void onReceive(Context context, Intent intent) {
     if (!Intent.ACTION_USER_PRESENT.equals(intent.getAction())) return;
-    String[] widgets = {"DailyTasksWidget", "QuickRecallWidget", "TimerWidget"};
+    String[] widgets = {"DailyTasksWidget", "QuickRecallWidget", "TimerWidget", "FocusTimerWidget"};
     AppWidgetManager manager = AppWidgetManager.getInstance(context);
     for (String widget : widgets) {
       ComponentName provider = new ComponentName(context, "com.sscbuddy.tasks.widget." + widget);

@@ -19,8 +19,8 @@ export function DailySectionHeader({ section, today, selected, tasks, onSelect, 
       {rankAction}
       <Pressable accessibilityRole="button" accessibilityLabel={section === "tasks" ? "Add task" : "Add habit"}
         disabled={addDisabled} onPress={onAdd}
-        style={{ width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: colors.accent, opacity: addDisabled ? 0.5 : 1 }}>
-        <MaterialCommunityIcons name="plus" size={23} color={colors.accentDeep} />
+        style={{ width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: colors.button, opacity: addDisabled ? 0.5 : 1 }}>
+        <MaterialCommunityIcons name="plus" size={23} color={colors.buttonInk} />
       </Pressable>
     </View>} />;
 }

@@ -1,4 +1,5 @@
 import { initializeApp } from "firebase/app";
+import { rankWeeklyEntries } from "../../../mobile-tasks/src/domain/weekly-results";
 import { appendRecallQuestionSnapshots, type RecallQuestionInput } from "../../../mobile-tasks/src/domain/quick-recall-solutions";
 import {
   GoogleAuthProvider,
@@ -174,7 +175,7 @@ export function watchTasks(user: User, onChange: (tasks: DailyTask[], source: "c
 /** Live weekly leaderboard rank for the desktop task widget header. */
 export function watchLeaderboardRank(user: User, callback: (rank: number | null) => void): Unsubscribe {
   return onSnapshot(collection(db!, "leaderboards", currentWeekKey(), "entries"), (snapshot) => {
-    const entries = snapshot.docs.map((entry) => entry.data()).sort((left: any, right: any) => Number(right.points) - Number(left.points) || Number(right.studyMinutes) - Number(left.studyMinutes) || Number(right.completed) - Number(left.completed));
+    const entries = rankWeeklyEntries(snapshot.docs.map((entry) => ({ ...entry.data(), uid: entry.id })));
     const index = entries.findIndex((entry: any) => entry.uid === user.uid);
     callback(index < 0 ? null : index + 1);
   }, () => callback(null));
@@ -182,7 +183,7 @@ export function watchLeaderboardRank(user: User, callback: (rank: number | null)
 
 export function watchWeeklyLeaderboard(callback: (entries: Record<string, unknown>[]) => void): Unsubscribe {
   return onSnapshot(collection(db!, "leaderboards", currentWeekKey(), "entries"), (snapshot) => {
-    callback(snapshot.docs.map((entry) => entry.data()).sort((left: any, right: any) => Number(right.points) - Number(left.points) || Number(right.studyMinutes) - Number(left.studyMinutes) || Number(right.completed) - Number(left.completed)));
+    callback(rankWeeklyEntries(snapshot.docs.map((entry) => ({ ...entry.data(), uid: entry.id }))));
   }, () => callback([]));
 }
 

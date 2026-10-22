@@ -1,5 +1,6 @@
 import { DestructiveDialog } from "./src/components/DestructiveDialog";
 import { DeviceFocusSync } from "./src/components/DeviceFocusSync";
+import { FocusWidgetSync } from "./src/components/FocusWidgetSync";
 import { AccentBackdrop } from "./src/components/AccentBackdrop";
 import { launchImages } from "./src/lib/launch-images";
 import { LaunchMotivation } from "./src/components/LaunchMotivation";
@@ -7,6 +8,8 @@ import { UppercaseTextInput as TextInput } from "./src/components/UppercaseTextI
 import { setAppAccent, useAppAccent } from "./src/theme";
 import { createThemedStyles } from "./src/theme";
 import { TaskOverview } from "./src/components/TaskOverview";
+import { DailyFocusReward } from "./src/components/DailyFocusReward";
+import { StudyLock } from "./src/components/StudyLock";
 import { DailySectionHeader } from "./src/components/DailySectionHeader";
 import { colors, dailyTaskColors } from "./src/theme";
 import { DropdownChevron } from "./src/components/DropdownChevron";
@@ -221,6 +224,7 @@ export default function App() {
   const nativeSplashHidden = useRef(false);
   const [authenticated, setAuthenticated] = useState(false);
   const [user, setUser] = useState<User | null>(null);
+  const [focusSetupRequest, setFocusSetupRequest] = useState(0);
   const [mediaMode, setMediaMode] = useState<MediaMode>(null);
   const [quickRecallOpen, setQuickRecallOpen] = useState(false);
   const [leaderboardOpen, setLeaderboardOpen] = useState(false);
@@ -285,6 +289,7 @@ export default function App() {
   const [addSubjectDialog, setAddSubjectDialog] = useState(false);
   const [completion, setCompletion] = useState<Task | null>(null);
   const [deletingTask, setDeletingTask] = useState<Task | null>(null);
+  const [carryTask, setCarryTask] = useState<Task | null>(null);
   const [spent, setSpent] = useState("60");
   const [taskActionLoading, setTaskActionLoading] = useState(false);
   const taskRowInteractionBlockedUntil = useRef(0);
@@ -532,6 +537,11 @@ export default function App() {
     if (!tasksLoaded) return;
     const openCompletionFromWidget = (url: string | null) => {
       if (url) { externalLaunch.current = true; setShowLaunchMotivation(false); }
+      if (url && /^sscbuddy:\/\/focus-lock(?:[/?#]|$)/.test(url)) {
+        setLeaderboardOpen(false); setQuickRecallOpen(false); setAppTab("tasks");
+        setFocusSetupRequest(value => value + 1);
+        return;
+      }
       if (url?.startsWith("sscbuddy://habits")) {
         setAppTab("habits");
         if (url.startsWith("sscbuddy://habits/checklist?")) {
@@ -839,6 +849,26 @@ export default function App() {
   };
   const remove = (id: string) => setDeletingTask(tasks.find((task) => task.id === id && task.date === dateKeyFromOffset(1)) ?? null);
   const canUseTaskRow = () => Date.now() >= taskRowInteractionBlockedUntil.current;
+  const addPastTask = (offset: 0 | 1) => {
+    const source = tasks.find(task => task.id === carryTask?.id);
+    if (!source || source.completed || source.date >= dateKey()) {
+      setCarryTask(null);
+      return;
+    }
+    persist([{
+      ...source,
+      id: createTaskId(),
+      date: dateKeyFromOffset(offset),
+      createdAt: new Date().toISOString(),
+      completed: false,
+      completedAt: null,
+      minutesSpent: null,
+    }, ...tasks]);
+    taskRowInteractionBlockedUntil.current = Date.now() + 800;
+    setCarryTask(null);
+    setTaskHistoryDate(null);
+    setTaskDay(offset ? "tomorrow" : "today");
+  };
   const confirmDelete = async () => {
     if (!deletingTask) return;
     if (deletingTask.date !== dateKeyFromOffset(1)) { setDeletingTask(null); return; }
@@ -937,6 +967,7 @@ export default function App() {
             <TaskOverview total={todaySummary.total} due={dueTasks.length} percent={todaySummary.percent}
               dueOnly={taskDueOnly} onFilterChange={setTaskDueOnly}
               studyTime={<RollingDuration minutes={todaySummary.minutes} fontSize={12} />} />
+            <DailyFocusReward uid={user?.uid} date={activeTaskDate} />
             </View>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.content, styles.tasksContent]}>
             <View style={styles.tasksList}>
@@ -948,6 +979,7 @@ export default function App() {
                   key={task.id}
                   task={task}
                   compact={isTaskHistory}
+                  onReschedule={isTaskHistory && !task.completed ? () => { if (canUseTaskRow()) setCarryTask(task); } : undefined}
                   yellow
                   last={index === visibleTasks.length - 1}
                   points={taskPoints.get(task.id) ?? 0}
@@ -964,6 +996,7 @@ export default function App() {
             )}
             </View>
       </ScrollView>
+      {user && <View style={{ paddingHorizontal: 20, paddingTop: 10, paddingBottom: 12 }}><StudyLock uid={user.uid} taskButton openRequest={focusSetupRequest} onRequestOpened={() => setFocusSetupRequest(0)} /></View>}
       <Modal transparent visible={editor !== null} animationType="fade" onRequestClose={() => { if (!taskActionLoading) { setSubjectMenuOpen(false); setTypeMenuOpen(false); setEditor(null); } }}>
         <KeyboardAvoidingView style={styles.backdrop} behavior={Platform.OS === "ios" ? "padding" : "height"}>
           <Pressable accessibilityLabel="Close task dialog" style={StyleSheet.absoluteFill} onPress={() => { if (!taskActionLoading) { setSubjectMenuOpen(false); setEditor(null); } }} />
@@ -1007,7 +1040,7 @@ export default function App() {
                 <Text style={styles.cancel}>Cancel</Text>
               </Pressable>
               <Pressable disabled={taskActionLoading || !name.trim()} onPress={() => void saveTask()} style={[styles.primary, (taskActionLoading || !name.trim()) && styles.actionDisabled]}>
-                {taskActionLoading ? <View style={{flexDirection: "row", alignItems: "center", gap: 8}}><ActivityIndicator size="small" color={dailyTaskColors.ink} /><Text style={styles.primaryText}>Saving…</Text></View> : <Text style={styles.primaryText}>Save task</Text>}
+                {taskActionLoading ? <View style={{flexDirection: "row", alignItems: "center", gap: 8}}><ActivityIndicator size="small" color={colors.buttonInk} /><Text style={styles.primaryText}>Saving…</Text></View> : <Text style={styles.primaryText}>Save task</Text>}
               </Pressable>
             </View>
           </ScrollView>
@@ -1050,12 +1083,26 @@ export default function App() {
                 <Text style={styles.cancel}>Cancel</Text>
               </Pressable>
               <Pressable disabled={taskActionLoading} onPress={() => void markDone()} style={[styles.primary, taskActionLoading && styles.actionDisabled]}>
-                {taskActionLoading ? <ActivityIndicator size="small" color={dailyTaskColors.ink} /> : <Text style={styles.primaryText}>Mark complete</Text>}
+                {taskActionLoading ? <ActivityIndicator size="small" color={colors.buttonInk} /> : <Text style={styles.primaryText}>Mark complete</Text>}
               </Pressable>
             </View>
           </ScrollView>
           </View>
         </KeyboardAvoidingView>
+      </Modal>
+      <Modal transparent visible={carryTask !== null} animationType="fade" onRequestClose={() => setCarryTask(null)}>
+        <View style={styles.backdrop}>
+          <Pressable accessibilityLabel="Close add task dialog" style={StyleSheet.absoluteFill} onPress={() => setCarryTask(null)} />
+          <View accessibilityViewIsModal style={styles.sheet}>
+            <Text style={styles.sheetTitle}>Add task to</Text>
+            <Text style={styles.muted} numberOfLines={2}>{carryTask?.name}</Text>
+            <View style={[styles.scheduleRow, { marginTop: 20 }]}>
+              <Pressable style={[styles.primary, { flex: 1 }]} onPress={() => addPastTask(0)}><Text style={styles.primaryText}>Today</Text></Pressable>
+              <Pressable style={[styles.primary, { flex: 1 }]} onPress={() => addPastTask(1)}><Text style={styles.primaryText}>Tomorrow</Text></Pressable>
+            </View>
+            <Pressable style={{ alignSelf: "center", padding: 14 }} onPress={() => setCarryTask(null)}><Text style={styles.cancel}>Cancel</Text></Pressable>
+          </View>
+        </View>
       </Modal>
       <DestructiveDialog visible={deletingTask !== null} title="Are you sure you want to delete this task?" busy={taskActionLoading} confirmLabel="Yes, delete" onCancel={() => setDeletingTask(null)} onConfirm={confirmDelete} />
         </>
@@ -1065,6 +1112,7 @@ export default function App() {
       {!quickRecallOpen && <BottomNavigation activeTab={appTab === "progress" ? "track" : appTab === "habits" ? "tasks" : appTab} onChange={(tab) => { setLeaderboardOpen(false); setAppTab(tab === "tasks" && profileSettings?.habitsEnabled !== false ? taskSection.current : tab); }} practiceSessionEnabled={profileSettings?.practiceSessionEnabled !== false} trackProgressEnabled={profileSettings?.trackProgressEnabled !== false} timersEnabled={profileSettings?.timersEnabled !== false} habitsEnabled={profileSettings?.habitsEnabled !== false} profileAvatar={profileSettings?.avatar ? avatarAssets[profileSettings.avatar] : undefined} />}
       <MediaOverlay user={user} mode={mediaMode} musicOpenRequest={musicOpenRequest} onClose={() => setMediaMode(null)} />
       <DeviceFocusSync user={user} />
+      <FocusWidgetSync user={user} />
       {celebratedStreak !== null && <StreakCelebration streak={celebratedStreak} onClose={() => setCelebratedStreak(null)} />}
       {celebratedLevel !== null && <LevelCelebration level={celebratedLevel} onClose={() => setCelebratedLevel(null)} />}
       {user && <WeeklyAwardCelebration uid={user.uid} enabled={(!showLaunchMotivation || profileSettings?.randomQuotesEnabled === false) && !dailyManifestation && celebratedStreak === null && celebratedLevel === null} />}
@@ -1245,8 +1293,8 @@ const styles = createThemedStyles({
   eyebrow: { color: "#818cf8", fontSize: 10, fontWeight: "700", letterSpacing: 2 },
   title: { color: "#fafafa", fontSize: 25, fontWeight: "700", marginTop: 3 },
   headerCopy: { color: "#a1a1aa", fontSize: 12, marginTop: 3 },
-  add: { backgroundColor: dailyTaskColors.accent, borderRadius: 10, width: 34, height: 34, alignItems: "center", justifyContent: "center" },
-  addText: { color: dailyTaskColors.ink, fontWeight: "600" },
+  add: { backgroundColor: colors.button, borderRadius: 10, width: 34, height: 34, alignItems: "center", justifyContent: "center" },
+  addText: { color: colors.buttonInk, fontWeight: "600" },
   actionDisabled: { opacity: 0.68 },
   tabs: {
     position: "relative",
@@ -1426,9 +1474,9 @@ const styles = createThemedStyles({
   sheetTitle: { color: "#fafafa", fontSize: 21, fontWeight: "800" },
   timeChips: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: -5 },
   timeChip: { borderRadius: 10, borderWidth: 1, borderColor: "#303030", paddingHorizontal: 11, paddingVertical: 8, backgroundColor: "#151515" },
-  timeChipActive: { borderColor: dailyTaskColors.accent, backgroundColor: dailyTaskColors.accent },
+  timeChipActive: { borderColor: colors.button, backgroundColor: colors.button },
   timeChipText: { color: "#a1a1aa", fontSize: 11, fontWeight: "800" },
-  timeChipTextActive: { color: dailyTaskColors.ink },
+  timeChipTextActive: { color: colors.buttonInk },
   fieldLabel: {
     color: "#a1a1aa",
     fontSize: 10,
@@ -1486,9 +1534,9 @@ const styles = createThemedStyles({
     paddingVertical: 10,
     paddingHorizontal: 14,
   },
-  scheduleChipActive: { borderColor: dailyTaskColors.accent, backgroundColor: dailyTaskColors.accent },
+  scheduleChipActive: { borderColor: colors.button, backgroundColor: colors.button },
   scheduleText: { color: "#a1a1aa", fontSize: 13, fontWeight: "600" },
-  scheduleTextActive: { color: dailyTaskColors.ink },
+  scheduleTextActive: { color: colors.buttonInk },
   subjectOption: { paddingHorizontal: 14, paddingVertical: 12 },
   subjectOptionActive: { backgroundColor: "#162c45" },
   subjectOptionText: { color: "#d4d4d8", fontSize: 15 },
@@ -1505,9 +1553,9 @@ const styles = createThemedStyles({
     borderRadius: 13,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: dailyTaskColors.accent,
+    backgroundColor: colors.button,
   },
-  primaryText: { color: dailyTaskColors.ink, fontWeight: "600" },
+  primaryText: { color: colors.buttonInk, fontWeight: "600" },
   deleteBackdrop: { flex: 1, alignItems: "center", justifyContent: "center", padding: 26, backgroundColor: "rgba(0,0,0,.76)" },
   deleteDialog: { width: "100%", maxWidth: 370, borderRadius: 22, padding: 21, backgroundColor: "#1c1c1c", borderWidth: 1, borderColor: "#3a3a3a" },
   deleteIcon: { width: 43, height: 43, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(244,63,94,.14)", borderWidth: 1, borderColor: "rgba(253,164,175,.16)" },

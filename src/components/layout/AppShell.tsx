@@ -41,6 +41,9 @@ import { trackerActiveDates } from "@/lib/tracker";
 import { loadTrackerData, saveTrackerData } from "@/lib/tracker-store";
 import { loadDailyTasks } from "@/lib/daily-tasks";
 import { getXpSummary } from "@/lib/xp";
+import { watchStudyFocusDays } from "../../../shared/study-lock";
+import { focusRewardTotal } from "../../../shared/focus-rewards";
+import { getFirebaseFirestore } from "@/lib/firebase-sync";
 import { loadPracticeProfile, savePracticeProfile, type PracticeProfile } from "@/lib/profile";
 import { checkUsernameAvailability, normalizeUsername, readCloudProfile, saveProfileWithUsername, savePublicProfileActivity, usernameValidationMessage, watchCloudProfile } from "@/lib/firebase-sync";
 import type { User } from "firebase/auth";
@@ -1158,6 +1161,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
   const [trackerActivityDates, setTrackerActivityDates] = useState<string[]>([]);
   const [taskActivityDates, setTaskActivityDates] = useState<string[]>([]);
   const [xpLevel, setXpLevel] = useState<number | null>(null);
+  const [focusXp, setFocusXp] = useState(0);
   const [profile, setProfile] = useState<PracticeProfile | null | undefined>(() => loadPracticeProfile());
   const [profileHydrated, setProfileHydrated] = useState(false);
   useEffect(() => { applyWebAccent(profile?.accentColor); }, [profile?.accentColor]);
@@ -1166,6 +1170,11 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
   const [streakReady, setStreakReady] = useState(false);
   const [manifestationOpen, setManifestationOpen] = useState(false);
   const authUser = useAuthUser();
+  useEffect(() => {
+    setFocusXp(0);
+    if (!authUser) return;
+    return watchStudyFocusDays(getFirebaseFirestore(), authUser.uid, days => setFocusXp(focusRewardTotal(Object.fromEntries(Object.entries(days).map(([date, value]) => [date, value.totalMilliseconds])))), () => {});
+  }, [authUser?.uid]);
   useEffect(() => {
     if (!profileHydrated || !profile?.avatar || !authUser) return;
     let cancelled = false;
@@ -1231,7 +1240,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
       setTrackerActivityDates(trackerActiveDates(tracker));
       const tasks = loadDailyTasks();
       setTaskActivityDates(tasks.filter((task) => task.completed).map((task) => (task.completedAt ?? task.date).slice(0, 10)));
-      setXpLevel(getXpSummary(tasks).level);
+      setXpLevel(getXpSummary(tasks, focusXp).level);
       setStreakReady(true);
     };
     refresh();
@@ -1245,7 +1254,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
       window.removeEventListener("ssc-daily-tasks-updated", refresh);
       stopPracticeObserver();
     };
-  }, []);
+  }, [focusXp]);
 
   useEffect(() => {
     const refresh = () => setProfile(loadPracticeProfile());
