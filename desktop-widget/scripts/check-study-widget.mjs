@@ -9,7 +9,7 @@ const fixture = `
 let control={session:null,allowedDomains:['parmar.com']};let connected=false;
 window.addEventListener('focus-connect',()=>{connected=true;emit()});
 const emit=()=>window.dispatchEvent(new Event('study-fixture'));
-export function watchStudyControl(db,uid,cb){const refresh=()=>cb(control,false);refresh();window.addEventListener('study-fixture',refresh);return()=>window.removeEventListener('study-fixture',refresh)}
+export function watchStudyControl(db,uid,cb){if(window.__GATE_PREVIEW__&&!control.session)control={...control,session:{id:'gate-session',startedAt:Date.now(),endsAt:Date.now()+900000,domains:['parmar.com']}};const refresh=()=>cb(control,false);refresh();window.addEventListener('study-fixture',refresh);return()=>window.removeEventListener('study-fixture',refresh)}
 export function watchStudyDevices(db,uid,cb){const refresh=()=>cb(connected?[{id:'browser',sessionId:control.session?.id,lastSeenAt:Date.now(),error:''}]:[]);refresh();window.addEventListener('study-fixture',refresh);return()=>window.removeEventListener('study-fixture',refresh)}
 export function watchStudyFocusDay(db,uid,date,cb){cb({totalMilliseconds:4500000,sessionCredits:{}});return()=>{}}
 export async function recordStudyFocus(){}
@@ -19,14 +19,17 @@ export function normalizeStudyDomain(value){return new URL('https://'+value).hos
 `;
 const server = await createServer({configFile:false,root,resolve:{dedupe:['react','react-dom']},optimizeDeps:{noDiscovery:true,include:['react','react-dom','react-dom/client','react/jsx-runtime','react/jsx-dev-runtime','lucide-react']},server:{port:0,watch:{ignored:['**/src-tauri/**']},fs:{allow:[path.resolve(root,'..')]}},plugins:[{
   name:'isolated-study-widget-fixture', enforce:'pre',
-  resolveId(id){if((id.endsWith('/lib/firebase') || id === '@/lib/firebase-sync'))return '\0study-firebase';if((id.endsWith('/shared/study-lock') || id === './study-lock'))return '\0study-controller';if(id==='/study-preview.js')return '\0study-preview';if(id==='/profile-preview.js')return '\0profile-preview';},
+  resolveId(id){if(id==='@/lib/auth-context')return '\0gate-auth';if(id==='@/routes/test')return '\0gate-practice';if(id==='/gate-preview.js')return '\0gate-preview';if((id.endsWith('/lib/firebase') || id === '@/lib/firebase-sync'))return '\0study-firebase';if((id.endsWith('/shared/study-lock') || id === './study-lock'))return '\0study-controller';if(id==='/study-preview.js')return '\0study-preview';if(id==='/profile-preview.js')return '\0profile-preview';},
   load(id){
+    if(id==='\0gate-auth')return `const user={uid:'preview-user'};export const useAuthUser=()=>user;`;
+    if(id==='\0gate-practice')return `import React from 'react';export function PracticeSession(){return React.createElement('button',{onClick:()=>history.back()},'Back to focus')}`;
+    if(id==='\0gate-preview')return `import React from 'react';import{createRoot}from'react-dom/client';import{FocusSessionGate}from'/@fs/${path.resolve(root,'../src/components/FocusSessionGate.tsx').replaceAll('\\','/')}';window.__GATE_PREVIEW__=true;document.body.style.fontFamily='system-ui';createRoot(document.getElementById('root')).render(React.createElement(FocusSessionGate,null,React.createElement('p',null,'Underlying page')));`;
     if(id==='\0study-firebase')return `export const getFirebaseFirestore=()=>({});export function observeAuth(cb){cb({uid:'preview-user'});return()=>{}};export function watchProfileAccent(user,cb){cb('#ff666e');return()=>{}}`;
     if(id==='\0study-controller')return fixture;
     if(id==='\0profile-preview')return `import React from 'react';import{createRoot}from'react-dom/client';import{ProfileStudyLock}from'/@fs/${path.resolve(root,'../src/components/profile/ProfileStudyLock.tsx').replaceAll('\\','/')}';document.body.style.background='#121212';createRoot(document.getElementById('root')).render(React.createElement(ProfileStudyLock,{uid:'preview-user'}));`;
     if(id==='\0study-preview')return `import React from 'react';import{createRoot}from'react-dom/client';import{PinnedStudyWindow}from'/src/components/PinnedStudyWindow.tsx';import'/src/styles.css';import'/@fs/${path.resolve(root,'../src/components/layout/accent-top-glow.css').replaceAll('\\','/')}';window.__SSC_HABIT_WIDGET__={uid:'preview-user',habitId:'study-lock',style:'study'};createRoot(document.getElementById('root')).render(React.createElement(PinnedStudyWindow,{pin:window.__SSC_HABIT_WIDGET__}));`;
   },
-  configureServer(server){server.middlewares.use((req,res,next)=>{if(!['/study-preview','/profile-preview'].includes(req.url))return next();res.setHeader('Content-Type','text/html');res.end('<div id="root"></div><script type="module" src="'+(req.url==='/profile-preview'?'/profile-preview.js':'/study-preview.js')+'"></script>');});}
+  configureServer(server){server.middlewares.use((req,res,next)=>{if(!['/study-preview','/profile-preview','/gate-preview'].includes(req.url))return next();res.setHeader('Content-Type','text/html');res.end('<div id="root"></div><script type="module" src="'+req.url+'.js"></script>');});}
 }]});
 let browser;
 try {
@@ -80,6 +83,7 @@ try {
   await page.route('**/avatars/1.jpg', route=>route.fulfill({path:path.resolve(root,'../public/avatars/1.jpg')}));
   await page.goto(`http://localhost:${server.httpServer.address().port}/profile-preview`);
   await page.getByRole('button',{name:'Focus Lock',exact:true}).click();
+  assert.equal(await page.locator('.study-profile-trigger small').textContent(),'Today · 1h 15m');
   assert.equal(await page.getByRole('button',{name:'Add Focus Lock desktop widget'}).count(),0);
   await page.locator('.study-duration-trigger').click();
   await page.getByRole('button',{name:'15 minutes',exact:true}).click();
@@ -93,13 +97,26 @@ try {
   const picture=await image.boundingBox(),details=await page.locator('.focus-lock-dialog-content').boundingBox();
   assert.ok(picture.x+picture.width<=details.x,'desktop image is on the left of timer');
   assert.equal(await image.evaluate(el=>getComputedStyle(el).objectFit),'contain');
-  assert.equal(await page.locator('.focus-lock-site').getAttribute('href'),'https://parmar.com');
+  assert.equal(await page.locator('.focus-lock-site').count(),0);
+  assert.equal(await page.locator('.browser-study-connection').count(),0);
+  assert.equal(await page.locator('.focus-lock-site').count(),0);
   await page.screenshot({path:path.join(root,'dist/profile-focus-lock-wide.png')});
   await page.setViewportSize({width:390,height:750});
   assert.equal(await page.locator('.focus-lock-visual').evaluate(el=>el.scrollWidth>el.clientWidth),false);
   await page.screenshot({path:path.join(root,'dist/profile-study-lock.png')});
   await page.getByRole('button',{name:'Close Focus Lock',exact:true}).click();
-  assert.match(await page.locator('.study-profile-trigger small').textContent(),/^(15:00|14:5\d)$/);
+  assert.equal(await page.locator('.study-profile-trigger small').textContent(),'Today · 1h 15m');
+  await page.setViewportSize({width:1280,height:900});
+  await page.goto(`http://localhost:${server.httpServer.address().port}/gate-preview`);
+  await page.getByRole('dialog',{name:'Focus session active'}).waitFor();
+  const gateImage=page.getByRole('img',{name:'Motivational image'});await gateImage.evaluate(el=>el.decode());
+  const left=await gateImage.boundingBox(),right=await page.locator('.focus-session-details').boundingBox();
+  assert.ok(left.x+left.width<=right.x,'actual full-screen locked page has image on the left');
+  assert.equal(await page.locator('.focus-session-gate a').count(),0);
+  assert.equal(await page.locator('.browser-study-connection').count(),0);
+  await page.screenshot({path:path.join(root,'dist/focus-locked-webpage.png')});
+  await page.setViewportSize({width:390,height:750});
+  assert.equal(await page.locator('.focus-session-gate').evaluate(el=>el.scrollWidth>el.clientWidth),false);
   assert.deepEqual(errors,[]);
   console.log('PASS: compact 360x190 and 320x180 layouts; account accent; saved daily focus; setup clock; countdown; web profile and remove menu. Local fixtures only.');
 } finally {await browser?.close();server.httpServer?.closeAllConnections();await server.close();}

@@ -1,4 +1,3 @@
-import { FocusSessionGate } from "./src/components/FocusSessionGate";
 import { DestructiveDialog } from "./src/components/DestructiveDialog";
 import { AccentBackdrop } from "./src/components/AccentBackdrop";
 import { launchImages } from "./src/lib/launch-images";
@@ -901,6 +900,7 @@ export default function App() {
             setTrackTab(tab);
             setAppTab("track");
           }}
+          onOpenPracticeSession={() => setAppTab("practice")}
             onOpenLeaderboard={() => setLeaderboardOpen(true)}
           streak={streak}
           sharedPracticeRecords={publicPracticeRecords}
@@ -1088,7 +1088,6 @@ export default function App() {
         }}
       />
       </SafeAreaView>
-      <FocusSessionGate user={user} />
       </View>
     </SafeAreaProvider>
   );

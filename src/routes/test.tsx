@@ -67,8 +67,18 @@ export const Route = createFileRoute("/test")({
 type Phase = "setup" | "key" | "instructions" | "test";
 
 function TestPage() {
+  return <PracticeSession search={Route.useSearch()} />;
+}
+
+/** The same test setup used by /test, rendered inside an active Focus Lock. */
+export function PracticeSession({
+  search = {},
+  focusLocked = false,
+}: {
+  search?: TestSearch;
+  focusLocked?: boolean;
+} = {}) {
   const user = useAuthUser();
-  const search = Route.useSearch();
   const navigate = useNavigate();
   const [replay, setReplay] = useState<TestRecord | null>(null);
   const [replayLoaded, setReplayLoaded] = useState(!search.attempt);
@@ -134,7 +144,7 @@ function TestPage() {
     setReplayLoaded(true);
   }, [search.attempt, user]);
   if (!sessionLoaded)
-    return (
+    return focusLocked ? <main className="exam-dark min-h-dvh bg-[#121212] p-5 text-zinc-100">Loading practice session…</main> : (
       <AppShell title="Loading test">
         <p>Loading test…</p>
       </AppShell>
@@ -202,6 +212,14 @@ function TestPage() {
     if (!getRecord(saved.id))
       throw new Error("Could not save test result locally. Please try again.");
     clearActiveTest();
+    if (focusLocked) {
+      setSession(null);
+      setConfig(null);
+      setAnswerKey(null);
+      setReplay(null);
+      setPhase("setup");
+      return;
+    }
     void navigate({ to: "/history/$id", params: { id: saved.id } });
   };
 
@@ -224,21 +242,12 @@ function TestPage() {
     );
   }
 
-  return (
-    <AppShell
-      title={
-        phase === "key"
-          ? "Answer key"
-          : phase === "instructions"
-            ? "Test instructions"
-            : "New practice session"
-      }
-    >
+  const practiceContent = (
       <div
         key={phase}
         className="app-page-enter exam-dark -mx-4 -my-6 min-h-[calc(100vh-4rem)] bg-[#121212] px-3 py-3 text-zinc-100 sm:-mx-6 sm:px-5 sm:py-4"
       >
-        {phase === "setup" && (
+        {phase === "setup" && !focusLocked && (
           <div className="mx-auto mb-2 flex max-w-5xl justify-end gap-1">
             <Link
               to="/quick-recall"
@@ -330,6 +339,9 @@ function TestPage() {
           />
         )}
       </div>
-    </AppShell>
   );
+  const pageTitle = phase === "key" ? "Answer key" : phase === "instructions" ? "Test instructions" : "New practice session";
+  return focusLocked
+    ? <main className="exam-dark min-h-dvh bg-[#121212] p-3 text-zinc-100 sm:p-5"><header className="mx-auto mb-2 flex max-w-5xl items-center gap-2 px-1 text-xs font-semibold uppercase tracking-[.16em] text-zinc-400"><span className="h-2 w-2 rounded-full bg-[var(--app-accent,#ffe000)]" />Focus Lock <span className="text-zinc-600">/</span> Practice session</header>{practiceContent}</main>
+    : <AppShell title={pageTitle}>{practiceContent}</AppShell>;
 }

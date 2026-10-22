@@ -12,7 +12,6 @@ import {
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { LoaderCircle } from "lucide-react";
 
-import { FocusSessionGate } from "@/components/FocusSessionGate";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { MotivationalMusic, MotivationalVideos } from "@/components/layout/AppShell";
@@ -489,7 +488,7 @@ function RootComponent() {
 
   return (
     <AuthUserContext.Provider value={syncUser}>
-      <QueryClientProvider client={queryClient}><FocusSessionGate>
+      <QueryClientProvider client={queryClient}>
         {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
         {authResolved && uiSettingsReady && <Outlet />}
         {(!authResolved || !uiSettingsReady || (syncUser && !workspaceReady && path !== "/auth")) && (
@@ -507,7 +506,7 @@ function RootComponent() {
             onClose={() => setVideosOpen(false)}
           />
         )}
-      </FocusSessionGate></QueryClientProvider>
+      </QueryClientProvider>
     </AuthUserContext.Provider>
   );
 }

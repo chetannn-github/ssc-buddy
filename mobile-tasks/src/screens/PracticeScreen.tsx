@@ -194,7 +194,7 @@ const defaultBank: Bank = {
   subjects: [],
 };
 
-export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQuickRecall: () => void }) {
+export function PracticeScreen({ user, onOpenQuickRecall, focusLocked = false }: { user: any; onOpenQuickRecall: () => void; focusLocked?: boolean }) {
   useFonts({
     Manrope_400Regular,
     Manrope_500Medium,
@@ -830,13 +830,13 @@ export function PracticeScreen({ user, onOpenQuickRecall }: { user: any; onOpenQ
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={s.page}>
       <View style={s.header}>
         <View>
-          <Text style={s.eyebrow}>PRACTICE SESSION</Text>
+          <Text style={s.eyebrow}>{focusLocked ? "FOCUS LOCK" : "PRACTICE SESSION"}</Text>
           <Text style={s.title}>Practice</Text>
         </View>
         <View style={s.headerActions}>
-          <Pressable accessibilityLabel="Open quick recall" onPress={onOpenQuickRecall} style={s.linkButton}>
+          {!focusLocked && <Pressable accessibilityLabel="Open quick recall" onPress={onOpenQuickRecall} style={s.linkButton}>
             <MaterialCommunityIcons name="creation-outline" color={colors.muted} size={20} />
-          </Pressable>
+          </Pressable>}
           <Pressable accessibilityLabel="Open question bank" onPress={() => setPhase("bank")} style={s.linkButton}>
             <MaterialCommunityIcons
               name="book-open-page-variant-outline"

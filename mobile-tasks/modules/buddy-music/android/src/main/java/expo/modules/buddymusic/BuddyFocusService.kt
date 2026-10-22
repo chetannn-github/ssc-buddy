@@ -99,7 +99,7 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
       setOnClickListener {
         packageManager.getLaunchIntentForPackage(packageName)?.let { intent ->
           intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-          foreground = packageName
+          this@BuddyFocusService.foreground = packageName
           preferences.edit().putBoolean("recall", true).apply()
           hide(); startActivity(intent)
         }

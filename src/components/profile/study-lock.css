@@ -22,3 +22,4 @@
 .browser-study-domains .focus-lock-site .focus-lock-site-icon{display:grid;place-items:center;flex-shrink:0;width:28px;height:28px;border-radius:9px;background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent);font-size:13px}
 .focus-lock-site>span:last-child{margin-left:auto;color:#aaa}
 @media(max-width:700px){.browser-study-dialog.focus-lock-visual{grid-template-columns:1fr;gap:20px;padding:20px}.focus-lock-image img{height:min(32dvh,260px)}.focus-lock-message{font-size:26px}.focus-lock-visual .browser-study-live-time{font-size:36px;margin:18px 0}}
+.focus-lock-recall{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:11px 22px;border:0;border-radius:24px;background:#f7faf2;color:#111;font-size:13px;font-weight:600;cursor:pointer}
