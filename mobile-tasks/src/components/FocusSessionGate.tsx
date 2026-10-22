@@ -7,7 +7,7 @@ import { controller } from "./StudyLock";
 import { getFirebaseFirestore } from "../lib/firebase";
 import { useAppAccent } from "../theme";
 import { launchImages } from "../lib/launch-images";
-import { PracticeScreen } from "../screens/PracticeScreen";
+import { QuickRecallScreen } from "../screens/QuickRecallScreen";
 import { SlotTime } from "./SlotTime";
 import { AccentBackdrop } from "./AccentBackdrop";
 import { DeviceFocusSetup } from "./DeviceFocusSetup";
@@ -18,7 +18,7 @@ export function FocusSessionGate({ user }: { user: User | null }) {
   const [session, setSession] = useState<StudySession | null>(null);
   const [controlReady, setControlReady] = useState(false);
   const [now, setNow] = useState(Date.now());
-  const [practice, setPractice] = useState(false);
+  const [recall, setRecall] = useState(false);
   const [imageIndex, setImageIndex] = useState(() => Math.floor(Math.random() * launchImages.length));
   const image = launchImages[imageIndex];
   useEffect(() => {
@@ -36,12 +36,12 @@ export function FocusSessionGate({ user }: { user: User | null }) {
   useEffect(() => {
     if (!active) return;
     let disposed = false;
-    const check = () => { void consumeFocusRecall().then(requested => { if (!disposed && requested) setPractice(true); }).catch(() => {}); };
+    const check = () => { void consumeFocusRecall().then(requested => { if (!disposed && requested) setRecall(true); }).catch(() => {}); };
     check();
     const timer = setInterval(check, 1000);
     return () => { disposed = true; clearInterval(timer); };
   }, [active]);
-  useEffect(() => { if (!active) setPractice(false); }, [active]);
+  useEffect(() => { if (!active) setRecall(false); }, [active]);
   useEffect(() => {
     if (!active || launchImages.length < 2) return;
     const rotate = () => setImageIndex(current => (current + 1) % launchImages.length);
@@ -59,17 +59,17 @@ export function FocusSessionGate({ user }: { user: User | null }) {
   }, [user?.uid, session?.id, Math.floor(now / 60000), active]);
   const seconds = session ? Math.max(0, Math.ceil((session.endsAt - now) / 1000)) : 0;
   const time = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
-  return <Modal visible={active} animationType="none" statusBarTranslucent navigationBarTranslucent onShow={() => StatusBar.setHidden(true, "none")} onRequestClose={() => { if (practice) setPractice(false); }}>
+  return <Modal visible={active} animationType="none" statusBarTranslucent navigationBarTranslucent onShow={() => StatusBar.setHidden(true, "none")} onRequestClose={() => { if (recall) setRecall(false); }}>
     <StatusBar hidden animated={false} />
     <View style={{ flex: 1, backgroundColor: "#000" }}>
       <AccentBackdrop />
-      {practice ? <View style={{ flex: 1, paddingTop: 32 }}>
-        <PracticeScreen user={user} onOpenQuickRecall={() => undefined} focusLocked />
+      {recall ? <View style={{ flex: 1, paddingTop: 32 }}>
+        <QuickRecallScreen user={user} onClose={() => setRecall(false)} onGoProfile={() => setRecall(false)} />
       </View> : <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 20, padding: 24 }}>
         <MaterialCommunityIcons name="lock-outline" size={32} color={accent} accessibilityLabel="Locked" />
         {image && <Image source={image} resizeMode="contain" accessibilityLabel="Motivational image" style={{ width: "100%", maxWidth: 340, height: "42%", borderRadius: 16 }} />}
         <SlotTime value={time} color={accent} size={64} />
-        <Pressable accessibilityRole="button" onPress={() => setPractice(true)} style={{ paddingVertical: 12, paddingHorizontal: 24, borderRadius: 24, backgroundColor: "#222" }}><Text style={{ color: "#eee", fontWeight: "600" }}>Practice session</Text></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="Open Quick Recall" onPress={() => setRecall(true)} style={{ paddingVertical: 12, paddingHorizontal: 24, borderRadius: 24, backgroundColor: "#222" }}><Text style={{ color: "#eee", fontWeight: "600" }}>Quick Recall</Text></Pressable>
         <DeviceFocusSetup />
       </View>}
     </View>

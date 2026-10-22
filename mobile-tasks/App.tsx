@@ -900,7 +900,6 @@ export default function App() {
             setTrackTab(tab);
             setAppTab("track");
           }}
-          onOpenPracticeSession={() => setAppTab("practice")}
             onOpenLeaderboard={() => setLeaderboardOpen(true)}
           streak={streak}
           sharedPracticeRecords={publicPracticeRecords}

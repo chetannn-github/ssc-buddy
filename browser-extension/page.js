@@ -42,7 +42,7 @@ function renderSlotTime(element, value) {
   const nodes = Array.from(value, (digit, index) => {
     const old = previous?.[previous.length - value.length + index];
     const cell = document.createElement('span');
-    if (!/\d/.test(digit)) { cell.textContent = digit; return cell; }
+    if (!/\d/.test(digit)) { cell.className = 'focus-slot-separator'; cell.textContent = digit; return cell; }
     cell.className = 'focus-slot';
     const roll = document.createElement('span');
     roll.textContent = digit;

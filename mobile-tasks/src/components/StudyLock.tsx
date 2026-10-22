@@ -19,7 +19,7 @@ const remaining = (end: number, now: number) => {
   const seconds = Math.max(0, Math.ceil((end - now) / 1000));
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 };
-export function StudyLock({ uid, onOpenPracticeSession }: { uid: string; onOpenPracticeSession?: () => void }) {
+export function StudyLock({ uid }: { uid: string }) {
   const accent = useAppAccent();
   const [open, setOpen] = useState(false), [picking, setPicking] = useState(false);
   const [control, setControl] = useState<StudyControl | null>(null), [devices, setDevices] = useState<StudyDevice[]>([]);
@@ -66,12 +66,11 @@ export function StudyLock({ uid, onOpenPracticeSession }: { uid: string; onOpenP
           {picking && !session ? <StudyClock minutes={minutes} accent={accent} onCancel={() => setPicking(false)} onSave={value => { setMinutes(value); setPicking(false); }} /> : <>
             <View style={s.heading}><Text accessibilityRole="header" style={s.title}>Focus Lock</Text><Pressable accessibilityRole="button" accessibilityLabel="Close Focus Lock dialog" hitSlop={10} onPress={close}>{icon("close", 19)}</Pressable></View>
             {!session && <View style={s.connection}>{icon("monitor", 12)}<View style={[s.dot, { backgroundColor: connected.length ? accent : "#777" }]} /><Text style={s.connectionText}>{connected.length ? `${connected.length} connected` : "No browser connected"}</Text></View>}
-            <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 15 }}><Text style={s.muted}>Today's focus</Text><Text style={{ color: "#ddd", fontSize: 11, fontWeight: "600" }}>{formatFocusTime(todayFocus)}</Text></View>
+            {!session && <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 15 }}><Text style={s.muted}>Today's focus</Text><Text style={{ color: "#ddd", fontSize: 11, fontWeight: "600" }}>{formatFocusTime(todayFocus)}</Text></View>}
             {!ready && !error && <ActivityIndicator color={accent} />}
             {!session && <DeviceFocusSetup />}
             {session ? <>
               <SlotTime value={remaining(session.endsAt, now)} color={accent} />
-              {onOpenPracticeSession && <Pressable accessibilityRole="button" accessibilityLabel="Open practice session" style={s.primary} onPress={() => { setOpen(false); onOpenPracticeSession(); }}><Text style={s.primaryText}>Practice session</Text></Pressable>}
             </> : <>
               <View style={s.websiteHeading}><Text style={s.websiteTitle}>Allowed websites</Text><Text style={s.muted}>{domains.length}/3</Text></View>
               <View style={s.entry}>{icon("web", 16)}<TextInput accessibilityLabel="Website domain" value={website} onChangeText={setWebsite} placeholder="parmar.com" placeholderTextColor="#777" autoCapitalize="none" autoCorrect={false} keyboardType="url" editable={!busy && domains.length < 3} style={s.input} onSubmitEditing={() => { if (website.trim()) void run(async () => { const domain = normalizeStudyDomain(website); await controller.saveStudyWebsites(getFirebaseFirestore(), uid, [...new Set([...domains, domain])], "mobile"); setWebsite(""); }); }} /><Pressable accessibilityRole="button" accessibilityLabel="Add website" disabled={busy || !ready || domains.length >= 3 || !website.trim()} style={s.add} onPress={() => void run(async () => { const domain = normalizeStudyDomain(website); await controller.saveStudyWebsites(getFirebaseFirestore(), uid, [...new Set([...domains, domain])], "mobile"); setWebsite(""); })}>{busy ? <ActivityIndicator size="small" color={accent} /> : icon("plus", 20, accent)}</Pressable></View>

@@ -118,7 +118,6 @@ type Props = {
   onOpenVideo: () => void;
   onOpenMusic: () => void;
   onOpenTracker: (tab: "Syllabus" | "Revision" | "Mock Test") => void;
-  onOpenPracticeSession?: () => void;
   onOpenLeaderboard: () => void;
   streak: number;
   sharedPracticeRecords?: Record<string, any>[];
@@ -199,7 +198,6 @@ export function ProfileScreen({
   onOpenVideo,
   onOpenMusic,
   onOpenTracker,
-  onOpenPracticeSession,
   onOpenLeaderboard,
   streak,
   sharedPracticeRecords = [],
@@ -653,7 +651,7 @@ export function ProfileScreen({
         contentContainerStyle={styles.content}
         onScrollBeginDrag={() => setRangeOpen(false)}
       >
-        {!readOnly && user && <StudyLock key={user.uid} uid={user.uid} onOpenPracticeSession={onOpenPracticeSession} />}
+        {!readOnly && user && <StudyLock key={user.uid} uid={user.uid} />}
         <View style={[styles.summaryCard, { position: "relative", marginTop: 10, paddingTop: 10 }]}>
           {rangeOpen && (
             <Pressable
