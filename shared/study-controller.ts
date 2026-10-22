@@ -47,13 +47,15 @@ async function startStudySession(db: Firestore, uid: string, minutes: number, va
   if (!Number.isInteger(minutes) || minutes < 1 || minutes > 720 || !values.length || values.length > 3) throw Error("Choose 1–720 minutes and up to 3 websites.");
   const { domains } = splitSelection(values);
   const reference = doc(db, ...studyControlPath(uid));
-  await runTransaction(db, async transaction => {
+  return runTransaction(db, async transaction => {
     const current = (await transaction.get(reference)).data();
     if (sessionIsActive(current?.["session"])) throw Error("The current focus session is locked until its timer ends.");
     const startedAt = Date.now();
     const creditPrevious = await prepareFocusCredits(transaction, db, uid, current?.["session"], startedAt);
     creditPrevious();
-    transaction.set(reference, { version: 1, revision: randomUUID(), session: { id: randomUUID(), startedAt, endsAt: startedAt + minutes * 60000, domains, timeZone: studyTimeZone() }, allowedDomains: domains, source, updatedAt: serverTimestamp() });
+    const session: StudySession = { id: randomUUID(), startedAt, endsAt: startedAt + minutes * 60000, domains, timeZone: studyTimeZone() };
+    transaction.set(reference, { version: 1, revision: randomUUID(), session, allowedDomains: domains, source, updatedAt: serverTimestamp() });
+    return session;
   });
 }
 async function saveStudyWebsites(db: Firestore, uid: string, values: string[], source = "windows") {

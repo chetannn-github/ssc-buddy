@@ -41,7 +41,10 @@ class BuddyMusicModule : Module() {
     AsyncFunction("getFocusLockStatus") {
       val context = requireNotNull(appContext.reactContext)
       val prefs = BuddyFocusService.prefs(context)
-      mapOf("enabled" to BuddyFocusService.enabled(context), "allowedCount" to prefs.getStringSet("allowed", emptySet()).orEmpty().size)
+      mapOf("enabled" to BuddyFocusService.enabled(context), "allowedCount" to prefs.getStringSet("allowed", emptySet()).orEmpty().size,
+        "serviceConnected" to BuddyFocusService.connected, "lastEventAt" to BuddyFocusService.lastEventAt,
+        "sessionActive" to (prefs.getLong("endsAt", 0) > System.currentTimeMillis() || prefs.getBoolean("paused", false)),
+        "error" to prefs.getString("overlayError", "").orEmpty())
     }.runOnQueue(Queues.MAIN)
     AsyncFunction("syncFocusLock") { id: String, endsAt: Double, accent: String ->
       BuddyFocusService.sync(requireNotNull(appContext.reactContext), id, endsAt, accent)

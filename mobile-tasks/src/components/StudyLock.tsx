@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Animated, Easing, ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Animated, Easing, ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import Svg, { Circle, Line } from "react-native-svg";
 import * as Crypto from "expo-crypto";
@@ -11,6 +11,7 @@ import { useAppAccent } from "../theme";
 import { accentInk } from "../domain/app-accent";
 import { SlotTime } from "./SlotTime";
 import { DeviceFocusSetup } from "./DeviceFocusSetup";
+import { deviceFocusStatus, openDeviceFocusSettings, supportsDeviceFocus, syncDeviceFocusState } from "../lib/native-focus-lock";
 import { clockValueFromPoint } from "../domain/clock-hand";
 
 // Use the mobile app's SDK instance and native UUID source with the shared contract.
@@ -68,7 +69,7 @@ export function StudyLock({ uid }: { uid: string }) {
             {!session && <View style={s.connection}>{icon("monitor", 12)}<View style={[s.dot, { backgroundColor: connected.length ? accent : "#777" }]} /><Text style={s.connectionText}>{connected.length ? `${connected.length} connected` : "No browser connected"}</Text></View>}
             {!session && <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 15 }}><Text style={s.muted}>Today's focus</Text><Text style={{ color: "#ddd", fontSize: 11, fontWeight: "600" }}>{formatFocusTime(todayFocus)}</Text></View>}
             {!ready && !error && <ActivityIndicator color={accent} />}
-            {!session && <DeviceFocusSetup />}
+            <DeviceFocusSetup />
             {session ? <>
               <SlotTime value={remaining(session.paused ? now + (session.remainingMs ?? 0) : session.endsAt, now)} color={accent} />
               <Pressable accessibilityRole="button" accessibilityLabel={session.paused ? "Resume focus" : "Take a break"} disabled={busy} style={[s.secondary, busy && { opacity: 0.45 }]} onPress={() => void run(() => session.paused ? controller.resumeStudySession(getFirebaseFirestore(), uid, "mobile") : controller.pauseStudySession(getFirebaseFirestore(), uid, "mobile"))}><Text style={s.secondaryText}>{session.paused ? "Resume focus" : "Take a break"}</Text></Pressable>
@@ -77,7 +78,17 @@ export function StudyLock({ uid }: { uid: string }) {
               <View style={s.entry}>{icon("web", 16)}<TextInput accessibilityLabel="Website domain" value={website} onChangeText={setWebsite} placeholder="parmar.com" placeholderTextColor="#777" autoCapitalize="none" autoCorrect={false} keyboardType="url" editable={!busy && domains.length < 3} style={s.input} onSubmitEditing={() => { if (website.trim()) void run(async () => { const domain = normalizeStudyDomain(website); await controller.saveStudyWebsites(getFirebaseFirestore(), uid, [...new Set([...domains, domain])], "mobile"); setWebsite(""); }); }} /><Pressable accessibilityRole="button" accessibilityLabel="Add website" disabled={busy || !ready || domains.length >= 3 || !website.trim()} style={s.add} onPress={() => void run(async () => { const domain = normalizeStudyDomain(website); await controller.saveStudyWebsites(getFirebaseFirestore(), uid, [...new Set([...domains, domain])], "mobile"); setWebsite(""); })}>{busy ? <ActivityIndicator size="small" color={accent} /> : icon("plus", 20, accent)}</Pressable></View>
               <View style={s.chips}>{domains.map(domain => <View key={domain} style={s.chip}><Text style={s.chipText}>{domain}</Text><Pressable accessibilityRole="button" accessibilityLabel={`Remove ${domain}`} disabled={busy} hitSlop={8} onPress={() => void run(() => controller.saveStudyWebsites(getFirebaseFirestore(), uid, domains.filter(value => value !== domain), "mobile"))}>{icon("close", 13)}</Pressable></View>)}</View>
               <Pressable accessibilityRole="button" accessibilityLabel="Focus time" style={s.duration} disabled={busy} onPress={() => setPicking(true)}>{icon("clock-outline", 17)}<Text style={s.durationLabel}>Focus time</Text><Text style={s.durationValue}>{minutes >= 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60 ? `${minutes % 60}m` : ""}` : `${minutes} min`}</Text></Pressable>
-              <Pressable accessibilityRole="button" accessibilityLabel="Start Focus Lock" disabled={busy || !ready || !domains.length || !!website.trim()} style={[s.primary, (busy || !ready || !domains.length || !!website.trim()) && { opacity: 0.4 }]} onPress={() => void run(() => controller.startStudySession(getFirebaseFirestore(), uid, minutes, domains, "mobile"))}>{busy ? <ActivityIndicator color="#111" /> : <Text style={s.primaryText}>Start Focus Lock</Text>}</Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel="Start Focus Lock" disabled={busy || !ready || !domains.length || !!website.trim()} style={[s.primary, (busy || !ready || !domains.length || !!website.trim()) && { opacity: 0.4 }]} onPress={() => void run(async () => {
+                if (Platform.OS === "android" && supportsDeviceFocus && !(await deviceFocusStatus()).enabled) {
+                  Alert.alert("Enable app blocking", "Allow SSC Buddy Focus Lock in Android Accessibility settings to block distracting apps. Phone, Contacts and up to 2 exception apps stay available. Then return here and tap Start Focus Lock.", [
+                    { text: "Not now", style: "cancel" },
+                    { text: "Enable", onPress: () => { void openDeviceFocusSettings().catch(() => setError("Could not open Accessibility settings.")); } },
+                  ]);
+                  return;
+                }
+                const started = await controller.startStudySession(getFirebaseFirestore(), uid, minutes, domains, "mobile");
+                await syncDeviceFocusState(started, accent, "");
+              })}>{busy ? <ActivityIndicator color="#111" /> : <Text style={s.primaryText}>Start Focus Lock</Text>}</Pressable>
             </>}
             {!!error && <Text accessibilityRole="alert" style={s.error}>{error}</Text>}
           </>}

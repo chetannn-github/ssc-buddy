@@ -3,7 +3,7 @@ import { Platform } from "react-native";
 import type { StudySession } from "../../../shared/study-controller";
 
 type FocusModule = {
-  getFocusLockStatus?: () => Promise<{ enabled: boolean; allowedCount: number }>;
+  getFocusLockStatus?: () => Promise<{ enabled: boolean; allowedCount: number; serviceConnected?: boolean; sessionActive?: boolean; error?: string }>;
   syncFocusLock?: (id: string, endsAt: number, accent: string) => Promise<void>;
   syncFocusState?: (id: string, endsAt: number, accent: string, paused: boolean, remainingMs: number, image: string) => Promise<void>;
   openFocusLockSettings?: () => Promise<void>;
