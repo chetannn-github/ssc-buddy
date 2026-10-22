@@ -4,6 +4,15 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class FocusAppPolicyTest {
+  @Test fun savedDeadlineRestoresOfflineAndAfterRestartWithoutRestartingTimer() {
+    val savedDeadline = 60_000L
+    assertTrue(FocusAppPolicy.lockActive("saved", false, savedDeadline, 20_000))
+    assertTrue(FocusAppPolicy.lockActive("saved", false, savedDeadline, 59_999))
+    assertFalse(FocusAppPolicy.lockActive("saved", false, savedDeadline, 60_000))
+    assertFalse(FocusAppPolicy.lockActive("saved", false, savedDeadline, 90_000))
+    assertTrue(FocusAppPolicy.lockActive("saved", true, savedDeadline, 90_000))
+    assertFalse(FocusAppPolicy.lockActive("", true, savedDeadline, 90_000))
+  }
   @Test fun blocksOtherAppsOnlyDuringSession() {
     assertTrue(FocusAppPolicy.blocks("video", 10, 20, setOf("phone", "contacts"), emptySet()))
     assertFalse(FocusAppPolicy.blocks("video", 20, 20, emptySet(), emptySet()))
@@ -21,6 +30,15 @@ class FocusAppPolicyTest {
     assertEquals(second, FocusAppPolicy.allow("video", 10, 20, second))
     assertEquals(second, FocusAppPolicy.allow("study", 10, 20, second))
     assertTrue(FocusAppPolicy.allow("video", 20, 20, emptySet()).isEmpty())
+  }
+  @Test fun navigationNeverConsumesSlotsAndOpeningBlockedAppStillBlocks() {
+    val essentials = setOf("home.launcher", "com.android.systemui", "phone", "contacts")
+    val allowed = setOf("study", "calculator")
+    for (navigation in setOf("home.launcher", "com.android.systemui")) {
+      assertFalse(FocusAppPolicy.blocks(navigation, 10, 20, essentials, allowed))
+    }
+    assertTrue(FocusAppPolicy.blocks("social.app", 10, 20, essentials, allowed))
+    assertEquals(2, allowed.size)
   }
   @Test fun appRestartKeepsSlotsButNewSessionResetsThem() {
     assertEquals(setOf("study"), FocusAppPolicy.forSession("session", "session", setOf("study")))

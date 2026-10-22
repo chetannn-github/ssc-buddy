@@ -37,10 +37,16 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
   private var timer: LinearLayout? = null
   private var renderedTime = ""
   private var foreground = ""
+  private var protectionState = ""
   private lateinit var preferences: SharedPreferences
   private val essentials = mutableSetOf<String>()
   private val ticker = object : Runnable {
     override fun run() {
+      val state = "${FocusProtection.active(this@BuddyFocusService)}:${preferences.getLong("endsAt", 0)}:${preferences.getBoolean("paused", false)}:${FocusProtection.enabled(this@BuddyFocusService)}"
+      if (state != protectionState) {
+        protectionState = state
+        FocusProtection.reconcile(this@BuddyFocusService)
+      }
       enforce()
       updateTimer()
       handler.postDelayed(this, if (overlay == null) 1000 else 250)
@@ -165,7 +171,9 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
       addShortcut(name, packageManager.getLaunchIntentForPackage(app), app)
     }
     root.addView(apps, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(16) })
-    root.addView(Button(this).apply { text = "Home"; setOnClickListener { hide(); performGlobalAction(GLOBAL_ACTION_HOME) } })
+    root.addView(Button(this).apply { text = "Home"; setOnClickListener {
+      if (performGlobalAction(GLOBAL_ACTION_HOME)) { foreground = ""; hide() }
+    } })
     for (index in 0 until root.childCount) (root.getChildAt(index) as? Button)?.apply {
       isAllCaps = false; textSize = 14f; setTextColor(Color.WHITE)
       background = GradientDrawable().apply { setColor(Color.rgb(31, 31, 31)); cornerRadius = dp(26).toFloat() }
@@ -178,12 +186,14 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
     params.gravity = Gravity.TOP or Gravity.START
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) params.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
     root.fitsSystemWindows = false
-    root.systemUiVisibility = View.SYSTEM_UI_FLAG_LAYOUT_STABLE or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+    // Keep Android Home/Recents/Back and gesture navigation available.
+    root.systemUiVisibility = View.SYSTEM_UI_FLAG_LAYOUT_STABLE or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or View.SYSTEM_UI_FLAG_FULLSCREEN
     root.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
       override fun onViewAttachedToWindow(view: View) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) view.windowInsetsController?.apply {
           systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-          hide(WindowInsets.Type.systemBars())
+          hide(WindowInsets.Type.statusBars())
+          show(WindowInsets.Type.navigationBars())
         }
       }
       override fun onViewDetachedFromWindow(view: View) {}
@@ -238,11 +248,14 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
     }
     fun sync(context: Context, id: String, endsAt: Double, accent: String, paused: Boolean = false, remainingMs: Double = 0.0, image: String = "") {
       val p = prefs(context)
+      // Cached empty/sign-out packets cannot clear a still-active offline lock.
+      if (FocusProtection.active(context) && id != p.getString("session", "")) return
       val editor = p.edit().putString("session", id).putLong("endsAt", endsAt.toLong()).putString("accent", accent)
       editor.putBoolean("paused", paused).putLong("remainingMs", remainingMs.toLong())
       if (image.isNotEmpty() || id.isEmpty()) editor.putString("image", image)
       editor.putStringSet("allowed", FocusAppPolicy.forSession(p.getString("session", "").orEmpty(), id, p.getStringSet("allowed", emptySet()).orEmpty()))
-      editor.apply()
+      check(editor.commit()) { "Could not save the focus unlock deadline on this phone." }
+      FocusProtection.reconcile(context)
     }
   }
 }

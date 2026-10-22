@@ -1,14 +1,17 @@
 import { useEffect, useState } from "react";
 import { AppState, Pressable, Text, View } from "react-native";
-import { deviceFocusStatus, openDeviceFocusSettings, supportsDeviceFocus } from "../lib/native-focus-lock";
+import { deviceFocusStatus, openDeviceFocusSettings, supportsDeviceFocus, supportsFocusAdmin, requestFocusAdmin } from "../lib/native-focus-lock";
 
 export function DeviceFocusSetup() {
   const [enabled, setEnabled] = useState(false);
   const [connected, setConnected] = useState<boolean | undefined>();
+  const [admin, setAdmin] = useState(false), [owner, setOwner] = useState(false);
   const [error, setError] = useState("");
   useEffect(() => {
     const refresh = () => { void deviceFocusStatus().then(value => {
       setEnabled(value.enabled);
+      setAdmin("adminEnabled" in value && value.adminEnabled === true);
+      setOwner("deviceOwner" in value && value.deviceOwner === true);
       setConnected("serviceConnected" in value ? value.serviceConnected : undefined);
       setError("error" in value && value.error ? "Android could not display the block screen. Turn device focus access off and on in Accessibility settings." : "");
     }).catch(() => setError("Could not check device focus access.")); };
@@ -24,5 +27,10 @@ export function DeviceFocusSetup() {
     {enabled && connected === false && <Text style={{ color: "#ff8495", fontSize: 11, lineHeight: 17 }}>Android has not connected the blocking service. Turn SSC Buddy Focus Lock off and on in Accessibility settings.</Text>}
     {(!enabled || connected === false || !!error) && <Pressable accessibilityRole="button" onPress={() => { void openDeviceFocusSettings().catch(() => setError("Could not open Accessibility settings.")); }} style={{ paddingVertical: 10 }}><Text style={{ color: "#eee", fontWeight: "600" }}>Open Accessibility settings</Text></Pressable>}
     {!!error && <Text style={{ color: "#ff8495", fontSize: 11 }}>{error}</Text>}
+    {supportsFocusAdmin && <View style={{ marginTop: 6, gap: 7 }}>
+      <Text style={{ color: "#eee", fontWeight: "600" }}>Uninstall protection{admin ? " · On" : ""}</Text>
+      <Text style={{ color: "#999", fontSize: 11, lineHeight: 17 }}>{owner ? "Managed uninstall blocking stays on until your focus session ends." : "Optional Device Admin access makes Android require admin deactivation before uninstalling SSC Buddy. You can deactivate it in Android Settings. Protection releases after your session ends."}</Text>
+      {!admin && <Pressable accessibilityRole="button" onPress={() => { void requestFocusAdmin().catch(() => setError("Could not open Android admin approval.")); }} style={{ paddingVertical: 10 }}><Text style={{ color: "#eee", fontWeight: "600" }}>Enable uninstall protection</Text></Pressable>}
+    </View>}
   </View>;
 }

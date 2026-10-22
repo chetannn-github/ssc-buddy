@@ -781,6 +781,8 @@ html, body, #root {
 .header-actions .browser-study-trigger,.android-task-actions .browser-study-trigger{position:relative;display:grid;place-items:center;align-self:center;width:30px;min-width:30px;height:30px;margin:0;padding:0;border:0;border-radius:50%;background:#ffffff08;color:var(--muted,#b9b9bf)}.browser-study-trigger.active{color:var(--accent)}.browser-study-trigger>i{position:absolute;right:3px;top:3px;width:5px;height:5px;border-radius:50%;background:var(--accent)}
 /* Standalone Study Lock has the same default footprint as a heatmap widget. */
 .pinned-study-body{margin:0;background:transparent!important;overflow:hidden}
+/* Focus Lock's portal dialog sits outside the card, so cover the entire widget window. */
+.pinned-study-body,.pinned-study-body *{-webkit-user-select:none;user-select:none}
 .study-desktop-card{position:relative;isolation:isolate;box-sizing:border-box;width:100%;height:100dvh;min-height:0;overflow:hidden;padding:17px 20px;border-radius:24px;background:#111;color:#f5f5f5}
 .study-desktop-card>.accent-top-glow{z-index:-1;pointer-events:none}
 .study-desktop-content{display:flex;flex-direction:column;height:100%;gap:10px;min-width:0}

@@ -1,6 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
   <uses-permission android:name="android.permission.INTERNET" />
   <uses-permission android:name="android.permission.WAKE_LOCK" />
+  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
   <queries>
@@ -10,6 +11,17 @@
     <intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent>
   </queries>
   <application>
+    <receiver android:name="expo.modules.buddymusic.FocusAdminReceiver" android:label="@string/buddy_focus_label" android:permission="android.permission.BIND_DEVICE_ADMIN" android:exported="true">
+      <meta-data android:name="android.app.device_admin" android:resource="@xml/buddy_focus_admin" />
+      <intent-filter><action android:name="android.app.action.DEVICE_ADMIN_ENABLED" /></intent-filter>
+    </receiver>
+    <receiver android:name="expo.modules.buddymusic.FocusRestoreReceiver" android:exported="false">
+      <intent-filter>
+        <action android:name="android.intent.action.BOOT_COMPLETED" />
+        <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+        <action android:name="android.intent.action.TIME_SET" />
+      </intent-filter>
+    </receiver>
     <service android:name="expo.modules.buddymusic.BuddyFocusService" android:label="@string/buddy_focus_label" android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE" android:exported="true">
       <intent-filter><action android:name="android.accessibilityservice.AccessibilityService" /></intent-filter>
       <meta-data android:name="android.accessibilityservice" android:resource="@xml/buddy_focus_accessibility" />
