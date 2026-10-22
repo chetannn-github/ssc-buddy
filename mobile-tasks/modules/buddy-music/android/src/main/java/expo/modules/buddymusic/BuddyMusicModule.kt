@@ -61,6 +61,17 @@ class BuddyMusicModule : Module() {
     AsyncFunction("requestFocusAdmin") {
       FocusProtection.request(requireNotNull(appContext.reactContext))
     }.runOnQueue(Queues.MAIN)
+    AsyncFunction("readFocusBreaks") {
+      BuddyFocusService.prefs(requireNotNull(appContext.reactContext)).getString("breakActions", "[]") ?: "[]"
+    }.runOnQueue(Queues.MAIN)
+    AsyncFunction("acknowledgeFocusBreak") { id: String ->
+      val prefs = BuddyFocusService.prefs(requireNotNull(appContext.reactContext))
+      val actions = JSONArray(prefs.getString("breakActions", "[]"))
+      if (actions.length() > 0 && actions.getJSONObject(0).getString("id") == id) {
+        actions.remove(0)
+        check(prefs.edit().putString("breakActions", actions.toString()).commit()) { "Could not save break sync." }
+      }
+    }.runOnQueue(Queues.MAIN)
     AsyncFunction("consumeFocusRecall") {
       val prefs = BuddyFocusService.prefs(requireNotNull(appContext.reactContext))
       val requested = prefs.getBoolean("recall", false)

@@ -2,6 +2,28 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createStudyController } from '../shared/study-controller.ts';
 import { normalizeStudyDomain, studyControlPath, studyDevicesPath } from '../shared/study-lock.ts';
+test('offline overlay break replay preserves restrictions, remaining time and retry-safe focus credits', async () => {
+  const documents = new Map();
+  const api = {
+    doc: (_db, ...parts) => parts.join('/'), collection: () => '', onSnapshot: () => () => {}, serverTimestamp: () => null,
+    runTransaction: async (_db, work) => work({ get: async ref => ({ data: () => documents.get(ref) }), set: (ref, value) => documents.set(ref, value) })
+  };
+  const controller = createStudyController(api);
+  const ref = 'users/student/studyLock/current', start = Date.now() - 600000;
+  documents.set(ref, { version: 1, revision: 'first', source: 'mobile', session: { id: 'focus', startedAt: start, endsAt: start + 1500000, domains: ['example.org'], timeZone: 'UTC' } });
+  let session;
+  for (const [index, seconds] of [60, 180, 240, 300].entries()) {
+    const action = { id: `break-${index}`, lockId: 'focus', at: start + seconds * 1000, paused: index % 2 === 0 };
+    session = await controller.applyOverlayBreak({}, 'student', action);
+    assert.deepEqual(await controller.applyOverlayBreak({}, 'student', action), session, 'acknowledgement retries do not repeat a break');
+    assert.deepEqual(session.domains, ['example.org']);
+    assert.equal(session.lockId ?? session.id, 'focus', 'app exception slots remain unchanged');
+  }
+  assert.equal(session.endsAt - session.startedAt, 1380000, 'only two minutes of focus consumed');
+  await controller.recordStudyFocus({}, 'student', session, start + 360000);
+  const total = [...documents].filter(([key]) => key.includes('/studyFocusDays/')).reduce((sum, [, day]) => sum + day.totalMilliseconds, 0);
+  assert.equal(total, 180000, 'three minutes of focus, excluding breaks');
+});
 test('repeated breaks preserve native app allowance identity while counting separate focus segments', async () => {
   const documents = new Map();
   const api = {

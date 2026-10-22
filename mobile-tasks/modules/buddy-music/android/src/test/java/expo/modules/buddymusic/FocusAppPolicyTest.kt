@@ -31,12 +31,11 @@ class FocusAppPolicyTest {
     assertEquals(second, FocusAppPolicy.allow("study", 10, 20, second))
     assertTrue(FocusAppPolicy.allow("video", 20, 20, emptySet()).isEmpty())
   }
-  @Test fun navigationNeverConsumesSlotsAndOpeningBlockedAppStillBlocks() {
-    val essentials = setOf("home.launcher", "com.android.systemui", "phone", "contacts")
+  @Test fun homeAndUnselectedAppsAreCoveredWhileSystemEssentialsRemainAvailable() {
+    val essentials = setOf("com.android.systemui", "phone", "contacts")
     val allowed = setOf("study", "calculator")
-    for (navigation in setOf("home.launcher", "com.android.systemui")) {
-      assertFalse(FocusAppPolicy.blocks(navigation, 10, 20, essentials, allowed))
-    }
+    assertFalse(FocusAppPolicy.blocks("com.android.systemui", 10, 20, essentials, allowed))
+    assertTrue(FocusAppPolicy.blocks("home.launcher", 10, 20, essentials, allowed))
     assertTrue(FocusAppPolicy.blocks("social.app", 10, 20, essentials, allowed))
     assertEquals(2, allowed.size)
   }

@@ -5,12 +5,13 @@ export function validSession(session, time = Date.now()) {
   if (session === null) return null;
   if (!session || typeof session.id !== 'string' || !Number.isSafeInteger(session.startedAt) || !Number.isSafeInteger(session.endsAt) || session.endsAt <= session.startedAt || session.endsAt - session.startedAt > 720 * 60000 || !Array.isArray(session.domains) || session.domains.length > 64) throw Error('Invalid study session');
   if (session.paused !== undefined && session.paused !== true) throw Error('Invalid study session');
+  if (session.lockId !== undefined && (typeof session.lockId !== 'string' || !session.lockId.length || session.lockId.length > 128)) throw Error('Invalid study session');
   if (session.paused && (!Number.isSafeInteger(session.remainingMs) || session.remainingMs < 1 || session.remainingMs > 720 * 60000 || !Number.isSafeInteger(session.pausedAt))) throw Error('Invalid paused study session');
   for (const domain of session.domains) {
     if (typeof domain !== 'string' || domain.length > 253 || !/^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(domain) || /^\d+(\.\d+){3}$/.test(domain)) throw Error('Invalid allowed website');
   }
   if (!session.domains.length) throw Error('Add a website first.');
-  return session.paused || session.endsAt > time ? { id: session.id, startedAt: session.startedAt, endsAt: session.endsAt, domains: session.domains.slice(0, 3), ...(session.timeZone ? { timeZone: session.timeZone } : {}), ...(session.paused ? { paused: true, pausedAt: session.pausedAt, remainingMs: session.remainingMs } : {}) } : null;
+  return session.paused || session.endsAt > time ? { id: session.id, startedAt: session.startedAt, endsAt: session.endsAt, domains: session.domains.slice(0, 3), ...(session.lockId ? { lockId: session.lockId } : {}), ...(session.timeZone ? { timeZone: session.timeZone } : {}), ...(session.paused ? { paused: true, pausedAt: session.pausedAt, remainingMs: session.remainingMs } : {}) } : null;
 }
 export function normalizeWebsite(value) { return splitSelection([String(value).trim()]).domains[0] ?? (() => { throw Error('Enter a website domain.'); })(); }
 export function editWebsites(control, value, remove = false, time = Date.now()) {

@@ -2,7 +2,8 @@ import { creditFocusDay, emptyFocusDay, focusSlices, studyTimeZone, type FocusDa
 import { splitSelection } from "./study-selection.ts";
 import type { collection, doc, onSnapshot, runTransaction, serverTimestamp, Firestore, Transaction } from "firebase/firestore";
 export type StudySession = { id: string; lockId?: string; startedAt: number; endsAt: number; domains: string[]; timeZone?: string; paused?: boolean; pausedAt?: number; remainingMs?: number };
-export type StudyControl = { version: 1; revision: string; session: StudySession | null; source: string; allowedDomains?: string[] };
+export type StudyControl = { version: 1; revision: string; session: StudySession | null; source: string; allowedDomains?: string[]; overlayBreakId?: string };
+export type OverlayBreak = { id: string; lockId: string; at: number; paused: boolean };
 export type StudyDevice = { id: string; label: string; sessionId: string | null; lastSeenAt: number; error: string };
 export const studyControlPath = (uid: string) => ["users", uid, "studyLock", "current"] as const;
 export const studyFocusPath = (uid: string, date: string) => ["users", uid, "studyFocusDays", date] as const;
@@ -90,5 +91,27 @@ async function resumeStudySession(db: Firestore, uid: string, source = "windows"
   });
 }
 
-return { watchStudyControl, watchStudyDevices, watchStudyFocusDay, recordStudyFocus, startStudySession, saveStudyWebsites, pauseStudySession, resumeStudySession };
+async function applyOverlayBreak(db: Firestore, uid: string, action: OverlayBreak) {
+  if (!action.id || !action.lockId || !Number.isSafeInteger(action.at) || action.at > Date.now() + 5000 || typeof action.paused !== "boolean") throw Error("Invalid break request.");
+  const reference = doc(db, ...studyControlPath(uid));
+  return runTransaction(db, async transaction => {
+    const current = (await transaction.get(reference)).data() as StudyControl | undefined, session = current?.session;
+    if (!session || (session.lockId ?? session.id) !== action.lockId) throw Error("This break belongs to a different focus session.");
+    if (current?.overlayBreakId === action.id) return session;
+    if (action.at < session.startedAt) throw Error("This break is older than your current timer.");
+    let next = session;
+    if (action.paused && !session.paused) {
+      if (action.at >= session.endsAt) throw Error("Your focus session already ended.");
+      const credit = await prepareFocusCredits(transaction, db, uid, session, action.at); credit();
+      next = { ...session, paused: true, pausedAt: action.at, remainingMs: session.endsAt - action.at };
+    } else if (!action.paused && session.paused) {
+      const remainingMs = session.remainingMs ?? 0;
+      if (remainingMs < 1 || action.at < (session.pausedAt ?? session.startedAt)) throw Error("Invalid resume time.");
+      next = { id: randomUUID(), lockId: session.lockId ?? session.id, startedAt: action.at, endsAt: action.at + remainingMs, domains: session.domains, timeZone: session.timeZone ?? studyTimeZone() };
+    }
+    transaction.set(reference, { ...current, session: next, overlayBreakId: action.id, revision: randomUUID(), source: "mobile-overlay", updatedAt: serverTimestamp() });
+    return next;
+  });
+}
+return { watchStudyControl, watchStudyDevices, watchStudyFocusDay, recordStudyFocus, startStudySession, saveStudyWebsites, pauseStudySession, resumeStudySession, applyOverlayBreak };
 }

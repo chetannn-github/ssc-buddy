@@ -28,7 +28,11 @@ import android.widget.LinearLayout
 import android.widget.TextSwitcher
 import android.widget.TextView
 import android.widget.ImageView
+import android.widget.ScrollView
 import android.graphics.BitmapFactory
+import org.json.JSONArray
+import org.json.JSONObject
+import java.util.UUID
 
 /** Only observes foreground package names; never requests screen/view contents. */
 class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPreferenceChangeListener {
@@ -59,7 +63,7 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
     preferences.registerOnSharedPreferenceChangeListener(this)
     essentials.addAll(setOf(packageName, "android", "com.android.systemui", "com.android.settings", "com.android.permissioncontroller", "com.google.android.permissioncontroller", "com.android.phone", "com.android.server.telecom", "com.android.emergency", "com.google.android.dialer", "com.android.dialer", "com.samsung.android.dialer", "com.android.contacts", "com.google.android.contacts", "com.samsung.android.app.contacts"))
     runCatching { (getSystemService(TELECOM_SERVICE) as? TelecomManager)?.defaultDialerPackage?.let(essentials::add) }
-    val intents = listOf(Intent(Intent.ACTION_DIAL, Uri.parse("tel:")), Intent(Intent.ACTION_VIEW).setType("vnd.android.cursor.dir/contact"), Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME))
+    val intents = listOf(Intent(Intent.ACTION_DIAL, Uri.parse("tel:")), Intent(Intent.ACTION_VIEW).setType("vnd.android.cursor.dir/contact"))
     intents.forEach { intent -> packageManager.queryIntentActivities(intent, 0).forEach { essentials.add(it.activityInfo.packageName) } }
     (getSystemService(INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager)?.enabledInputMethodList?.forEach { essentials.add(it.packageName) }
     handler.post(ticker)
@@ -71,7 +75,9 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
     lastEventAt = System.currentTimeMillis()
     // Ignore events emitted by our own accessibility overlay.
     if (target == packageName && overlay != null) return
-    foreground = target
+    // Keep the focus screen in place while Android displays transient system UI.
+    if (target == "com.android.systemui" && overlay != null) return
+    this@BuddyFocusService.foreground = target
     enforce()
   }
   override fun onSharedPreferenceChanged(shared: SharedPreferences?, key: String?) { handler.post { hide(); enforce() } }
@@ -93,7 +99,6 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
       contentDescription = "Open $label"; isEnabled = intent != null
       alpha = if (intent != null) 1f else 0.4f
       isFocusable = true
-      background = GradientDrawable().apply { setColor(Color.rgb(24, 24, 24)); cornerRadius = dp(18).toFloat() }
     }
     tile.addView(ImageView(this).apply {
       val icon = runCatching {
@@ -102,6 +107,12 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
       }.getOrNull()
       if (icon != null) setImageDrawable(icon) else setImageResource(android.R.drawable.sym_def_app_icon)
       scaleType = ImageView.ScaleType.FIT_CENTER; importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+      clipToOutline = true
+      outlineProvider = object : android.view.ViewOutlineProvider() {
+        override fun getOutline(view: View, outline: android.graphics.Outline) {
+          outline.setRoundRect(0, 0, view.width, view.height, dp(11).toFloat())
+        }
+      }
     }, LinearLayout.LayoutParams(dp(40), dp(40)))
     tile.addView(text(label, 10f, Color.LTGRAY).apply {
       maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END
@@ -112,7 +123,7 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
       runCatching {
         // Start first so a missing/disabled app never exposes the blocked app.
         startActivity(Intent(intent).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
-        foreground = iconPackage ?: intent.`package` ?: packageName
+        this@BuddyFocusService.foreground = iconPackage ?: intent.`package` ?: packageName
         hide()
       }.onFailure { android.widget.Toast.makeText(this, "Could not open $label", android.widget.Toast.LENGTH_SHORT).show() }
     }
@@ -123,6 +134,51 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
     val activity = resolved?.takeUnless { it.packageName == "android" }
       ?: packageManager.queryIntentActivities(intent, 0).firstOrNull { it.activityInfo.packageName != "android" }?.activityInfo
     return activity?.let { Intent(intent).setComponent(ComponentName(it.packageName, it.name)) }
+  }
+  private fun showAppPicker() {
+    if (!FocusProtection.active(this)) return
+    val sessionId = preferences.getString("session", "")
+    val accent = runCatching { Color.parseColor(preferences.getString("accent", "#ffe000")) }.getOrDefault(Color.YELLOW)
+    val selected = preferences.getStringSet("allowed", emptySet()).orEmpty()
+    if (selected.size >= 2) return
+    val root = LinearLayout(this).apply {
+      orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(32), dp(20), dp(24)); setBackgroundColor(Color.BLACK)
+    }
+    root.addView(Button(this).apply {
+      text = "‹  Allowed apps · ${selected.size}/2"; isAllCaps = false; setTextColor(Color.WHITE)
+      setBackgroundColor(Color.TRANSPARENT)
+      setOnClickListener { hide(); enforce() }
+    })
+    val rows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+    val launchers = packageManager.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), 0).map { it.activityInfo.packageName }.toSet()
+    val installed = packageManager.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
+      .distinctBy { it.activityInfo.packageName }
+      .filter { it.activityInfo.packageName !in essentials && it.activityInfo.packageName !in selected && it.activityInfo.packageName !in launchers }
+      .sortedBy { it.loadLabel(packageManager).toString().lowercase() }
+    installed.forEach { app ->
+      val appPackage = app.activityInfo.packageName
+      val label = app.loadLabel(packageManager).toString()
+      val row = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+        setPadding(dp(8), dp(10), dp(8), dp(10)); isFocusable = true
+        contentDescription = "Allow $label for this session"
+      }
+      row.addView(ImageView(this).apply { setImageDrawable(app.loadIcon(packageManager)); scaleType = ImageView.ScaleType.FIT_CENTER }, LinearLayout.LayoutParams(dp(40), dp(40)))
+      row.addView(text(label, 14f).apply { gravity = Gravity.START or Gravity.CENTER_VERTICAL; maxLines = 2 }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+      row.addView(text("+", 24f, accent))
+      row.setOnClickListener {
+        val current = preferences.getStringSet("allowed", emptySet()).orEmpty()
+        if (!FocusProtection.active(this) || preferences.getString("session", "") != sessionId || current.size >= 2) return@setOnClickListener
+        if (packageManager.getLaunchIntentForPackage(appPackage) == null) return@setOnClickListener
+        val next = FocusAppPolicy.allow(appPackage, System.currentTimeMillis(), restrictionDeadline(), current)
+        if (preferences.edit().putStringSet("allowed", next).commit()) { hide(); enforce() }
+      }
+      rows.addView(row, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+    }
+    if (installed.isEmpty()) rows.addView(text("No more apps available", 14f, Color.GRAY))
+    root.addView(ScrollView(this).apply { addView(rows); isVerticalScrollBarEnabled = false }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+    hide()
+    attachOverlay(root)
   }
   private fun show(target: String) {
     val accent = runCatching { Color.parseColor(preferences.getString("accent", "#ffe000")) }.getOrDefault(Color.YELLOW)
@@ -145,18 +201,22 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
     root.addView(timer)
     val label = runCatching { packageManager.getApplicationLabel(packageManager.getApplicationInfo(target, 0)).toString() }.getOrDefault("This app")
     root.addView(text("$label is paused for your focus session", 15f, Color.LTGRAY))
-    val allowed = preferences.getStringSet("allowed", emptySet()).orEmpty()
     root.addView(Button(this).apply {
-      text = if (allowed.size < 2) "Allow this app · ${allowed.size}/2" else "2/2 apps already allowed"
-      isEnabled = allowed.size < 2
+      text = if (preferences.getBoolean("paused", false)) "Resume focus" else "Take a break"
       setOnClickListener {
-        val current = preferences.getStringSet("allowed", emptySet()).orEmpty()
-        if (current.size < 2 && restrictionDeadline() > System.currentTimeMillis()) {
-          preferences.edit().putStringSet("allowed", FocusAppPolicy.allow(target, System.currentTimeMillis(), restrictionDeadline(), current)).apply()
-          hide()
-        }
+        val now = System.currentTimeMillis()
+        if (!FocusProtection.active(this@BuddyFocusService)) return@setOnClickListener
+        val paused = !preferences.getBoolean("paused", false)
+        val remaining = if (paused) preferences.getLong("endsAt", 0) - now else preferences.getLong("remainingMs", 0)
+        if (remaining <= 0) return@setOnClickListener
+        val actions = JSONArray(preferences.getString("breakActions", "[]"))
+        actions.put(JSONObject().put("id", UUID.randomUUID().toString()).put("lockId", preferences.getString("session", "")).put("at", now).put("paused", paused))
+        val edit = preferences.edit().putBoolean("paused", paused).putLong("remainingMs", remaining).putString("breakActions", actions.toString())
+        if (!paused) edit.putLong("endsAt", now + remaining)
+        if (edit.commit()) FocusProtection.reconcile(this@BuddyFocusService)
       }
     })
+    val allowed = preferences.getStringSet("allowed", emptySet()).orEmpty()
     val apps = LinearLayout(this).apply { gravity = Gravity.CENTER; orientation = LinearLayout.HORIZONTAL }
     fun addShortcut(label: String, intent: Intent?, iconPackage: String? = null) {
       apps.addView(shortcut(label, intent, iconPackage), LinearLayout.LayoutParams(0, dp(98), 1f).apply { setMargins(dp(3), 0, dp(3), 0) })
@@ -164,21 +224,25 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
     addShortcut("SSC Buddy", packageManager.getLaunchIntentForPackage(packageName), packageName)
     val phone = essentialIntent(Intent(Intent.ACTION_DIAL, Uri.parse("tel:")))
     addShortcut("Phone", phone, phone?.component?.packageName)
-    val contacts = essentialIntent(Intent(Intent.ACTION_VIEW).setType("vnd.android.cursor.dir/contact"))
-    addShortcut("Contacts", contacts, contacts?.component?.packageName)
-    allowed.sorted().take(2).filter { it !in setOfNotNull(packageName, phone?.component?.packageName, contacts?.component?.packageName) }.forEach { app ->
+    allowed.sorted().take(2).filter { it !in setOfNotNull(packageName, phone?.component?.packageName) }.forEach { app ->
       val name = runCatching { packageManager.getApplicationLabel(packageManager.getApplicationInfo(app, 0)).toString() }.getOrDefault("Allowed app")
       addShortcut(name, packageManager.getLaunchIntentForPackage(app), app)
     }
+    if (allowed.size < 2) apps.addView(LinearLayout(this).apply {
+      orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; isFocusable = true; contentDescription = "Add allowed app"
+      addView(text("+", 36f, accent), LinearLayout.LayoutParams(dp(40), dp(48)))
+      addView(text("Add app", 10f, Color.LTGRAY))
+      setOnClickListener { showAppPicker() }
+    }, LinearLayout.LayoutParams(0, dp(98), 1f))
     root.addView(apps, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(16) })
-    root.addView(Button(this).apply { text = "Home"; setOnClickListener {
-      if (performGlobalAction(GLOBAL_ACTION_HOME)) { foreground = ""; hide() }
-    } })
     for (index in 0 until root.childCount) (root.getChildAt(index) as? Button)?.apply {
       isAllCaps = false; textSize = 14f; setTextColor(Color.WHITE)
       background = GradientDrawable().apply { setColor(Color.rgb(31, 31, 31)); cornerRadius = dp(26).toFloat() }
       layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(48)).apply { topMargin = dp(10) }
     }
+    attachOverlay(root)
+  }
+  private fun attachOverlay(root: View) {
     val params = WindowManager.LayoutParams(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT,
       WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
       WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_FULLSCREEN or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
@@ -186,14 +250,12 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
     params.gravity = Gravity.TOP or Gravity.START
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) params.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
     root.fitsSystemWindows = false
-    // Keep Android Home/Recents/Back and gesture navigation available.
-    root.systemUiVisibility = View.SYSTEM_UI_FLAG_LAYOUT_STABLE or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or View.SYSTEM_UI_FLAG_FULLSCREEN
+    root.systemUiVisibility = View.SYSTEM_UI_FLAG_LAYOUT_STABLE or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
     root.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
       override fun onViewAttachedToWindow(view: View) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) view.windowInsetsController?.apply {
           systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-          hide(WindowInsets.Type.statusBars())
-          show(WindowInsets.Type.navigationBars())
+          hide(WindowInsets.Type.systemBars())
         }
       }
       override fun onViewDetachedFromWindow(view: View) {}
@@ -248,6 +310,8 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
     }
     fun sync(context: Context, id: String, endsAt: Double, accent: String, paused: Boolean = false, remainingMs: Double = 0.0, image: String = "") {
       val p = prefs(context)
+      // Local overlay breaks must reach the shared timer before cloud snapshots can replace them.
+      if (JSONArray(p.getString("breakActions", "[]")).length() > 0) return
       // Cached empty/sign-out packets cannot clear a still-active offline lock.
       if (FocusProtection.active(context) && id != p.getString("session", "")) return
       val editor = p.edit().putString("session", id).putLong("endsAt", endsAt.toLong()).putString("accent", accent)

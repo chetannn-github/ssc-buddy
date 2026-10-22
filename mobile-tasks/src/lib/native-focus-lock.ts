@@ -1,6 +1,6 @@
 import { requireOptionalNativeModule } from "expo";
 import { Platform } from "react-native";
-import type { StudySession } from "../../../shared/study-controller";
+import type { StudySession, OverlayBreak } from "../../../shared/study-controller";
 
 type FocusModule = {
   getFocusLockStatus?: () => Promise<{ enabled: boolean; allowedCount: number; serviceConnected?: boolean; sessionActive?: boolean; adminEnabled?: boolean; deviceOwner?: boolean; unlockAt?: number; error?: string }>;
@@ -9,6 +9,8 @@ type FocusModule = {
   syncFocusState?: (id: string, endsAt: number, accent: string, paused: boolean, remainingMs: number, image: string) => Promise<void>;
   openFocusLockSettings?: () => Promise<void>;
   consumeFocusRecall?: () => Promise<boolean>;
+  readFocusBreaks?: () => Promise<string>;
+  acknowledgeFocusBreak?: (id: string) => Promise<void>;
 };
 const native = Platform.OS === "android" ? requireOptionalNativeModule<FocusModule>("BuddyMusic") : null;
 export const supportsDeviceFocus = !!native?.getFocusLockStatus;
@@ -19,3 +21,5 @@ export const syncDeviceFocus = (id: string, endsAt: number, accent: string) => n
 export const syncDeviceFocusState = (session: StudySession | null, accent: string, image: string) => native?.syncFocusState?.(session?.lockId ?? session?.id ?? "", session?.endsAt ?? 0, accent, session?.paused === true, session?.remainingMs ?? 0, image) ?? syncDeviceFocus(session?.lockId ?? session?.id ?? "", session?.endsAt ?? 0, accent);
 export const openDeviceFocusSettings = () => native?.openFocusLockSettings?.() ?? Promise.resolve();
 export const consumeFocusRecall = () => native?.consumeFocusRecall?.() ?? Promise.resolve(false);
+export const readFocusBreaks = async (): Promise<OverlayBreak[]> => JSON.parse(await native?.readFocusBreaks?.() ?? "[]");
+export const acknowledgeFocusBreak = (id: string) => native?.acknowledgeFocusBreak?.(id) ?? Promise.resolve();

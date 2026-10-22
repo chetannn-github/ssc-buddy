@@ -80,7 +80,7 @@ export function StudyLock({ uid }: { uid: string }) {
               <Pressable accessibilityRole="button" accessibilityLabel="Focus time" style={s.duration} disabled={busy} onPress={() => setPicking(true)}>{icon("clock-outline", 17)}<Text style={s.durationLabel}>Focus time</Text><Text style={s.durationValue}>{minutes >= 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60 ? `${minutes % 60}m` : ""}` : `${minutes} min`}</Text></Pressable>
               <Pressable accessibilityRole="button" accessibilityLabel="Start Focus Lock" disabled={busy || !ready || !domains.length || !!website.trim()} style={[s.primary, (busy || !ready || !domains.length || !!website.trim()) && { opacity: 0.4 }]} onPress={() => void run(async () => {
                 if (Platform.OS === "android" && supportsDeviceFocus && !(await deviceFocusStatus()).enabled) {
-                  Alert.alert("Enable app blocking", "Allow SSC Buddy Focus Lock in Android Accessibility settings to block distracting apps. Phone, Contacts and up to 2 exception apps stay available. Then return here and tap Start Focus Lock.", [
+                  Alert.alert("Enable app blocking", "Turn on SSC Buddy Focus Lock in Accessibility settings, then return to start.", [
                     { text: "Not now", style: "cancel" },
                     { text: "Enable", onPress: () => { void openDeviceFocusSettings().catch(() => setError("Could not open Accessibility settings.")); } },
                   ]);

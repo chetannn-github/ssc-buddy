@@ -46,7 +46,8 @@ export function startWorker(cloud) {
       const nextItems = session ? session.domains : [];
       const sameSites = session && oldItems.length === session.domains.length && oldItems.every(item => session.domains.includes(item));
       const paused = !locked.paused && session?.paused && session.id === locked.id && session.startedAt === locked.startedAt && session.endsAt === locked.endsAt && sameSites;
-      const resumed = locked.paused && session && !session.paused && sameSites;
+      // A browser may reconnect after both pause and resume already happened on the phone.
+      const resumed = session && !session.paused && sameSites && session.lockId === (locked.lockId ?? locked.id) && session.startedAt >= locked.startedAt && session.endsAt - session.startedAt <= (locked.paused ? locked.remainingMs : locked.endsAt - locked.startedAt);
       if (!paused && !resumed && (!session || session.id !== locked.id || session.startedAt !== locked.startedAt || session.endsAt !== locked.endsAt || Boolean(session.paused) !== Boolean(locked.paused) || Number(session.remainingMs ?? 0) !== Number(locked.remainingMs ?? 0) || oldItems.some(item => !nextItems.includes(item)))) throw Error('Your session stays locked until its timer ends.');
     }
     const domains = (session?.domains ?? packet.allowedDomains ?? []).slice(0, 3);
