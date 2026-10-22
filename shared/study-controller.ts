@@ -1,7 +1,7 @@
 import { creditFocusDay, emptyFocusDay, focusSlices, studyTimeZone, type FocusDay, type FocusSession } from "./study-focus.ts";
 import { splitSelection } from "./study-selection.ts";
 import type { collection, doc, onSnapshot, runTransaction, serverTimestamp, Firestore, Transaction } from "firebase/firestore";
-export type StudySession = { id: string; startedAt: number; endsAt: number; domains: string[]; timeZone?: string; paused?: boolean; pausedAt?: number; remainingMs?: number };
+export type StudySession = { id: string; lockId?: string; startedAt: number; endsAt: number; domains: string[]; timeZone?: string; paused?: boolean; pausedAt?: number; remainingMs?: number };
 export type StudyControl = { version: 1; revision: string; session: StudySession | null; source: string; allowedDomains?: string[] };
 export type StudyDevice = { id: string; label: string; sessionId: string | null; lastSeenAt: number; error: string };
 export const studyControlPath = (uid: string) => ["users", uid, "studyLock", "current"] as const;
@@ -84,7 +84,7 @@ async function resumeStudySession(db: Firestore, uid: string, source = "windows"
     const remainingMs = Number(paused?.remainingMs);
     if (!paused?.paused || !Number.isSafeInteger(remainingMs) || remainingMs < 1 || remainingMs > 720 * 60000) throw Error("There is no paused focus session to resume.");
     const startedAt = Date.now();
-    transaction.set(reference, { ...current, version: 1, revision: randomUUID(), source, session: { id: randomUUID(), startedAt, endsAt: startedAt + remainingMs, domains: paused.domains, timeZone: paused.timeZone }, updatedAt: serverTimestamp() });
+    transaction.set(reference, { ...current, version: 1, revision: randomUUID(), source, session: { id: randomUUID(), lockId: paused.lockId ?? paused.id, startedAt, endsAt: startedAt + remainingMs, domains: paused.domains, timeZone: paused.timeZone }, updatedAt: serverTimestamp() });
   });
 }
 

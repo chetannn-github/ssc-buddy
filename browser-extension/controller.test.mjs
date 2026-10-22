@@ -2,6 +2,27 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createStudyController } from '../shared/study-controller.ts';
 import { normalizeStudyDomain, studyControlPath, studyDevicesPath } from '../shared/study-lock.ts';
+test('repeated breaks preserve native app allowance identity while counting separate focus segments', async () => {
+  const documents = new Map();
+  const api = {
+    doc: (_db, ...parts) => parts.join('/'), collection: () => '', onSnapshot: () => () => {}, serverTimestamp: () => null,
+    runTransaction: async (_db, work) => work({ get: async ref => ({ data: () => documents.get(ref) }), set: (ref, value) => documents.set(ref, value) })
+  };
+  const controller = createStudyController(api);
+  const ref = 'users/student/studyLock/current';
+  await controller.startStudySession({}, 'student', 25, ['example.org']);
+  const originalId = documents.get(ref).session.id;
+  for (let i = 0; i < 2; i++) {
+    await controller.pauseStudySession({}, 'student');
+    const paused = documents.get(ref).session;
+    await assert.rejects(() => controller.saveStudyWebsites({}, 'student', []), /locked/);
+    await controller.resumeStudySession({}, 'student');
+    const resumed = documents.get(ref).session;
+    assert.equal(resumed.lockId, originalId, 'two app slots cannot reset on resume');
+    assert.notEqual(resumed.id, paused.id, 'focus segments remain separately credited');
+    assert.equal(resumed.endsAt - resumed.startedAt, paused.remainingMs);
+  }
+});
 test('ecosystem controllers normalize domains and share account-scoped paths', () => {
   assert.equal(normalizeStudyDomain('https://ChatGPT.com/c/1'),'chatgpt.com');
   assert.equal(normalizeStudyDomain('docs.example.org'),'docs.example.org');

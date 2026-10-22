@@ -15,6 +15,8 @@ export function watchStudyFocusDay(db,uid,date,cb){cb({totalMilliseconds:4500000
 export async function recordStudyFocus(){}
 export async function startStudySession(db,uid,minutes,domains){control={...control,session:{id:'test-session',startedAt:Date.now(),endsAt:Date.now()+minutes*60000,domains}};emit()}
 export async function saveStudyWebsites(db,uid,domains){control={...control,allowedDomains:domains};emit()}
+export async function pauseStudySession(){const session=control.session;control={...control,session:{...session,paused:true,remainingMs:session.endsAt-Date.now()}};emit()}
+export async function resumeStudySession(){const session=control.session;control={...control,session:{id:'resumed-session',startedAt:Date.now(),endsAt:Date.now()+session.remainingMs,domains:session.domains}};emit()}
 export function normalizeStudyDomain(value){return new URL('https://'+value).hostname}
 `;
 const server = await createServer({configFile:false,root,resolve:{dedupe:['react','react-dom']},optimizeDeps:{noDiscovery:true,include:['react','react-dom','react-dom/client','react/jsx-runtime','react/jsx-dev-runtime','lucide-react']},server:{port:0,watch:{ignored:['**/src-tauri/**']},fs:{allow:[path.resolve(root,'..')]}},plugins:[{
@@ -74,6 +76,10 @@ try {
   await page.evaluate(()=>window.dispatchEvent(new Event('focus-connect')));
   const seconds=value=>value.split(':').reduce((total,part)=>total*60+Number(part),0);
   assert.ok(seconds(await page.locator('.study-desktop-time').textContent())<=seconds(beforeConnect),'connecting browser does not restart timer');
+  await page.locator('.study-desktop-time').click();
+  assert.equal(await page.locator('.browser-study-overlay').count(),0,'clicking the active timer does not open a separate dialog');
+  await page.getByRole('button',{name:'Pause Focus Lock',exact:true}).click();
+  await page.getByRole('button',{name:'Resume Focus Lock',exact:true}).waitFor();
   await page.screenshot({path:path.join(root,'dist/study-widget-running.png')});
   await page.locator('.study-desktop-heading').click({button:'right'});
   await page.getByRole('menuitem',{name:'Remove widget'}).waitFor();
@@ -85,6 +91,8 @@ try {
   await page.getByRole('button',{name:'Focus Lock',exact:true}).click();
   assert.equal(await page.locator('.study-profile-trigger small').textContent(),'Today · 1h 15m');
   assert.equal(await page.getByRole('button',{name:'Add Focus Lock desktop widget'}).count(),0);
+  assert.equal(await page.getByRole('button',{name:'Close Focus Lock',exact:true}).count(),0);
+  assert.equal(await page.locator('.study-focus-today').count(),0);
   await page.locator('.study-duration-trigger').click();
   await page.getByRole('button',{name:'15 minutes',exact:true}).click();
   await page.getByRole('button',{name:'Save',exact:true}).click();
@@ -104,7 +112,7 @@ try {
   await page.setViewportSize({width:390,height:750});
   assert.equal(await page.locator('.focus-lock-visual').evaluate(el=>el.scrollWidth>el.clientWidth),false);
   await page.screenshot({path:path.join(root,'dist/profile-study-lock.png')});
-  await page.getByRole('button',{name:'Close Focus Lock',exact:true}).click();
+  await page.keyboard.press('Escape');
   assert.equal(await page.locator('.study-profile-trigger small').textContent(),'Today · 1h 15m');
   await page.setViewportSize({width:1280,height:900});
   await page.goto(`http://localhost:${server.httpServer.address().port}/gate-preview`);

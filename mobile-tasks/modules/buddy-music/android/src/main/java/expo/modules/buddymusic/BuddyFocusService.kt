@@ -24,6 +24,8 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextSwitcher
 import android.widget.TextView
+import android.widget.ImageView
+import android.graphics.BitmapFactory
 
 /** Only observes foreground package names; never requests screen/view contents. */
 class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPreferenceChangeListener {
@@ -36,8 +38,8 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
   private val essentials = mutableSetOf<String>()
   private val ticker = object : Runnable {
     override fun run() {
-      if (System.currentTimeMillis() >= preferences.getLong("endsAt", 0)) hide()
-      else updateTimer()
+      enforce()
+      updateTimer()
       handler.postDelayed(this, if (overlay == null) 1000 else 250)
     }
   }
@@ -62,10 +64,11 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
   }
   override fun onSharedPreferenceChanged(shared: SharedPreferences?, key: String?) { handler.post { hide(); enforce() } }
   private fun enforce() {
-    if (!FocusAppPolicy.blocks(foreground, System.currentTimeMillis(), preferences.getLong("endsAt", 0), essentials, preferences.getStringSet("allowed", emptySet()).orEmpty())) { hide(); return }
+    if (!FocusAppPolicy.blocks(foreground, System.currentTimeMillis(), restrictionDeadline(), essentials, preferences.getStringSet("allowed", emptySet()).orEmpty())) { hide(); return }
     if (overlay != null) return
     show(foreground)
   }
+  private fun restrictionDeadline(): Long = if (preferences.getBoolean("paused", false) && !preferences.getString("session", "").isNullOrEmpty()) Long.MAX_VALUE else preferences.getLong("endsAt", 0)
   private fun text(value: String, size: Float, tint: Int = Color.WHITE) = TextView(this).apply {
     text = value; textSize = size; setTextColor(tint); gravity = Gravity.CENTER
     setPadding(dp(10), dp(8), dp(10), dp(8))
@@ -78,6 +81,16 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
       background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(Color.argb(30, Color.red(accent), Color.green(accent), Color.blue(accent)), Color.BLACK)).apply { setColor(Color.BLACK); colors = intArrayOf(Color.rgb(Color.red(accent) / 10, Color.green(accent) / 10, Color.blue(accent) / 10), Color.BLACK) }
     }
     root.addView(text("Focus Lock", 22f, accent))
+    val image = preferences.getString("image", "").orEmpty()
+    if (image.startsWith("file:")) runCatching {
+      val bitmap = BitmapFactory.decodeFile(Uri.parse(image).path, BitmapFactory.Options().apply { inSampleSize = 2 })
+      if (bitmap != null) root.addView(ImageView(this).apply {
+        setImageBitmap(bitmap); scaleType = ImageView.ScaleType.FIT_CENTER
+        contentDescription = "Focus motivation"; clipToOutline = true
+        background = GradientDrawable().apply { setColor(Color.BLACK); cornerRadius = dp(20).toFloat() }
+      }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f).apply { setMargins(0, dp(18), 0, dp(18)) })
+    }
+    root.addView(text("Your goals deserve this time.", 24f))
     timer = LinearLayout(this).apply { gravity = Gravity.CENTER }
     root.addView(timer)
     val label = runCatching { packageManager.getApplicationLabel(packageManager.getApplicationInfo(target, 0)).toString() }.getOrDefault("This app")
@@ -88,14 +101,14 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
       isEnabled = allowed.size < 2
       setOnClickListener {
         val current = preferences.getStringSet("allowed", emptySet()).orEmpty()
-        if (current.size < 2 && preferences.getLong("endsAt", 0) > System.currentTimeMillis()) {
-          preferences.edit().putStringSet("allowed", FocusAppPolicy.allow(target, System.currentTimeMillis(), preferences.getLong("endsAt", 0), current)).apply()
+        if (current.size < 2 && restrictionDeadline() > System.currentTimeMillis()) {
+          preferences.edit().putStringSet("allowed", FocusAppPolicy.allow(target, System.currentTimeMillis(), restrictionDeadline(), current)).apply()
           hide()
         }
       }
     })
     root.addView(Button(this).apply {
-      text = "Quick Recall"
+      text = "Back to SSC Buddy"
       setOnClickListener {
         packageManager.getLaunchIntentForPackage(packageName)?.let { intent ->
           intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
@@ -107,6 +120,11 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
     })
     root.addView(text("Phone and Contacts are always allowed", 12f, Color.GRAY))
     root.addView(Button(this).apply { text = "Home"; setOnClickListener { hide(); performGlobalAction(GLOBAL_ACTION_HOME) } })
+    for (index in 0 until root.childCount) (root.getChildAt(index) as? Button)?.apply {
+      isAllCaps = false; textSize = 14f; setTextColor(Color.WHITE)
+      background = GradientDrawable().apply { setColor(Color.rgb(31, 31, 31)); cornerRadius = dp(26).toFloat() }
+      layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(48)).apply { topMargin = dp(10) }
+    }
     val params = WindowManager.LayoutParams(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT,
       WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY, WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN, PixelFormat.OPAQUE)
     params.gravity = Gravity.TOP or Gravity.START
@@ -115,7 +133,8 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
   }
   private fun updateTimer() {
     val row = timer ?: return
-    val seconds = ((preferences.getLong("endsAt", 0) - System.currentTimeMillis() + 999) / 1000).coerceAtLeast(0)
+    val milliseconds = if (preferences.getBoolean("paused", false)) preferences.getLong("remainingMs", 0) else preferences.getLong("endsAt", 0) - System.currentTimeMillis()
+    val seconds = ((milliseconds + 999) / 1000).coerceAtLeast(0)
     val value = "%d:%02d".format(seconds / 60, seconds % 60)
     if (value == renderedTime) return
     if (row.childCount != value.length) {
@@ -147,9 +166,10 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
       val expected = ComponentName(context, BuddyFocusService::class.java)
       return Settings.Secure.getString(context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty().split(':').any { ComponentName.unflattenFromString(it) == expected }
     }
-    fun sync(context: Context, id: String, endsAt: Double, accent: String) {
+    fun sync(context: Context, id: String, endsAt: Double, accent: String, paused: Boolean = false, remainingMs: Double = 0.0, image: String = "") {
       val p = prefs(context)
       val editor = p.edit().putString("session", id).putLong("endsAt", endsAt.toLong()).putString("accent", accent)
+      editor.putBoolean("paused", paused).putLong("remainingMs", remainingMs.toLong()).putString("image", image)
       editor.putStringSet("allowed", FocusAppPolicy.forSession(p.getString("session", "").orEmpty(), id, p.getStringSet("allowed", emptySet()).orEmpty()))
       editor.apply()
     }

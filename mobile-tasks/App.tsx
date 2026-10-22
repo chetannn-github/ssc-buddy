@@ -1,4 +1,5 @@
 import { DestructiveDialog } from "./src/components/DestructiveDialog";
+import { DeviceFocusSync } from "./src/components/DeviceFocusSync";
 import { AccentBackdrop } from "./src/components/AccentBackdrop";
 import { launchImages } from "./src/lib/launch-images";
 import { LaunchMotivation } from "./src/components/LaunchMotivation";
@@ -1063,6 +1064,7 @@ export default function App() {
       )}
       {!quickRecallOpen && <BottomNavigation activeTab={appTab === "progress" ? "track" : appTab === "habits" ? "tasks" : appTab} onChange={(tab) => { setLeaderboardOpen(false); setAppTab(tab === "tasks" && profileSettings?.habitsEnabled !== false ? taskSection.current : tab); }} practiceSessionEnabled={profileSettings?.practiceSessionEnabled !== false} trackProgressEnabled={profileSettings?.trackProgressEnabled !== false} timersEnabled={profileSettings?.timersEnabled !== false} habitsEnabled={profileSettings?.habitsEnabled !== false} profileAvatar={profileSettings?.avatar ? avatarAssets[profileSettings.avatar] : undefined} />}
       <MediaOverlay user={user} mode={mediaMode} musicOpenRequest={musicOpenRequest} onClose={() => setMediaMode(null)} />
+      <DeviceFocusSync user={user} />
       {celebratedStreak !== null && <StreakCelebration streak={celebratedStreak} onClose={() => setCelebratedStreak(null)} />}
       {celebratedLevel !== null && <LevelCelebration level={celebratedLevel} onClose={() => setCelebratedLevel(null)} />}
       {user && <WeeklyAwardCelebration uid={user.uid} enabled={(!showLaunchMotivation || profileSettings?.randomQuotesEnabled === false) && !dailyManifestation && celebratedStreak === null && celebratedLevel === null} />}

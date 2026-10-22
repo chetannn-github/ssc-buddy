@@ -5,7 +5,7 @@ import { watchStudyControl, watchStudyDevices, watchStudyFocusDay, recordStudyFo
 import { emptyFocusDay, focusDayKey, todayFocusMilliseconds, formatFocusTime, type FocusDay } from "./study-focus";
 import { SlotTime } from "./SlotTime";
 import { StudyDurationPicker } from "./StudyDurationPicker";
-import { Clock3, Globe2, MonitorUp, Monitor, Plus, LockKeyhole, X } from "lucide-react";
+import { Clock3, Globe2, MonitorUp, Monitor, Pause, Play, Plus, LockKeyhole, X } from "lucide-react";
 type Session = { endsAt: number; domains: string[]; paused?: boolean; remainingMs?: number };
 type Status = { session: Session | null; connected: number; protected: number };
 const remaining = (session: Session | number) => {
@@ -83,19 +83,19 @@ export function StudyLockControl({ uid, desktop = false, profile = false, getDat
     setBusy(true); setError(""); try { await action(); } catch (e) { const message = String(e); setError(/firebase/i.test(message) ? "Could not update your focus session. Please try again." : message); } finally { setBusy(false); }
   };
   return <>
-    {desktop ? <section ref={desktopTrigger} className="study-desktop-content" role="button" tabIndex={0} aria-label={session ? "Open active Focus Lock session" : "Set up Focus Lock"} onClick={() => setOpen(true)} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setOpen(true); } }}>
-      <div className="study-desktop-heading"><span data-tauri-drag-region><LockKeyhole size={14} />Focus Lock</span></div>
+    {desktop ? <section ref={desktopTrigger} className="study-desktop-content" {...(!session ? { role: "button", tabIndex: 0, "aria-label": "Set up Focus Lock", onClick: () => setOpen(true), onKeyDown: (event: React.KeyboardEvent<HTMLElement>) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setOpen(true); } } } : {})}>
+      <div className="study-desktop-heading"><span data-tauri-drag-region><LockKeyhole size={14} />Focus Lock</span>{session && <button className={`study-desktop-toggle ${session.paused ? "is-paused" : "is-running"}`} type="button" aria-label={session.paused ? "Resume Focus Lock" : "Pause Focus Lock"} title={session.paused ? "Resume focus" : "Pause focus"} disabled={busy} onClick={event => { event.stopPropagation(); void run(() => session.paused ? resumeStudySession(getDatabase(), uid, source) : pauseStudySession(getDatabase(), uid, source)); }}>{session.paused ? <Play size={14} fill="currentColor" /> : <Pause size={14} fill="currentColor" />}</button>}</div>
       <div className="study-desktop-summary"><span className="study-desktop-daily">Today's focus time <b>{formatFocusTime(todayFocus)}</b></span><strong className={`study-desktop-time ${session ? "is-running" : ""}`}>{session ? <SlotTime value={remaining(session)} /> : "Ready to focus"}</strong></div>
     </section> : <button ref={trigger} className={`browser-study-trigger ${profile ? "study-profile-trigger" : "icon-button"} ${session ? "active" : ""}`} aria-label="Focus Lock" title={session ? `Focus Lock - ${remaining(session.endsAt)}` : "Focus Lock"} onClick={() => setOpen(true)}><LockKeyhole size={17} />{profile && <><span>Focus Lock</span><small>Today · {formatFocusTime(todayFocus)}</small></>}{session && !profile && <i aria-hidden="true" />}</button>}
 
     {open && createPortal(<div className="browser-study-overlay" onPointerDown={event => { event.stopPropagation(); if (event.target === event.currentTarget) setOpen(false); }} onContextMenu={e => e.stopPropagation()}>
-      <section ref={dialog} className={`browser-study-dialog ${desktop ? "study-desktop-dialog" : ""} ${session && !pickingTime ? "is-running" : ""} ${session && lockedImage ? "focus-lock-visual" : ""}`} role="dialog" aria-modal="true" aria-labelledby="browser-study-title">
+      <section ref={dialog} className={`browser-study-dialog ${desktop ? "study-desktop-dialog" : ""} ${source === "web" ? "web-focus-lock" : ""} ${session && !pickingTime ? "is-running" : ""} ${session && lockedImage ? "focus-lock-visual" : ""}`} role="dialog" aria-modal="true" aria-labelledby="browser-study-title">
         {session && lockedImage && <div className="focus-lock-image"><img src={lockedImage} alt="Focus motivation" /></div>}
         <div className="focus-lock-dialog-content">
         {pickingTime && !session ? <StudyDurationPicker minutes={Number(minutes)} onCancel={() => setPickingTime(false)} onConfirm={value => { setMinutes(String(value)); setPickingTime(false); }} /> : <>
-        <div className="browser-study-heading"><h2 id="browser-study-title">Focus Lock</h2>{onPin && <button aria-label="Add Focus Lock desktop widget" title="Add desktop widget" disabled={busy} onClick={() => void run(() => onPin())}><MonitorUp size={17} /></button>}<button aria-label="Close Focus Lock" onClick={() => setOpen(false)}><X size={18} /></button></div>
+        <div className="browser-study-heading"><h2 id="browser-study-title">Focus Lock</h2>{onPin && <button aria-label="Add Focus Lock desktop widget" title="Add desktop widget" disabled={busy} onClick={() => void run(() => onPin())}><MonitorUp size={17} /></button>}{source !== "web" && <button aria-label="Close Focus Lock" onClick={() => setOpen(false)}><X size={18} /></button>}</div>
         {source !== "web" && <div className={`browser-study-connection ${status?.connected ? "connected" : ""}`} role="status"><Monitor size={12} /><i /><span>{status?.connected ? `${status.connected} connected` : "No browser connected"}</span></div>}
-        {(!desktop || !session) && <div className="study-focus-today"><span>Today's focus</span><strong>{formatFocusTime(todayFocus)}</strong></div>}
+        {source !== "web" && (!desktop || !session) && <div className="study-focus-today"><span>Today's focus</span><strong>{formatFocusTime(todayFocus)}</strong></div>}
         {session ? <>
           {lockedImage && <><p className="focus-lock-eyebrow">ONE SESSION. ONE STEP CLOSER.</p><h3 className="focus-lock-message">Your goals deserve this time.</h3></>}
           <div className="browser-study-live-time"><SlotTime value={remaining(session)} /></div>
