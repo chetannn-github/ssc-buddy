@@ -10,6 +10,7 @@ import { getFirebaseFirestore } from "../lib/firebase";
 import { useAppAccent } from "../theme";
 import { accentInk } from "../domain/app-accent";
 import { SlotTime } from "./SlotTime";
+import { DeviceFocusSetup } from "./DeviceFocusSetup";
 import { clockValueFromPoint } from "../domain/clock-hand";
 
 // Use the mobile app's SDK instance and native UUID source with the shared contract.
@@ -68,6 +69,7 @@ export function StudyLock({ uid }: { uid: string }) {
             <View style={s.connection}>{icon("monitor", 12)}<View style={[s.dot, { backgroundColor: connected.length ? accent : "#777" }]} /><Text style={s.connectionText}>{connected.length ? `${connected.length} connected` : "No browser connected"}</Text>{session && <Text style={s.connectionText}>{protectedSession ? "Protected" : "Connecting…"}</Text>}</View>
             <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 15 }}><Text style={s.muted}>Today's focus</Text><Text style={{ color: "#ddd", fontSize: 11, fontWeight: "600" }}>{formatFocusTime(todayFocus)}</Text></View>
             {!ready && !error && <ActivityIndicator color={accent} />}
+            {!session && <DeviceFocusSetup />}
             {session ? <>
               <SlotTime value={remaining(session.endsAt, now)} color={accent} />
               <View style={s.chips}>{domains.map(domain => <View key={domain} style={s.chip}><Text style={s.chipText}>{domain}</Text></View>)}</View>

@@ -1,5 +1,24 @@
 .study-profile-trigger,.browser-study-overlay{--accent:var(--app-accent,#ffe000);--accent-ink:var(--app-accent-ink,#171400)}
-.browser-study-overlay{font-family:inherit}
+.browser-study-overlay{font-family:var(--font-sans,"Manrope"),ui-sans-serif,system-ui,sans-serif}
 .browser-study-dialog button{cursor:pointer}
 .study-profile-trigger small{font-size:11px}
 .browser-study-dialog .study-duration-actions button{background:transparent}
+.browser-study-dialog.focus-lock-visual{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:center;gap:34px;width:min(100%,980px);padding:26px;border:0;background:#0b0c0b}
+.focus-lock-image{display:flex;align-items:center;justify-content:center;min-width:0;order:1}
+.focus-lock-visual .focus-lock-dialog-content{order:2}
+.focus-lock-image img{display:block;width:100%;height:min(65dvh,560px);object-fit:contain;border-radius:16px}
+.focus-lock-dialog-content{min-width:0}
+.focus-lock-visual .browser-study-heading{margin-bottom:12px}
+.focus-lock-visual .study-focus-today{margin-bottom:24px}
+.focus-lock-visual .focus-lock-eyebrow{font-size:10px;letter-spacing:.17em;color:var(--accent);margin:0 0 12px}
+.focus-lock-message{margin:0;color:#f9faf6;font-size:clamp(24px,3vw,38px);line-height:1.15;font-weight:700;letter-spacing:-.035em}
+.browser-study-dialog.focus-lock-visual .browser-study-live-time{text-align:left;font-size:44px;margin:22px 0}
+.browser-study-dialog.focus-lock-visual .browser-study-domains{display:grid;gap:8px;justify-content:stretch;text-align:left}
+.focus-lock-site{display:flex;align-items:center;gap:10px;min-width:0;padding:10px 12px;border-radius:14px;background:#ffffff08;color:#eee;text-decoration:none;transition:background .18s}
+.focus-lock-site:hover{background:color-mix(in srgb,var(--accent) 12%,transparent)}
+.focus-lock-site:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.focus-lock-site strong{min-width:0;overflow-wrap:anywhere;font-size:12px;font-weight:600}
+.browser-study-domains .focus-lock-site>span{padding:0;background:transparent}
+.browser-study-domains .focus-lock-site .focus-lock-site-icon{display:grid;place-items:center;flex-shrink:0;width:28px;height:28px;border-radius:9px;background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent);font-size:13px}
+.focus-lock-site>span:last-child{margin-left:auto;color:#aaa}
+@media(max-width:700px){.browser-study-dialog.focus-lock-visual{grid-template-columns:1fr;gap:20px;padding:20px}.focus-lock-image img{height:min(32dvh,260px)}.focus-lock-message{font-size:26px}.focus-lock-visual .browser-study-live-time{font-size:36px;margin:18px 0}}

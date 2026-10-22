@@ -12,7 +12,7 @@ const remaining = (endsAt: number) => {
   const seconds = Math.max(0, Math.ceil((endsAt - Date.now()) / 1000));
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 };
-export function StudyLockControl({ uid, desktop = false, profile = false, getDatabase, source = "windows", onResize, onPin }: { uid: string; desktop?: boolean; profile?: boolean; getDatabase: () => Firestore; source?: string; onResize?: (expanded: boolean) => Promise<void>; onPin?: () => Promise<void> }) {
+export function StudyLockControl({ uid, desktop = false, profile = false, getDatabase, source = "windows", onResize, onPin, lockedImage }: { uid: string; desktop?: boolean; profile?: boolean; getDatabase: () => Firestore; source?: string; onResize?: (expanded: boolean) => Promise<void>; onPin?: () => Promise<void>; lockedImage?: string }) {
   const [open, setOpen] = useState(false), [status, setStatus] = useState<Status | null>(null);
   const [minutes, setMinutes] = useState("25"), [domains, setDomains] = useState(() => typeof localStorage === "undefined" ? "" : localStorage.getItem(`ssc-browser-allowlist:${uid}`) ?? "chatgpt.com");
   const [website, setWebsite] = useState(""), [pickingTime, setPickingTime] = useState(false);
@@ -90,14 +90,17 @@ export function StudyLockControl({ uid, desktop = false, profile = false, getDat
     </section> : <button ref={trigger} className={`browser-study-trigger ${profile ? "study-profile-trigger" : "icon-button"} ${session ? "active" : ""}`} aria-label="Focus Lock" title={session ? `Focus Lock - ${remaining(session.endsAt)}` : "Focus Lock"} onClick={() => setOpen(true)}><LockKeyhole size={17} />{profile && <><span>Focus Lock</span><small>{session ? <SlotTime value={remaining(session.endsAt)} /> : "Set up session"}</small></>}{session && !profile && <i aria-hidden="true" />}</button>}
 
     {open && createPortal(<div className="browser-study-overlay" onPointerDown={event => { event.stopPropagation(); if (event.target === event.currentTarget) setOpen(false); }} onContextMenu={e => e.stopPropagation()}>
-      <section ref={dialog} className={`browser-study-dialog ${session && !pickingTime ? "is-running" : ""}`} role="dialog" aria-modal="true" aria-labelledby="browser-study-title">
+      <section ref={dialog} className={`browser-study-dialog ${session && !pickingTime ? "is-running" : ""} ${session && lockedImage ? "focus-lock-visual" : ""}`} role="dialog" aria-modal="true" aria-labelledby="browser-study-title">
+        {session && lockedImage && <div className="focus-lock-image"><img src={lockedImage} alt="Focus motivation" /></div>}
+        <div className="focus-lock-dialog-content">
         {pickingTime && !session ? <StudyDurationPicker minutes={Number(minutes)} onCancel={() => setPickingTime(false)} onConfirm={value => { setMinutes(String(value)); setPickingTime(false); }} /> : <>
         <div className="browser-study-heading"><h2 id="browser-study-title">Focus Lock</h2>{onPin && <button aria-label="Add Focus Lock desktop widget" title="Add desktop widget" disabled={busy} onClick={() => void run(() => onPin())}><MonitorUp size={17} /></button>}<button aria-label="Close Focus Lock" onClick={() => setOpen(false)}><X size={18} /></button></div>
-        <div className={`browser-study-connection ${status?.connected ? "connected" : ""}`} role="status"><Monitor size={12} /><i /><span>{status?.connected ? `${status.connected} connected` : "No browser connected"}</span>{session && <span>{status?.protected ? "Protected" : "Connect browser to block"}</span>}</div>
+        {source !== "web" && <div className={`browser-study-connection ${status?.connected ? "connected" : ""}`} role="status"><Monitor size={12} /><i /><span>{status?.connected ? `${status.connected} connected` : "No browser connected"}</span>{session && <span>{status?.protected ? "Protected" : "Connect browser to block"}</span>}</div>}
         <div className="study-focus-today"><span>Today's focus</span><strong>{formatFocusTime(todayFocus)}</strong></div>
         {session ? <>
+          {lockedImage && <><p className="focus-lock-eyebrow">ONE SESSION. ONE STEP CLOSER.</p><h3 className="focus-lock-message">Your goals deserve this time.</h3></>}
           <div className="browser-study-live-time"><SlotTime value={remaining(session.endsAt)} /></div>
-          <div className="browser-study-domains">{session.domains.map(domain => <span key={domain} title={domain}>{domain}</span>)}</div>
+          <div className="browser-study-domains">{session.domains.map(domain => lockedImage ? <a key={domain} href={`https://${domain}`} className="focus-lock-site" rel="noreferrer"><span className="focus-lock-site-icon">{domain.replace(/^www\./, "").charAt(0).toUpperCase()}</span><strong>{domain}</strong><span aria-hidden="true">&#8599;</span></a> : <span key={domain} title={domain}>{domain}</span>)}</div>
         </> : <>
           <div className="study-websites"><h3>Allowed websites <small>{websites.length}/3</small></h3>
             <div className="study-domain-entry"><Globe2 size={15} /><input aria-label="Website domain" value={website} onChange={event => setWebsite(event.target.value)} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); addWebsite(); } }} placeholder="parmar.com" spellCheck={false} autoCapitalize="none" /><button aria-label="Add website" disabled={!website.trim() || busy || websites.length >= 3} onClick={addWebsite}><Plus size={17} /></button></div>
@@ -111,6 +114,7 @@ export function StudyLockControl({ uid, desktop = false, profile = false, getDat
         </>}
         {error && <p className="browser-study-error" role="alert">{error}</p>}
         </>}
+        </div>
       </section>
     </div>, document.body)}
   </>;

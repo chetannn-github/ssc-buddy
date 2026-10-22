@@ -10,20 +10,36 @@ import { launchImages } from "../lib/launch-images";
 import { QuickRecallScreen } from "../screens/QuickRecallScreen";
 import { SlotTime } from "./SlotTime";
 import { AccentBackdrop } from "./AccentBackdrop";
+import { DeviceFocusSetup } from "./DeviceFocusSetup";
+import { consumeFocusRecall, syncDeviceFocus } from "../lib/native-focus-lock";
 
 export function FocusSessionGate({ user }: { user: User | null }) {
   const accent = useAppAccent();
   const [session, setSession] = useState<StudySession | null>(null);
+  const [controlReady, setControlReady] = useState(false);
   const [now, setNow] = useState(Date.now());
   const [recall, setRecall] = useState(false);
   const [image] = useState(() => launchImages[Math.floor(Math.random() * launchImages.length)]);
   useEffect(() => {
     setSession(null);
-    if (!user) return;
-    return controller.watchStudyControl(getFirebaseFirestore(), user.uid, value => setSession(value?.session ?? null), () => {});
+    setControlReady(false);
+    if (!user) { void syncDeviceFocus("", 0, accent).catch(() => {}); return; }
+    return controller.watchStudyControl(getFirebaseFirestore(), user.uid, value => { setSession(value?.session ?? null); setControlReady(true); }, () => {});
   }, [user?.uid]);
   useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer); }, []);
   const active = !!session && session.endsAt > now;
+  useEffect(() => {
+    if (!controlReady) return;
+    void syncDeviceFocus(session?.id ?? "", session?.endsAt ?? 0, accent).catch(() => {});
+  }, [controlReady, session?.id, session?.endsAt, accent]);
+  useEffect(() => {
+    if (!active) return;
+    let disposed = false;
+    const check = () => { void consumeFocusRecall().then(requested => { if (!disposed && requested) setRecall(true); }).catch(() => {}); };
+    check();
+    const timer = setInterval(check, 1000);
+    return () => { disposed = true; clearInterval(timer); };
+  }, [active]);
   useEffect(() => { if (!active) setRecall(false); }, [active]);
   useEffect(() => {
     if (!user || !session) return;
@@ -42,6 +58,7 @@ export function FocusSessionGate({ user }: { user: User | null }) {
         <SlotTime value={time} color={accent} size={64} />
         {image && <Image source={image} resizeMode="contain" accessibilityLabel="Motivational image" style={{ width: "100%", maxWidth: 340, height: "40%", borderRadius: 16 }} />}
         <Pressable accessibilityRole="button" onPress={() => setRecall(true)} style={{ paddingVertical: 12, paddingHorizontal: 24, borderRadius: 24, backgroundColor: "#222" }}><Text style={{ color: "#eee", fontWeight: "600" }}>Quick Recall</Text></Pressable>
+        <DeviceFocusSetup />
       </View>}
     </View>
   </Modal>;

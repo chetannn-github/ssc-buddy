@@ -38,6 +38,24 @@ class BuddyMusicModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("BuddyMusic")
     Events("status")
+    AsyncFunction("getFocusLockStatus") {
+      val context = requireNotNull(appContext.reactContext)
+      val prefs = BuddyFocusService.prefs(context)
+      mapOf("enabled" to BuddyFocusService.enabled(context), "allowedCount" to prefs.getStringSet("allowed", emptySet()).orEmpty().size)
+    }.runOnQueue(Queues.MAIN)
+    AsyncFunction("syncFocusLock") { id: String, endsAt: Double, accent: String ->
+      BuddyFocusService.sync(requireNotNull(appContext.reactContext), id, endsAt, accent)
+    }.runOnQueue(Queues.MAIN)
+    AsyncFunction("openFocusLockSettings") {
+      val context = requireNotNull(appContext.reactContext)
+      context.startActivity(android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+    }.runOnQueue(Queues.MAIN)
+    AsyncFunction("consumeFocusRecall") {
+      val prefs = BuddyFocusService.prefs(requireNotNull(appContext.reactContext))
+      val requested = prefs.getBoolean("recall", false)
+      if (requested) prefs.edit().remove("recall").apply()
+      requested
+    }.runOnQueue(Queues.MAIN)
     OnStartObserving { handler.post { observing = true; handler.removeCallbacks(ticker); ticker.run() } }
     OnStopObserving { handler.post { observing = false; handler.removeCallbacks(ticker) } }
     AsyncFunction("initialize") { promise: Promise ->

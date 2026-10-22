@@ -76,6 +76,8 @@ try {
   await page.getByRole('menuitem',{name:'Remove widget'}).waitFor();
   await page.keyboard.press('Escape');assert.equal(await page.getByRole('menuitem').count(),0);
   await page.setViewportSize({width:390,height:750});
+  await page.route('**/avatars/manifest.json', route=>route.fulfill({contentType:'application/json',body:JSON.stringify(['1.jpg'])}));
+  await page.route('**/avatars/1.jpg', route=>route.fulfill({path:path.resolve(root,'../public/avatars/1.jpg')}));
   await page.goto(`http://localhost:${server.httpServer.address().port}/profile-preview`);
   await page.getByRole('button',{name:'Focus Lock',exact:true}).click();
   assert.equal(await page.getByRole('button',{name:'Add Focus Lock desktop widget'}).count(),0);
@@ -86,6 +88,15 @@ try {
   await page.locator('.browser-study-live-time').waitFor();
   assert.match(await page.locator('.browser-study-live-time').textContent(),/^(15:00|14:5\d)$/);
   assert.equal(await page.getByRole('button',{name:/Remove parmar/}).count(),0);
+  const image=page.getByRole('img',{name:'Focus motivation'});await image.waitFor();await image.evaluate(el=>el.decode());
+  await page.setViewportSize({width:1280,height:900});
+  const picture=await image.boundingBox(),details=await page.locator('.focus-lock-dialog-content').boundingBox();
+  assert.ok(picture.x+picture.width<=details.x,'desktop image is on the left of timer');
+  assert.equal(await image.evaluate(el=>getComputedStyle(el).objectFit),'contain');
+  assert.equal(await page.locator('.focus-lock-site').getAttribute('href'),'https://parmar.com');
+  await page.screenshot({path:path.join(root,'dist/profile-focus-lock-wide.png')});
+  await page.setViewportSize({width:390,height:750});
+  assert.equal(await page.locator('.focus-lock-visual').evaluate(el=>el.scrollWidth>el.clientWidth),false);
   await page.screenshot({path:path.join(root,'dist/profile-study-lock.png')});
   await page.getByRole('button',{name:'Close Focus Lock',exact:true}).click();
   assert.match(await page.locator('.study-profile-trigger small').textContent(),/^(15:00|14:5\d)$/);

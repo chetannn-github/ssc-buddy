@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
-import { LockKeyhole } from "lucide-react";
+import { LockKeyhole, Sparkles } from "lucide-react";
 import { useAuthUser } from "@/lib/auth-context";
 import { getFirebaseFirestore } from "@/lib/firebase-sync";
 import { watchStudyControl, recordStudyFocus, type StudySession } from "../../shared/study-lock";
@@ -14,7 +14,7 @@ export function FocusSessionGate({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<StudySession | null>(null);
   const [now, setNow] = useState(Date.now());
   const [recall, setRecall] = useState(false);
-  const [image, setImage] = useState<string>();
+  const [image, setImage] = useState("/avatars/1.jpg");
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     setSession(null);
@@ -49,10 +49,14 @@ export function FocusSessionGate({ children }: { children: ReactNode }) {
     <div inert={active}>{children}</div>
     {active && <dialog ref={dialog} className="focus-session-gate" onCancel={event => event.preventDefault()} aria-label="Focus session active">
       {recall ? <div style={{ position: "relative", paddingTop: 24 }}><Suspense fallback={<p>Loading recall…</p>}><Recall focusLocked /></Suspense></div> : <div className="focus-session-center">
-        <LockKeyhole size={32} aria-label="Locked" />
-        <div className="focus-session-timer"><SlotTime value={time} /></div>
-        {image && <img src={image} alt="Motivational image" />}
-        <button onClick={() => { window.history.pushState({ ...window.history.state, focusRecall: true }, "", window.location.href); setRecall(true); }}>Quick Recall</button>
+        <div className="focus-session-image"><img src={image} alt="Motivational image" /></div>
+        <section className="focus-session-details">
+          <div className="focus-session-brand"><LockKeyhole size={17} aria-hidden="true" />Focus Lock</div>
+          <p className="focus-session-eyebrow">ONE SESSION. ONE STEP CLOSER.</p>
+          <h1>Your goals deserve this time.</h1>
+          <div className="focus-session-timer"><SlotTime value={time} /></div>
+          <button onClick={() => { window.history.pushState({ ...window.history.state, focusRecall: true }, "", window.location.href); setRecall(true); }}><Sparkles size={18} aria-hidden="true" />Quick Recall</button>
+        </section>
       </div>}
     </dialog>}
   </>;

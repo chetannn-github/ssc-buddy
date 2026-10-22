@@ -1,0 +1,4 @@
+<resources>
+  <string name="buddy_focus_label">SSC Buddy Focus Lock</string>
+  <string name="buddy_focus_description">During your focus session, detect which app is opened and show a focus screen over blocked apps. Phone and Contacts are always available. You can allow up to two other apps. Screen content is not read or collected. Disable this service in Android Accessibility settings at any time.</string>
+</resources>
