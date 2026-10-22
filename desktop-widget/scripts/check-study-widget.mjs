@@ -16,13 +16,14 @@ export function normalizeStudyDomain(value){return new URL('https://'+value).hos
 `;
 const server = await createServer({configFile:false,root,resolve:{dedupe:['react','react-dom']},optimizeDeps:{noDiscovery:true,include:['react','react-dom','react-dom/client','react/jsx-runtime','react/jsx-dev-runtime','lucide-react']},server:{port:0,watch:{ignored:['**/src-tauri/**']},fs:{allow:[path.resolve(root,'..')]}},plugins:[{
   name:'isolated-study-widget-fixture', enforce:'pre',
-  resolveId(id){if(id.endsWith('/lib/firebase'))return '\0study-firebase';if(id.endsWith('/shared/study-lock'))return '\0study-controller';if(id==='/study-preview.js')return '\0study-preview';},
+  resolveId(id){if((id.endsWith('/lib/firebase') || id === '@/lib/firebase-sync'))return '\0study-firebase';if((id.endsWith('/shared/study-lock') || id === './study-lock'))return '\0study-controller';if(id==='/study-preview.js')return '\0study-preview';if(id==='/profile-preview.js')return '\0profile-preview';},
   load(id){
     if(id==='\0study-firebase')return `export const getFirebaseFirestore=()=>({});export function observeAuth(cb){cb({uid:'preview-user'});return()=>{}};export function watchProfileAccent(user,cb){cb('#ff666e');return()=>{}}`;
     if(id==='\0study-controller')return fixture;
+    if(id==='\0profile-preview')return `import React from 'react';import{createRoot}from'react-dom/client';import{ProfileStudyLock}from'/@fs/${path.resolve(root,'../src/components/profile/ProfileStudyLock.tsx').replaceAll('\\','/')}';document.body.style.background='#121212';createRoot(document.getElementById('root')).render(React.createElement(ProfileStudyLock,{uid:'preview-user'}));`;
     if(id==='\0study-preview')return `import React from 'react';import{createRoot}from'react-dom/client';import{PinnedStudyWindow}from'/src/components/PinnedStudyWindow.tsx';import'/src/styles.css';import'/@fs/${path.resolve(root,'../src/components/layout/accent-top-glow.css').replaceAll('\\','/')}';window.__SSC_HABIT_WIDGET__={uid:'preview-user',habitId:'study-lock',style:'study'};createRoot(document.getElementById('root')).render(React.createElement(PinnedStudyWindow,{pin:window.__SSC_HABIT_WIDGET__}));`;
   },
-  configureServer(server){server.middlewares.use((req,res,next)=>{if(req.url!=='/study-preview')return next();res.setHeader('Content-Type','text/html');res.end('<div id="root"></div><script type="module" src="/study-preview.js"></script>');});}
+  configureServer(server){server.middlewares.use((req,res,next)=>{if(!['/study-preview','/profile-preview'].includes(req.url))return next();res.setHeader('Content-Type','text/html');res.end('<div id="root"></div><script type="module" src="'+(req.url==='/profile-preview'?'/profile-preview.js':'/study-preview.js')+'"></script>');});}
 }]});
 let browser;
 try {
@@ -62,6 +63,20 @@ try {
   await page.locator('.study-desktop-heading').click({button:'right'});
   await page.getByRole('menuitem',{name:'Remove widget'}).waitFor();
   await page.keyboard.press('Escape');assert.equal(await page.getByRole('menuitem').count(),0);
+  await page.setViewportSize({width:390,height:750});
+  await page.goto(`http://localhost:${server.httpServer.address().port}/profile-preview`);
+  await page.getByRole('button',{name:'Study Lock',exact:true}).click();
+  assert.equal(await page.getByRole('button',{name:'Add Study Lock desktop widget'}).count(),0);
+  await page.locator('.study-duration-trigger').click();
+  await page.getByRole('button',{name:'15 minutes',exact:true}).click();
+  await page.getByRole('button',{name:'Save',exact:true}).click();
+  await page.getByRole('button',{name:'Start study lock',exact:true}).click();
+  await page.locator('.browser-study-live-time').waitFor();
+  assert.match(await page.locator('.browser-study-live-time').textContent(),/^(15:00|14:5\d)$/);
+  assert.equal(await page.getByRole('button',{name:/Remove parmar/}).count(),0);
+  await page.screenshot({path:path.join(root,'dist/profile-study-lock.png')});
+  await page.getByRole('button',{name:'Close Study Lock',exact:true}).click();
+  assert.match(await page.locator('.study-profile-trigger small').textContent(),/^(15:00|14:5\d)$/);
   assert.deepEqual(errors,[]);
   console.log('PASS: compact 430×220 and 340×200 layouts, account accent, setup clock, session countdown and remove menu. Local fixtures only.');
 } finally {await browser?.close();server.httpServer?.closeAllConnections();await server.close();}

@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { StudyLock } from "../components/StudyLock";
 import { DestructiveDialog } from "../components/DestructiveDialog";
 import { createThemedStyles, setAppAccent, useAppAccent } from "../theme";
 import { APP_ACCENTS, accentInk, type AppAccent } from "../domain/app-accent";
@@ -650,6 +651,7 @@ export function ProfileScreen({
         contentContainerStyle={styles.content}
         onScrollBeginDrag={() => setRangeOpen(false)}
       >
+        {!readOnly && user && <StudyLock key={user.uid} uid={user.uid} />}
         <View style={[styles.summaryCard, { position: "relative", marginTop: 10, paddingTop: 10 }]}>
           {rangeOpen && (
             <Pressable

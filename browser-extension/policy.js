@@ -1,3 +1,4 @@
+import { studyTimeZone } from "../shared/study-focus.ts";
 import { splitSelection, websiteDomain } from '../shared/study-selection.ts';
 export const RULE_IDS = [1, 2, 3];
 export function validSession(session, time = Date.now()) {
@@ -7,7 +8,7 @@ export function validSession(session, time = Date.now()) {
     if (typeof domain !== 'string' || domain.length > 253 || !/^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(domain) || /^\d+(\.\d+){3}$/.test(domain)) throw Error('Invalid allowed website');
   }
   if (!session.domains.length) throw Error('Add a website first.');
-  return session.endsAt > time ? { id: session.id, startedAt: session.startedAt, endsAt: session.endsAt, domains: session.domains.slice(0, 3) } : null;
+  return session.endsAt > time ? { id: session.id, startedAt: session.startedAt, endsAt: session.endsAt, domains: session.domains.slice(0, 3), ...(session.timeZone ? { timeZone: session.timeZone } : {}) } : null;
 }
 export function normalizeWebsite(value) { return splitSelection([String(value).trim()]).domains[0] ?? (() => { throw Error('Enter a website domain.'); })(); }
 export function editWebsites(control, value, remove = false, time = Date.now()) {
@@ -25,7 +26,7 @@ export function startControl(control, minutes, time = Date.now()) {
   if (control.session?.endsAt > time) throw Error('Your session is already running.');
   const { domains } = splitSelection(control.allowedDomains ?? []);
   if (!domains.length) throw Error('Add a website first.');
-  return { ...control, version: 1, revision: crypto.randomUUID(), source: 'extension', session: { id: crypto.randomUUID(), startedAt: time, endsAt: time + minutes * 60000, domains } };
+  return { ...control, version: 1, revision: crypto.randomUUID(), source: 'extension', session: { id: crypto.randomUUID(), startedAt: time, endsAt: time + minutes * 60000, domains, timeZone: studyTimeZone() } };
 }
 export function allowed(url, domains) {
   try { const parsed = new URL(url); return ['https:', 'http:'].includes(parsed.protocol) && domains.some(d => parsed.hostname === d || parsed.hostname.endsWith(`.${d}`)); } catch { return false; }
