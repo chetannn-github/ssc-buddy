@@ -1,3 +1,4 @@
+import { ProfileStudyLock } from "@/components/profile/ProfileStudyLock";
 import { AccentPicker } from "@/components/profile/AccentPicker";
 import { applyWebAccent, normalizeAppAccent, type AppAccent } from "@/lib/app-accent";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
@@ -1274,6 +1275,8 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
               </div>}
             </div>
           </section>
+
+          {!readOnly && authUser && <ProfileStudyLock key={authUser.uid} uid={authUser.uid} />}
 
           <div className="space-y-3">
             <TargetProgress

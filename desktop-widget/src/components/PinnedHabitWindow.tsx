@@ -5,17 +5,16 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import NumberFlow from "@number-flow/react";
 import { Check, Flame, ListChecks, LoaderCircle, Minus, Plus, Trash2, X } from "lucide-react";
 import type { User } from "firebase/auth";
-import { observeAuth, watchProfileAccent } from "../lib/firebase";
+import { observeAuth } from "../lib/firebase";
 import { useHabits, useHabitToday } from "../lib/habits";
 import { removeDesktopHabit, responsiveHabitStyle, type DesktopHabitPin } from "../lib/desktop-habit-widgets";
 import { HABIT_COLORS, habitEntry, habitIntensity, habitIsComplete, habitScheduled, habitStats, normalizeHabitSettings } from "../../../mobile-tasks/src/domain/habits";
 import { habitWidgetCalendar } from "../../../mobile-tasks/src/domain/habit-widget-layout";
-import { accentInk, normalizeAppAccent } from "../../../mobile-tasks/src/domain/app-accent";
+import { accentInk } from "../../../mobile-tasks/src/domain/app-accent";
 
 export function PinnedHabitWindow({ pin }: { pin: DesktopHabitPin }) {
   const reducedMotion = useReducedMotion();
   const [user, setUser] = useState<User | null>(null), [ready, setReady] = useState(false);
-  const [glowAccent, setGlowAccent] = useState(normalizeAppAccent(undefined));
   const [error, setError] = useState(""), [checklist, setChecklist] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const card = useRef<HTMLElement>(null);
@@ -83,13 +82,8 @@ export function PinnedHabitWindow({ pin }: { pin: DesktopHabitPin }) {
 
   useEffect(() => { document.body.classList.add("pinned-habit-body"); return () => document.body.classList.remove("pinned-habit-body"); }, []);
   useEffect(() => observeAuth(next => { setUser(next); setReady(true); setChecklist(false); setError(""); }), []);
-  useEffect(() => {
-    setGlowAccent(normalizeAppAccent(undefined));
-    if (!user || user.uid !== pin.uid) return;
-    return watchProfileAccent(user, (value) => setGlowAccent(normalizeAppAccent(value)));
-  }, [user?.uid, pin.uid]);
   const tint = habit ? HABIT_COLORS[habit.color] : "#ffe000";
-  const style = { "--glow-accent": glowAccent, "--accent": tint, "--accent-ink": accentInk(tint), "--habit-color": tint, "--habit-ink": accentInk(tint), "--habit-soft": tint + "22" } as CSSProperties;
+  const style = { "--glow-accent": tint, "--accent": tint, "--accent-ink": accentInk(tint), "--habit-color": tint, "--habit-ink": accentInk(tint), "--habit-soft": tint + "22" } as CSSProperties;
   const remove = () => { void removeDesktopHabit().catch(() => setError("Could not remove widget. Try again.")); };
   const openMenu = (event: React.MouseEvent) => {
     event.preventDefault();

@@ -1,0 +1,5 @@
+.study-profile-trigger,.browser-study-overlay{--accent:var(--app-accent,#ffe000);--accent-ink:var(--app-accent-ink,#171400)}
+.browser-study-overlay{font-family:inherit}
+.browser-study-dialog button{cursor:pointer}
+.study-profile-trigger small{font-size:11px}
+.browser-study-dialog .study-duration-actions button{background:transparent}

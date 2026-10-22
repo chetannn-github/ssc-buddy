@@ -18,10 +18,10 @@ pub struct HabitPin {
 }
 impl HabitPin {
   fn min_size(&self) -> (f64, f64) {
-    match self.style.as_str() { "recall" => (400., 300.), "tasks" => (340., 400.), _ => (220., 160.) }
+    match self.style.as_str() { "recall" => (400., 300.), "tasks" => (340., 400.), "study" => (340., 200.), _ => (220., 160.) }
   }
   fn max_size(&self) -> (f64, f64) {
-    match self.style.as_str() { "recall" => (400., 420.), "tasks" => (340., 500.), _ => (430., 420.) }
+    match self.style.as_str() { "recall" => (400., 420.), "tasks" => (340., 500.), "study" => (430., 300.), _ => (430., 420.) }
   }
   fn label(&self) -> String {
     let mut hash = DefaultHasher::new();
@@ -41,7 +41,7 @@ impl HabitPin {
   fn valid(&self) -> bool {
     !self.uid.is_empty() && !self.habit_id.is_empty()
       && self.uid.len() <= 256 && self.habit_id.len() <= 512
-      && matches!(self.style.as_str(), "heatmap" | "month" | "compact" | "recall" | "tasks")
+      && matches!(self.style.as_str(), "heatmap" | "month" | "compact" | "recall" | "tasks" | "study")
       && self.width.is_finite() && self.height.is_finite()
       && self.x.map_or(true, f64::is_finite) && self.y.map_or(true, f64::is_finite)
   }
@@ -125,6 +125,36 @@ pub async fn fit_habit_heatmap(app: AppHandle, window: WebviewWindow, height: f6
 }
 
 #[tauri::command]
+pub async fn resize_study_widget(app: AppHandle, window: WebviewWindow, expanded: bool) -> Result<(), String> {
+  let label = window.label().to_owned();
+  let valid = app.state::<HabitPins>().0.lock().map_err(|e| e.to_string())?.iter().any(|pin| pin.label() == label && pin.style == "study");
+  if !valid { return Err("Not a Study Lock widget.".into()); }
+  let state = app.state::<ChecklistWindows>();
+  if expanded {
+    let scale = window.scale_factor().map_err(|e| e.to_string())?;
+    let size = window.inner_size().map_err(|e| e.to_string())?.to_logical::<f64>(scale);
+    let position = window.outer_position().map_err(|e| e.to_string())?.to_logical::<f64>(scale);
+    let original = {
+      let mut saved = state.0.lock().map_err(|e| e.to_string())?;
+      *saved.entry(label.clone()).or_insert(ChecklistBounds { x: position.x, y: position.y, width: size.width, height: size.height })
+    };
+    window.set_max_size(Some(tauri::LogicalSize::new(430., 540.))).map_err(|e| e.to_string())?;
+    animate_checklist(window.clone(), original.width, 520., None, true).await?;
+    crate::window_bounds::keep_visible(&window.as_ref().window());
+  } else {
+    let original = state.0.lock().map_err(|e| e.to_string())?.get(&label).copied();
+    if let Some(original) = original {
+      animate_checklist(window.clone(), original.width, original.height, Some((original.x, original.y)), true).await?;
+      window.set_max_size(Some(tauri::LogicalSize::new(430., 300.))).map_err(|e| e.to_string())?;
+      state.0.lock().map_err(|e| e.to_string())?.remove(&label);
+      crate::window_bounds::keep_visible(&window.as_ref().window());
+      remember_bounds(&window.as_ref().window());
+    }
+  }
+  Ok(())
+}
+
+#[tauri::command]
 pub async fn resize_habit_checklist(app: AppHandle, window: WebviewWindow, expanded: bool, item_count: usize, animate: Option<bool>) -> Result<(), String> {
   let label = window.label().to_owned();
   let is_habit = app.state::<HabitPins>().0.lock().map_err(|e| e.to_string())?.iter()
@@ -182,7 +212,7 @@ fn open(app: &AppHandle, pin: &HabitPin) -> Result<(), String> {
   let (max_width, max_height) = pin.max_size();
   let (min_width, min_height) = pin.min_size();
   let mut builder = WebviewWindowBuilder::new(app, pin.label(), WebviewUrl::App("index.html".into()))
-    .title("Habit widget")
+    .title(if pin.style == "study" { "Study Lock" } else { "Habit widget" })
     .initialization_script(&script)
     .inner_size(pin.width.clamp(min_width, max_width), pin.height.clamp(min_height, max_height))
     .min_inner_size(min_width, min_height)
@@ -217,7 +247,7 @@ pub fn restore(app: &AppHandle) {
 #[tauri::command]
 pub async fn pin_habit_widget(app: AppHandle, window: WebviewWindow, uid: String, habit_id: String, style: String) -> Result<(), String> {
   if window.label() != "main" { return Err("Open widgets from the main window.".into()); }
-  let (width, height) = match style.as_str() { "month" => (260., 260.), "compact" => (250., 180.), "recall" => (400., 380.), "tasks" => (340., 475.), _ => (430., 220.) };
+  let (width, height) = match style.as_str() { "month" => (260., 260.), "compact" => (250., 180.), "recall" => (400., 380.), "tasks" => (340., 475.), "study" => (430., 220.), _ => (430., 220.) };
   let pin = HabitPin { uid, habit_id, style, x: None, y: None, width, height, desktop_id: virtual_desktop::active().or_else(|| virtual_desktop::current(&window)) };
   if !pin.valid() { return Err("Invalid habit widget.".into()); }
   keep_on_saved_desktops(&app);
@@ -264,6 +294,17 @@ pub fn remember_bounds(window: &tauri::Window) {
 mod tests {
   use super::*;
   fn pin() -> HabitPin { HabitPin { uid: "alice".into(), habit_id: "read".into(), style: "heatmap".into(), x: None, y: None, width: 430., height: 220., desktop_id: None } }
+  #[test]
+  fn study_widget_has_compact_bounds_and_survives_restore() {
+    let study = HabitPin { style: "study".into(), habit_id: "study-lock".into(), ..pin() };
+    assert!(study.valid());
+    assert_eq!(study.min_size(), (340., 200.));
+    assert_eq!(study.max_size(), (430., 300.));
+    let restored: HabitPin = serde_json::from_str(&serde_json::to_string(&study).unwrap()).unwrap();
+    assert!(restored.valid());
+    assert_eq!(restored.label(), study.label());
+    assert_ne!(restored.label(), pin().label());
+  }
   #[test]
   fn widgets_are_isolated_by_account_habit_and_style() {
     let first = pin();

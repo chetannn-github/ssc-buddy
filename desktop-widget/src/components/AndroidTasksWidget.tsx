@@ -4,7 +4,8 @@ import { dailyTaskWidgetModel } from "../../../mobile-tasks/src/domain/daily-tas
 import { formatMinutes, summarizeTasks } from "../../../mobile-tasks/src/domain/tasks";
 import type { DailyTask } from "../lib/firebase";
 
-export function AndroidTasksWidget({ tasks, today, selectedDate, dueOnly, rank, medals, points, onSelectDate, onFilterChange, onNew, onComplete, onReopen }: {
+export function AndroidTasksWidget({ headerAction, tasks, today, selectedDate, dueOnly, rank, medals, points, onSelectDate, onFilterChange, onNew, onComplete, onReopen }: {
+  headerAction?: React.ReactNode;
   tasks: DailyTask[]; today: string; selectedDate: string; dueOnly: boolean;
   rank: number | null; medals: string[]; points: Map<string, number>;
   onSelectDate: (date: string) => void; onFilterChange: (due: boolean) => void;
@@ -15,7 +16,7 @@ export function AndroidTasksWidget({ tasks, today, selectedDate, dueOnly, rank, 
   return <>
     <div className="android-task-heading">
       <h1 data-tauri-drag-region>{model.selected === today ? "Today" : date.toLocaleDateString(undefined, { weekday: "short" })}, {date.toLocaleDateString(undefined, { day: "numeric", month: "short" })}</h1>
-      <div className="android-task-actions">{rank !== null && <span className="android-task-rank">{rank <= 3 && rank > 0 && <img src={medals[rank - 1]} alt="" />}#{rank}</span>}<button onClick={onNew} aria-label="Add task">+</button></div>
+      <div className="android-task-actions">{headerAction}{rank !== null && <span className="android-task-rank">{rank <= 3 && rank > 0 && <img src={medals[rank - 1]} alt="" />}#{rank}</span>}<button onClick={onNew} aria-label="Add task">+</button></div>
     </div>
     <div className="android-task-dates">{model.dates.map(day => {
       const value = new Date(day + "T12:00:00"), selected = day === model.selected;

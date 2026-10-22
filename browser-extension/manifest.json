@@ -1,0 +1,45 @@
+{
+  "manifest_version": 3,
+  "name": "SSC Buddy Study Lock",
+  "version": "1.0.0",
+  "minimum_chrome_version": "120",
+  "description": "Stay focused on your allowed websites with SSC Buddy.",
+  "permissions": [
+    "declarativeNetRequest",
+    "storage",
+    "alarms",
+    "tabs"
+  ],
+  "host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "worker.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": "icon.png"
+  },
+  "icons": {
+    "128": "icon.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "blocked.html",
+        "page.js",
+        "ui.css",
+        "images/*"
+      ],
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ]
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'; connect-src 'self' https://*.googleapis.com https://*.firebaseapp.com"
+  }
+}

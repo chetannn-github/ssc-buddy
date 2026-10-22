@@ -3,14 +3,13 @@ const PALETTES = [
   ["#e52e4d", "#c91638", "#a90e2e", "#870b26"],
   ["#fff27a", "#ffe94d", "#ffe51f", "#ffe000"],
   ["#316ad6", "#2452b5", "#1b3f95", "#142f75"],
-  ["#bbff35", "#91ee00", "#6fc800", "#509900"],
   ["#a345de", "#8a2bc2", "#701ba2", "#58127e"],
 ];
 export const HEATMAP_EMPTY_COLOR = "#202024";
 export type HeatmapColorCycle = { seed: number; previousShift: number; shift: number };
 export function heatmapPaletteColor(level: number, cycle: HeatmapColorCycle, mode: "activity" | "tasks") {
   if (level <= 0) return HEATMAP_EMPTY_COLOR;
-  const palette = (cycle.shift + (mode === "tasks" ? 4 : 0)) % PALETTES.length;
+  const palette = (cycle.shift + (mode === "tasks" ? PALETTES.length - 1 : 0)) % PALETTES.length;
   return PALETTES[palette]![Math.max(0, Math.min(3, level - 1))]!;
 }
 let lastVisit: HeatmapColorCycle | undefined;
