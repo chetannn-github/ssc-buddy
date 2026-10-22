@@ -240,11 +240,6 @@ export function ResultScreen({ record, onRestart, attempts = [] }: Props) {
                   <span className={cn("text-sm", a ? "font-semibold" : "text-muted-foreground")}>
                     {a ?? "—"}
                   </span>
-                  {record.answerKey?.[i] ? (
-                    <span className="text-[10px] text-muted-foreground">
-                      key {record.answerKey[i]}
-                    </span>
-                  ) : null}
                 </div>
 
                 {attemptedRow ? (

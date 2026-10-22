@@ -3,11 +3,11 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { taskWidgetHeight } from "./task-widget-height";
 
 /** Measure intrinsic row heights so shrinking the window does not create a resize loop. */
-export function useTaskWidgetHeight(contentRef: RefObject<HTMLDivElement | null>) {
+export function useTaskWidgetHeight(contentRef: RefObject<HTMLDivElement | null>, suspended = false) {
   useEffect(() => {
     const content = contentRef.current;
     const card = content?.parentElement;
-    if (!content || !card || !isTauri() || window.__SSC_HABIT_WIDGET__?.style !== "tasks") return;
+    if (suspended || !content || !card || !isTauri() || window.__SSC_HABIT_WIDGET__?.style !== "tasks") return;
     let active = true, applying = false, frame = 0, lastHeight = 0;
     let pendingHeight: number | null = null;
     const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -64,5 +64,5 @@ export function useTaskWidgetHeight(contentRef: RefObject<HTMLDivElement | null>
     mutation.observe(content, { childList: true, subtree: true, characterData: true });
     observe();
     return () => { active = false; pendingHeight = null; cancelAnimationFrame(frame); resize.disconnect(); mutation.disconnect(); };
-  }, [contentRef]);
+  }, [contentRef, suspended]);
 }

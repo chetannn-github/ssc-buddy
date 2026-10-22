@@ -1,6 +1,7 @@
 import { accentInk } from "@/lib/app-accent";
 import { HabitIconSheet } from "./HabitIconSheet";
 import { HabitIcon } from "./HabitIcon";
+import { AnimatedChoices } from "../../../shared/AnimatedChoices";
 import { useRef, useState } from "react";
 import { Check, LoaderCircle, X } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -216,22 +217,10 @@ export function HabitEditor({
             </section>
 <section className={section}>
                 <h3>Type</h3>
-                <div className="flex gap-3">
-                  {(["build", "quit"] as const).map((type) => (
-                    <button
-                      key={type}
-                      type="button"
-                      className="flex-1 rounded-xl bg-[#121212] px-3 py-2.5 font-semibold"
-                      style={{ backgroundColor: settings.type === type ? tint + "40" : undefined }}
-                      onClick={() => {
-                        patch({ type, ...(type === "quit" ? { frequency: "daily" } : {}) });
-                        setGoal(type === "quit" ? "0" : "1");
-                      }}
-                    >
-                      {type === "build" ? "Build A Habit" : "Quit A Habit"}
-                    </button>
-                  ))}
-                </div>
+                <AnimatedChoices className="habit-choice-switch" label="Habit type" options={[{ value: "build", label: "Build A Habit" }, { value: "quit", label: "Quit A Habit" }]} value={settings.type} onChange={(type) => {
+                  patch({ type: type as "build" | "quit", ...(type === "quit" ? { frequency: "daily" } : {}) });
+                  setGoal(type === "quit" ? "0" : "1");
+                }} />
                 <p className="text-center text-xs text-zinc-500">
                   {settings.type === "quit"
                     ? "Completed by default – only mark the days you slipped. Streak is counted as slip-free days."
@@ -278,22 +267,7 @@ export function HabitEditor({
             {frequency}
 <section className={section}>
                 <h3>Tracking</h3>
-                <div className="flex gap-3">
-                  {(["tick", "count", "checklist"] as const).map((tracking) => (
-                    <button
-                      type="button"
-                      key={tracking}
-                      disabled={false}
-                      className="flex-1 rounded-xl bg-[#121212] py-3 capitalize disabled:opacity-30"
-                      style={{
-                        backgroundColor: settings.tracking === tracking ? tint + "40" : undefined,
-                      }}
-                      onClick={() => patch({ tracking })}
-                    >
-                      {tracking}
-                    </button>
-                  ))}
-                </div>
+                <AnimatedChoices className="habit-choice-switch" label="Habit tracking" options={[{ value: "tick", label: "Tick" }, { value: "count", label: "Count" }, { value: "checklist", label: "Checklist" }]} value={settings.tracking} onChange={(tracking) => patch({ tracking: tracking as "tick" | "count" | "checklist" })} />
                 <p className="text-center text-xs text-zinc-500">
                   {settings.tracking === "tick"
                     ? settings.type === "quit"

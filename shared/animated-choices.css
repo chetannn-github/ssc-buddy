@@ -10,3 +10,4 @@
 @media(prefers-reduced-motion:reduce){.animated-choices>.animated-choice-indicator,.animated-choices>button,.animated-choices>button>span{transition:none}}
 .study-time-presets{--choice-radius:20px;margin:0 0 16px}
 .completion-time-choices{--choice-gap:7px;--choice-color:#f9fcf5;--choice-ink:#111;--choice-radius:10px}
+.habit-choice-switch{--choice-gap:10px;--choice-radius:12px;--choice-color:var(--habit-color,var(--app-accent,var(--accent,#ffe000)));--choice-ink:#111}.habit-choice-switch>button{min-height:44px;text-transform:none}.habit-choice-switch>button::before{background:#121212}

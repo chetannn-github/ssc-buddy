@@ -2,10 +2,9 @@ import { isQuestionAttempt } from "../../mobile-tasks/src/domain/question-deleti
 import { isQuickRecallRecord } from "../../mobile-tasks/src/domain/quick-recall-history";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, BookOpenCheck, RefreshCw, RotateCcw } from "lucide-react";
+import { ArrowLeft, RefreshCw, RotateCcw } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { ResultScreen } from "@/components/exam/ResultScreen";
-import { SolutionScreen } from "@/components/exam/SolutionScreen";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
@@ -38,7 +37,6 @@ function ResultDetail() {
   const [record, setRecord] = useState<TestRecord | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [attempts, setAttempts] = useState<TestRecord[]>([]);
-  const [solution, setSolution] = useState(false);
   const [reevaluating, setReevaluating] = useState(false);
   const reevaluationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const navigate = useNavigate();
@@ -46,7 +44,6 @@ function ResultDetail() {
   useEffect(() => {
     setRecord(getRecord(id));
     setAttempts(getAttemptGroup(id));
-    setSolution(false);
     setLoaded(true);
   }, [id]);
 
@@ -99,10 +96,6 @@ function ResultDetail() {
     setAttempts(getAttemptGroup(updatedRecord.id));
   };
 
-  if (solution && record) {
-    return <SolutionScreen key={record.id} record={record} onExit={() => setSolution(false)} />;
-  }
-
   return (
     <AppShell
       title={record ? record.subject : "Result details"}
@@ -136,15 +129,6 @@ function ResultDetail() {
                   Reevaluate
                 </Button>
               )}
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 gap-1.5 px-3 text-xs"
-                onClick={() => setSolution(true)}
-              >
-                <BookOpenCheck className="h-4 w-4" />
-                View Solution
-              </Button>
               {isQuickRecallRecord(record) ? (
                 <Button variant="outline" size="sm" className="h-8 gap-1.5 px-3 text-xs" asChild>
                   <Link to="/quick-recall">

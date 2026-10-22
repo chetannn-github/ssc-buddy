@@ -8,10 +8,10 @@ import type { DailyTask } from "../lib/firebase";
 import { useRef } from "react";
 import { useTaskWidgetHeight } from "../lib/use-task-widget-height";
 
-export function AndroidTasksWidget({ uid, headerAction, tasks, today, selectedDate, dueOnly, rank, medals, points, onSelectDate, onFilterChange, onNew, onComplete, onReopen, onReschedule }: {
-  uid?: string; headerAction?: React.ReactNode;
+export function AndroidTasksWidget({ uid, resizeSuspended = false, tasks, today, selectedDate, dueOnly, points, onSelectDate, onFilterChange, onNew, onComplete, onReopen, onReschedule }: {
+  uid?: string; resizeSuspended?: boolean;
   tasks: DailyTask[]; today: string; selectedDate: string; dueOnly: boolean;
-  rank: number | null; medals: string[]; points: Map<string, number>;
+  points: Map<string, number>;
   onSelectDate: (date: string) => void; onFilterChange: (due: boolean) => void;
   onNew: () => void; onComplete: (task: DailyTask) => void; onReopen: (task: DailyTask) => void;
   onReschedule?: (task: DailyTask, position: { x: number; y: number }) => void;
@@ -19,11 +19,11 @@ export function AndroidTasksWidget({ uid, headerAction, tasks, today, selectedDa
   const model = dailyTaskWidgetModel(tasks, { date: selectedDate, dueOnly }, today);
   const date = new Date(model.selected + "T12:00:00");
   const content = useRef<HTMLDivElement>(null);
-  useTaskWidgetHeight(content);
+  useTaskWidgetHeight(content, resizeSuspended);
   return <div ref={content} className="android-task-content">
     <div className="android-task-heading">
       <h1 data-tauri-drag-region>{model.selected === today ? "Today" : date.toLocaleDateString(undefined, { weekday: "short" })}, {date.toLocaleDateString(undefined, { day: "numeric", month: "short" })}</h1>
-      <div className="android-task-actions">{headerAction}{rank !== null && <span className="android-task-rank">{rank <= 3 && rank > 0 && <img src={medals[rank - 1]} alt="" />}#{rank}</span>}<button onClick={onNew} aria-label="Add task">+</button></div>
+      <div className="android-task-actions"><button onClick={onNew} aria-label="Add task">+</button></div>
     </div>
     <div className="android-task-dates">{model.dates.map(day => {
       const value = new Date(day + "T12:00:00"), selected = day === model.selected;
