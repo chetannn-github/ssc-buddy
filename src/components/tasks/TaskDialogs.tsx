@@ -1,5 +1,6 @@
 import { LoaderCircle } from "lucide-react";
 import { useEffect, useState } from "react";
+import { AnimatedChoices } from "../../../shared/AnimatedChoices";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -154,18 +155,7 @@ export function TaskFormDialog({
           {!task && (
             <div className="space-y-2">
               <Label>Schedule for</Label>
-              <div className="flex gap-2">
-                {(["today", "tomorrow"] as const).map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    onClick={() => setSchedule(option)}
-                    className={`rounded-md border px-3 py-1.5 text-sm capitalize transition-colors ${schedule === option ? "border-primary bg-primary text-primary-foreground" : "border-white/10 bg-[#121212] text-zinc-400 hover:bg-white/5"}`}
-                  >
-                    {option}
-                  </button>
-                ))}
-              </div>
+              <AnimatedChoices className="completion-time-choices" label="Schedule for" options={[{ value: "today", label: "Today", disabled: isSaving }, { value: "tomorrow", label: "Tomorrow", disabled: isSaving }]} value={schedule} onChange={value => setSchedule(value as "today" | "tomorrow")} />
             </div>
           )}
         </div>
@@ -234,20 +224,7 @@ export function CompleteTaskDialog({
             }}
           />
         </div>
-        <div className="flex flex-wrap gap-2">
-          {[30, 45, 60, 90, 120].map((duration) => (
-            <button
-              key={duration}
-              type="button"
-              onClick={() => {
-                setMinutes(String(duration));
-              }}
-              className={`rounded-full border px-3 py-1 text-xs transition-colors ${total === duration ? "border-primary bg-primary text-primary-foreground" : "border-white/10 bg-white/[0.04] text-zinc-300 hover:bg-white/10 hover:text-white"}`}
-            >
-              {duration >= 60 ? `${duration / 60}h` : `${duration}m`}
-            </button>
-          ))}
-        </div>
+        <AnimatedChoices className="completion-time-choices" label="Time spent" options={[30, 45, 60, 90, 120].map(duration => ({ value: String(duration), label: duration >= 60 ? `${duration / 60}h` : `${duration}m`, disabled: isSaving }))} value={String(Number(minutes))} onChange={setMinutes} />
         {saveError && <p role="alert" className="text-xs text-red-300">{saveError}</p>}
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>

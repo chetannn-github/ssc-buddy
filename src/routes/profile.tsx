@@ -844,7 +844,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
   const [importingData, setImportingData] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
-  const [savingFeature, setSavingFeature] = useState<"practice" | "track" | "timers" | "habits" | "quotes" | null>(null);
+  const [savingFeature, setSavingFeature] = useState<"practice" | "track" | "profileTracker" | "timers" | "habits" | "quotes" | null>(null);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [previewingAvatar, setPreviewingAvatar] = useState(false);
   const [isAvatarChanging, setIsAvatarChanging] = useState(false);
@@ -859,6 +859,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
   const [examNameDraft, setExamNameDraft] = useState("");
   const [practiceSessionEnabledDraft, setPracticeSessionEnabledDraft] = useState(true);
   const [trackProgressEnabledDraft, setTrackProgressEnabledDraft] = useState(true);
+  const [showTrackerOnProfileDraft, setShowTrackerOnProfileDraft] = useState(true);
   const [timersEnabledDraft, setTimersEnabledDraft] = useState(true);
   const [habitsEnabledDraft, setHabitsEnabledDraft] = useState(true);
   const [randomQuotesEnabledDraft, setRandomQuotesEnabledDraft] = useState(true);
@@ -886,6 +887,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
             ...(publicProfile.examName ? { examName: publicProfile.examName } : {}),
             practiceSessionEnabled: publicProfile.practiceSessionEnabled !== false,
             trackProgressEnabled: publicProfile.trackProgressEnabled !== false,
+            showTrackerOnProfile: publicProfile.showTrackerOnProfile !== false,
           }
         : null;
       setRecords(publicProfile?.dashboard?.records ?? []);
@@ -913,6 +915,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
       setExamNameDraft(trackerData.meta.examName);
       setPracticeSessionEnabledDraft(saved?.practiceSessionEnabled !== false);
       setTrackProgressEnabledDraft(saved?.trackProgressEnabled !== false);
+      setShowTrackerOnProfileDraft(saved?.showTrackerOnProfile !== false);
       setTimersEnabledDraft(saved?.timersEnabled !== false);
       setHabitsEnabledDraft(saved?.habitsEnabled !== false);
       setRandomQuotesEnabledDraft(saved?.randomQuotesEnabled !== false);
@@ -1018,6 +1021,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
       ...(examNameDraft.trim() ? { examName: examNameDraft.trim() } : {}),
       practiceSessionEnabled: practiceSessionEnabledDraft,
       trackProgressEnabled: trackProgressEnabledDraft,
+      showTrackerOnProfile: showTrackerOnProfileDraft,
       timersEnabled: timersEnabledDraft,
       habitsEnabled: habitsEnabledDraft,
       randomQuotesEnabled: randomQuotesEnabledDraft,
@@ -1059,10 +1063,13 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
     } catch { applyWebAccent(previous); setAccentError("Could not save accent. Please try again."); }
     finally { setSavingAccent(false); }
   };
-  const saveFeature = async (feature: "practice" | "track" | "timers" | "habits" | "quotes") => {
+  const saveFeature = async (feature: "practice" | "track" | "profileTracker" | "timers" | "habits" | "quotes") => {
     if (savingFeature || savingAccent || isSavingProfile) return;
     const nextPractice = feature === "practice" ? !practiceSessionEnabledDraft : practiceSessionEnabledDraft;
     const nextTrack = feature === "track" ? !trackProgressEnabledDraft : trackProgressEnabledDraft;
+    const previousProfileTracker = showTrackerOnProfileDraft;
+    const nextProfileTracker = feature === "profileTracker" ? !showTrackerOnProfileDraft : showTrackerOnProfileDraft;
+    setShowTrackerOnProfileDraft(nextProfileTracker);
     const nextHabits = feature === "habits" ? !habitsEnabledDraft : habitsEnabledDraft;
     const previousHabits = habitsEnabledDraft;
     const nextQuotes = feature === "quotes" ? !randomQuotesEnabledDraft : randomQuotesEnabledDraft;
@@ -1091,6 +1098,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
       ...(nextExamName ? { examName: nextExamName } : {}),
       practiceSessionEnabled: nextPractice,
       trackProgressEnabled: nextTrack,
+      showTrackerOnProfile: nextProfileTracker,
       timersEnabled: nextTimers,
       habitsEnabled: nextHabits,
       randomQuotesEnabled: nextQuotes,
@@ -1102,6 +1110,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
     } catch (error) {
       setPracticeSessionEnabledDraft(previousPractice);
       setTrackProgressEnabledDraft(previousTrack);
+      setShowTrackerOnProfileDraft(previousProfileTracker);
       setTimersEnabledDraft(previousTimers);
       setHabitsEnabledDraft(previousHabits);
       setRandomQuotesEnabledDraft(previousQuotes);
@@ -1136,6 +1145,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
       ...(profile?.examName ? { examName: profile.examName } : {}),
       practiceSessionEnabled: profile?.practiceSessionEnabled !== false,
       trackProgressEnabled: profile?.trackProgressEnabled !== false,
+      showTrackerOnProfile: profile?.showTrackerOnProfile !== false,
       timersEnabled: profile?.timersEnabled !== false,
       habitsEnabled: profile?.habitsEnabled !== false,
       randomQuotesEnabled: profile?.randomQuotesEnabled !== false,
@@ -1301,13 +1311,13 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
               range={range}
               onRangeChange={setRange}
               showPractice={profile?.practiceSessionEnabled !== false}
-              showTracker={profile?.trackProgressEnabled !== false}
+              showTracker={profile?.trackProgressEnabled !== false && profile?.showTrackerOnProfile !== false}
             />
 
             <ActivityHeatmap colorTheme={colorTheme} records={records} tracker={tracker} tasks={dailyTasks} range="year" activityEnabled={profile?.practiceSessionEnabled !== false || profile?.trackProgressEnabled !== false} publicActivity={readOnly && !publicProfile?.dashboard ? publicProfile?.activity : undefined} dataReady={readOnly || profile !== null} />
           </div>
 
-          {profile?.trackProgressEnabled !== false && <StudyTrackerOverview tracker={tracker} readOnly={readOnly} />}
+          {profile?.trackProgressEnabled !== false && profile?.showTrackerOnProfile !== false && <StudyTrackerOverview tracker={tracker} readOnly={readOnly} />}
         </div>
       </div>
       {previewingAvatar && avatar && (
@@ -1412,7 +1422,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
                 <span className={cn("relative h-5 w-9 rounded-full border transition-colors", practiceSessionEnabledDraft ? "border-primary bg-primary" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", practiceSessionEnabledDraft ? "translate-x-5 bg-primary-foreground" : "translate-x-1 bg-zinc-400")} /></span>
               </button>}
             </div>
-            {profileSettingsOpen && <div className="profile-settings-scroll absolute inset-0 z-10 overflow-y-auto rounded-2xl bg-[#121212] p-6 sm:p-8"><div className="flex items-center gap-2"><button type="button" aria-label="Back to profile form" onClick={() => setProfileSettingsOpen(false)} className="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 hover:bg-white/10 hover:text-white"><ArrowLeft className="h-4 w-4" /></button><h3 className="text-lg font-semibold">Settings</h3></div><div className="mt-6 space-y-4"><AccentPicker value={profile?.accentColor} onChange={(color) => void chooseAccent(color)} disabled={!profile || savingAccent || savingFeature !== null} saving={savingAccent} />{accentError && <p role="alert" className="text-xs text-red-300">{accentError}</p>}<div className="divide-y divide-white/10 overflow-hidden rounded-xl border border-white/10 bg-[#121212]"><button type="button" disabled={savingFeature !== null || savingAccent} onClick={() => void saveFeature("practice")} className="flex w-full items-center justify-between gap-3 border-0 bg-transparent px-3 py-3 text-left disabled:cursor-wait disabled:opacity-70"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Practice session</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Take practice tests, review answers and track your results.</span></span>{savingFeature === "practice" ? <LoaderCircle className="h-5 w-5 shrink-0 animate-spin text-primary" /> : <span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", practiceSessionEnabledDraft ? "border-primary bg-primary" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", practiceSessionEnabledDraft ? "translate-x-5 bg-primary-foreground" : "translate-x-1 bg-zinc-400")} /></span>}</button><button type="button" disabled={savingFeature !== null || savingAccent} onClick={() => void saveFeature("track")} className="flex w-full items-center justify-between gap-3 border-0 bg-transparent px-3 py-3 text-left disabled:cursor-wait disabled:opacity-70"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Track</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Track syllabus, revision and mock test progress.</span></span>{savingFeature === "track" ? <LoaderCircle className="h-5 w-5 shrink-0 animate-spin text-primary" /> : <span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", trackProgressEnabledDraft ? "border-primary bg-primary" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", trackProgressEnabledDraft ? "translate-x-5 bg-primary-foreground" : "translate-x-1 bg-zinc-400")} /></span>}</button><button type="button" role="switch" aria-checked={timersEnabledDraft} disabled={savingFeature !== null || savingAccent} onClick={() => void saveFeature("timers")} className="flex w-full items-center justify-between gap-3 border-0 bg-transparent px-3 py-3 text-left disabled:cursor-wait disabled:opacity-70"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Timers</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Countdowns for important dates and deadlines.</span></span>{savingFeature === "timers" ? <LoaderCircle className="h-5 w-5 shrink-0 animate-spin text-primary" /> : <span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", timersEnabledDraft ? "border-primary bg-primary" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", timersEnabledDraft ? "translate-x-5 bg-primary-foreground" : "translate-x-1 bg-zinc-400")} /></span>}</button><button type="button" role="switch" aria-checked={habitsEnabledDraft} disabled={savingFeature !== null || savingAccent} onClick={() => void saveFeature("habits")} className="flex w-full items-center justify-between gap-3 border-0 bg-transparent px-3 py-3 text-left disabled:cursor-wait disabled:opacity-70"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Habits</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Daily heatmaps, streaks and personal challenges.</span></span>{savingFeature === "habits" ? <LoaderCircle className="h-5 w-5 shrink-0 animate-spin text-primary" /> : <span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", habitsEnabledDraft ? "border-primary bg-primary" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", habitsEnabledDraft ? "translate-x-5 bg-primary-foreground" : "translate-x-1 bg-zinc-400")} /></span>}</button><button type="button" role="switch" aria-checked={randomQuotesEnabledDraft} disabled={savingFeature !== null || savingAccent} onClick={() => void saveFeature("quotes")} className="flex w-full items-center justify-between gap-3 border-0 bg-transparent px-3 py-3 text-left disabled:cursor-wait disabled:opacity-70"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Random quotes</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Show a random motivational image when opening the app.</span></span>{savingFeature === "quotes" ? <LoaderCircle className="h-5 w-5 shrink-0 animate-spin text-primary" /> : <span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", randomQuotesEnabledDraft ? "border-primary bg-primary" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", randomQuotesEnabledDraft ? "translate-x-5 bg-primary-foreground" : "translate-x-1 bg-zinc-400")} /></span>}</button></div></div></div>}
+            {profileSettingsOpen && <div className="profile-settings-scroll absolute inset-0 z-10 overflow-y-auto rounded-2xl bg-[#121212] p-6 sm:p-8"><div className="flex items-center gap-2"><button type="button" aria-label="Back to profile form" onClick={() => setProfileSettingsOpen(false)} className="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 hover:bg-white/10 hover:text-white"><ArrowLeft className="h-4 w-4" /></button><h3 className="text-lg font-semibold">Settings</h3></div><div className="mt-6 space-y-4"><AccentPicker value={profile?.accentColor} onChange={(color) => void chooseAccent(color)} disabled={!profile || savingAccent || savingFeature !== null} saving={savingAccent} />{accentError && <p role="alert" className="text-xs text-red-300">{accentError}</p>}<div className="divide-y divide-white/10 overflow-hidden rounded-xl border border-white/10 bg-[#121212]"><button type="button" disabled={savingFeature !== null || savingAccent} onClick={() => void saveFeature("practice")} className="flex w-full items-center justify-between gap-3 border-0 bg-transparent px-3 py-3 text-left disabled:cursor-wait disabled:opacity-70"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Practice session</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Take practice tests, review answers and track your results.</span></span>{savingFeature === "practice" ? <LoaderCircle className="h-5 w-5 shrink-0 animate-spin text-primary" /> : <span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", practiceSessionEnabledDraft ? "border-primary bg-primary" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", practiceSessionEnabledDraft ? "translate-x-5 bg-primary-foreground" : "translate-x-1 bg-zinc-400")} /></span>}</button><button type="button" disabled={savingFeature !== null || savingAccent} onClick={() => void saveFeature("track")} className="flex w-full items-center justify-between gap-3 border-0 bg-transparent px-3 py-3 text-left disabled:cursor-wait disabled:opacity-70"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Track</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Track syllabus, revision and mock test progress.</span></span>{savingFeature === "track" ? <LoaderCircle className="h-5 w-5 shrink-0 animate-spin text-primary" /> : <span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", trackProgressEnabledDraft ? "border-primary bg-primary" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", trackProgressEnabledDraft ? "translate-x-5 bg-primary-foreground" : "translate-x-1 bg-zinc-400")} /></span>}</button><button type="button" role="switch" aria-checked={showTrackerOnProfileDraft} disabled={savingFeature !== null || savingAccent} onClick={() => void saveFeature("profileTracker")} className="flex w-full items-center justify-between gap-3 border-0 bg-transparent px-3 py-3 text-left disabled:cursor-wait disabled:opacity-70"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Show tracker on profile</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Display Study Tracker statistics and progress on your profile.</span></span>{savingFeature === "profileTracker" ? <LoaderCircle className="h-5 w-5 shrink-0 animate-spin text-primary" /> : <span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", showTrackerOnProfileDraft ? "border-primary bg-primary" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", showTrackerOnProfileDraft ? "translate-x-5 bg-primary-foreground" : "translate-x-1 bg-zinc-400")} /></span>}</button><button type="button" role="switch" aria-checked={timersEnabledDraft} disabled={savingFeature !== null || savingAccent} onClick={() => void saveFeature("timers")} className="flex w-full items-center justify-between gap-3 border-0 bg-transparent px-3 py-3 text-left disabled:cursor-wait disabled:opacity-70"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Timers</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Countdowns for important dates and deadlines.</span></span>{savingFeature === "timers" ? <LoaderCircle className="h-5 w-5 shrink-0 animate-spin text-primary" /> : <span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", timersEnabledDraft ? "border-primary bg-primary" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", timersEnabledDraft ? "translate-x-5 bg-primary-foreground" : "translate-x-1 bg-zinc-400")} /></span>}</button><button type="button" role="switch" aria-checked={habitsEnabledDraft} disabled={savingFeature !== null || savingAccent} onClick={() => void saveFeature("habits")} className="flex w-full items-center justify-between gap-3 border-0 bg-transparent px-3 py-3 text-left disabled:cursor-wait disabled:opacity-70"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Habits</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Daily heatmaps, streaks and personal challenges.</span></span>{savingFeature === "habits" ? <LoaderCircle className="h-5 w-5 shrink-0 animate-spin text-primary" /> : <span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", habitsEnabledDraft ? "border-primary bg-primary" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", habitsEnabledDraft ? "translate-x-5 bg-primary-foreground" : "translate-x-1 bg-zinc-400")} /></span>}</button><button type="button" role="switch" aria-checked={randomQuotesEnabledDraft} disabled={savingFeature !== null || savingAccent} onClick={() => void saveFeature("quotes")} className="flex w-full items-center justify-between gap-3 border-0 bg-transparent px-3 py-3 text-left disabled:cursor-wait disabled:opacity-70"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Random quotes</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Show a random motivational image when opening the app.</span></span>{savingFeature === "quotes" ? <LoaderCircle className="h-5 w-5 shrink-0 animate-spin text-primary" /> : <span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", randomQuotesEnabledDraft ? "border-primary bg-primary" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", randomQuotesEnabledDraft ? "translate-x-5 bg-primary-foreground" : "translate-x-1 bg-zinc-400")} /></span>}</button></div></div></div>}
             <div className="mt-4 flex justify-end gap-2">
               <Button
                 variant="outline"

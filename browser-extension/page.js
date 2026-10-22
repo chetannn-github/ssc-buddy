@@ -60,7 +60,7 @@ async function refresh(type = 'status', extra = {}) {
     const result = await chrome.runtime.sendMessage({ type, ...extra });
     if (!result?.ok) throw Error(result?.error ?? 'Extension unavailable');
     session = result.session;
-    slots = (result.domains ?? []).length;
+    slots = (result.domains ?? session?.domains ?? []).length;
     if ($('start-session')) { $('start-session').hidden = !result.user || !!session; $('start-button').disabled = busy || !slots; }
     if ($('approve-site')) { $('approve-site').hidden = !result.blockedSite?.canAdd; $('approve-site').textContent = 'Add ' + (result.blockedSite?.domain ?? 'website'); }
     if (document.body.classList.contains('popup') && $('motivation')) $('motivation').hidden = !result.user;
@@ -84,11 +84,12 @@ async function refresh(type = 'status', extra = {}) {
       const domains = result.domains ?? session?.domains ?? [];
       $('website-editor').hidden = !result.user;
       $('website-count').textContent = domains.length + '/' + MAX_STUDY_WEBSITES;
+      $('website-form').hidden = domains.length >= MAX_STUDY_WEBSITES;
       $('website-add').disabled = busy || domains.length >= MAX_STUDY_WEBSITES;
       $('website-domain').disabled = domains.length >= MAX_STUDY_WEBSITES;
       const site = result.currentSite;
       canAddCurrent = !!site?.canAdd;
-      $('add-current').hidden = !site || !result.user;
+      $('add-current').hidden = !site || !result.user || domains.length >= MAX_STUDY_WEBSITES;
       $('add-current').disabled = busy || !site?.canAdd;
       if (!busy) {
         $('add-current').replaceChildren();

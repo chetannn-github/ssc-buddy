@@ -1,4 +1,5 @@
 import { AccentBackdrop } from "./AccentBackdrop";
+import { AnimatedTimeChips } from "./AnimatedTimeChips";
 import { UppercaseTextInput as TextInput } from "./UppercaseTextInput";
 import { colors } from "../theme";
 import { createThemedStyles } from "../theme";
@@ -423,27 +424,11 @@ export function HabitEditor({
                 {colorsOpen && palette}
                 <View style={s.section}>
                   <Text style={s.label}>Type</Text>
-                  <View style={s.segments}>
-                    {(["build", "quit"] as const).map((type) => (
-                      <Pressable
-                        key={type}
-                        disabled={busy}
-                        style={[
-                          s.segment,
-                          { flex: 1 },
-                          settings.type === type && { backgroundColor: tint + "40" },
-                        ]}
-                        onPress={() => {
-                          patch({ type, ...(type === "quit" ? { frequency: "daily" } : {}) });
-                          setGoal(type === "quit" ? "0" : "1");
-                        }}
-                      >
-                        <Text style={s.text}>
-                          {type === "build" ? "Build A Habit" : "Quit A Habit"}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
+                  <AnimatedTimeChips options={[0, 1]} labels={["Build A Habit", "Quit A Habit"]} value={settings.type === "quit" ? 1 : 0} disabled={busy} onChange={value => {
+                    const type = value === 1 ? "quit" : "build";
+                    patch({ type, ...(type === "quit" ? { frequency: "daily" } : {}) });
+                    setGoal(type === "quit" ? "0" : "1");
+                  }} color={tint + "40"} ink={colors.text} muted={colors.text} background="#191919" radius={12} height={44} textStyle={s.text} />
                   <Text style={s.hint}>
                     {settings.type === "quit"
                       ? "Completed by default – only mark the days you slipped. Streak is counted as slip-free days."
@@ -453,24 +438,7 @@ export function HabitEditor({
                 {frequency}
                 <View style={s.section}>
                   <Text style={s.label}>Tracking</Text>
-                  <View style={s.segments}>
-                    {(["tick", "count", "checklist"] as const).map((tracking) => (
-                      <Pressable
-                        key={tracking}
-                        disabled={busy}
-                        onPress={() => patch({ tracking })}
-                        style={[
-                          s.segment,
-                          { flex: 1 },
-                          settings.tracking === tracking && { backgroundColor: tint + "40" },
-                        ]}
-                      >
-                        <Text style={[s.text, { fontSize: 13 }]}>
-                          {tracking[0]!.toUpperCase() + tracking.slice(1)}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
+                  <AnimatedTimeChips options={[0, 1, 2]} labels={["Tick", "Count", "Checklist"]} value={["tick", "count", "checklist"].indexOf(settings.tracking)} disabled={busy} onChange={value => patch({ tracking: (["tick", "count", "checklist"] as const)[value]! })} color={tint + "40"} ink={colors.text} muted={colors.text} background="#191919" radius={12} height={44} textStyle={[s.text, { fontSize: 13 }]} />
                   <Text style={s.hint}>
                     {settings.tracking === "tick"
                       ? settings.type === "quit"

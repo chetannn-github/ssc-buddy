@@ -8,7 +8,7 @@ export type PracticeProfile = {
   /** Kept with the profile so web and mobile render the same identity. */
   examName?: string;
   practiceSessionEnabled?: boolean;
-  trackProgressEnabled?: boolean;
+  trackProgressEnabled?: boolean; showTrackerOnProfile?: boolean;
   timersEnabled?: boolean;
   habitsEnabled?: boolean;
   randomQuotesEnabled?: boolean;
@@ -46,6 +46,7 @@ export function loadPracticeProfile(): PracticeProfile | null {
         : {}),
       ...(typeof profile.practiceSessionEnabled === "boolean" ? { practiceSessionEnabled: profile.practiceSessionEnabled } : {}),
       ...(typeof profile.trackProgressEnabled === "boolean" ? { trackProgressEnabled: profile.trackProgressEnabled } : {}),
+      ...(typeof profile.showTrackerOnProfile === "boolean" ? { showTrackerOnProfile: profile.showTrackerOnProfile } : {}),
       ...(typeof profile.timersEnabled === "boolean" ? { timersEnabled: profile.timersEnabled } : {}),
       ...(typeof profile.habitsEnabled === "boolean" ? { habitsEnabled: profile.habitsEnabled } : {}),
       ...(typeof profile.randomQuotesEnabled === "boolean" ? { randomQuotesEnabled: profile.randomQuotesEnabled } : {}),
@@ -70,6 +71,7 @@ export function savePracticeProfile(profile: PracticeProfile) {
       ...(profile.examName?.trim() ? { examName: profile.examName.trim() } : {}),
       ...(profile.practiceSessionEnabled === false ? { practiceSessionEnabled: false } : {}),
       ...(profile.trackProgressEnabled === false ? { trackProgressEnabled: false } : {}),
+      ...(profile.showTrackerOnProfile === false ? { showTrackerOnProfile: false } : {}),
       ...(profile.timersEnabled === false ? { timersEnabled: false } : {}),
       ...(profile.habitsEnabled === false ? { habitsEnabled: false } : {}),
       ...(profile.randomQuotesEnabled === false ? { randomQuotesEnabled: false } : {}),

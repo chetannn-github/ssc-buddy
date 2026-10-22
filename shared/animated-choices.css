@@ -9,3 +9,4 @@
 .animated-choices>button:focus-visible{outline:2px solid var(--choice-color);outline-offset:3px}
 @media(prefers-reduced-motion:reduce){.animated-choices>.animated-choice-indicator,.animated-choices>button,.animated-choices>button>span{transition:none}}
 .study-time-presets{--choice-radius:20px;margin:0 0 16px}
+.completion-time-choices{--choice-gap:7px;--choice-color:#f9fcf5;--choice-ink:#111;--choice-radius:10px}

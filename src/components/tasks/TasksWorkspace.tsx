@@ -48,6 +48,7 @@ import { currentWeekKey, publishLeaderboardEntry, weeklyTaskPoints } from "@/lib
 import { FocusRewardRow } from "../../../shared/FocusRewardRow";
 import { CarryTaskMenu, type TaskMenuPosition } from "../../../shared/CarryTaskMenu";
 import { copyPastTask } from "../../../shared/carry-task";
+import { canChangeTaskCompletion } from "../../../mobile-tasks/src/domain/tasks";
 import { getFirebaseFirestore } from "@/lib/firebase-sync";
 
 export function TasksWorkspace({
@@ -310,8 +311,10 @@ export function TasksWorkspace({
                       grouped
                       points={points.get(task.id) ?? 0}
                       readOnly={history}
-                      onComplete={setCompleting}
+                      onComplete={task => { if (canChangeTaskCompletion(task)) setCompleting(task); }}
                       onReopen={(id) => {
+                        const source = tasks.find(item => item.id === id);
+                        if (!source || !canChangeTaskCompletion(source)) return;
                         void persist(
                           tasks.map((item) =>
                             item.id === id
@@ -394,8 +397,10 @@ export function TasksWorkspace({
           onOpenChange={(open) => {
             if (!open) setCompleting(null);
           }}
-          onComplete={async (id, minutesSpent) =>
-            persist(
+          onComplete={async (id, minutesSpent) => {
+            const source = tasks.find(item => item.id === id);
+            if (!source || !canChangeTaskCompletion(source)) throw new Error("Only today's tasks can be marked complete.");
+            await persist(
               tasks.map((task) =>
                 task.id === id
                   ? {
@@ -406,8 +411,8 @@ export function TasksWorkspace({
                     }
                   : task,
               ),
-            )
-          }
+            );
+          }}
         />
         <Dialog
           open={!!deleting}
@@ -562,7 +567,7 @@ function TaskRow({
         >
           <button
             type="button"
-            disabled={readOnly}
+            disabled={readOnly || !canChangeTaskCompletion(task)}
             onClick={(event) => {
               event.stopPropagation();
               if (task.completed) onReopen(task.id);

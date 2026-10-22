@@ -51,3 +51,13 @@ test("stale widget actions cannot complete a pending task or reopen a previous d
   assert.equal(api.canReopenDailyWidgetTask(task("pending"), today), false);
   assert.equal(api.canReopenDailyWidgetTask(task("old", "2026-10-19", true), today), false);
 });
+
+test("tomorrow tasks stay read-only and completion changes only apply to today's tasks", () => {
+  const future = task("future", "2026-10-21");
+  assert.equal(api.dailyTaskWidgetModel([future], { date: "2026-10-21" }, today).readOnly, true);
+  assert.equal(api.canChangeTaskCompletion(future, today), false);
+  assert.equal(api.canChangeTaskCompletion({ ...future, completed: true }, today), false);
+  assert.equal(api.canChangeTaskCompletion(task("past", "2026-10-19"), today), false);
+  assert.equal(api.canChangeTaskCompletion(task("current"), today), true);
+  assert.equal(api.canChangeTaskCompletion({ date: undefined }, today), false);
+});

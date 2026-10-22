@@ -72,6 +72,7 @@ export function StudyLockControl({ uid, desktop = false, profile = false, getDat
     return () => { window.removeEventListener("keydown", key, true); (desktop ? desktopTrigger.current : trigger.current)?.focus(); };
   }, [open, pickingTime]);
   const websites = domains.split(/[\n,]+/).map(value => value.trim()).filter(Boolean).slice(0, MAX_STUDY_WEBSITES);
+  useEffect(() => { if (websites.length >= MAX_STUDY_WEBSITES) setWebsite(""); }, [websites.length]);
   const addWebsite = () => {
     if (!website.trim()) return;
     try {
@@ -107,7 +108,7 @@ export function StudyLockControl({ uid, desktop = false, profile = false, getDat
           {source === "web" ? (onPracticeSession && <button className="focus-lock-recall" onClick={() => { setOpen(false); onPracticeSession(); }}>Practice session</button>) : source !== "windows" && !desktop && <div className="browser-study-domains">{session.domains.slice(0, MAX_STUDY_WEBSITES).map(domain => lockedImage ? <a key={domain} href={`https://${domain}`} className="focus-lock-site" rel="noreferrer"><span className="focus-lock-site-icon">{domain.replace(/^www\./, "").charAt(0).toUpperCase()}</span><strong>{domain}</strong><span aria-hidden="true">&#8599;</span></a> : <span key={domain} title={domain}>{domain}</span>)}</div>}
         </> : <>
           <div className="study-websites"><h3>Allowed websites <small>{websites.length}/{MAX_STUDY_WEBSITES}</small></h3>
-            <div className="study-domain-entry"><Globe2 size={15} /><input aria-label="Website domain" value={website} onChange={event => setWebsite(event.target.value)} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); addWebsite(); } }} placeholder="parmar.com" spellCheck={false} autoCapitalize="none" /><button aria-label="Add website" disabled={!website.trim() || busy || websites.length >= MAX_STUDY_WEBSITES} onClick={addWebsite}><Plus size={17} /></button></div>
+            {websites.length < MAX_STUDY_WEBSITES && <div className="study-domain-entry"><Globe2 size={15} /><input aria-label="Website domain" value={website} onChange={event => setWebsite(event.target.value)} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); addWebsite(); } }} placeholder="parmar.com" spellCheck={false} autoCapitalize="none" /><button aria-label="Add website" disabled={!website.trim() || busy} onClick={addWebsite}><Plus size={17} /></button></div>}
             <div className="study-domain-chips">{websites.map(domain => <span key={domain} title={domain}>{domain}<button aria-label={`Remove ${domain}`} onClick={() => { const next = websites.filter(value => value !== domain).join("\n"); setDomains(next); localStorage.setItem(`ssc-browser-allowlist:${uid}`, next); void run(() => saveStudyWebsites(getDatabase(), uid, next.split("\n").filter(Boolean))); }}><X size={12} /></button></span>)}</div>
           </div>
           <button className="study-duration-trigger" onClick={() => setPickingTime(true)}><Clock3 size={17} /><span>Focus time</span><strong><SlotTime value={Number(minutes) >= 60 ? `${Math.floor(Number(minutes) / 60)}h${Number(minutes) % 60 ? ` ${Number(minutes) % 60}m` : ""}` : `${minutes} min`} /></strong></button>

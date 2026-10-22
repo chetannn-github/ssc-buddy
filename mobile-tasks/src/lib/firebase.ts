@@ -171,7 +171,7 @@ export function usernameValidationMessage(value: string) {
 const usernameDoc = (username: string) => doc(getFirebaseFirestore(), "usernames", username);
 const publicProfileDoc = (username: string) => doc(getFirebaseFirestore(), "publicProfiles", username);
 
-export type PublicProfile = { uid: string; username: string; name: string; questionGoal: number; avatar?: string; examName?: string; practiceSessionEnabled?: boolean; trackProgressEnabled?: boolean; activity?: Record<string, number>; dashboard?: { records?: Record<string, unknown>[]; dailyTasks?: Record<string, unknown>[]; tracker?: Record<string, any> | null } };
+export type PublicProfile = { uid: string; username: string; name: string; questionGoal: number; avatar?: string; examName?: string; practiceSessionEnabled?: boolean; trackProgressEnabled?: boolean; showTrackerOnProfile?: boolean; activity?: Record<string, number>; dashboard?: { records?: Record<string, unknown>[]; dailyTasks?: Record<string, unknown>[]; tracker?: Record<string, any> | null } };
 
 export async function readPublicProfile(value: string): Promise<PublicProfile | null> {
   const username = normalizeUsername(value.replace(/^@/, ""));
@@ -187,6 +187,7 @@ export async function readPublicProfile(value: string): Promise<PublicProfile | 
     ...(typeof data.examName === "string" && data.examName.trim() ? { examName: data.examName.trim() } : {}),
     ...(typeof data.practiceSessionEnabled === "boolean" ? { practiceSessionEnabled: data.practiceSessionEnabled } : {}),
     ...(typeof data.trackProgressEnabled === "boolean" ? { trackProgressEnabled: data.trackProgressEnabled } : {}),
+    ...(typeof data.showTrackerOnProfile === "boolean" ? { showTrackerOnProfile: data.showTrackerOnProfile } : {}),
     ...(data.activity && typeof data.activity === "object" ? { activity: data.activity as Record<string, number> } : {}),
     ...(data.dashboard && typeof data.dashboard === "object" ? { dashboard: data.dashboard as PublicProfile["dashboard"] } : {}),
   };
@@ -222,6 +223,7 @@ function publicProfileFields(user: User, username: string, fields: Record<string
     ...(typeof fields.examName === "string" && fields.examName.trim() ? { examName: fields.examName.trim() } : {}),
     ...(typeof fields.practiceSessionEnabled === "boolean" ? { practiceSessionEnabled: fields.practiceSessionEnabled } : {}),
     ...(typeof fields.trackProgressEnabled === "boolean" ? { trackProgressEnabled: fields.trackProgressEnabled } : {}),
+    ...(typeof fields.showTrackerOnProfile === "boolean" ? { showTrackerOnProfile: fields.showTrackerOnProfile } : {}),
   };
 }
 

@@ -55,6 +55,8 @@ import {
 } from "./src/domain/tasks";
 import { LiquidProgressBar } from "./src/components/ProfileXpBar";
 import { TaskRow } from "./src/components/TaskRow";
+import { AnimatedTimeChips } from "./src/components/AnimatedTimeChips";
+import { canChangeTaskCompletion } from "./src/domain/tasks";
 import { WeeklyAwardCelebration } from "./src/components/WeeklyAwardCelebration";
 import { CelebrationFireworks } from "./src/components/CelebrationFireworks";
 import { BottomNavigation } from "./src/components/BottomNavigation";
@@ -230,6 +232,8 @@ export default function App() {
   const [leaderboardOpen, setLeaderboardOpen] = useState(false);
   const [musicOpenRequest, setMusicOpenRequest] = useState(0);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const currentTasks = useRef(tasks);
+  currentTasks.current = tasks;
   const [tasksLoaded, setTasksLoaded] = useState(false);
   const [calendarDay, setCalendarDay] = useState(() => dateKey());
   const [widgetRank, setWidgetRank] = useState<number | null>(null);
@@ -814,14 +818,18 @@ export default function App() {
   };
   const markDone = async () => {
     if (!completion || taskActionLoading) return;
+    const source = currentTasks.current.find(task => task.id === completion.id);
+    if (!source || !canChangeTaskCompletion(source)) { setCompletion(null); return; }
     // Android can pass the finishing modal's touch to the row now occupying
     // that screen position after the completed task reorders. Briefly ignore
     // row actions while the completion dialog disappears.
     taskRowInteractionBlockedUntil.current = Date.now() + 800;
     setTaskActionLoading(true);
     await new Promise((resolve) => setTimeout(resolve, 280));
+    const latest = currentTasks.current.find(task => task.id === completion.id);
+    if (!latest || !canChangeTaskCompletion(latest)) { setCompletion(null); setTaskActionLoading(false); return; }
     persist(
-      tasks.map((task) =>
+      currentTasks.current.map((task) =>
         task.id === completion.id
           ? {
               ...task,
@@ -835,6 +843,8 @@ export default function App() {
     setCompletion(null); setTaskActionLoading(false);
   };
   const reopen = (id: string) => {
+    const source = currentTasks.current.find(task => task.id === id);
+    if (!source || !canChangeTaskCompletion(source)) return;
     // Unmarking updates the row and can otherwise send a
     // delayed Android touch to its first visible row.
     taskRowInteractionBlockedUntil.current = Date.now() + 800;
@@ -981,7 +991,7 @@ export default function App() {
                   last={index === visibleTasks.length - 1}
                   points={taskPoints.get(task.id) ?? 0}
                   onDone={() => {
-                    if (!canUseTaskRow()) return;
+                    if (!canUseTaskRow() || !canChangeTaskCompletion(task)) return;
                     setSpent(String(task.minutesSpent ?? 30));
                     setCompletion(task);
                   }}
@@ -1017,19 +1027,7 @@ export default function App() {
             {editor === "new" && (
               <View>
                 <Text style={styles.fieldLabel}>SCHEDULE FOR</Text>
-                <View style={styles.scheduleRow}>
-                  {(["today", "tomorrow"] as const).map((option) => (
-                    <Pressable
-                      key={option}
-                      onPress={() => setSchedule(option)}
-                      style={[styles.scheduleChip, schedule === option && styles.scheduleChipActive]}
-                    >
-                      <Text style={[styles.scheduleText, schedule === option && styles.scheduleTextActive]}>
-                        {option === "today" ? "Today" : "Tomorrow"}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
+                <AnimatedTimeChips options={[0, 1]} labels={["Today", "Tomorrow"]} value={schedule === "today" ? 0 : 1} onChange={value => setSchedule(value === 0 ? "today" : "tomorrow")} disabled={taskActionLoading} color={colors.button} ink={colors.buttonInk} muted="#a1a1aa" background="#151515" borderColor="#3f3f46" radius={12} height={40} textStyle={styles.scheduleText} />
               </View>
             )}
             <View style={styles.sheetActions}>
@@ -1074,7 +1072,7 @@ export default function App() {
               }}
               keyboardType="numeric"
             />
-            <View style={styles.timeChips}>{[30, 45, 60, 90, 120].map((minutes) => <Pressable key={minutes} onPress={() => setSpent(String(minutes))} style={[styles.timeChip, Number(spent) === minutes && styles.timeChipActive]}><Text style={[styles.timeChipText, Number(spent) === minutes && styles.timeChipTextActive]}>{formatMinutes(minutes)}</Text></Pressable>)}</View>
+            <AnimatedTimeChips options={[30, 45, 60, 90, 120]} labels={[30, 45, 60, 90, 120].map(formatMinutes)} value={Number(spent)} onChange={minutes => setSpent(String(minutes))} disabled={taskActionLoading} color={colors.button} ink={colors.buttonInk} muted="#a1a1aa" background="#151515" borderColor="#303030" radius={10} gap={7} height={34} textStyle={styles.timeChipText} style={styles.timeChips} />
             <View style={styles.sheetActions}>
               <Pressable onPress={() => setCompletion(null)}>
                 <Text style={styles.cancel}>Cancel</Text>
@@ -1456,7 +1454,7 @@ const styles = createThemedStyles({
   },
   taskDialogContent: { gap: 14 },
   sheetTitle: { color: "#fafafa", fontSize: 21, fontWeight: "800" },
-  timeChips: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: -5 },
+  timeChips: { flexDirection: "row", gap: 7, marginTop: -5 },
   timeChip: { borderRadius: 10, borderWidth: 1, borderColor: "#303030", paddingHorizontal: 11, paddingVertical: 8, backgroundColor: "#151515" },
   timeChipActive: { borderColor: colors.button, backgroundColor: colors.button },
   timeChipText: { color: "#a1a1aa", fontSize: 11, fontWeight: "800" },

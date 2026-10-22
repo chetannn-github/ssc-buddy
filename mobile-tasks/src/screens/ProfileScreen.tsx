@@ -235,10 +235,12 @@ export function ProfileScreen({
   const [trackProgressEnabled, setTrackProgressEnabled] = useState(
     profileSettings?.trackProgressEnabled !== false,
   );
+  const [showTrackerOnProfile, setShowTrackerOnProfile] = useState(profileSettings?.showTrackerOnProfile !== false);
+  const profileTrackerVisible = trackProgressEnabled && showTrackerOnProfile;
   const [timersEnabled, setTimersEnabled] = useState(profileSettings?.timersEnabled !== false);
   const [habitsEnabled, setHabitsEnabled] = useState(profileSettings?.habitsEnabled !== false);
   const [randomQuotesEnabled, setRandomQuotesEnabled] = useState(profileSettings?.randomQuotesEnabled !== false);
-  const [savingFeature, setSavingFeature] = useState<"practice" | "track" | "timers" | "habits" | "quotes" | null>(null);
+  const [savingFeature, setSavingFeature] = useState<"practice" | "track" | "profileTracker" | "timers" | "habits" | "quotes" | null>(null);
   const [editing, setEditing] = useState(() => !profileSettings?.username);
   const [confirmLogout, setConfirmLogout] = useState(false);
   const name = profileReady
@@ -424,13 +426,14 @@ export function ProfileScreen({
     );
     setPracticeSessionEnabled(profileSettings.practiceSessionEnabled !== false);
     setTrackProgressEnabled(profileSettings.trackProgressEnabled !== false);
+    setShowTrackerOnProfile(profileSettings.showTrackerOnProfile !== false);
     setTimersEnabled(profileSettings.timersEnabled !== false);
     setHabitsEnabled(profileSettings.habitsEnabled !== false);
     setRandomQuotesEnabled(profileSettings.randomQuotesEnabled !== false);
     setProfileReady(true);
   }, [profileSettings?.name, profileSettings?.username, profileSettings?.examName,
     profileSettings?.questionGoal, profileSettings?.manifestation, profileSettings?.avatar,
-    profileSettings?.practiceSessionEnabled, profileSettings?.trackProgressEnabled,
+    profileSettings?.practiceSessionEnabled, profileSettings?.trackProgressEnabled, profileSettings?.showTrackerOnProfile,
     profileSettings?.timersEnabled, profileSettings?.habitsEnabled, profileSettings?.randomQuotesEnabled]);
   const filteredTasks = tasks.filter((task) => withinRange(task.date, range));
   const filteredSummary = summarizeTasks(filteredTasks);
@@ -481,6 +484,7 @@ export function ProfileScreen({
         avatar: avatarFile,
         practiceSessionEnabled,
         trackProgressEnabled,
+        showTrackerOnProfile,
         timersEnabled,
         habitsEnabled,
         randomQuotesEnabled,
@@ -533,17 +537,19 @@ export function ProfileScreen({
       setAccentSaveError("Could not save accent. Please try again.");
     } finally { setSavingAccent(false); }
   };
-  const saveFeature = async (feature: "practice" | "track" | "timers" | "habits" | "quotes") => {
+  const saveFeature = async (feature: "practice" | "track" | "profileTracker" | "timers" | "habits" | "quotes") => {
     if (savingFeature || savingAccent) return;
     const nextPractice = feature === "practice" ? !practiceSessionEnabled : practiceSessionEnabled;
     const nextTrack = feature === "track" ? !trackProgressEnabled : trackProgressEnabled;
+    const nextProfileTracker = feature === "profileTracker" ? !showTrackerOnProfile : showTrackerOnProfile;
+    setShowTrackerOnProfile(nextProfileTracker);
     const nextHabits = feature === "habits" ? !habitsEnabled : habitsEnabled;
     const nextQuotes = feature === "quotes" ? !randomQuotesEnabled : randomQuotesEnabled;
     const nextTimers = feature === "timers" ? !timersEnabled : timersEnabled;
     setPracticeSessionEnabled(nextPractice); setTrackProgressEnabled(nextTrack); setTimersEnabled(nextTimers); setHabitsEnabled(nextHabits); setRandomQuotesEnabled(nextQuotes);
     setSavingFeature(feature);
-    try { await onProfileSaved({ ...profileSettings, accentColor: appAccent, name: profileName, username: normalizeUsername(username), examName, questionGoal: Number(goal) || 100, manifestation, avatar: avatarFile, practiceSessionEnabled: nextPractice, trackProgressEnabled: nextTrack, timersEnabled: nextTimers, habitsEnabled: nextHabits, randomQuotesEnabled: nextQuotes }); }
-    catch { setPracticeSessionEnabled(practiceSessionEnabled); setTrackProgressEnabled(trackProgressEnabled); setTimersEnabled(timersEnabled); setHabitsEnabled(habitsEnabled); setRandomQuotesEnabled(randomQuotesEnabled); }
+    try { await onProfileSaved({ ...profileSettings, accentColor: appAccent, name: profileName, username: normalizeUsername(username), examName, questionGoal: Number(goal) || 100, manifestation, avatar: avatarFile, practiceSessionEnabled: nextPractice, trackProgressEnabled: nextTrack, showTrackerOnProfile: nextProfileTracker, timersEnabled: nextTimers, habitsEnabled: nextHabits, randomQuotesEnabled: nextQuotes }); }
+    catch { setShowTrackerOnProfile(showTrackerOnProfile); setPracticeSessionEnabled(practiceSessionEnabled); setTrackProgressEnabled(trackProgressEnabled); setTimersEnabled(timersEnabled); setHabitsEnabled(habitsEnabled); setRandomQuotesEnabled(randomQuotesEnabled); }
     finally { setSavingFeature(null); }
   };
   useEffect(() => {
@@ -667,7 +673,7 @@ export function ProfileScreen({
           )}
           <View style={[styles.cardHeader, { elevation: 31 }]}>
             <Text style={styles.cardEyebrow}>
-              {practiceSessionEnabled ? "PRACTICE" : trackProgressEnabled ? "STUDY TRACKER" : "TASKS"}
+              {practiceSessionEnabled ? "PRACTICE" : profileTrackerVisible ? "STUDY TRACKER" : "TASKS"}
             </Text>
             <View style={[styles.rangeWrap, { elevation: 40 }]}>
               <Pressable style={styles.rangeButton} onPress={() => setRangeOpen((value) => !value)}>
@@ -736,10 +742,10 @@ export function ProfileScreen({
                 <Stat columns={2} lastRow label="Wrong" value={String(practiceWrong)} />
               </View>
             )}
-            {practiceSessionEnabled && trackProgressEnabled && (
+            {practiceSessionEnabled && profileTrackerVisible && (
               <Text style={[styles.cardEyebrow, styles.trackerEyebrow]}>STUDY TRACKER</Text>
             )}
-            {practiceSessionEnabled && trackProgressEnabled ? (
+            {practiceSessionEnabled && profileTrackerVisible ? (
               <View style={styles.trackerGrid}>
                 <Stat label="Lectures" value={String(trackerLectures)} />
                 <Stat label="Revisions" value={String(trackerRevisions)} />
@@ -750,15 +756,15 @@ export function ProfileScreen({
               </View>
             ) : (
               <>
-                {trackProgressEnabled && <View style={styles.trackerGrid}>
+                {profileTrackerVisible && <View style={styles.trackerGrid}>
                   <Stat lastRow label="Lectures" value={String(trackerLectures)} />
                   <Stat lastRow label="Revisions" value={String(trackerRevisions)} />
                   <Stat lastColumn lastRow label="Mock tests" value={String(loggedMocks)} />
                 </View>}
                 <View style={styles.trackerGrid}>
                   <Stat lastRow label="Study time" value={formatMinutes(filteredSummary.minutes)} />
-                  <Stat lastRow label="Tasks completed" value={trackProgressEnabled ? `${filteredSummary.done}/${filteredSummary.total}` : String(filteredSummary.done)} />
-                  <Stat lastColumn lastRow label={trackProgressEnabled ? "Focus time" : "Incomplete tasks"} value={trackProgressEnabled ? focusData.text : String(filteredSummary.total - filteredSummary.done)} />
+                  <Stat lastRow label="Tasks completed" value={profileTrackerVisible ? `${filteredSummary.done}/${filteredSummary.total}` : String(filteredSummary.done)} />
+                  <Stat lastColumn lastRow label={profileTrackerVisible ? "Focus time" : "Incomplete tasks"} value={profileTrackerVisible ? focusData.text : String(filteredSummary.total - filteredSummary.done)} />
                 </View>
               </>
             )}
@@ -778,7 +784,7 @@ export function ProfileScreen({
           dataReady={readOnly || sharedActivityReady}
           sharedActivity={readOnly ? publicActivity : undefined}
         />
-        {trackProgressEnabled && <StudyTrackerOverview
+        {profileTrackerVisible && <StudyTrackerOverview
           tracker={trackerData}
           mockTests={mockTests}
           examName={examName || "Your tracker"}
@@ -886,6 +892,10 @@ export function ProfileScreen({
                       <Text style={styles.featureToggleCopy}>Track syllabus, revision and mock test progress.</Text>
                     </View>
                     {savingFeature === "track" ? <ActivityIndicator size="small" color={colors.accent} /> : <View style={[styles.featureSwitch, trackProgressEnabled && styles.featureSwitchOn]}><View style={[styles.featureKnob, trackProgressEnabled && styles.featureKnobOn]} /></View>}
+                  </Pressable>
+                  <Pressable accessibilityRole="switch" accessibilityState={{ checked: showTrackerOnProfile }} disabled={savingFeature !== null || savingAccent} onPress={() => void saveFeature("profileTracker")} style={[styles.featureToggle, styles.settingsToggleRow, styles.settingsToggleDivider]}>
+                    <View style={styles.featureToggleContent}><Text style={styles.featureToggleTitle}>Show tracker on profile</Text><Text style={styles.featureToggleCopy}>Display Study Tracker statistics and progress on your profile.</Text></View>
+                    {savingFeature === "profileTracker" ? <ActivityIndicator size="small" color={colors.accent} /> : <View style={[styles.featureSwitch, showTrackerOnProfile && styles.featureSwitchOn]}><View style={[styles.featureKnob, showTrackerOnProfile && styles.featureKnobOn]} /></View>}
                   </Pressable>
                   <Pressable accessibilityRole="switch" accessibilityState={{ checked: timersEnabled }} disabled={savingFeature !== null || savingAccent} onPress={() => void saveFeature("timers")} style={[styles.featureToggle, styles.settingsToggleRow, styles.settingsToggleDivider]}>
                     <View style={styles.featureToggleContent}><Text style={styles.featureToggleTitle}>Timers</Text><Text style={styles.featureToggleCopy}>Countdowns for important dates and deadlines.</Text></View>

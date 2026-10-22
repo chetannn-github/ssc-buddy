@@ -10,6 +10,7 @@ import { watchPracticeEntities, loadQuickRecallSeed, recordQuickRecallPractice, 
 import { colors } from "../theme";
 import { dateKey } from "../domain/tasks";
 import { RecallScopeDropdown } from "./RecallScopeDropdown";
+import { AnimatedTimeChips } from "../components/AnimatedTimeChips";
 
 import { ALL_RECALL_EXERCISES, RECALL_QUESTION_COUNTS, type RecallQuestionCount } from "../domain/recall-selection";
 
@@ -100,14 +101,7 @@ export function QuickRecallScreen({ user, onClose, onGoProfile }: { user: User |
           onToggle={() => selectedChapter && setMenu(menu === "exercise" ? null : "exercise")}
           onSelect={(exerciseId) => { setScope((current) => ({ ...current, exerciseId })); setMenu(null); }} />
         <Text style={styles.setupLabel}>QUESTIONS</Text>
-        <View style={styles.countOptions}>
-          {RECALL_QUESTION_COUNTS.map((count) => <Pressable key={count} accessibilityRole="radio"
-            accessibilityLabel={count + " questions"} accessibilityState={{ selected: questionCount === count }}
-            onPress={() => { setQuestionCount(count); setMenu(null); }}
-            style={[styles.countOption, questionCount === count && styles.countOptionSelected]}>
-            <Text style={[styles.countText, questionCount === count && styles.countTextSelected]}>{count}</Text>
-          </Pressable>)}
-        </View>
+        <AnimatedTimeChips options={RECALL_QUESTION_COUNTS} labels={RECALL_QUESTION_COUNTS.map(String)} value={questionCount} onChange={count => { setQuestionCount(count as RecallQuestionCount); setMenu(null); }} color={colors.accent} ink={colors.accentDeep} muted={colors.text} background="#202020" borderColor="#3f3f46" radius={10} height={36} textStyle={styles.countText} />
         <Pressable style={styles.start} onPress={() => void load()}>
           <Text style={styles.nextText}>Start recall</Text><MaterialCommunityIcons name="arrow-right" size={17} color={colors.buttonInk} />
         </Pressable>

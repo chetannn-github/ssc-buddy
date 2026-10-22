@@ -2,7 +2,7 @@ import { createThemedStyles } from "../theme";
 import { useRef, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
-import { dateKeyFromOffset, formatMinutes, type Task } from "../domain/tasks";
+import { canChangeTaskCompletion, dateKeyFromOffset, formatMinutes, type Task } from "../domain/tasks";
 import { colors, dailyTaskColors } from "../theme";
 
 type Props = {
@@ -97,11 +97,13 @@ export function TaskRow({
         ) : (
           <Pressable
             accessibilityLabel={task.completed ? "Mark task incomplete" : "Mark task complete"}
+            disabled={!canChangeTaskCompletion(task)}
             onPress={task.completed ? onReopen : onDone}
             onLongPress={openMenu}
             delayLongPress={400}
             style={[
               styles.check,
+              !canChangeTaskCompletion(task) && { opacity: 0.4 },
               yellow && styles.dailyCheck,
               task.completed && styles.checkComplete,
               task.completed && completedTone,

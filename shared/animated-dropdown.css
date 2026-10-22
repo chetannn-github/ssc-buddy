@@ -1,0 +1,6 @@
+.smooth-dropdown{transform-origin:top center;will-change:opacity,transform}
+.smooth-dropdown[data-state=open]{animation:dropdown-open 220ms cubic-bezier(.22,1,.36,1) both}
+.smooth-dropdown[data-state=closed]{animation:dropdown-close 150ms ease-in both;pointer-events:none}
+@keyframes dropdown-open{from{opacity:0;transform:translateY(-6px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes dropdown-close{from{opacity:1;transform:translateY(0) scale(1)}to{opacity:0;transform:translateY(-4px) scale(.98)}}
+@media(prefers-reduced-motion:reduce){.smooth-dropdown[data-state]{animation:none}.smooth-dropdown[data-state=closed]{opacity:0}}

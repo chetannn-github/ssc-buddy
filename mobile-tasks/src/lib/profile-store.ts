@@ -12,7 +12,7 @@ export type PracticeProfile = {
   manifestation?: string;
   examName?: string;
   practiceSessionEnabled?: boolean;
-  trackProgressEnabled?: boolean;
+  trackProgressEnabled?: boolean; showTrackerOnProfile?: boolean;
   timersEnabled?: boolean;
   habitsEnabled?: boolean;
   randomQuotesEnabled?: boolean;
@@ -35,6 +35,7 @@ export function normalizeProfile(value: unknown): PracticeProfile {
     ...(typeof profile.examName === "string" && profile.examName.trim() ? { examName: profile.examName.trim() } : {}),
     ...(typeof profile.practiceSessionEnabled === "boolean" ? { practiceSessionEnabled: profile.practiceSessionEnabled } : {}),
     ...(typeof profile.trackProgressEnabled === "boolean" ? { trackProgressEnabled: profile.trackProgressEnabled } : {}),
+    ...(typeof profile.showTrackerOnProfile === "boolean" ? { showTrackerOnProfile: profile.showTrackerOnProfile } : {}),
     ...(typeof profile.timersEnabled === "boolean" ? { timersEnabled: profile.timersEnabled } : {}),
     ...(typeof profile.habitsEnabled === "boolean" ? { habitsEnabled: profile.habitsEnabled } : {}),
       ...(typeof profile.randomQuotesEnabled === "boolean" ? { randomQuotesEnabled: profile.randomQuotesEnabled } : {}),

@@ -422,7 +422,7 @@ export type PublicProfile = {
   avatar?: string;
   examName?: string;
   practiceSessionEnabled?: boolean;
-  trackProgressEnabled?: boolean;
+  trackProgressEnabled?: boolean; showTrackerOnProfile?: boolean;
   /** Aggregated per-day counts only; no questions, answers, or task details. */
   activity?: Record<string, number>;
   dashboard?: PublicProfileDashboard;
@@ -441,6 +441,7 @@ function publicProfileFields(user: User, username: string, fields: Record<string
     ...(typeof fields["examName"] === "string" && fields["examName"].trim() ? { examName: fields["examName"].trim() } : {}),
     ...(typeof fields["practiceSessionEnabled"] === "boolean" ? { practiceSessionEnabled: fields["practiceSessionEnabled"] } : {}),
     ...(typeof fields["trackProgressEnabled"] === "boolean" ? { trackProgressEnabled: fields["trackProgressEnabled"] } : {}),
+    ...(typeof fields["showTrackerOnProfile"] === "boolean" ? { showTrackerOnProfile: fields["showTrackerOnProfile"] } : {}),
   };
 }
 
@@ -457,6 +458,7 @@ export async function readPublicProfile(value: string): Promise<PublicProfile | 
     ...(typeof data["examName"] === "string" && data["examName"].trim() ? { examName: data["examName"].trim() } : {}),
     ...(typeof data["practiceSessionEnabled"] === "boolean" ? { practiceSessionEnabled: data["practiceSessionEnabled"] } : {}),
     ...(typeof data["trackProgressEnabled"] === "boolean" ? { trackProgressEnabled: data["trackProgressEnabled"] } : {}),
+    ...(typeof data["showTrackerOnProfile"] === "boolean" ? { showTrackerOnProfile: data["showTrackerOnProfile"] } : {}),
     ...(data["activity"] && typeof data["activity"] === "object" ? {
       activity: Object.fromEntries(
         Object.entries(data["activity"] as Record<string, unknown>).flatMap(([date, count]) =>

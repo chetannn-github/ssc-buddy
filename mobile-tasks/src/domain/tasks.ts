@@ -32,6 +32,10 @@ export const dateKeyFromOffset = (offset: number, from = new Date()) => {
   return dateKey(date);
 };
 
+export function canChangeTaskCompletion(task: { date?: unknown }, today = dateKey()) {
+  return task.date === today;
+}
+
 export const formatMinutes = (minutes: number) =>
   minutes >= 60
     ? `${Math.floor(minutes / 60)}h${minutes % 60 ? ` ${minutes % 60}m` : ""}`
