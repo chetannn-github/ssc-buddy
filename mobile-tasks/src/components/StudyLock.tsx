@@ -5,6 +5,7 @@ import Svg, { Circle, Line } from "react-native-svg";
 import * as Crypto from "expo-crypto";
 import { collection, doc, onSnapshot, runTransaction, serverTimestamp } from "firebase/firestore";
 import { createStudyController, normalizeStudyDomain, type StudyControl, type StudyDevice } from "../../../shared/study-controller";
+import { emptyFocusDay, focusDayKey, todayFocusMilliseconds, formatFocusTime, type FocusDay } from "../../../shared/study-focus";
 import { getFirebaseFirestore } from "../lib/firebase";
 import { useAppAccent } from "../theme";
 import { accentInk } from "../domain/app-accent";
@@ -22,10 +23,14 @@ export function StudyLock({ uid }: { uid: string }) {
   const [control, setControl] = useState<StudyControl | null>(null), [devices, setDevices] = useState<StudyDevice[]>([]);
   const [now, setNow] = useState(Date.now()), [minutes, setMinutes] = useState(25);
   const [website, setWebsite] = useState(""), [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const [focusData, setFocusData] = useState<FocusDay>(emptyFocusDay);
+  const date = focusDayKey(now, control?.session?.timeZone);
+  useEffect(() => controller.watchStudyFocusDay(getFirebaseFirestore(), uid, date, setFocusData, () => setError("Could not load today?s focus time.")), [uid, date]);
+  const todayFocus = todayFocusMilliseconds(focusData, control?.session ?? null, now);
   const [ready, setReady] = useState(false);
   useEffect(() => {
     let stopControl = () => {}, stopDevices = () => {};
-    const failed = () => { setError("Could not load your study session. Please try again."); setReady(false); };
+    const failed = () => { setError("Could not load your focus session. Please try again."); setReady(false); };
     try {
       const db = getFirebaseFirestore();
       stopControl = controller.watchStudyControl(db, uid, value => { setControl(value); setReady(true); }, failed);
@@ -35,38 +40,40 @@ export function StudyLock({ uid }: { uid: string }) {
     return () => { stopControl(); stopDevices(); clearInterval(timer); };
   }, [uid]);
   const session = control?.session && control.session.endsAt > now ? control.session : null;
-  const domains = session?.domains ?? control?.allowedDomains ?? [];
+  const pending = control?.pendingSession;
+  const domains = session?.domains ?? pending?.domains ?? control?.allowedDomains ?? [];
   const connected = devices.filter(device => now - device.lastSeenAt < 90000);
   const protectedSession = !!session && connected.some(device => device.sessionId === session.id && !device.error);
   const run = async (action: () => Promise<void>) => {
     if (busy) return;
     setBusy(true); setError("");
-    try { await action(); } catch (e) { const message = e instanceof Error ? e.message : ""; setError(/firebase|googleapis/i.test(message) || !message ? "Could not update your study session. Please try again." : message); }
+    try { await action(); } catch (e) { const message = e instanceof Error ? e.message : ""; setError(/firebase|googleapis/i.test(message) || !message ? "Could not update your focus session. Please try again." : message); }
     finally { setBusy(false); }
   };
   const close = () => { if (picking) setPicking(false); else setOpen(false); };
   const icon = (name: React.ComponentProps<typeof MaterialCommunityIcons>["name"], size = 17, tint = "#999") => <MaterialCommunityIcons name={name} size={size} color={tint} />;
   return <>
-    <Pressable accessibilityRole="button" accessibilityLabel="Study Lock" style={s.profileTrigger} onPress={() => setOpen(true)}>
-      {icon("lock-outline", 18, "#eee")}<Text style={s.profileLabel}>Study Lock</Text><Text style={[s.profileHint, session && { color: accent }]}>{session ? remaining(session.endsAt, now) : "Set up session"}</Text>
+    <Pressable accessibilityRole="button" accessibilityLabel="Focus Lock" style={s.profileTrigger} onPress={() => setOpen(true)}>
+      {icon("lock-outline", 18, "#eee")}<Text style={s.profileLabel}>Focus Lock</Text><Text style={[s.profileHint, session && { color: accent }]}>{session ? remaining(session.endsAt, now) : pending ? "Waiting for browser" : "Set up session"}</Text>
     </Pressable>
     <Modal transparent visible={open} animationType="fade" statusBarTranslucent onRequestClose={close}>
       <KeyboardAvoidingView style={s.overlay} behavior={Platform.OS === "ios" ? "padding" : "height"}>
-        <Pressable style={StyleSheet.absoluteFill} accessibilityLabel="Close Study Lock" onPress={close} />
+        <Pressable style={StyleSheet.absoluteFill} accessibilityLabel="Close Focus Lock" onPress={close} />
         <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} style={s.dialog} contentContainerStyle={s.dialogContent}>
-          {picking && !session ? <StudyClock minutes={minutes} accent={accent} onCancel={() => setPicking(false)} onSave={value => { setMinutes(value); setPicking(false); }} /> : <>
-            <View style={s.heading}><Text accessibilityRole="header" style={s.title}>Browser Study Lock</Text><Pressable accessibilityRole="button" accessibilityLabel="Close Study Lock dialog" hitSlop={10} onPress={close}>{icon("close", 19)}</Pressable></View>
+          {picking && !session && !pending ? <StudyClock minutes={minutes} accent={accent} onCancel={() => setPicking(false)} onSave={value => { setMinutes(value); setPicking(false); }} /> : <>
+            <View style={s.heading}><Text accessibilityRole="header" style={s.title}>Focus Lock</Text><Pressable accessibilityRole="button" accessibilityLabel="Close Focus Lock dialog" hitSlop={10} onPress={close}>{icon("close", 19)}</Pressable></View>
             <View style={s.connection}>{icon("monitor", 12)}<View style={[s.dot, { backgroundColor: connected.length ? accent : "#777" }]} /><Text style={s.connectionText}>{connected.length ? `${connected.length} connected` : "No browser connected"}</Text>{session && <Text style={s.connectionText}>{protectedSession ? "Protected" : "Connecting…"}</Text>}</View>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 15 }}><Text style={s.muted}>Today?s focus</Text><Text style={{ color: "#ddd", fontSize: 11, fontWeight: "600" }}>{formatFocusTime(todayFocus)}</Text></View>
             {!ready && !error && <ActivityIndicator color={accent} />}
-            {session ? <>
+            {pending ? <><Text style={s.liveTime}>{pending.minutes} min</Text><Text style={[s.muted, { textAlign: "center", marginBottom: 14 }]}>Starts when your browser connects.</Text><View style={s.chips}>{domains.map(domain => <View key={domain} style={s.chip}><Text style={s.chipText}>{domain}</Text></View>)}</View></> : session ? <>
               <Text style={[s.liveTime, { color: accent }]}>{remaining(session.endsAt, now)}</Text>
               <View style={s.chips}>{domains.map(domain => <View key={domain} style={s.chip}><Text style={s.chipText}>{domain}</Text></View>)}</View>
             </> : <>
               <View style={s.websiteHeading}><Text style={s.websiteTitle}>Allowed websites</Text><Text style={s.muted}>{domains.length}/3</Text></View>
               <View style={s.entry}>{icon("web", 16)}<TextInput accessibilityLabel="Website domain" value={website} onChangeText={setWebsite} placeholder="parmar.com" placeholderTextColor="#777" autoCapitalize="none" autoCorrect={false} keyboardType="url" editable={!busy && domains.length < 3} style={s.input} onSubmitEditing={() => { if (website.trim()) void run(async () => { const domain = normalizeStudyDomain(website); await controller.saveStudyWebsites(getFirebaseFirestore(), uid, [...new Set([...domains, domain])], "mobile"); setWebsite(""); }); }} /><Pressable accessibilityRole="button" accessibilityLabel="Add website" disabled={busy || !ready || domains.length >= 3 || !website.trim()} style={s.add} onPress={() => void run(async () => { const domain = normalizeStudyDomain(website); await controller.saveStudyWebsites(getFirebaseFirestore(), uid, [...new Set([...domains, domain])], "mobile"); setWebsite(""); })}>{busy ? <ActivityIndicator size="small" color={accent} /> : icon("plus", 20, accent)}</Pressable></View>
               <View style={s.chips}>{domains.map(domain => <View key={domain} style={s.chip}><Text style={s.chipText}>{domain}</Text><Pressable accessibilityRole="button" accessibilityLabel={`Remove ${domain}`} disabled={busy} hitSlop={8} onPress={() => void run(() => controller.saveStudyWebsites(getFirebaseFirestore(), uid, domains.filter(value => value !== domain), "mobile"))}>{icon("close", 13)}</Pressable></View>)}</View>
-              <Pressable accessibilityRole="button" accessibilityLabel="Study time" style={s.duration} disabled={busy} onPress={() => setPicking(true)}>{icon("clock-outline", 17)}<Text style={s.durationLabel}>Study time</Text><Text style={s.durationValue}>{minutes >= 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60 ? `${minutes % 60}m` : ""}` : `${minutes} min`}</Text></Pressable>
-              <Pressable accessibilityRole="button" accessibilityLabel="Start study lock" disabled={busy || !ready || !connected.length || !domains.length || !!website.trim()} style={[s.primary, (busy || !ready || !connected.length || !domains.length || !!website.trim()) && { opacity: 0.4 }]} onPress={() => void run(() => controller.startStudySession(getFirebaseFirestore(), uid, minutes, domains, "mobile"))}>{busy ? <ActivityIndicator color="#111" /> : <Text style={s.primaryText}>Start study lock</Text>}</Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel="Focus time" style={s.duration} disabled={busy} onPress={() => setPicking(true)}>{icon("clock-outline", 17)}<Text style={s.durationLabel}>Focus time</Text><Text style={s.durationValue}>{minutes >= 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60 ? `${minutes % 60}m` : ""}` : `${minutes} min`}</Text></Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel="Start focus lock" disabled={busy || !ready || !domains.length || !!website.trim()} style={[s.primary, (busy || !ready || !connected.length || !domains.length || !!website.trim()) && { opacity: 0.4 }]} onPress={() => void run(() => controller.startStudySession(getFirebaseFirestore(), uid, minutes, domains, "mobile"))}>{busy ? <ActivityIndicator color="#111" /> : <Text style={s.primaryText}>Start focus lock</Text>}</Pressable>
             </>}
             {!!error && <Text accessibilityRole="alert" style={s.error}>{error}</Text>}
           </>}
@@ -83,7 +90,7 @@ function StudyClock({ minutes, accent, onCancel, onSave }: { minutes: number; ac
   const total = hour * 60 + minute, valid = total >= 1 && total <= 720;
   const choose = (value: number) => { if (part === "hour") setHour(value); else setMinute(value); };
   return <>
-    <Text accessibilityRole="header" style={s.title}>Study time</Text>
+    <Text accessibilityRole="header" style={s.title}>Focus time</Text>
     <View style={s.digits}>{(["hour", "minute"] as const).map((field, index) => <View key={field} style={s.digitGroup}>{index === 1 && <Text style={s.colon}>:</Text>}<View>{keyboard ? <TextInput accessibilityLabel={field === "hour" ? "Hours" : "Minutes"} keyboardType="number-pad" value={String(field === "hour" ? hour : minute)} onFocus={() => setPart(field)} onChangeText={value => { const next = Math.max(0, Math.min(field === "hour" ? 12 : 59, Number(value.replace(/\D/g, "")) || 0)); if (field === "hour") setHour(next); else setMinute(next); }} style={[s.digit, { color: "#fff" }]} /> : <Pressable accessibilityRole="button" accessibilityLabel={field === "hour" ? "Select hours" : "Select minutes"} onPress={() => setPart(field)} style={[s.digit, part === field && { backgroundColor: accent }]}><Text style={[s.digitText, part === field && { color: accentInk(accent) }]}>{String(field === "hour" ? hour : minute).padStart(2, "0")}</Text></Pressable>}<Text style={s.digitLabel}>{field === "hour" ? "Hours" : "Minutes"}</Text></View></View>)}</View>
     {!keyboard && <View style={s.clock}>
       <Svg pointerEvents="none" width={220} height={220} style={StyleSheet.absoluteFill}><Line x1={110} y1={110} x2={110 + Math.sin(angle) * 82} y2={110 - Math.cos(angle) * 82} stroke={accent} strokeWidth={2} /><Circle cx={110} cy={110} r={4} fill={accent} /><Circle cx={110 + Math.sin(angle) * 82} cy={110 - Math.cos(angle) * 82} r={17} fill={accent} /></Svg>
