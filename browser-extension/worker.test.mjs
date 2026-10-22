@@ -12,7 +12,7 @@ test('cloud-driven rules acknowledge after enforcement and survive Firebase outa
   const realInterval=globalThis.setInterval, timers=[];
   globalThis.setInterval=(...args)=>{const timer=realInterval(...args);timer.unref();timers.push(timer);return timer;};
   const data={},rules=[],acks=[],redirected=[];let onMessage,onAlarm,fail=false,offline=false;
-  let packet={version:1,revision:'one',session:{id:'session',startedAt:Date.now(),endsAt:Date.now()+60000,domains:['chatgpt.com']}};
+  let packet={version:1,revision:'one',session:{id:'session',startedAt:Date.now()-120000,endsAt:Date.now()+60000,domains:['chatgpt.com']}};
   let signedIn=false;
   const user={uid:'test-user',email:'test@example.org'};
   const cloud={ready:Promise.resolve(),user:()=>signedIn?user:null,subscribe:()=>()=>{},read:async()=>{if(offline)throw Error('Offline');return structuredClone(packet);},acknowledge:async(id,sessionId)=>acks.push({id,sessionId}),login:async()=>{},logout:async()=>{throw Error('Should remain locked');}};
@@ -30,7 +30,7 @@ test('cloud-driven rules acknowledge after enforcement and survive Firebase outa
     const message=(type,extra={},page='popup.html')=>new Promise(resolve=>onMessage({type,...extra},{id:chrome.runtime.id,url:chrome.runtime.getURL(page)},resolve));
     const signedOut=await message('status');assert.equal(signedOut.ok,true);assert.deepEqual(signedOut.domains,[]);
     signedIn=true;await message('sync');await wait(()=>acks.length===1);
-    assert.equal(rules.length,2);assert.equal(data.study.uid,user.uid);assert.deepEqual(redirected.map(t=>t.id),[2]);assert.equal(acks[0].sessionId,'session');
+    assert.equal(rules.length,2);assert.equal(data.study.session.startedAt,packet.session.startedAt);assert.equal(data.study.session.endsAt,packet.session.endsAt,"late browser connection preserves original deadline");assert.equal(data.study.uid,user.uid);assert.deepEqual(redirected.map(t=>t.id),[2]);assert.equal(acks[0].sessionId,'session');
     assert.equal(onMessage({type:'status'},{id:chrome.runtime.id,url:'https://evil.example'},()=>assert.fail('Untrusted message')),undefined);
     assert.equal((await message('logout')).ok,false);
     assert.equal((await message('login',{email:'other@example.org',password:'x'},'blocked.html')).ok,false);

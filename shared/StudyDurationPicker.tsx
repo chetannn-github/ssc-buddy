@@ -16,7 +16,7 @@ export function StudyDurationPicker({ minutes, onCancel, onConfirm }: { minutes:
   };
   const total = hour * 60 + minute;
   return <div className="study-duration-picker">
-    <h2 id="browser-study-title">Study time</h2>
+    <h2 id="browser-study-title">Focus time</h2>
     <div className="study-duration-digits">{(["hour", "minute"] as const).map((field, index) => <div key={field}>
       {index === 1 && <b>:</b>}<div>{keyboard ? <input aria-label={field === "hour" ? "Hours" : "Minutes"} type="number" min={0} max={field === "hour" ? 12 : 59} value={field === "hour" ? hour : minute} onFocus={() => setPart(field)} onChange={event => { const value = Math.max(0, Math.min(field === "hour" ? 12 : 59, Number(event.target.value) || 0)); if (field === "hour") setHour(value); else setMinute(value); }} /> : <button aria-label={field === "hour" ? "Select hours" : "Select minutes"} aria-pressed={part === field} onClick={() => setPart(field)}>{String(field === "hour" ? hour : minute).padStart(2, "0")}</button>}<small>{field === "hour" ? "Hours" : "Minutes"}</small></div>
     </div>)}</div>

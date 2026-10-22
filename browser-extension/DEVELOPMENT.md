@@ -1,4 +1,4 @@
-# Study Lock development
+# Focus Lock development
 
 The extension uses Firebase Auth and account-scoped Firestore REST documents. The desktop widget uses its existing Firebase SDK. Shared domain validation lives in shared/study-selection.ts and desktop controllers in shared/study-lock.ts.
 
@@ -9,3 +9,5 @@ Dynamic declarativeNetRequest rules redirect top-level HTTP(S) navigation except
 The popup reuses desktop-widget/src/components/StudyDurationPicker.tsx. Build with node browser-extension/build.mjs. The build reads existing Firebase web configuration from project environment files; these identify the project and do not grant administrative access.
 
 Tests: node --test browser-extension/policy.test.mjs browser-extension/worker.test.mjs browser-extension/controller.test.mjs. browser-check.mjs launches an isolated Edge profile and intercepts authentication and Firestore traffic; no production writes are performed.
+
+Daily focus totals are private documents under users/{uid}/studyFocusDays/{YYYY-MM-DD}. totalMilliseconds and sessionCredits store elapsed credits per session ID. Client transactions and REST update-time preconditions prevent duplicate credits from retries or multiple devices. Session timeZone fixes midnight boundaries; completed sessions are credited before replacement. The extension persists pending credits across offline expiry and retries after reconnect. Active totals write minute checkpoints and an exact final duration; the widget adds uncredited live elapsed time for display. Test these with node --test browser-extension/focus.test.mjs browser-extension/controller.test.mjs; browser-check.mjs also checks offline completion persistence.

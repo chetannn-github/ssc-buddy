@@ -30,7 +30,27 @@ async function action(button, label, work) {
 }
 function tick() {
   const seconds = Math.max(0, Math.ceil(((session?.endsAt ?? 0) - Date.now()) / 1000));
-  $('countdown').textContent = seconds ? (Math.floor(seconds / 3600) ? Math.floor(seconds / 3600) + ':' : '') + String(Math.floor(seconds / 60) % 60).padStart(2, '0') + ':' + String(seconds % 60).padStart(2, '0') : '';
+  const value = seconds ? (Math.floor(seconds / 3600) ? Math.floor(seconds / 3600) + ':' : '') + String(Math.floor(seconds / 60) % 60).padStart(2, '0') + ':' + String(seconds % 60).padStart(2, '0') : '';
+  renderSlotTime($('countdown'), value);
+}
+function renderSlotTime(element, value) {
+  if (element.dataset.slotValue === value) return;
+  const previous = element.dataset.slotValue;
+  element.dataset.slotValue = value;
+  element.classList.add('focus-slot-time');
+  element.setAttribute('aria-label', value);
+  const nodes = Array.from(value, (digit, index) => {
+    const old = previous?.[previous.length - value.length + index];
+    const cell = document.createElement('span');
+    if (!/\d/.test(digit)) { cell.textContent = digit; return cell; }
+    cell.className = 'focus-slot';
+    const roll = document.createElement('span');
+    roll.textContent = digit;
+    if (old && old !== digit) { roll.className = 'focus-slot-roll'; roll.dataset.previous = old; }
+    cell.append(roll);
+    return cell;
+  });
+  element.replaceChildren(...nodes);
 }
 async function refresh(type = 'status', extra = {}) {
   try {
@@ -42,9 +62,9 @@ async function refresh(type = 'status', extra = {}) {
     if ($('approve-site')) { $('approve-site').hidden = !result.blockedSite?.canAdd; $('approve-site').textContent = 'Add ' + (result.blockedSite?.domain ?? 'website'); }
     if (document.body.classList.contains('popup') && $('motivation')) $('motivation').hidden = !result.user;
     $('error').textContent = result.error ?? '';
-    $('status').textContent = session ? result.connected ? 'Study Lock is active.' : 'Offline. Your study timer is still running.' : result.connected ? '' : result.user ? 'Offline' : '';
+    $('status').textContent = session ? result.connected ? 'Focus Lock is active.' : 'Offline. Your focus timer is still running.' : result.connected ? '' : result.user ? 'Offline' : '';
     $('status').hidden = !$('status').textContent;
-    if (document.body.classList.contains('blocked') && !session) { $('title').textContent = 'Your study session is complete.'; $('status').textContent = 'Websites are unlocked. You can return to your previous page.'; }
+    if (document.body.classList.contains('blocked') && !session) { $('title').textContent = 'Your focus session is complete.'; $('status').textContent = 'Websites are unlocked. You can return to your previous page.'; }
     if ($('login')) $('login').hidden = !!result.user || !!session;
     if ($('account')) $('account').textContent = result.user?.email ?? '';
     if ($('login')) $('reconnect').hidden = !result.user;

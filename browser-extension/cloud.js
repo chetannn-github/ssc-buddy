@@ -1,6 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { initializeAuth, indexedDBLocalPersistence, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth/web-extension';
 import { decodeDocument, encode } from './firestore-codec.js';
+import { creditFocusDay, focusSlices } from '../shared/study-focus.ts';
 import { editWebsites, startControl } from './policy.js';
 export function createCloud() {
   const config = __FIREBASE_CONFIG__;
@@ -9,8 +10,8 @@ export function createCloud() {
   const auth = initializeAuth(app, { persistence: indexedDBLocalPersistence });
   const ready = new Promise(resolve => { const stop = onAuthStateChanged(auth, () => { stop(); resolve(); }); });
   const root = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(config.projectId)}/databases/(default)/documents`;
-  async function request(relative, options = {}) {
-    await ready; const user = auth.currentUser; if (!user) throw Error('Sign in to your SSC Buddy account.');
+  async function request(relative, options = {}, expectedUid) {
+    await ready; const user = auth.currentUser; if (!user || (expectedUid && user.uid !== expectedUid)) throw Error('Sign in to your SSC Buddy account.');
     const token = await user.getIdToken();
     const response = await fetch(`${root}/users/${encodeURIComponent(user.uid)}/${relative}`, { ...options, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...options.headers }, signal: AbortSignal.timeout(8000), cache: 'no-store' });
     if (response.status === 404 && !options.method) return null;
@@ -18,11 +19,31 @@ export function createCloud() {
     if (!response.ok) { const error = new Error(response.status === 403 ? 'Sign in with your SSC Buddy account.' : 'Could not connect. Please try again.'); error.status = response.status; throw error; }
     return result;
   }
+  async function recordFocus(session, time = Date.now()) {
+    const uid = auth.currentUser?.uid;
+    if (!uid) throw Error("Sign in to your SSC Buddy account.");
+    for (const slice of focusSlices(session, time, true)) {
+      let saved = false;
+      for (let attempt = 0; attempt < 4; attempt++) {
+        const relative = 'studyFocusDays/' + slice.date;
+        const document = await request(relative, {}, uid), value = document ? decodeDocument(document) : null;
+        const next = creditFocusDay(value, session.id, slice.milliseconds);
+        if (next.totalMilliseconds === value?.totalMilliseconds) { saved = true; break; }
+        const condition = document ? 'currentDocument.updateTime=' + encodeURIComponent(document.updateTime) : 'currentDocument.exists=false';
+        const fields = encode({ version: 1, date: slice.date, ...next }).mapValue.fields;
+        fields.updatedAt = { timestampValue: new Date().toISOString() };
+        try { await request(relative + '?' + condition, { method: 'PATCH', body: JSON.stringify({ fields }) }, uid); saved = true; break; }
+        catch (error) { if (![409, 412].includes(error.status)) throw error; }
+      }
+      if (!saved) throw Error('Could not save focus time. Please try again.');
+    }
+  }
   async function editSelection(domain, remove) {
       for (let attempt = 0; attempt < 4; attempt++) {
         const document = await request('studyLock/current');
         const control = document ? decodeDocument(document) : { version: 1, revision: 'empty', session: null };
         const next = editWebsites(control, domain, remove);
+        if (control.session && control.session.endsAt <= Date.now()) await recordFocus(control.session);
         const condition = document ? `currentDocument.updateTime=${encodeURIComponent(document.updateTime)}` : 'currentDocument.exists=false';
         try {
           const fields = encode(next).mapValue.fields; fields.updatedAt = { timestampValue: new Date().toISOString() };
@@ -34,6 +55,7 @@ export function createCloud() {
   }
   return {
     ready,
+    recordFocus,
     user: () => auth.currentUser ? { uid: auth.currentUser.uid, email: auth.currentUser.email } : null,
     subscribe: callback => onAuthStateChanged(auth, callback),
     login: (email, password) => signInWithEmailAndPassword(auth, email, password),
@@ -45,6 +67,7 @@ export function createCloud() {
         const document = await request('studyLock/current');
         const control = document ? decodeDocument(document) : { version: 1, revision: 'empty', session: null };
         const next = startControl(control, minutes);
+        if (control.session) await recordFocus(control.session);
         const condition = document ? `currentDocument.updateTime=${encodeURIComponent(document.updateTime)}` : 'currentDocument.exists=false';
         try { await request(`studyLock/current?${condition}`, { method: 'PATCH', body: JSON.stringify({ fields: encode(next).mapValue.fields }) }); return; }
         catch (error) { if (![409, 412].includes(error.status)) throw error; }

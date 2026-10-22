@@ -18,10 +18,10 @@ pub struct HabitPin {
 }
 impl HabitPin {
   fn min_size(&self) -> (f64, f64) {
-    match self.style.as_str() { "recall" => (400., 300.), "tasks" => (340., 400.), "study" => (340., 200.), _ => (220., 160.) }
+    match self.style.as_str() { "recall" => (400., 300.), "tasks" => (340., 400.), "study" => (260., 150.), _ => (220., 160.) }
   }
   fn max_size(&self) -> (f64, f64) {
-    match self.style.as_str() { "recall" => (400., 420.), "tasks" => (340., 500.), "study" => (430., 300.), _ => (430., 420.) }
+    match self.style.as_str() { "recall" => (400., 420.), "tasks" => (340., 500.), "study" => (390., 240.), _ => (430., 420.) }
   }
   fn label(&self) -> String {
     let mut hash = DefaultHasher::new();
@@ -128,7 +128,7 @@ pub async fn fit_habit_heatmap(app: AppHandle, window: WebviewWindow, height: f6
 pub async fn resize_study_widget(app: AppHandle, window: WebviewWindow, expanded: bool) -> Result<(), String> {
   let label = window.label().to_owned();
   let valid = app.state::<HabitPins>().0.lock().map_err(|e| e.to_string())?.iter().any(|pin| pin.label() == label && pin.style == "study");
-  if !valid { return Err("Not a Study Lock widget.".into()); }
+  if !valid { return Err("Not a Focus Lock widget.".into()); }
   let state = app.state::<ChecklistWindows>();
   if expanded {
     let scale = window.scale_factor().map_err(|e| e.to_string())?;
@@ -138,14 +138,14 @@ pub async fn resize_study_widget(app: AppHandle, window: WebviewWindow, expanded
       let mut saved = state.0.lock().map_err(|e| e.to_string())?;
       *saved.entry(label.clone()).or_insert(ChecklistBounds { x: position.x, y: position.y, width: size.width, height: size.height })
     };
-    window.set_max_size(Some(tauri::LogicalSize::new(430., 540.))).map_err(|e| e.to_string())?;
-    animate_checklist(window.clone(), original.width, 520., None, true).await?;
+    window.set_max_size(Some(tauri::LogicalSize::new(390., 540.))).map_err(|e| e.to_string())?;
+    animate_checklist(window.clone(), original.width.max(360.), 520., None, true).await?;
     crate::window_bounds::keep_visible(&window.as_ref().window());
   } else {
     let original = state.0.lock().map_err(|e| e.to_string())?.get(&label).copied();
     if let Some(original) = original {
       animate_checklist(window.clone(), original.width, original.height, Some((original.x, original.y)), true).await?;
-      window.set_max_size(Some(tauri::LogicalSize::new(430., 300.))).map_err(|e| e.to_string())?;
+      window.set_max_size(Some(tauri::LogicalSize::new(390., 240.))).map_err(|e| e.to_string())?;
       state.0.lock().map_err(|e| e.to_string())?.remove(&label);
       crate::window_bounds::keep_visible(&window.as_ref().window());
       remember_bounds(&window.as_ref().window());
@@ -212,7 +212,7 @@ fn open(app: &AppHandle, pin: &HabitPin) -> Result<(), String> {
   let (max_width, max_height) = pin.max_size();
   let (min_width, min_height) = pin.min_size();
   let mut builder = WebviewWindowBuilder::new(app, pin.label(), WebviewUrl::App("index.html".into()))
-    .title(if pin.style == "study" { "Study Lock" } else { "Habit widget" })
+    .title(if pin.style == "study" { "Focus Lock" } else { "Habit widget" })
     .initialization_script(&script)
     .inner_size(pin.width.clamp(min_width, max_width), pin.height.clamp(min_height, max_height))
     .min_inner_size(min_width, min_height)
@@ -234,9 +234,11 @@ pub fn restore(app: &AppHandle) {
     .and_then(|data| serde_json::from_slice::<Vec<HabitPin>>(&data).ok()).unwrap_or_default();
   let mut pins: Vec<_> = stored.into_iter().filter(HabitPin::valid).take(30).collect();
   for pin in &mut pins {
+    if pin.style == "study" && (((pin.width - 430.).abs() < 1. && (pin.height - 220.).abs() < 1.) || ((pin.width - 360.).abs() < 1. && (pin.height - 190.).abs() < 1.)) { pin.width = 280.; pin.height = 150.; }
     // Migrate the previous default while preserving manually chosen heights.
     if pin.style == "recall" && (pin.height - 475.).abs() < 1. { pin.height = 380.; }
   }
+  for pin in &mut pins { if pin.style == "study" && (pin.width - 280.).abs() < 1. && (pin.height - 180.).abs() < 1. { pin.height = 150.; } }
   for pin in &mut pins { if pin.desktop_id.is_none() { pin.desktop_id = virtual_desktop::active().or_else(|| app.get_webview_window("main").and_then(|window| virtual_desktop::current(&window))); } }
   if let Ok(mut state) = app.state::<HabitPins>().0.lock() { *state = pins.clone(); }
   for pin in pins { if let Err(error) = open(app, &pin) { eprintln!("Could not restore habit widget: {error}"); } }
@@ -247,7 +249,7 @@ pub fn restore(app: &AppHandle) {
 #[tauri::command]
 pub async fn pin_habit_widget(app: AppHandle, window: WebviewWindow, uid: String, habit_id: String, style: String) -> Result<(), String> {
   if window.label() != "main" { return Err("Open widgets from the main window.".into()); }
-  let (width, height) = match style.as_str() { "month" => (260., 260.), "compact" => (250., 180.), "recall" => (400., 380.), "tasks" => (340., 475.), "study" => (430., 220.), _ => (430., 220.) };
+  let (width, height) = match style.as_str() { "month" => (260., 260.), "compact" => (250., 180.), "recall" => (400., 380.), "tasks" => (340., 475.), "study" => (280., 150.), _ => (430., 220.) };
   let pin = HabitPin { uid, habit_id, style, x: None, y: None, width, height, desktop_id: virtual_desktop::active().or_else(|| virtual_desktop::current(&window)) };
   if !pin.valid() { return Err("Invalid habit widget.".into()); }
   keep_on_saved_desktops(&app);
@@ -298,8 +300,8 @@ mod tests {
   fn study_widget_has_compact_bounds_and_survives_restore() {
     let study = HabitPin { style: "study".into(), habit_id: "study-lock".into(), ..pin() };
     assert!(study.valid());
-    assert_eq!(study.min_size(), (340., 200.));
-    assert_eq!(study.max_size(), (430., 300.));
+    assert_eq!(study.min_size(), (260., 150.));
+    assert_eq!(study.max_size(), (390., 240.));
     let restored: HabitPin = serde_json::from_str(&serde_json::to_string(&study).unwrap()).unwrap();
     assert!(restored.valid());
     assert_eq!(restored.label(), study.label());

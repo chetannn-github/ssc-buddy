@@ -15,6 +15,13 @@ export function startWorker(cloud) {
   const serialize = work => { const next = chain.then(work); chain = next.catch(() => {}); return next; };
   const get = async () => await chrome.storage.local.get(['study', 'deviceId']);
   async function apply(session, revision, uid) {
+    const { study } = await get();
+    if (study?.session && (!session || session.id !== study.session.id)) {
+      const { pendingFocus = [] } = await chrome.storage.local.get('pendingFocus');
+      const next = pendingFocus.filter(entry => entry.uid !== study.uid || entry.session.id !== study.session.id);
+      next.push({ uid: study.uid, session: study.session });
+      await chrome.storage.local.set({ pendingFocus: next });
+    }
     const oldGrants = await chrome.declarativeNetRequest.getSessionRules();
     await chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: oldGrants.filter(rule => rule.id >= 100000).map(rule => rule.id) });
     await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: RULE_IDS, addRules: rulesFor(session, chrome.runtime.getURL('blocked.html')) });
@@ -30,7 +37,7 @@ export function startWorker(cloud) {
     return session;
   }
   async function receive(packet, uid) {
-    if (packet.version !== 1 || typeof packet.revision !== 'string' || packet.revision.length > 128) throw Error('Could not load your study session');
+    if (packet.version !== 1 || typeof packet.revision !== 'string' || packet.revision.length > 128) throw Error('Could not load your focus session');
     const session = validSession(packet.session);
     const { study: saved } = await get();
     const locked = validSession(saved?.session ?? null);
@@ -62,6 +69,22 @@ export function startWorker(cloud) {
       if (!deviceId) { deviceId = crypto.randomUUID(); await chrome.storage.local.set({ deviceId }); }
       await cloud.acknowledge(deviceId, session?.id ?? null);
       lastSync = Date.now(); error = '';
+      // Enforcement/acknowledgement always complete first. Stats retries never
+      // hold a browser locked beyond its deadline, including while offline.
+      if (cloud.recordFocus) {
+        try {
+          if (packet.session) await cloud.recordFocus(packet.session);
+          const { pendingFocus = [] } = await chrome.storage.local.get('pendingFocus');
+          for (const entry of pendingFocus.filter(entry => entry.uid === user.uid)) {
+            if (cloud.user()?.uid !== user.uid) break;
+            await cloud.recordFocus(entry.session);
+            await serialize(async () => {
+              const { pendingFocus: latest = [] } = await chrome.storage.local.get('pendingFocus');
+              await chrome.storage.local.set({ pendingFocus: latest.filter(item => item.uid !== entry.uid || item.session.id !== entry.session.id) });
+            });
+          }
+        } catch { /* Cached sessions and pending credits retry on the next sync. */ }
+      }
     })().catch(e => { error = userError(e); }).finally(() => { syncing = undefined; });
     return syncing;
   }
@@ -80,7 +103,7 @@ export function startWorker(cloud) {
       const session = await serialize(expire); await cloud.ready;
       if (message.type === 'login' || message.type === 'logout') {
         if (!sender.url.startsWith(chrome.runtime.getURL('popup.html'))) throw Error('Open the extension popup to manage your account.');
-        if (session) throw Error('Account changes are locked until your study timer ends.');
+        if (session) throw Error('Account changes are locked until your focus timer ends.');
         if (message.type === 'login') { await cloud.login(String(message.email ?? '').trim(), String(message.password ?? '')); await sync(); }
         if (message.type === 'logout') { await cloud.logout(); lastSync = 0; await serialize(() => apply(null, 'signed-out', null)); }
       } else if (message.type === 'website') {

@@ -7,7 +7,7 @@ function close() { overlay?.remove(); overlay=null; button.focus(); }
 button.addEventListener('click',()=>{
   if(overlay)return;
   overlay=document.createElement('div');overlay.className='duration-overlay';
-  const panel=document.createElement('section');panel.className='browser-study-dialog';panel.setAttribute('role','dialog');panel.setAttribute('aria-modal','true');panel.setAttribute('aria-label','Study time');overlay.append(panel);document.body.append(overlay);
+  const panel=document.createElement('section');panel.className='browser-study-dialog';panel.setAttribute('role','dialog');panel.setAttribute('aria-modal','true');panel.setAttribute('aria-label','Focus time');overlay.append(panel);document.body.append(overlay);
   const root=createRoot(panel);
   const dismiss=()=>{root.unmount();close();};
   root.render(<StudyDurationPicker minutes={Number(value.value)} onCancel={dismiss} onConfirm={minutes=>{value.value=String(minutes);document.getElementById('duration-label').textContent=minutes>=60?`${Math.floor(minutes/60)}h${minutes%60?` ${minutes%60}m`:''}`:`${minutes} min`;dismiss();}}/>);

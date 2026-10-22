@@ -87,7 +87,7 @@ function buildRecall(seed?: QuickRecallSeed, scope: RecallScope = { subjectId: R
   return selectRecallQuestions(scoped, favourites, stats, practice, Date.now(), Math.random, questionCount);
 }
 
-function QuickRecall() {
+export function QuickRecall({ focusLocked = false }: { focusLocked?: boolean } = {}) {
   const user = useAuthUser();
   const [questions, setQuestions] = useState<RecallQuestion[]>(() => buildRecall());
   const [seed, setSeed] = useState<QuickRecallSeed | null>(null);
@@ -205,7 +205,7 @@ function QuickRecall() {
   };
 
   return (
-    <AppShell title="Quick Recall">
+    <RecallShell focusLocked={focusLocked}>
       <main className="exam-dark -mx-4 -my-6 min-h-[calc(100vh-4rem)] bg-[#121212] px-4 py-4 text-zinc-100 sm:-mx-6 sm:px-6">
         <section className="mx-auto max-w-xl">
           {setup ? (
@@ -242,7 +242,7 @@ function QuickRecall() {
           )}
         </section>
       </main>
-    </AppShell>
+    </RecallShell>
   );
 }
 
@@ -265,3 +265,5 @@ function RecallDropdown({ label, value, options, disabled = false, onChange }: {
     </div>
   );
 }
+
+function RecallShell({ focusLocked, children }: { focusLocked: boolean; children: React.ReactNode }) { return focusLocked ? <main>{children}</main> : <AppShell title="Quick Recall">{children}</AppShell>; }

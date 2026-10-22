@@ -29,7 +29,7 @@ export function PinnedStudyWindow({ pin }: { pin: DesktopHabitPin }) {
     event.preventDefault(); setMenu({ x: Math.max(6, Math.min(innerWidth - 176, event.clientX)), y: Math.max(6, Math.min(innerHeight - 54, event.clientY)) });
   }}>
     <div className="accent-top-glow" aria-hidden="true" />
-    {!ready ? <p className="study-desktop-message">Loading…</p> : user?.uid === pin.uid ? <BrowserStudyLock uid={user.uid} desktop /> : <div className="study-desktop-message"><b data-tauri-drag-region>Study Lock</b><p>Sign in to your account in the main widget.</p></div>}
+    {!ready ? <p className="study-desktop-message">Loading…</p> : user?.uid === pin.uid ? <BrowserStudyLock uid={user.uid} desktop /> : <div className="study-desktop-message"><b data-tauri-drag-region>Focus Lock</b><p>Sign in to your account in the main widget.</p></div>}
     {error && <p className="browser-study-error" role="alert">{error}</p>}
     {menu && <div className="pinned-context-dismiss" onPointerDown={() => setMenu(null)}><div role="menu" className="task-context-menu" style={{ left: menu.x, top: menu.y }} onPointerDown={event => event.stopPropagation()}><button role="menuitem" onClick={remove}>Remove widget</button></div></div>}
   </main>;

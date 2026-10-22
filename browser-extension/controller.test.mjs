@@ -23,15 +23,46 @@ test('web and mobile share one session and preserve its active websites and dead
   const web = createStudyController(api, () => 'web-id');
   const mobile = createStudyController(api, () => 'mobile-id');
   await web.saveStudyWebsites({}, 'same-user', ['parmar.com'], 'web');
+  const pressedAt = Date.now();
   await mobile.startStudySession({}, 'same-user', 25, ['parmar.com'], 'mobile');
   const reference = 'users/same-user/studyLock/current';
   const session = structuredClone(documents.get(reference).session);
   assert.equal(writes.at(-1).source, 'mobile');
   assert.deepEqual(session.domains, ['parmar.com']);
+  assert.ok(session.startedAt >= pressedAt && session.startedAt <= Date.now(), 'timer starts immediately without any browser/device check');
   assert.equal(session.endsAt - session.startedAt, 25 * 60000);
   await assert.rejects(() => web.startStudySession({}, 'same-user', 30, ['example.org'], 'web'), /locked/);
   await assert.rejects(() => mobile.saveStudyWebsites({}, 'same-user', [], 'mobile'), /locked/);
   assert.deepEqual(documents.get(reference).session, session);
   await assert.rejects(() => mobile.startStudySession({}, 'another-user', 25, ['one.org', 'two.org', 'three.org', 'four.org'], 'mobile'), /3 websites/);
   assert.equal(documents.has('users/another-user/studyLock/current'), false);
+});
+
+test('finished sessions are saved before the next session replaces them, and retries preserve totals', async () => {
+  const documents = new Map();
+  const api = {
+    doc: (_db, ...parts) => parts.join('/'), collection: (_db, ...parts) => parts.join('/'),
+    onSnapshot: () => () => {}, serverTimestamp: () => ({ timestamp: true }),
+    runTransaction: async (_db, work) => {
+      let written = false;
+      await work({
+        get: async ref => { assert.equal(written, false, 'transaction reads finish before writes'); return { data: () => documents.get(ref) }; },
+        set: (ref, value) => { written = true; documents.set(ref, value); }
+      });
+    }
+  };
+  const controller = createStudyController(api, () => crypto.randomUUID());
+  const previous = { id: 'previous', domains: ['parmar.com'], timeZone: 'Asia/Kolkata', startedAt: Date.parse('2026-10-20T23:45:00+05:30'), endsAt: Date.parse('2026-10-21T00:15:00+05:30') };
+  documents.set('users/alice/studyLock/current', { session: previous });
+  await controller.startStudySession({}, 'alice', 25, ['parmar.com'], 'web');
+  assert.equal(documents.get('users/alice/studyFocusDays/2026-10-20').totalMilliseconds, 900000);
+  assert.equal(documents.get('users/alice/studyFocusDays/2026-10-21').totalMilliseconds, 900000);
+  await controller.recordStudyFocus({}, 'alice', previous);
+  await controller.recordStudyFocus({}, 'alice', previous);
+  assert.equal(documents.get('users/alice/studyFocusDays/2026-10-20').totalMilliseconds, 900000);
+  assert.equal(documents.get('users/alice/studyFocusDays/2026-10-21').totalMilliseconds, 900000);
+  const second = { ...previous, id: 'second' };
+  await controller.recordStudyFocus({}, 'alice', second);
+  assert.equal(documents.get('users/alice/studyFocusDays/2026-10-20').totalMilliseconds, 1800000);
+  assert.equal(documents.has('users/bob/studyFocusDays/2026-10-20'), false);
 });

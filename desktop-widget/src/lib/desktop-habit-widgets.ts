@@ -24,6 +24,6 @@ export function responsiveHabitStyle(width: number, height: number): DesktopHabi
 }
 
 export async function pinDesktopStudy(uid: string) {
-  if (!isTauri()) throw new Error("Open the installed Windows widget to pin Study Lock.");
+  if (!isTauri()) throw new Error("Open the installed Windows widget to pin Focus Lock.");
   await invoke("pin_habit_widget", { uid, habitId: "study-lock", style: "study" });
 }

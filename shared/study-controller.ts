@@ -48,7 +48,7 @@ async function startStudySession(db: Firestore, uid: string, minutes: number, va
   const reference = doc(db, ...studyControlPath(uid));
   await runTransaction(db, async transaction => {
     const current = (await transaction.get(reference)).data();
-    if (current?.["session"]?.endsAt > Date.now()) throw Error("The current study session is locked until its timer ends.");
+    if (current?.["session"]?.endsAt > Date.now()) throw Error("The current focus session is locked until its timer ends.");
     const startedAt = Date.now();
     const creditPrevious = await prepareFocusCredits(transaction, db, uid, current?.["session"], startedAt);
     creditPrevious();
