@@ -34,7 +34,7 @@ fn main() {
     .manage(habit_widgets::HabitPins::default())
     .manage(habit_widgets::BoundsSaveDebounce::default())
     .manage(habit_widgets::ChecklistWindows::default())
-    .invoke_handler(tauri::generate_handler![habit_widgets::pin_habit_widget, habit_widgets::remove_habit_widget, habit_widgets::resize_habit_checklist, habit_widgets::fit_habit_heatmap, habit_widgets::resize_study_widget])
+    .invoke_handler(tauri::generate_handler![habit_widgets::pin_habit_widget, habit_widgets::remove_habit_widget, habit_widgets::resize_habit_checklist, habit_widgets::fit_tasks_widget, habit_widgets::fit_habit_heatmap, habit_widgets::resize_study_widget])
     .setup(|app| {
       app.handle().plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, None))?;
       let _ = app.autolaunch().enable();

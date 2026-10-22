@@ -5,6 +5,8 @@ import NumberFlow from "@number-flow/react";
 import { dailyTaskWidgetModel } from "../../../mobile-tasks/src/domain/daily-task-widget";
 import { formatMinutes, summarizeTasks } from "../../../mobile-tasks/src/domain/tasks";
 import type { DailyTask } from "../lib/firebase";
+import { useRef } from "react";
+import { useTaskWidgetHeight } from "../lib/use-task-widget-height";
 
 export function AndroidTasksWidget({ uid, headerAction, tasks, today, selectedDate, dueOnly, rank, medals, points, onSelectDate, onFilterChange, onNew, onComplete, onReopen, onReschedule }: {
   uid?: string; headerAction?: React.ReactNode;
@@ -16,7 +18,9 @@ export function AndroidTasksWidget({ uid, headerAction, tasks, today, selectedDa
 }) {
   const model = dailyTaskWidgetModel(tasks, { date: selectedDate, dueOnly }, today);
   const date = new Date(model.selected + "T12:00:00");
-  return <>
+  const content = useRef<HTMLDivElement>(null);
+  useTaskWidgetHeight(content);
+  return <div ref={content} className="android-task-content">
     <div className="android-task-heading">
       <h1 data-tauri-drag-region>{model.selected === today ? "Today" : date.toLocaleDateString(undefined, { weekday: "short" })}, {date.toLocaleDateString(undefined, { day: "numeric", month: "short" })}</h1>
       <div className="android-task-actions">{headerAction}{rank !== null && <span className="android-task-rank">{rank <= 3 && rank > 0 && <img src={medals[rank - 1]} alt="" />}#{rank}</span>}<button onClick={onNew} aria-label="Add task">+</button></div>
@@ -39,7 +43,7 @@ export function AndroidTasksWidget({ uid, headerAction, tasks, today, selectedDa
       const missed = !task.completed && model.selected < today, score = points.get(task.id) ?? 0;
       return <TaskWidgetRow key={task.id} task={task} missed={missed} score={score} readOnly={model.readOnly} onComplete={onComplete} onReopen={onReopen} onContextMenu={model.selected < today && onReschedule ? event => { event.preventDefault(); event.stopPropagation(); onReschedule(task, { x: event.clientX, y: event.clientY }); } : undefined} />;
     }) : <p className="android-task-empty">{dueOnly && model.summary.total ? "All tasks complete" : "No tasks planned"}</p>}</section>
-  </>;
+  </div>;
 }
 
 

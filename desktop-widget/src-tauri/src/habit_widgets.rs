@@ -18,10 +18,10 @@ pub struct HabitPin {
 }
 impl HabitPin {
   fn min_size(&self) -> (f64, f64) {
-    match self.style.as_str() { "recall" => (400., 300.), "tasks" => (340., 400.), "study" => (260., 150.), _ => (220., 160.) }
+    match self.style.as_str() { "recall" => (400., 300.), "tasks" => (340., 280.), "study" => (260., 150.), _ => (220., 160.) }
   }
   fn max_size(&self) -> (f64, f64) {
-    match self.style.as_str() { "recall" => (400., 420.), "tasks" => (340., 500.), "study" => (390., 240.), _ => (430., 420.) }
+    match self.style.as_str() { "recall" => (400., 420.), "tasks" => (340., 600.), "study" => (390., 240.), _ => (430., 420.) }
   }
   fn label(&self) -> String {
     let mut hash = DefaultHasher::new();
@@ -83,6 +83,7 @@ fn checklist_height(items: usize, original: f64) -> f64 {
 }
 
 fn checklist_ease(t: f64) -> f64 { let t = t.clamp(0., 1.); t * t * (3. - 2. * t) }
+fn tasks_height(height: f64, available: f64) -> f64 { height.clamp(280., available.min(600.).max(280.)) }
 
 async fn animate_checklist(window: WebviewWindow, width: f64, height: f64, position: Option<(f64, f64)>, animate: bool) -> Result<(), String> {
   tauri::async_runtime::spawn_blocking(move || {
@@ -103,6 +104,24 @@ async fn animate_checklist(window: WebviewWindow, width: f64, height: f64, posit
     }
     Ok(())
   }).await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn fit_tasks_widget(app: AppHandle, window: WebviewWindow, height: f64, animate: bool) -> Result<(), String> {
+  let label = window.label();
+  let valid = app.state::<HabitPins>().0.lock().map_err(|e| e.to_string())?.iter()
+    .any(|pin| pin.label() == label && pin.style == "tasks");
+  if !valid || !height.is_finite() { return Err("Invalid Tasks widget size.".into()); }
+  let scale = window.scale_factor().map_err(|e| e.to_string())?;
+  let size = window.inner_size().map_err(|e| e.to_string())?.to_logical::<f64>(scale);
+  let available = window.current_monitor().ok().flatten()
+    .map(|monitor| monitor.work_area().size.height as f64 / scale).unwrap_or(600.);
+  let target = tasks_height(height, available);
+  if (target - size.height).abs() <= 1. { return Ok(()); }
+  animate_checklist(window.clone(), size.width, target, None, animate).await?;
+  crate::window_bounds::keep_visible(&window.as_ref().window());
+  remember_bounds(&window.as_ref().window());
+  Ok(())
 }
 
 #[tauri::command]
@@ -296,6 +315,16 @@ pub fn remember_bounds(window: &tauri::Window) {
 mod tests {
   use super::*;
   fn pin() -> HabitPin { HabitPin { uid: "alice".into(), habit_id: "read".into(), style: "heatmap".into(), x: None, y: None, width: 430., height: 220., desktop_id: None } }
+  #[test]
+  fn task_windows_follow_content_with_bounded_height() {
+    let tasks = HabitPin { style: "tasks".into(), ..pin() };
+    assert_eq!(tasks.min_size(), (340., 280.));
+    assert_eq!(tasks.max_size(), (340., 600.));
+    assert_eq!(tasks_height(100., 1000.), 280.);
+    assert_eq!(tasks_height(385., 1000.), 385.);
+    assert_eq!(tasks_height(900., 1000.), 600.);
+    assert_eq!(tasks_height(900., 480.), 480.);
+  }
   #[test]
   fn study_widget_has_compact_bounds_and_survives_restore() {
     let study = HabitPin { style: "study".into(), habit_id: "study-lock".into(), ..pin() };
