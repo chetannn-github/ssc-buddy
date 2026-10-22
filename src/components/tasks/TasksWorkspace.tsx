@@ -325,7 +325,7 @@ export function TasksWorkspace({
                         setFormOpen(true);
                       }}
                       onDelete={() => setDeleting(task)}
-                      onReschedule={history && !task.completed ? position => { setError(""); setCarryPosition(position); setCarryTask(task); } : undefined}
+                      onReschedule={history ? position => { setError(""); setCarryPosition(position); setCarryTask(task); } : undefined}
                     />
                   ))
                 ) : (

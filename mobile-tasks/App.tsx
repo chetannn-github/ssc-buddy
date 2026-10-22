@@ -850,7 +850,7 @@ export default function App() {
   const canUseTaskRow = () => Date.now() >= taskRowInteractionBlockedUntil.current;
   const addPastTask = (task: Task, offset: 0 | 1) => {
     const source = tasks.find(item => item.id === task.id);
-    if (!source || source.completed || source.date >= dateKey()) {
+    if (!source || source.date >= dateKey()) {
       return;
     }
     persist([{
@@ -976,7 +976,7 @@ export default function App() {
                   key={task.id}
                   task={task}
                   compact={isTaskHistory}
-                  onReschedule={isTaskHistory && !task.completed ? offset => { if (canUseTaskRow()) addPastTask(task, offset); } : undefined}
+                  onReschedule={isTaskHistory ? offset => { if (canUseTaskRow()) addPastTask(task, offset); } : undefined}
                   yellow
                   last={index === visibleTasks.length - 1}
                   points={taskPoints.get(task.id) ?? 0}

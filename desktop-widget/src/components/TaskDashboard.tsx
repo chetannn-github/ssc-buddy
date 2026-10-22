@@ -51,8 +51,7 @@ export function TaskDashboard({ uid, minimal = false, habits = [], mode = "tasks
   const openMenu = (event: React.MouseEvent, task: DailyTask) => {
     event.preventDefault();
     event.stopPropagation();
-    if (history && !task.completed) { onReschedule?.(task, { x: event.clientX, y: event.clientY }); return; }
-    if (history) return;
+    if (history) { onReschedule?.(task, { x: event.clientX, y: event.clientY }); return; }
     setMenu({ task, x: Math.max(8, Math.min(window.innerWidth - 188, event.clientX)), y: Math.max(8, Math.min(window.innerHeight - (task.date === tomorrow ? 110 : 62), event.clientY)) });
   };
   const duration = (minutes: number) => minutes >= 60 ? `${Math.floor(minutes / 60)}h${minutes % 60 ? ` ${minutes % 60}m` : ""}` : `${minutes}m`;

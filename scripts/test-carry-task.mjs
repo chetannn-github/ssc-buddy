@@ -19,8 +19,21 @@ test("adding a missed task keeps its history and creates an incomplete copy with
     assert.equal(next.minutesSpent, null);
   }
 });
-test("completed tasks and tasks scheduled today or later cannot be carried", () => {
-  for (const invalid of [{ ...task, completed: true }, { ...task, date: "2026-10-22" }, { ...task, date: "2026-10-23" }]) {
+test("completed past tasks create pending copies without changing the original completion record", () => {
+  const completed = Object.freeze({ ...task, completed: true, completedAt: "2026-10-20T09:00:00Z", minutesSpent: 60 });
+  for (const target of ["2026-10-22", "2026-10-23"]) {
+    const next = copyPastTask(completed, target, "2026-10-22", "new", "now");
+    assert.equal(next.date, target);
+    assert.equal(next.completed, false);
+    assert.equal(next.completedAt, null);
+    assert.equal(next.minutesSpent, null);
+    assert.equal(completed.completed, true);
+    assert.equal(completed.completedAt, "2026-10-20T09:00:00Z");
+    assert.equal(completed.minutesSpent, 60);
+  }
+});
+test("tasks scheduled today or later cannot be carried regardless of completion", () => {
+  for (const invalid of [{ ...task, date: "2026-10-22" }, { ...task, date: "2026-10-23" }, { ...task, date: "2026-10-22", completed: true }]) {
     assert.throws(() => copyPastTask(invalid, "2026-10-22", "2026-10-22", "new", "now"));
   }
 });

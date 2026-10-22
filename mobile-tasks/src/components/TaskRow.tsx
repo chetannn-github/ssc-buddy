@@ -38,7 +38,7 @@ export function TaskRow({
   const [menu, setMenu] = useState<{ top: number; left: number } | null>(null);
   const { width, height } = useWindowDimensions();
   const canDelete = task.date === dateKeyFromOffset(1);
-  const canCarry = compact && !!onReschedule && !task.completed && task.date < dateKeyFromOffset(0);
+  const canCarry = compact && !!onReschedule && task.date < dateKeyFromOffset(0);
   const openMenu = () => {
     if (compact && !canCarry) return;
     row.current?.measureInWindow((x, y, rowWidth, rowHeight) => {
