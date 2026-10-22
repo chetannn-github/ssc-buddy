@@ -23,10 +23,10 @@
     color-mix(in srgb, var(--halo-color) 85%, #000),
     var(--halo-color) 73%);
   box-shadow: 20px 10px clamp(60px, 16vw, 180px)
-    color-mix(in srgb, var(--halo-color) 28%, transparent);
+    color-mix(in srgb, var(--halo-color) 16%, transparent);
   filter: blur(clamp(24px, 6vw, 76px));
   transform: translate(-50%, -72%);
-  opacity: 0.48;
+  opacity: 0.18;
   animation: accent-top-drift 50s ease-in-out infinite;
 }
 .web-accent-top-glow {
@@ -36,8 +36,8 @@
   z-index: 20;
 }
 @keyframes accent-top-drift {
-  0%, 100% { transform: translate(calc(-50% - 14px), calc(-72% - 4px)); opacity: 0.45; }
-  50% { transform: translate(calc(-50% + 14px), calc(-72% + 6px)); opacity: 0.52; }
+  0%, 100% { transform: translate(calc(-50% - 6px), calc(-72% - 2px)); opacity: 0.17; }
+  50% { transform: translate(calc(-50% + 6px), calc(-72% + 2px)); opacity: 0.20; }
 }
 @media (prefers-reduced-motion: reduce) {
   .accent-top-glow::before { animation: none; }
