@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { DonutChart } from "@/components/exam/DonutChart";
 import { cn } from "@/lib/utils";
@@ -8,8 +8,7 @@ type Props = {
   record: TestRecord;
   onRestart?: () => void;
   attempts?: TestRecord[];
-  onViewSolution?: () => void;
-  detailActions?: ReactNode;
+  hideAnswers?: boolean;
 };
 
 type AnswerFilter = "all" | "correct" | "incorrect" | "unattempted";
@@ -92,7 +91,7 @@ function AttemptMarksChart({ attempts, activeId }: { attempts: TestRecord[]; act
   );
 }
 
-export function ResultScreen({ record, onRestart, attempts = [], onViewSolution, detailActions }: Props) {
+export function ResultScreen({ record, onRestart, attempts = [], hideAnswers = false }: Props) {
   const [answerFilter, setAnswerFilter] = useState<AnswerFilter>("all");
   const total = record.answers.length;
   const verdicts = useMemo<Verdict[]>(
@@ -139,7 +138,7 @@ export function ResultScreen({ record, onRestart, attempts = [], onViewSolution,
     );
 
   return (
-    <div className={cn("grid items-start gap-3", !onViewSolution && "lg:grid-cols-[300px_minmax(0,1fr)]")}>
+    <div className={cn("grid items-start gap-3", !hideAnswers && "lg:grid-cols-[300px_minmax(0,1fr)]")}>
       <div className="card-surface flex items-center gap-4 p-3 sm:p-4 lg:sticky lg:top-4 lg:flex-col lg:items-start">
         <DonutChart
           size={80}
@@ -208,11 +207,10 @@ export function ResultScreen({ record, onRestart, attempts = [], onViewSolution,
             </span>
           </div>
           {attempts.length > 1 && <AttemptMarksChart attempts={attempts} activeId={record.id} />}
-          {onViewSolution && <div className="mt-4 flex flex-wrap items-center gap-2"><Button className="h-8 text-xs" size="sm" onClick={onViewSolution}>View solution</Button>{detailActions}</div>}
         </div>
       </div>
 
-      {!onViewSolution && <div className="card-surface p-3 sm:p-4">
+      {!hideAnswers && <div className="card-surface p-3 sm:p-4">
         <div className="mb-2 flex items-center justify-between">
           <h2 className="text-xs font-medium text-muted-foreground">Answers</h2>
           <span className="text-[10px] text-muted-foreground">

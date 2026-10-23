@@ -107,8 +107,9 @@ export function SolutionScreen({ record, onExit }: Props) {
 
   return (
     <div className="exam-dark min-h-screen bg-[#121212] text-zinc-100">
-      <header className="sticky top-0 z-20 h-16 bg-[#121212] text-zinc-100 shadow-[var(--shadow-card)]">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4">
+      <main className="mx-auto grid max-w-7xl items-start gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
+        <section className="rounded-xl border border-white/10 bg-[#121212] p-5 sm:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-3">
           <div className="min-w-0">
             <h1 className="text-xs font-semibold tracking-[0.14em] uppercase opacity-80">
               Solutions
@@ -125,10 +126,6 @@ export function SolutionScreen({ record, onExit }: Props) {
             </Button>
           </div>
         </div>
-      </header>
-
-      <main className="mx-auto grid max-w-6xl gap-4 px-4 py-5 lg:grid-cols-[1fr_320px]">
-        <section className="card-surface p-5 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3">
             <h2 className="text-lg font-semibold">
               Question {record.questionNumbers?.[current] ?? record.startNumber + current}
@@ -225,7 +222,7 @@ export function SolutionScreen({ record, onExit }: Props) {
           </div>
         </section>
 
-        <aside className="card-surface h-fit p-4 lg:sticky lg:top-24">
+        <aside className="h-fit rounded-xl border border-white/10 bg-[#121212] p-4 lg:sticky lg:top-24">
           <h3 className="text-sm font-semibold">Question Palette</h3>
           <ul className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
             <li className="flex items-center gap-2">

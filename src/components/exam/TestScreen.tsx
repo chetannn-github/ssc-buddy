@@ -187,7 +187,7 @@ export function TestScreen({
         )}
         style={darkMode ? undefined : { backgroundImage: "var(--gradient-header)" }}
       >
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4">
           <div className="min-w-0">
             <h1 className="text-xs font-semibold tracking-[0.14em] uppercase opacity-80">
               Mock Test
@@ -224,8 +224,8 @@ export function TestScreen({
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-6xl gap-4 px-4 py-5 lg:grid-cols-[1fr_320px]">
-        <section className="card-surface p-5 sm:p-6">
+      <main className="mx-auto grid max-w-7xl items-start gap-4 px-4 py-5 lg:grid-cols-[minmax(0,1fr)_300px]">
+        <section className={cn("rounded-xl border p-5 sm:p-6", darkMode ? "border-white/10 bg-[#121212]" : "border-border bg-surface")}>
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3">
             <h2 className="text-lg font-semibold">
               Question {questionNumbers?.[current] ?? startNumber + current}
@@ -239,7 +239,7 @@ export function TestScreen({
             </span>
           </div>
 
-          <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-foreground">
+          <p className="mt-5 whitespace-pre-wrap text-sm leading-6 text-foreground">
             {questions?.[current]?.question ??
               "Read this question from your book and select the correct option."}
           </p>
@@ -249,12 +249,13 @@ export function TestScreen({
               <button
                 key={opt}
                 type="button"
+                aria-pressed={q.answer === opt}
                 onClick={() => update(current, { answer: q.answer === opt ? null : opt })}
                 className={cn(
                   "flex w-full items-center gap-3 rounded-lg border px-4 py-4 text-left text-sm transition-all active:scale-[0.99]",
                   q.answer === opt
                     ? "border-primary bg-primary/10 font-semibold shadow-[var(--shadow-card)]"
-                    : "border-border bg-surface hover:border-primary/40 hover:bg-accent/50",
+                    : darkMode ? "border-white/10 bg-black/10 text-zinc-300 hover:border-primary/40 hover:bg-white/5" : "border-border bg-surface hover:border-primary/40 hover:bg-accent/50",
                 )}
               >
                 <span
@@ -304,7 +305,7 @@ export function TestScreen({
           </div>
         </section>
 
-        <aside className="card-surface h-fit p-4 lg:sticky lg:top-24">
+        <aside className={cn("h-fit rounded-xl border p-4 lg:sticky lg:top-24", darkMode ? "border-white/10 bg-[#121212]" : "border-border bg-surface")}>
           <h3 className="text-sm font-semibold">Question Palette</h3>
           <ul className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
             <li className="flex items-center gap-2">

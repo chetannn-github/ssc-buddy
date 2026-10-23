@@ -160,7 +160,7 @@ function ResultDetail() {
               Back to history
             </Link>
           </Button>
-
+          {record && <div className="flex flex-wrap items-center justify-end gap-2"><Button size="sm" className="h-8 text-xs" onClick={() => setSolutionId(record.id)}>View solution</Button>{detailActions}</div>}
         </div>}
 
         {solutionId !== record?.id && attempts.length > 1 && (
@@ -187,7 +187,7 @@ function ResultDetail() {
           solutionId === record.id ? (
             <SolutionScreen key={record.id} record={record} onExit={() => setSolutionId(null)} />
           ) : (
-            <ResultScreen key={record.id} record={record} attempts={attempts} detailActions={detailActions} onViewSolution={() => setSolutionId(record.id)} />
+            <ResultScreen key={record.id} record={record} attempts={attempts} hideAnswers />
           )
         ) : loaded ? (
           <div className="card-surface p-10 text-center">
