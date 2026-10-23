@@ -88,7 +88,10 @@ export function StudyLock({ uid, taskButton = false, openRequest = 0, onRequestO
   const icon = (name: React.ComponentProps<typeof MaterialCommunityIcons>["name"], size = 17, tint = "#999") => <MaterialCommunityIcons name={name} size={size} color={tint} />;
   return <>
     {taskButton ? <Pressable accessibilityRole="button" accessibilityLabel={session ? "Open focus timer" : "Start Focus"} style={s.taskStart} onPress={() => setOpen(true)}>
-      {icon("timer-outline", 19, "#111")}<Text style={s.taskStartText}>{session ? `${breaking ? "Break" : session.paused ? "Focus paused" : "Focus"} · ${remaining(now + studyTimerMilliseconds(session, now), now)}` : "Start Focus"}</Text>
+      {icon("timer-outline", 19, "#111")}{session ? <View style={s.taskTimer}>
+        <Text style={s.taskStartText}>{breaking ? "Break" : session.paused ? "Focus paused" : "Focus"} · </Text>
+        <SlotTime value={remaining(now + studyTimerMilliseconds(session, now), now)} color="#111" size={14} weight="700" compact />
+      </View> : <Text style={s.taskStartText}>Start Focus</Text>}
     </Pressable> : <Pressable accessibilityRole="button" accessibilityLabel="Focus Lock" style={s.profileTrigger} onPress={() => setOpen(true)}>
       <View style={s.profileLock}>{icon("lock-outline", 18, session ? accent : "#eee")}{session && <ActiveLockDot color={accent} />}</View><Text style={s.profileLabel}>Focus Lock</Text>
       <View style={s.profileFocus}><Text style={s.profileFocusTime}>Today · </Text><SlotTime value={formatFocusTime(todayFocus)} color="#ddd" size={12} weight="600" compact /></View>
@@ -198,6 +201,7 @@ const s = StyleSheet.create({
   breakCount: { minWidth: 28, alignItems: "center", justifyContent: "center", overflow: "hidden" },
   taskStart: { alignSelf: "center", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 48, minWidth: 180, paddingHorizontal: 28, borderRadius: 28, backgroundColor: "#f9fcf5" },
   taskStartText: { color: "#111", fontSize: 14, fontWeight: "700", fontVariant: ["tabular-nums"] },
+  taskTimer: { flexDirection: "row", alignItems: "center" },
   appLimitRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 18 },
   appLimitOptions: { flexDirection: "row", gap: 6, padding: 4, borderRadius: 24, backgroundColor: "#202020" },
   appLimitIndicator: { position: "absolute", left: 4, top: 4, width: 40, height: 36, borderRadius: 20, backgroundColor: colors.button },
