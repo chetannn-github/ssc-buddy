@@ -118,10 +118,13 @@ class BuddyFocusService : Service(), SharedPreferences.OnSharedPreferenceChangeL
   }
   private fun scanForeground() {
     val now = System.currentTimeMillis()
-    if (scannedUntil > now) scannedUntil = 0
-    val from = if (scannedUntil == 0L) now - 24 * 60 * 60 * 1000 else scannedUntil
+    if (scannedUntil > now) { scannedUntil = 0; foregroundTracker.reset() }
+    val from = FocusForegroundTracker.queryStart(scannedUntil, now)
     runCatching {
-      val events = (getSystemService(USAGE_STATS_SERVICE) as UsageStatsManager).queryEvents(from, now) ?: return@runCatching
+      val unlocked = (getSystemService(POWER_SERVICE) as PowerManager).isInteractive && !(getSystemService(KEYGUARD_SERVICE) as KeyguardManager).isKeyguardLocked
+      if (!unlocked) { foreground = ""; return@runCatching }
+      val events = (getSystemService(USAGE_STATS_SERVICE) as UsageStatsManager).queryEvents(from, now)
+        ?: throw IllegalStateException("Usage events unavailable")
       val event = UsageEvents.Event()
       while (events.hasNextEvent()) {
         events.getNextEvent(event)
@@ -129,14 +132,14 @@ class BuddyFocusService : Service(), SharedPreferences.OnSharedPreferenceChangeL
         // some phones. Wait for a new resumed app rather than hide/re-show in a loop.
         val overlayPausedApp = overlay != null && event.packageName == foregroundTracker.current &&
           event.eventType in setOf(UsageEvents.Event.ACTIVITY_PAUSED, UsageEvents.Event.ACTIVITY_STOPPED)
-        if (!overlayPausedApp) foregroundTracker.event(event.packageName.orEmpty(), event.eventType, event.timeStamp)
-        lastEventAt = event.timeStamp
+        if (!overlayPausedApp && foregroundTracker.event(event.packageName.orEmpty(), event.eventType, event.timeStamp)) lastEventAt = event.timeStamp
       }
       scannedUntil = now
-      val unlocked = (getSystemService(POWER_SERVICE) as PowerManager).isInteractive && !(getSystemService(KEYGUARD_SERVICE) as KeyguardManager).isKeyguardLocked
-      foreground = if (unlocked) foregroundTracker.current else ""
+      foreground = foregroundTracker.current
+      if (preferences.getString("overlayError", "") == "Could not read app usage events.") preferences.edit().remove("overlayError").apply()
     }.onFailure {
-      foreground = ""
+      // A transient query failure cannot remove a currently visible block.
+      // Keep the last confirmed foreground and retry the same overlap next tick.
       preferences.edit().putString("overlayError", "Could not read app usage events.").apply()
     }
   }
