@@ -2212,7 +2212,6 @@ function QuestionBank({
                 </View>
                 <View style={s.bankPalette}>
                   <Text style={s.sessionTitle}>Question palette</Text>
-                  <Text style={s.bankSubhead}>Jump to any question</Text>
                   <QuestionPalette
                     count={viewing.questions.length}
                     current={currentQuestion}
