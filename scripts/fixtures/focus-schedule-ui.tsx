@@ -5,6 +5,7 @@ import { useFocusScheduleRunner } from "../../shared/use-focus-schedule-runner";
 import * as reader from "../../shared/study-lock";
 import { StudyLockControl } from "../../shared/StudyLockControl";
 import { StudyDurationPicker } from "../../shared/StudyDurationPicker";
+import "../../shared/study-lock.css";
 
 export async function run() {
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT=true;
@@ -41,8 +42,10 @@ export async function run() {
     const savedRow=container.querySelector<HTMLElement>('[aria-label="Saved schedules"]')!,addButton=container.querySelector<HTMLElement>('[aria-label="Add focus schedule"]')!;
     if(savedRow.getBoundingClientRect().top<addButton.getBoundingClientRect().bottom)throw Error("saved schedules should be in the next row");
     if(savedRow.textContent?.includes('Preview')||savedRow.textContent?.includes(':')||savedRow.querySelectorAll('svg').length!==6)throw Error("saved chips should only show names and icons");
+    const initialForm=container.querySelector('.focus-schedule-form'),savedHighlight=savedRow.querySelector<HTMLElement>('.sliding-highlight')!,savedPosition=savedHighlight.style.transform;
     await act(async()=>previewCards[2]!.click());
-    if(getComputedStyle(container.querySelector('.focus-schedule-form')!).animationName!=='focus-schedule-enter')throw Error("schedule switching animation missing");
+    if(container.querySelector('.focus-schedule-form')!==initialForm||getComputedStyle(initialForm!).animationName!=='none')throw Error("schedule form remounted or faded during selection");
+    if(savedRow.querySelector('.sliding-highlight')!==savedHighlight||savedHighlight.style.transform===savedPosition||!savedHighlight.style.transition.includes('transform'))throw Error("schedule background did not slide between chips");
     await act(async()=>button("Save schedule").click());
     if(transactions)throw Error("saving a preview touched the database");
     await act(async()=>button("Edit").click());
@@ -94,12 +97,14 @@ export async function run() {
     await act(async()=>clockRoot.render(<StudyDurationPicker minutes={95} onCancel={()=>{}} onConfirm={value=>saved.push(value)}/>));
     const clockButton=(label:string)=>container.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`)!;
     const face=()=>container.querySelector<HTMLElement>('.clock-face-motion')!;
+    const stableFace=face(),digitHighlight=container.querySelector<HTMLElement>('.study-duration-digits .sliding-highlight')!,hourPosition=digitHighlight.style.transform;
     if(face().dataset.clockMode!=='hour')throw Error("clock started on wrong field");
     await act(async()=>clockButton('2 hours').click());
-    if(face().dataset.clockMode!=='minute'||!face().getAnimations().some(animation=>animation.effect?.getTiming().duration===220))throw Error("automatic hour-to-minute transition missing");
+    if(face().dataset.clockMode!=='minute'||face()!==stableFace||face().getAnimations().length)throw Error("clock dial blinked during automatic field switch");
+    if(container.querySelector('.study-duration-digits .sliding-highlight')!==digitHighlight||digitHighlight.style.transform===hourPosition||!digitHighlight.style.transition.includes('transform'))throw Error("hour-to-minute background did not slide");
     await act(async()=>clockButton('10 minutes').click());
     await act(async()=>clockButton('Select hours').click());
-    if(face().dataset.clockMode!=='hour'||face().getAnimations().length!==1)throw Error("manual minute-to-hour transition missing");
+    if(face().dataset.clockMode!=='hour'||face()!==stableFace||face().getAnimations().length||digitHighlight.style.transform!==hourPosition)throw Error("minute-to-hour background did not return without blinking");
     if(!clockButton('Select hours').style.transition.includes('background-color'))throw Error("clock digit background transition missing");
     await act(async()=>clockButton('Select minutes').click());
     if(clockButton('Select hours').textContent!=='02'||clockButton('Select minutes').textContent!=='10')throw Error("switching clock fields changed the selected time");
@@ -109,10 +114,10 @@ export async function run() {
     try{
       window.matchMedia=(()=>({matches:true})) as any;
       await act(async()=>clockButton('Select hours').click());
-      if(face().getAnimations().length)throw Error("clock ignored reduced-motion preference");
+      if(face().getAnimations().length||digitHighlight.style.transition!=='none')throw Error("clock ignored reduced-motion preference");
     }finally{window.matchMedia=originalMatchMedia;}
     await act(async()=>clockRoot.unmount());
-    return "direct schedule editor, five local fixtures, clean saved row, auto/manual clock transitions, preserved duration, reduced motion, freeze, cleanup";
+    return "sliding schedule/hour-minute backgrounds without remount/fade, fixed selected time, save closes dialog, reduced motion, freeze, cleanup";
   }finally{
     Date.now=originals.now;window.setInterval=originals.interval;window.setTimeout=originals.timeout;window.clearInterval=originals.clearInterval;window.clearTimeout=originals.clearTimeout;
     container.remove();delete (globalThis as any).__scheduleSdk;

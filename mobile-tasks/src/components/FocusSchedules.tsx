@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { useLayoutEffect, useRef } from "react";
+import { useRef } from "react";
 import { AccessibilityInfo, Animated, Easing, ActivityIndicator, Alert, AppState, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { focusScheduleFrozen, SCHEDULE_PRESETS, scheduleTime, WEEKDAY_LABELS, type FocusSchedule } from "../../../shared/focus-schedules";
@@ -17,13 +17,6 @@ export function FocusSchedules({items,now,renderClock,saveSchedule,onBack,onSave
   const [deleting,setDeleting]=useState(false);
   const [alarmAccess,setAlarmAccess]=useState<boolean|null>(null);
   const [reducedMotion,setReducedMotion]=useState(false);
-  const formMotion=useRef(new Animated.Value(1)).current;
-  useLayoutEffect(()=>{
-    formMotion.setValue(reducedMotion?1:0);
-    if(reducedMotion)return;
-    const animation=Animated.timing(formMotion,{toValue:1,duration:220,easing:Easing.out(Easing.cubic),useNativeDriver:true});
-    animation.start();return()=>animation.stop();
-  },[draft?.id,reducedMotion,formMotion]);
   useEffect(()=>{
     let active=true;
     void AccessibilityInfo.isReduceMotionEnabled().then(value=>{if(active)setReducedMotion(value);}).catch(()=>{});
@@ -38,6 +31,8 @@ export function FocusSchedules({items,now,renderClock,saveSchedule,onBack,onSave
     return()=>{active=false;listener.remove();};
   },[items.length]);
   const existing=[...items,...previews].find(item=>item.id===draft?.id),frozen=!!existing&&focusScheduleFrozen(existing,now);
+  const savedItems=[...items,...previews],savedWidths=savedItems.map(item=>Math.max(84,Math.min(180,item.name.length*6.2+34)));
+  const savedIcons=["weather-night","weather-sunset-up","book-open-variant","coffee-outline","leaf"] as const;
   const save=async(value:FocusSchedule|null,id:string)=>{
     setBusy(true);setError("");try{
       if(isFocusSchedulePreview(id)){setPreviews(previous=>previous.flatMap(item=>item.id===id?(value?[{...value,enabled:false}]:[]):[item]));setDraft(null);if(value)onSaved?.();return;}
@@ -57,19 +52,17 @@ export function FocusSchedules({items,now,renderClock,saveSchedule,onBack,onSave
       <Text style={[s.title,{fontSize:15,flex:1}]}>Add schedule</Text>
       <Pressable accessibilityRole="button" accessibilityLabel="Add focus schedule" disabled={busy} hitSlop={8} onPress={()=>{setError("");setDraft(fresh());}}><MaterialCommunityIcons name="plus" size={23} color="#eee"/></Pressable>
     </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} nestedScrollEnabled style={{marginTop:8}} contentContainerStyle={{gap:6,paddingVertical:3}}>
-        {[...items,...previews].map(item=>{const selected=draft?.id===item.id,icons=["weather-night","weather-sunset-up","book-open-variant","coffee-outline","leaf"] as const;return <Pressable key={item.id} accessibilityRole="button" accessibilityLabel={`Edit ${item.name}`} accessibilityState={{selected}} disabled={busy} onPress={()=>{setError("");setDraft({...item});}} style={[s.chip,{paddingVertical:9,flexDirection:"row",alignItems:"center",gap:5},selected&&s.selected]}>
-          <MaterialCommunityIcons name={icons[focusScheduleIconIndex(item.id)]!} size={14} color={selected?"#111":"#bbb"}/><Text numberOfLines={1} style={[s.chipText,selected&&s.ink]}>{item.name}</Text>
-        </Pressable>;})}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} nestedScrollEnabled style={{marginTop:8,flexGrow:0}} contentContainerStyle={{paddingVertical:3}}>
+        <AnimatedTimeChips options={savedItems.map((_,index)=>index)} labels={savedItems.map(item=>item.name)} icons={savedItems.map(item=><MaterialCommunityIcons name={savedIcons[focusScheduleIconIndex(item.id)]!} size={13} color="#888"/>)} optionWidths={savedWidths} value={savedItems.findIndex(item=>item.id===draft?.id)} onChange={index=>{setError("");setDraft({...savedItems[index]!});}} disabled={busy} color="#f9fcf5" ink="#111" height={34} gap={6} radius={16} textStyle={{fontSize:11}} style={{width:savedWidths.reduce((sum,width)=>sum+width,0)+Math.max(0,savedItems.length-1)*6}}/>
       </ScrollView>
     {Platform.OS==="android"&&items.length>0&&alarmAccess===false&&<Pressable style={s.item} onPress={()=>void openScheduleAlarmSettings().catch(()=>setError("Could not open alarm settings."))}><MaterialCommunityIcons name="alarm-check" size={20} color="#eee"/><Text style={[s.title,{flex:1}]}>Allow scheduled starts</Text><Text style={s.small}>Enable</Text></Pressable>}
-    {draft&&<Animated.View style={[s.form,{opacity:formMotion,transform:[{translateY:formMotion.interpolate({inputRange:[0,1],outputRange:[8,0]})}]}]}>
+    {draft&&<View style={s.form}>
       <TextInput accessibilityLabel="Schedule name" maxLength={40} editable={!busy&&!frozen} style={s.input} value={draft.name} onChangeText={name=>setDraft({...draft,name})} placeholder="Schedule name" placeholderTextColor="#888" />
       <View style={s.row}>{(["startMinute","endMinute"] as const).map(field=><Pressable key={field} disabled={busy||frozen} accessibilityRole="button" accessibilityLabel={field==="startMinute"?"Schedule start":"Schedule end"} style={s.time} onPress={()=>setPicking(field)}><Text style={s.small}>{field==="startMinute"?"Start":"End"}</Text><Text style={s.title}>{scheduleTime(draft[field])}</Text></Pressable>)}</View>
       <View style={s.wrap}>{WEEKDAY_LABELS.map((day,index)=><WeekdayChip key={day} label={day} selected={draft.weekdays.includes(index)} disabled={busy||frozen} reducedMotion={reducedMotion} onPress={()=>setDraft({...draft,weekdays:draft.weekdays.includes(index)?draft.weekdays.filter(value=>value!==index):[...draft.weekdays,index]})}/>)}</View>
       <View style={s.row}><Text style={s.title}>Allowed apps</Text><AnimatedTimeChips options={[0,1,2]} labels={["0","1","2"]} value={draft.appLimit} onChange={value=>setDraft({...draft,appLimit:value})} disabled={busy||frozen} color="#f9fcf5" ink="#111" height={34} gap={4} style={{width:132}} /></View>
       <View style={s.row}><Pressable disabled={busy} style={s.chip} onPress={()=>setDraft(null)}><Text style={s.chipText}>Cancel</Text></Pressable>{existing&&<Pressable disabled={busy||frozen} style={s.chip} onPress={()=>setDeleting(true)}><Text style={{color:"#ff647e",fontSize:12}}>Delete</Text></Pressable>}<Pressable disabled={busy||frozen} style={[s.chip,s.selected,{flex:1,alignItems:"center",opacity:frozen?.4:1}]} onPress={()=>void save(draft,draft.id)}>{busy?<ActivityIndicator color="#111"/>:<Text style={[s.chipText,s.ink]}>Save schedule</Text>}</Pressable></View>
-    </Animated.View>}
+    </View>}
     {!!error&&<Text accessibilityRole="alert" style={{color:"#ff8a95",fontSize:11,marginTop:8}}>{error}</Text>}
     <DestructiveDialog visible={deleting&&!!draft&&!frozen} title="Delete this schedule?" confirmLabel="Yes, delete" busy={busy} onCancel={()=>setDeleting(false)} onConfirm={async()=>{if(draft&&!frozen)await save(null,draft.id);setDeleting(false);}} />
   </View>;

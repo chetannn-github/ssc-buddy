@@ -7,10 +7,13 @@ import { AnimatedChoices } from "./AnimatedChoices";
 import { focusSchedulePreviews, isFocusSchedulePreview, focusScheduleIconIndex } from "./focus-schedule-preview";
 import { ArrowLeft, Plus, Moon, Sunrise, BookOpen, Coffee, Leaf } from "lucide-react";
 import "./focus-schedules.css";
+import { useRef } from "react";
+import { SlidingHighlight } from "./SlidingHighlight";
 
 export function FocusScheduleManager({uid,getDatabase,domains,onBack,onSaved}:{uid:string;getDatabase:()=>Firestore;domains:string[];onBack?:()=>void;onSaved?:()=>void}) {
   const [items,setItems]=useState<FocusSchedule[]>([]),[draft,setDraft]=useState<FocusSchedule|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState(""),[now,setNow]=useState(Date.now());
   const [previews,setPreviews]=useState(focusSchedulePreviews);
+  const savedRow=useRef<HTMLDivElement>(null);
   useEffect(()=>{
     let opened=false;
     return watchStudyControl(getDatabase(),uid,value=>{
@@ -26,12 +29,12 @@ export function FocusScheduleManager({uid,getDatabase,domains,onBack,onSaved}:{u
     <div className="focus-schedule-toolbar">
       {onBack&&<button type="button" className="focus-schedule-icon" aria-label="Back to Focus Lock" onClick={onBack}><ArrowLeft size={19}/></button>}
       <h2 id="browser-study-title">Add schedule</h2>
-      <div className="focus-schedule-list" aria-label="Saved schedules">{[...items,...previews].map(item=>{const Icon=[Moon,Sunrise,BookOpen,Coffee,Leaf][focusScheduleIconIndex(item.id)]!;return <button type="button" className="focus-schedule-item" data-schedule-preview={isFocusSchedulePreview(item.id)?"":undefined} aria-label={`Edit ${item.name}`} aria-pressed={draft?.id===item.id} key={item.id} disabled={busy} onClick={()=>{setError("");setDraft({...item});}}>
+      <div ref={savedRow} className="focus-schedule-list" aria-label="Saved schedules"><SlidingHighlight container={savedRow} active={draft?.id} color="#f9fcf5" radius={16}/>{[...items,...previews].map(item=>{const Icon=[Moon,Sunrise,BookOpen,Coffee,Leaf][focusScheduleIconIndex(item.id)]!;return <button type="button" data-slide-key={item.id} className="focus-schedule-item" data-schedule-preview={isFocusSchedulePreview(item.id)?"":undefined} aria-label={`Edit ${item.name}`} aria-pressed={draft?.id===item.id} key={item.id} disabled={busy} onClick={()=>{setError("");setDraft({...item});}}>
         <Icon size={14} aria-hidden="true"/><b>{item.name}</b>
       </button>;})}</div>
       <button type="button" className="focus-schedule-icon" aria-label="Add focus schedule" disabled={busy} onClick={()=>{setError("");setDraft(fresh());}}><Plus size={21}/></button>
     </div>
-    {draft&&<div className="focus-schedule-form" key={draft.id}>
+    {draft&&<div className="focus-schedule-form">
       <label>Name<input aria-label="Schedule name" maxLength={40} disabled={busy||frozen} value={draft.name} onChange={e=>setDraft({...draft,name:e.target.value})}/></label>
       <div className="focus-schedule-times">{(["startMinute","endMinute"] as const).map(field=><label key={field}>{field==="startMinute"?"Start":"End"}<input type="time" aria-label={field==="startMinute"?"Schedule start":"Schedule end"} value={scheduleTime(draft[field])} disabled={busy||frozen} onChange={e=>{const [hour,minute]=e.target.value.split(":").map(Number);if(Number.isFinite(hour)&&Number.isFinite(minute))setDraft({...draft,[field]:hour!*60+minute!});}}/></label>)}</div>
       <div className="focus-schedule-days">{WEEKDAY_LABELS.map((day,index)=><button type="button" key={day} aria-pressed={draft.weekdays.includes(index)} disabled={busy||frozen} onClick={()=>setDraft({...draft,weekdays:draft.weekdays.includes(index)?draft.weekdays.filter(value=>value!==index):[...draft.weekdays,index]})}>{day}</button>)}</div>
