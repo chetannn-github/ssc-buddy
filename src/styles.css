@@ -13,9 +13,23 @@
 }
 .web-sticky-section {
   position: sticky;
-  top: 64px;
+  top: calc(4rem + var(--sticky-inset, 0px));
   z-index: 20;
   background: #121212;
+}
+.web-sticky-section::before {
+  content: "";
+  position: absolute;
+  inset: auto 0 100%;
+  height: var(--sticky-inset, 0px);
+  background: #121212;
+  pointer-events: none;
+}
+.web-task-controls { --sticky-inset: calc(1.5rem + 1px); }
+.web-habit-controls { --sticky-inset: 1.5rem; }
+.web-profile-header { --sticky-inset: 1.25rem; }
+@media (min-width: 640px) {
+  .web-profile-header { --sticky-inset: 1.5rem; }
 }
 
 .habit-editor input[type="number"] {
