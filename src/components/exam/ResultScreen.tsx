@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { DonutChart } from "@/components/exam/DonutChart";
 import { cn } from "@/lib/utils";
@@ -9,6 +9,7 @@ type Props = {
   onRestart?: () => void;
   attempts?: TestRecord[];
   onViewSolution?: () => void;
+  detailActions?: ReactNode;
 };
 
 type AnswerFilter = "all" | "correct" | "incorrect" | "unattempted";
@@ -91,7 +92,7 @@ function AttemptMarksChart({ attempts, activeId }: { attempts: TestRecord[]; act
   );
 }
 
-export function ResultScreen({ record, onRestart, attempts = [], onViewSolution }: Props) {
+export function ResultScreen({ record, onRestart, attempts = [], onViewSolution, detailActions }: Props) {
   const [answerFilter, setAnswerFilter] = useState<AnswerFilter>("all");
   const total = record.answers.length;
   const verdicts = useMemo<Verdict[]>(
@@ -207,7 +208,7 @@ export function ResultScreen({ record, onRestart, attempts = [], onViewSolution 
             </span>
           </div>
           {attempts.length > 1 && <AttemptMarksChart attempts={attempts} activeId={record.id} />}
-          {onViewSolution && <Button className="mt-4" size="sm" onClick={onViewSolution}>View solution</Button>}
+          {onViewSolution && <div className="mt-4 flex flex-wrap items-center gap-2"><Button className="h-8 text-xs" size="sm" onClick={onViewSolution}>View solution</Button>{detailActions}</div>}
         </div>
       </div>
 

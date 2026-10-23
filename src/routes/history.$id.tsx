@@ -98,26 +98,7 @@ function ResultDetail() {
     setAttempts(getAttemptGroup(updatedRecord.id));
   };
 
-  return (
-    <AppShell
-      title={record ? record.subject : "Result details"}
-      subtitle={
-        record
-          ? record.exercise
-            ? `${record.chapter} · ${record.exercise}`
-            : record.chapter
-          : undefined
-      }
-    >
-      <div className="exam-dark -mx-4 -my-6 min-h-[calc(100vh-4rem)] bg-[#121212] px-4 py-6 text-zinc-100 sm:-mx-6 sm:px-6">
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2 text-xs" asChild>
-            <Link to="/history">
-              <ArrowLeft className="h-4 w-4" />
-              Back to history
-            </Link>
-          </Button>
-          {record ? (
+  const detailActions = record ? (
             <div className="flex items-center gap-2">
               {!isQuestionAttempt(record) && !isQuickRecallRecord(record) && (
                 <Button
@@ -158,10 +139,31 @@ function ResultDetail() {
                 </Button>
               )}
             </div>
-          ) : null}
-        </div>
+          ) : null;
 
-        {attempts.length > 1 && (
+  return (
+    <AppShell
+      title={record ? record.subject : "Result details"}
+      subtitle={
+        record
+          ? record.exercise
+            ? `${record.chapter} · ${record.exercise}`
+            : record.chapter
+          : undefined
+      }
+    >
+      <div className="exam-dark -mx-4 -my-6 min-h-[calc(100vh-4rem)] bg-[#121212] px-4 py-6 text-zinc-100 sm:-mx-6 sm:px-6">
+        {solutionId !== record?.id && <div className="mb-3 flex items-center justify-between gap-2">
+          <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2 text-xs" asChild>
+            <Link to="/history">
+              <ArrowLeft className="h-4 w-4" />
+              Back to history
+            </Link>
+          </Button>
+
+        </div>}
+
+        {solutionId !== record?.id && attempts.length > 1 && (
           <div className="card-surface mb-3 flex flex-wrap items-center gap-1.5 p-3">
             {attempts.map((a, i) => (
               <button
@@ -185,7 +187,7 @@ function ResultDetail() {
           solutionId === record.id ? (
             <SolutionScreen key={record.id} record={record} onExit={() => setSolutionId(null)} />
           ) : (
-            <ResultScreen key={record.id} record={record} attempts={attempts} onViewSolution={() => setSolutionId(record.id)} />
+            <ResultScreen key={record.id} record={record} attempts={attempts} detailActions={detailActions} onViewSolution={() => setSolutionId(record.id)} />
           )
         ) : loaded ? (
           <div className="card-surface p-10 text-center">
