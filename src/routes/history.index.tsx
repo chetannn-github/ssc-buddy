@@ -18,6 +18,7 @@ import {
   type TestRecord,
 } from "@/lib/exam";
 import { isQuickRecallRecord } from "../../mobile-tasks/src/domain/quick-recall-history";
+import { HISTORY_TIME_RANGES, matchesHistoryTimeRange, type HistoryTimeRange } from "../../mobile-tasks/src/domain/practice-history-range";
 
 function friendlyDate(timestamp: string, fallbackDate?: string, showTime = true) {
   // Android records use `date` as a local calendar key (YYYY-MM-DD) and keep
@@ -44,7 +45,7 @@ function friendlyDate(timestamp: string, fallbackDate?: string, showTime = true)
 
 const title = "History";
 const description =
-  "Browse every saved practice test: filter by subject and chapter, search, sort by latest or highest score, and open detailed results.";
+  "Browse saved practice tests by time range and subject, and open detailed results.";
 
 export const Route = createFileRoute("/history/")({
   head: () => ({
@@ -64,7 +65,7 @@ function HistoryPage() {
   const navigate = useNavigate();
   const [records, setRecords] = useState<TestRecord[]>([]);
   const [subject, setSubject] = useState(ALL);
-  const [chapter, setChapter] = useState(ALL);
+  const [timeRange, setTimeRange] = useState<HistoryTimeRange>("today");
   const [isLoading, setIsLoading] = useState(consumeLightPageLoader);
 
   useEffect(() => {
@@ -87,23 +88,10 @@ function HistoryPage() {
     () => Array.from(new Set(sessionRecords.map((r) => r.subject))).sort(),
     [sessionRecords],
   );
-  const chapters = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          sessionRecords
-            .filter((r) => subject === ALL || r.subject === subject)
-            .map((r) => r.chapter)
-            .filter(Boolean),
-        ),
-      ).sort(),
-    [sessionRecords, subject],
-  );
-
   const visible = useMemo(() => {
     const list = sessionRecords.filter(
       (r) =>
-        (subject === ALL || r.subject === subject) && (chapter === ALL || r.chapter === chapter),
+        (subject === ALL || r.subject === subject) && matchesHistoryTimeRange(r, timeRange),
     );
     const groups = new Map<string, TestRecord[]>();
     for (const r of list) {
@@ -124,7 +112,7 @@ function HistoryPage() {
         };
       })
       .sort((a, b) => new Date(b.latest.date).getTime() - new Date(a.latest.date).getTime());
-  }, [sessionRecords, subject, chapter]);
+  }, [sessionRecords, subject, timeRange]);
 
   return (
     <AppShell title="Test History">
@@ -133,13 +121,16 @@ function HistoryPage() {
           <PageLoader label="Loading test history" />
         ) : (
           <div className="space-y-4">
-            <div className="grid gap-3 rounded-2xl border border-white/10 bg-[#161616] p-3 sm:grid-cols-2">
+            <div className="grid grid-cols-2 gap-3 rounded-2xl border border-white/10 bg-[#161616] p-3">
+              <Select value={timeRange} onValueChange={(value) => setTimeRange(value as HistoryTimeRange)}>
+                <SelectTrigger aria-label="Time range"><SelectValue placeholder="Today" /></SelectTrigger>
+                <SelectContent className="history-select-content">
+                  {HISTORY_TIME_RANGES.map(({value,label}) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
+                </SelectContent>
+              </Select>
               <Select
                 value={subject}
-                onValueChange={(v) => {
-                  setSubject(v);
-                  setChapter(ALL);
-                }}
+                onValueChange={setSubject}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="All subjects" />
@@ -149,19 +140,6 @@ function HistoryPage() {
                   {subjects.map((s) => (
                     <SelectItem key={s} value={s}>
                       {s}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={chapter} onValueChange={setChapter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="All chapters" />
-                </SelectTrigger>
-                <SelectContent className="history-select-content">
-                  <SelectItem value={ALL}>All chapters</SelectItem>
-                  {chapters.map((c) => (
-                    <SelectItem key={c} value={c}>
-                      {c}
                     </SelectItem>
                   ))}
                 </SelectContent>

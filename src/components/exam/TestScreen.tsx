@@ -1,16 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { SubmissionSummaryScreen } from "./SubmissionSummaryScreen";
 import { cn } from "@/lib/utils";
 import {
   formatClock,
@@ -166,6 +157,11 @@ export function TestScreen({
     );
 
   const q: QuestionState = states[current] ?? blank(true);
+
+  if (confirmOpen) return <div className={cn("min-h-screen px-4 py-6", darkMode ? "exam-dark bg-[#121212] text-zinc-100" : "bg-background")}>
+    {saveError && <p role="alert" className="mx-auto mb-4 max-w-3xl text-sm text-destructive">{saveError}</p>}
+    <SubmissionSummaryScreen title={[subject, chapter].filter(Boolean).join(" · ")} count={states.length} attempted={answers.filter(Boolean).length} seconds={seconds} elapsed={total-seconds} onBack={() => setConfirmOpen(false)} onSubmit={() => submit(answers, seconds)} />
+  </div>;
 
   return (
     <div
@@ -335,21 +331,6 @@ export function TestScreen({
         </aside>
       </main>
 
-      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <AlertDialogContent className={darkMode ? "test-dark-dialog" : undefined}>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Submit the test?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {counts.answered + counts.marked} of {states.length} questions have a marked answer.
-              You cannot return to the test after submitting.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Keep solving</AlertDialogCancel>
-            <AlertDialogAction onClick={() => submit(answers, seconds)}>Submit</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

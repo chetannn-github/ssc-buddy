@@ -723,6 +723,7 @@ html, body, #root {
 
 /* A full-width SVG viewport with its natural aspect ratio keeps every cell square. */
 .pinned-habit:not(.pinned-compact) .pinned-grid { display:block; flex:0 0 auto; width:100%; min-height:0; padding:0; margin:10px 0 6px; }
+.pinned-habit.pinned-month .pinned-target + .pinned-count { margin-top:10px; }
 .pinned-habit:not(.pinned-compact) .pinned-grid>svg { display:block; width:100%; height:100%; }
 .pinned-habit:not(.pinned-compact) .pinned-footer { margin-top:0; }
 

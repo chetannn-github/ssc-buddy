@@ -1,5 +1,7 @@
 // @ts-nocheck
 import { DestructiveDialog } from "../components/DestructiveDialog";
+import { HISTORY_TIME_RANGES, matchesHistoryTimeRange, type HistoryTimeRange } from "../domain/practice-history-range";
+import { PracticeSubmitSummary } from "../components/PracticeSubmitSummary";
 import { UppercaseTextInput as TextInput } from "../components/UppercaseTextInput";
 import { useAndroidBack } from "../hooks/use-android-back";
 import { ReattemptModeButton } from "../components/ReattemptModeButton";
@@ -816,6 +818,7 @@ export function PracticeScreen({ user, onOpenQuickRecall, focusLocked = false }:
       <TestScreen
         title={[activeTest?.subject, activeTest?.chapter, activeTest?.exercise].filter(Boolean).join(" · ")}
         seconds={remaining}
+        elapsed={Math.max(0, (activeTest?.duration ?? duration) * 60 - remaining)}
         current={current}
         count={activeTest?.answerKey?.length ?? questionCount}
         questions={activeTest?.questions}
@@ -1281,6 +1284,7 @@ function Instructions({
 function TestScreen({
   title,
   seconds,
+  elapsed,
   current,
   count,
   questions,
@@ -1291,17 +1295,26 @@ function TestScreen({
 }: {
   title: string;
   seconds: number;
+  elapsed: number;
   current: number;
   count: number;
   questions?: Question[];
   answers: Array<Option | null>;
   onPick: (choice: Option) => void;
   onCurrent: (value: number) => void;
-  onSubmit: () => void;
+  onSubmit: () => void | Promise<void>;
 }) {
   const display = `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
   const question = questions?.[current];
   const swipeHandlers = useQuestionSwipe(current, count, onCurrent);
+  const [reviewing, setReviewing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  useAndroidBack(() => setReviewing(false), reviewing && !busy);
+  if (reviewing) return <PracticeSubmitSummary title={title} count={count} attempted={answers.slice(0, count).filter(Boolean).length} seconds={seconds} elapsed={elapsed} busy={busy} onBack={() => setReviewing(false)} onSubmit={async () => {
+    if (busy) return;
+    setBusy(true);
+    try { await onSubmit(); } finally { setBusy(false); }
+  }} />;
   return (
     <View style={s.page}>
       <View style={s.testHeader}>
@@ -1354,7 +1367,7 @@ function TestScreen({
               <Text style={s.primaryText}>Next</Text>
             </Pressable>
           ) : (
-            <Pressable onPress={onSubmit} style={s.primarySmall}>
+            <Pressable onPress={() => setReviewing(true)} style={s.primarySmall}>
               <Text style={s.primaryText}>Submit test</Text>
             </Pressable>
           )}
@@ -1379,13 +1392,14 @@ function History({
   onReattempt: (record: Record) => void;
 }) {
   const [subject, setSubject] = useState("All subjects");
-  const [chapter, setChapter] = useState("All chapters");
-  const [filterMenu, setFilterMenu] = useState<"subject" | "chapter" | null>(null);
-  const lastFilter = useRef<"subject" | "chapter">("subject");
+  const [timeRange, setTimeRange] = useState<HistoryTimeRange>("today");
+  const rangeLabel = HISTORY_TIME_RANGES.find(item => item.value === timeRange)?.label ?? "All time";
+  const [filterMenu, setFilterMenu] = useState<"subject" | "timeRange" | null>(null);
+  const lastFilter = useRef<"subject" | "timeRange">("subject");
   const [pageHeight, setPageHeight] = useState(0);
   const [filterRowLayout, setFilterRowLayout] = useState({ x: 0, y: 0, width: 0, height: 0 });
-  const [filterLayouts, setFilterLayouts] = useState({ subject: { x: 0, y: 0, width: 0, height: 0 }, chapter: { x: 0, y: 0, width: 0, height: 0 } });
-  const toggleFilter = (kind: "subject" | "chapter") => {
+  const [filterLayouts, setFilterLayouts] = useState({ subject: { x: 0, y: 0, width: 0, height: 0 }, timeRange: { x: 0, y: 0, width: 0, height: 0 } });
+  const toggleFilter = (kind: "subject" | "timeRange") => {
     lastFilter.current = kind;
     setFilterMenu(current => current === kind ? null : kind);
   };
@@ -1399,17 +1413,10 @@ function History({
 
   const sessionRecords = records;
   const subjects = Array.from(new Set(sessionRecords.map((record) => record.subject))).sort();
-  const chapters = Array.from(
-    new Set(
-      sessionRecords
-        .filter((record) => subject === "All subjects" || record.subject === subject)
-        .map((record) => record.chapter).filter(Boolean),
-    ),
-  ).sort();
   const visible = sessionRecords.filter(
     (record) =>
       (subject === "All subjects" || record.subject === subject) &&
-      (chapter === "All chapters" || record.chapter === chapter),
+      matchesHistoryTimeRange(record, timeRange),
   );
   const visibleGroups = Array.from(
     visible.reduce((groups, record) => {
@@ -1496,16 +1503,16 @@ function History({
       </View>
         <View style={[s.historyFilters, s.fixedFilters]} onLayout={event => setFilterRowLayout(event.nativeEvent.layout)}>
           <HistoryFilter
+            label={rangeLabel}
+            open={filterMenu === "timeRange"}
+            onPress={() => toggleFilter("timeRange")}
+            onLayout={event => { const layout = event.nativeEvent.layout; setFilterLayouts(current => ({ ...current, timeRange: layout })); }}
+          />
+          <HistoryFilter
             label={subject}
             open={filterMenu === "subject"}
             onPress={() => toggleFilter("subject")}
             onLayout={event => { const layout = event.nativeEvent.layout; setFilterLayouts(current => ({ ...current, subject: layout })); }}
-          />
-          <HistoryFilter
-            label={chapter}
-            open={filterMenu === "chapter"}
-            onPress={() => toggleFilter("chapter")}
-            onLayout={event => { const layout = event.nativeEvent.layout; setFilterLayouts(current => ({ ...current, chapter: layout })); }}
           />
         </View>
       <ScrollView style={s.filteredList} contentContainerStyle={s.content}>
@@ -1552,20 +1559,20 @@ function History({
           <View style={s.empty}>
             <MaterialCommunityIcons name="notebook-outline" size={30} color={colors.subdued} />
             <Text style={s.sessionTitle}>No matching sessions</Text>
-            <Text style={s.helper}>Try another subject or chapter.</Text>
+            <Text style={s.helper}>Try another time range or subject.</Text>
           </View>
         )}
       </ScrollView>
       <HistoryFilterMenu
         open={filterMenu !== null}
-        label={activeFilter === "subject" ? subject : chapter}
-        options={activeFilter === "subject" ? ["All subjects", ...subjects] : ["All chapters", ...chapters]}
+        label={activeFilter === "subject" ? subject : rangeLabel}
+        options={activeFilter === "subject" ? ["All subjects", ...subjects] : HISTORY_TIME_RANGES.map(item => item.label)}
         anchor={{ x: filterRowLayout.x + filterLayouts[activeFilter].x, y: filterRowLayout.y + filterLayouts[activeFilter].y, width: filterLayouts[activeFilter].width, height: filterLayouts[activeFilter].height }}
         pageHeight={pageHeight}
         onClose={() => setFilterMenu(null)}
         onSelect={next => {
-          if (activeFilter === "subject") { setSubject(next); setChapter("All chapters"); }
-          else setChapter(next);
+          if (activeFilter === "subject") setSubject(next);
+          else setTimeRange(HISTORY_TIME_RANGES.find(item => item.label === next)?.value ?? "all");
           setFilterMenu(null);
         }}
       />
@@ -1573,7 +1580,7 @@ function History({
   );
 }
 function HistoryFilter({ label, open, onPress, onLayout }) {
-  return <Pressable onLayout={onLayout} onPress={onPress} accessibilityRole="button" accessibilityState={{ expanded: open }} style={[s.historyFilterButton, { flex: 1 }]}>
+  return <Pressable onLayout={onLayout} onPress={onPress} accessibilityRole="button" accessibilityState={{ expanded: open }} style={s.historyFilterButton}>
     <Text numberOfLines={1} style={s.historyFilterText}>{label}</Text>
     <DropdownChevron open={open} size={17} color={colors.muted} />
   </Pressable>;
@@ -2719,7 +2726,7 @@ const s = StyleSheet.create({
   outlineText: { color: colors.text, fontWeight: "700", fontSize: 13 },
   resultRow: { flexDirection: "row", marginTop: 17 },
   historyFilters: { zIndex: 20, flexDirection: "row", gap: 8 },
-  historyFilterButton: { height: 42, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 6, borderRadius: 12, paddingHorizontal: 12, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  historyFilterButton: { flex: 1, minWidth: 0, height: 42, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 6, borderRadius: 12, paddingHorizontal: 12, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   historyFilterText: { flex: 1, color: colors.text, fontSize: 12, fontWeight: "700" },
   historyFilterMenu: { position: "absolute", zIndex: 40, elevation: 40, top: 47, right: 0, left: 0, maxHeight: 210, overflow: "hidden", borderRadius: 12, backgroundColor: "#292929", borderWidth: 1, borderColor: "#454545", shadowColor: "#000", shadowOpacity: 0.5, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } },
   historyFilterOption: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12, paddingVertical: 10 },

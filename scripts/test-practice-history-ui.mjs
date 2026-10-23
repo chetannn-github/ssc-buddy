@@ -64,6 +64,19 @@ try {
       assert.ok(counts.length>=2 && counts.every(value=>value==='textfield'),'native count spinners must be hidden');
     } else if (mode === 'history') {
       assert.equal(await page.getByRole('button',{name:/Delete|Reattempt|Practice again/}).count(),0,'actions belong inside the session');
+      assert.equal(await page.getByText('All chapters',{exact:true}).count(),0);
+      const range=page.getByRole('combobox',{name:'Time range',exact:true});
+      assert.equal(await range.textContent(),'Today','history defaults to today');
+      const triggers=page.getByRole('combobox');
+      const rangeBox=await range.boundingBox(),subjectBox=await triggers.nth(1).boundingBox();
+      assert.ok(Math.abs(rangeBox.y-subjectBox.y)<1 && rangeBox.x<subjectBox.x,'time range and subject sit side by side');
+      const today=new Date();const localDay=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      const todayKey=localDay(today);
+      await range.click();await page.getByRole('option',{name:'Today',exact:true}).click();
+      const expected=records.filter(r=>r.date===todayKey).length;
+      assert.equal(await page.locator('article').count(),expected,'time range filters the actual history list');
+      await range.click();await page.getByRole('option',{name:'All time',exact:true}).click();
+      assert.equal(await page.locator('article').count(),records.length,'all time restores every session');
       await page.getByRole('link').filter({hasText:'ENGLISH'}).first().click();
       assert.equal((await page.evaluate(()=>globalThis.__navigation)).to,'/history/$id');
     } else if(mode==='result') {
