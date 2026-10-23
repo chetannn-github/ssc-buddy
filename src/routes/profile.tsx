@@ -868,6 +868,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
   const [importMessage, setImportMessage] = useState("");
   const [promptCopied, setPromptCopied] = useState(false);
   const [xpTimelineOpen, setXpTimelineOpen] = useState(false);
+  const [medalsOpen, setMedalsOpen] = useState(false);
   const importFileRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const authUser = useAuthUser();
@@ -1223,14 +1224,14 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
 
               <div className="mt-0.5 flex items-center justify-center gap-2 sm:justify-start">
                 <h2 className="truncate text-xl font-semibold text-zinc-50">{displayName}</h2>
-              <div className="inline-flex shrink-0 items-center gap-2 rounded-full border border-white/10 bg-white/5 px-2 py-1" aria-label="Weekly medals">
+              <button type="button" onClick={() => setMedalsOpen(true)} className="inline-flex shrink-0 cursor-pointer items-center gap-2 rounded-full border border-white/10 bg-white/5 px-2 py-1 transition-colors hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white/60" aria-label="View weekly medals">
                 {(["gold", "silver", "bronze"] as const).map((medal) => (
                   <span key={medal} title={`${medal}: ${medalCounts[medal]} weekly medals`} aria-label={`${medal} medals: ${medalCounts[medal]}`} className="inline-flex items-center gap-0.5 text-[10px] font-semibold tabular-nums text-zinc-200">
                     <img src={`/${medal}-medal.png`} alt="" className="h-4 w-4 object-contain" />
                     <RollingNumber value={medalCounts[medal]} prefix="×" />
                   </span>
                 ))}
-              </div>
+              </button>
                 {readOnly && (
                   <span
                     title={`${consistencyStreak}-day consistency streak`}
@@ -1514,6 +1515,23 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
           </div>
         </div>
       )}
+      <Dialog open={medalsOpen} onOpenChange={setMedalsOpen}>
+        <DialogContent className="w-[calc(100%-3rem)] rounded-3xl border-0 bg-[#181818] p-6 text-zinc-100 sm:max-w-sm [&>button]:hidden">
+          <DialogHeader>
+            <DialogTitle className="text-center text-xl">Weekly medals</DialogTitle>
+            <DialogDescription className="sr-only">Medals earned from completed leaderboard weeks.</DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-3 gap-2">
+            {(["gold", "silver", "bronze"] as const).map((medal, index) => <div key={medal} className="flex flex-col items-center gap-2 rounded-2xl bg-[#222] py-4">
+              <img src={`/${medal}-medal.png`} alt="" className="h-14 w-12 object-contain" />
+              <span className="text-2xl font-bold tabular-nums">{medalCounts[medal]}</span>
+              <span className="text-xs capitalize text-zinc-200">{medal}</span>
+              <span className="text-[10px] text-zinc-400">{["1st", "2nd", "3rd"][index]} place</span>
+            </div>)}
+          </div>
+          <p className="text-center text-xs text-zinc-400">Earned from completed leaderboard weeks.</p>
+        </DialogContent>
+      </Dialog>
       <Dialog open={xpTimelineOpen} onOpenChange={setXpTimelineOpen}>
         <DialogContent className="border-white/10 bg-[#121212] p-5 text-zinc-100 sm:max-w-sm">
           <DialogHeader><DialogTitle>Level {xpSummary.level} · {levelName(xpSummary.level)}</DialogTitle><DialogDescription className="text-zinc-400">Your all-time XP path</DialogDescription></DialogHeader>
