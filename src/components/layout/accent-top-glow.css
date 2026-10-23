@@ -33,7 +33,7 @@
   position: fixed;
   height: min(490px, 70vh);
   border-radius: 0;
-  z-index: 20;
+  z-index: 41;
   opacity: 0.3;
 }
 @keyframes accent-top-drift {

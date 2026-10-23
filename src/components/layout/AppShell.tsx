@@ -1355,7 +1355,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
   return (
     <div className="flex min-h-screen w-full flex-col bg-[#121212] text-zinc-100">
       <div aria-hidden="true" className="accent-top-glow web-accent-top-glow" />
-      <header className="h-16 border-0 bg-[#121212] text-zinc-100 shadow-none">
+      <header className="web-app-header h-16 border-0 bg-[#121212] text-zinc-100 shadow-none">
         <div className="mx-auto flex h-16 w-full max-w-5xl items-center gap-4 px-4 sm:px-6">
           <Link
             to="/tasks"

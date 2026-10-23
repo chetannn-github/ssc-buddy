@@ -157,7 +157,8 @@ export function TasksWorkspace({
   return (
     <AppShell title="Tasks & Habits">
       <div className="mx-auto w-full max-w-5xl space-y-5 text-zinc-100">
-        <section className="rounded-2xl border border-white/10 bg-[#121212] overflow-hidden p-4 sm:p-6">
+        <section className={`${isHabits ? "web-sticky-section " : ""}rounded-2xl border border-white/10 bg-[#121212] p-4 sm:p-6`}>
+          <div className={`${!isHabits ? "web-sticky-section " : ""}-mx-4 -mt-4 rounded-t-2xl px-4 pt-4 pb-1 sm:-mx-6 sm:-mt-6 sm:px-6 sm:pt-6`} aria-label="Task and habit controls">
           <div className="flex items-center justify-between gap-3">
             <h1 className="min-w-0 text-xl font-semibold tracking-tight sm:text-2xl">
               {selected === today
@@ -291,6 +292,7 @@ export function TasksWorkspace({
               </>
             )}
           </div>
+          </div>
           {!isHabits && (
             <>
               {error && (
@@ -300,7 +302,7 @@ export function TasksWorkspace({
               )}
               <div
                 aria-label="Tasks"
-                className="-mx-4 -mb-4 mt-3 divide-y divide-white/10 border-t border-white/10 bg-[#121212] sm:-mx-6 sm:-mb-6"
+                className="-mx-4 -mb-4 mt-3 divide-y divide-white/10 overflow-hidden rounded-b-2xl border-t border-white/10 bg-[#121212] sm:-mx-6 sm:-mb-6"
               >
                 <FocusRewardRow uid={user?.uid} date={selected} getDatabase={getFirebaseFirestore} />
                 {visible.length ? (

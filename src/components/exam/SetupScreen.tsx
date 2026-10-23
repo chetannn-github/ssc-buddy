@@ -22,7 +22,6 @@ import { PageLoader } from "@/components/ui/page-loader";
 import { consumeLightPageLoader } from "@/lib/navigation";
 import {
   upsertExercise,
-  deleteExercise,
   addChapter,
   getExercise,
   addSubject,
@@ -565,18 +564,6 @@ export function SetupScreen({
               >
                 {isJsonExercise ? "Edit questions of" : "Edit questions & answer key of"} “
                 {activeExerciseName || chapter}”
-              </button>
-            )}
-            {isJsonExercise && !isAllExercises && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSubjects(deleteExercise(subject, chapter, activeExerciseName));
-                  selectChapter(chapter);
-                }}
-                className="ml-3 text-xs font-medium text-destructive underline-offset-2 hover:underline"
-              >
-                Delete question exercise
               </button>
             )}
           </div>
