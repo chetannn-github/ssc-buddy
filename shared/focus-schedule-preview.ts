@@ -2,7 +2,7 @@ import type { FocusSchedule } from "./focus-schedules";
 import { studyTimeZone } from "./study-focus";
 
 // Temporary UI fixtures. They never enter the control document or native alarms.
-export const SHOW_FOCUS_SCHEDULE_PREVIEWS = true;
+export const SHOW_FOCUS_SCHEDULE_PREVIEWS = false;
 export const isFocusSchedulePreview = (id: string) => id.startsWith("preview-focus-");
 export const focusScheduleIconIndex = (id: string) => [...id].reduce((sum,char)=>sum+char.charCodeAt(0),0)%5;
 export function focusSchedulePreviews(): FocusSchedule[] {
