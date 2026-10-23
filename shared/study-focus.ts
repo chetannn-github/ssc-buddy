@@ -43,6 +43,10 @@ export function todayFocusMilliseconds(value: FocusDay | null, session: FocusSes
 export function formatFocusTime(milliseconds: number) {
   const seconds = Math.floor(Math.max(0, milliseconds) / 1000), minutes = Math.floor(seconds / 60);
   if (!minutes) return seconds ? `${seconds}s` : "0m";
+  return formatFocusMinutes(minutes);
+}
+export function formatFocusMinutes(value: number) {
+  const minutes = Math.max(0, Math.floor(value));
   return minutes >= 60 ? `${Math.floor(minutes / 60)}h${minutes % 60 ? ` ${minutes % 60}m` : ""}` : `${minutes}m`;
 }
 /** Include uncredited live focus once, using the same day filter as profile stats. */

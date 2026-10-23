@@ -1,4 +1,4 @@
-import { focusDayKey, todayFocusMilliseconds, type FocusDay, type FocusSession } from "../../../shared/study-focus";
+import { focusDayKey, formatFocusMinutes, todayFocusMilliseconds, type FocusDay, type FocusSession } from "../../../shared/study-focus";
 
 export type FocusWidgetSnapshot = { uid: string; date: string; day: FocusDay; session: FocusSession | null; accent: string };
 export const FOCUS_WIDGET_URI = "sscbuddy://focus-lock";
@@ -8,6 +8,6 @@ export function focusTimerWidgetModel(snapshot: FocusWidgetSnapshot | null, uid:
   const today = focusDayKey(now, snapshot.session?.timeZone);
   const value = snapshot.date === today ? snapshot.day : null;
   const minutes = Math.floor(todayFocusMilliseconds(value, snapshot.session, now) / 60000);
-  const label = minutes >= 60 ? `${Math.floor(minutes / 60)}h${minutes % 60 ? ` ${minutes % 60}m` : ""}` : `${minutes}m`;
+  const label = formatFocusMinutes(minutes);
   return { minutes, label, hint: snapshot.session?.paused ? "Paused" : snapshot.session && snapshot.session.endsAt > now ? "Focusing" : "Start focus", accent: snapshot.accent };
 }

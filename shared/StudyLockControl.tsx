@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Firestore } from "firebase/firestore";
 import { watchStudyControl, watchStudyDevices, watchStudyFocusDay, recordStudyFocus, type StudySession, startStudySession, type StudyControl, type StudyDevice, normalizeStudyDomain, saveStudyWebsites, pauseStudySession, resumeStudySession } from "./study-lock";
-import { emptyFocusDay, focusDayKey, todayFocusMilliseconds, formatFocusTime, type FocusDay } from "./study-focus";
+import { emptyFocusDay, focusDayKey, todayFocusMilliseconds, formatFocusMinutes, formatFocusTime, type FocusDay } from "./study-focus";
 import { SlotTime } from "./SlotTime";
 import { AnimatedChoices } from "./AnimatedChoices";
 import { StudyDurationPicker } from "./StudyDurationPicker";
@@ -111,8 +111,8 @@ export function StudyLockControl({ uid, desktop = false, profile = false, getDat
             {websites.length < MAX_STUDY_WEBSITES && <div className="study-domain-entry"><Globe2 size={15} /><input aria-label="Website domain" value={website} onChange={event => setWebsite(event.target.value)} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); addWebsite(); } }} placeholder="parmar.com" spellCheck={false} autoCapitalize="none" /><button aria-label="Add website" disabled={!website.trim() || busy} onClick={addWebsite}><Plus size={17} /></button></div>}
             <div className="study-domain-chips">{websites.map(domain => <span key={domain} title={domain}>{domain}<button aria-label={`Remove ${domain}`} onClick={() => { const next = websites.filter(value => value !== domain).join("\n"); setDomains(next); localStorage.setItem(`ssc-browser-allowlist:${uid}`, next); void run(() => saveStudyWebsites(getDatabase(), uid, next.split("\n").filter(Boolean))); }}><X size={12} /></button></span>)}</div>
           </div>
-          <button className="study-duration-trigger" onClick={() => setPickingTime(true)}><Clock3 size={17} /><span>Focus time</span><strong><SlotTime value={Number(minutes) >= 60 ? `${Math.floor(Number(minutes) / 60)}h${Number(minutes) % 60 ? ` ${Number(minutes) % 60}m` : ""}` : `${minutes} min`} /></strong></button>
-          <AnimatedChoices className="study-time-presets" label="Focus duration" options={[15, 30, 60, 90].map(value => ({ value: String(value), label: `${value} min`, disabled: busy }))} value={minutes} onChange={setMinutes} />
+          <button className="study-duration-trigger" onClick={() => setPickingTime(true)}><Clock3 size={17} /><span>Focus time</span><strong><SlotTime value={formatFocusMinutes(Number(minutes))} /></strong></button>
+          <AnimatedChoices className="study-time-presets" label="Focus duration" options={[15, 30, 60, 90].map(value => ({ value: String(value), label: formatFocusMinutes(value), disabled: busy }))} value={minutes} onChange={setMinutes} />
           <button className="browser-study-primary" disabled={busy || !websites.length || !!website.trim()} onClick={() => void run(async () => {
             const duration = Number(minutes); if (!Number.isInteger(duration) || duration < 1 || duration > 720) throw Error("Choose 1–720 minutes.");
             await startStudySession(getDatabase(), uid, duration, websites, source); localStorage.setItem(`ssc-browser-allowlist:${uid}`, domains);

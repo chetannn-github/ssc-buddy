@@ -5,7 +5,7 @@ import Svg, { Circle, Line } from "react-native-svg";
 import * as Crypto from "expo-crypto";
 import { collection, doc, onSnapshot, runTransaction, serverTimestamp } from "firebase/firestore";
 import { createStudyController, type StudyControl } from "../../../shared/study-controller";
-import { emptyFocusDay, focusDayKey, formatFocusTime, todayFocusMilliseconds, type FocusDay } from "../../../shared/study-focus";
+import { emptyFocusDay, focusDayKey, formatFocusMinutes, formatFocusTime, todayFocusMilliseconds, type FocusDay } from "../../../shared/study-focus";
 import { getFirebaseFirestore } from "../lib/firebase";
 import { colors, useAppAccent } from "../theme";
 import { accentInk } from "../domain/app-accent";
@@ -97,8 +97,8 @@ export function StudyLock({ uid, taskButton = false, openRequest = 0, onRequestO
               <SlotTime value={remaining(session.paused ? now + (session.remainingMs ?? 0) : session.endsAt, now)} color={accent} />
               <Pressable accessibilityRole="button" accessibilityLabel={session.paused ? "Resume focus" : "Take a break"} disabled={busy} style={[s.secondary, busy && { opacity: 0.45 }]} onPress={() => void run(() => session.paused ? controller.resumeStudySession(getFirebaseFirestore(), uid, "mobile") : controller.pauseStudySession(getFirebaseFirestore(), uid, "mobile"))}><Text style={s.secondaryText}>{session.paused ? "Resume focus" : "Take a break"}</Text></Pressable>
             </> : <>
-              <Pressable accessibilityRole="button" accessibilityLabel="Focus time" style={s.duration} disabled={busy} onPress={() => setPicking(true)}>{icon("clock-outline", 17)}<Text style={s.durationLabel}>Focus time</Text><View style={s.durationValue}><SlotTime value={minutes >= 60 ? `${Math.floor(minutes / 60)}h${minutes % 60 ? ` ${minutes % 60}m` : ""}` : `${minutes} min`} color="#eee" size={12} weight="600" compact /></View></Pressable>
-              <AnimatedTimeChips options={[15, 30, 60, 90]} value={minutes} onChange={setMinutes} disabled={busy} suffix=" min" color={accent} ink={accentInk(accent)} style={s.quickTimes} />
+              <Pressable accessibilityRole="button" accessibilityLabel="Focus time" style={s.duration} disabled={busy} onPress={() => setPicking(true)}>{icon("clock-outline", 17)}<Text style={s.durationLabel}>Focus time</Text><View style={s.durationValue}><SlotTime value={formatFocusMinutes(minutes)} color="#eee" size={12} weight="600" compact /></View></Pressable>
+              <AnimatedTimeChips options={[15, 30, 60, 90]} labels={[15, 30, 60, 90].map(formatFocusMinutes)} value={minutes} onChange={setMinutes} disabled={busy} color={accent} ink={accentInk(accent)} style={s.quickTimes} />
               <View style={s.appLimitRow}>
                 <Text style={s.durationLabel}>Allowed apps</Text>
                 <View style={s.appLimitOptions}>
