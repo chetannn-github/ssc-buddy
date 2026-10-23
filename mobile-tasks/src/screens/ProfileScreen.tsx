@@ -9,6 +9,7 @@ import { createThemedStyles, setAppAccent, useAppAccent } from "../theme";
 import { type AppAccent } from "../domain/app-accent";
 import { AccentPicker } from "../components/AccentPicker";
 import { ConsistencyCard } from "../components/ConsistencyCard";
+import { MedalsCard } from "../components/MedalsCard";
 import { DropdownChevron } from "../components/DropdownChevron";
 import { NumberFlow } from "number-flow-react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -233,6 +234,7 @@ export function ProfileScreen({
   );
   const [profileSettingsOpen, setProfileSettingsOpen] = useState(false);
   const [consistencyOpen,setConsistencyOpen]=useState(false);
+  const [medalsOpen, setMedalsOpen] = useState(false);
   const appAccent = useAppAccent();
   const [savingAccent, setSavingAccent] = useState(false);
   const [accentSaveError, setAccentSaveError] = useState("");
@@ -584,6 +586,7 @@ export function ProfileScreen({
   return (
     <View style={styles.page}>
       <ConsistencyCard visible={consistencyOpen} streak={streak} onClose={()=>setConsistencyOpen(false)}/>
+      <MedalsCard visible={medalsOpen} counts={medalCounts} onClose={() => setMedalsOpen(false)} />
       <View style={styles.profileTop}>
         <View style={styles.profileRow}>
           {readOnly && <Pressable accessibilityRole="button" accessibilityLabel="Back" hitSlop={8} onPress={onBack} style={styles.publicBackRow}>
@@ -633,14 +636,14 @@ export function ProfileScreen({
               </Text>
 
             </View>
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginVertical: 4 }}>
+            <Pressable accessibilityRole="button" accessibilityLabel="View weekly medals" hitSlop={8} onPress={() => setMedalsOpen(true)} style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginVertical: 4 }}>
               {(["gold", "silver", "bronze"] as const).map((medal, index) => (
                 <View key={medal} accessibilityLabel={`${medal} medals: ${medalCounts[medal]}`} style={{ flexDirection: "row", alignItems: "center", gap: 3, borderRadius: 12, borderWidth: 1, borderColor: "#383838", backgroundColor: "#242424", paddingHorizontal: 6, paddingVertical: 3 }}>
                   <Image source={rankMedals[index]} style={{ width: 17, height: 17, resizeMode: "contain" }} />
                   <ProfileNumber value={medalCounts[medal]} prefix="×" style={{ color: "#e4e4e7", fontSize: 10, fontWeight: "800" }} />
                 </View>
               ))}
-            </View>
+            </Pressable>
             <Pressable accessibilityRole="button" accessibilityLabel="View XP level roadmap" style={styles.xpBlock} onPress={() => setXpTimelineOpen(true)}>
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", flexWrap: "wrap", gap: 3 }}><Text style={styles.xpText}>Lv.</Text><ProfileNumber value={xpSummary.level} style={styles.xpText} /><Text style={styles.xpText}>· {levelName(xpSummary.level)} ·</Text><ProfileNumber value={xpSummary.xp} prefix={xpSummary.xp > 0 ? "+" : ""} suffix=" XP" style={[styles.xpText, xpSummary.xp < 0 && styles.xpNegative]} /></View>
               {xpSummary.level > 0 && <ProfileXpBar progress={xpSummary.progress} />}
@@ -1102,6 +1105,16 @@ const heatmapActivityFromTracker = (tracker?: Record<string, any>): HeatmapTrack
       revisionTypeId: entry.revisionTypeId,
     }));
 
+function activityDotColor(label: string) {
+  const value = label.toLowerCase();
+  if (value === "lecture") return "#38bdf8";
+  if (value.startsWith("revision")) return "#34d399";
+  if (value.includes("mock")) return "#a78bfa";
+  if (value === "quick recall") return "#fbbf24";
+  if (value.includes("task")) return "#fb7185";
+  return "#60a5fa";
+}
+
 function ActivityHeatmap({
   colorTheme,
   user,
@@ -1477,7 +1490,7 @@ function ActivityHeatmap({
         ) : activityRows.length ? (
           activityRows.map((row) => (
             <View key={row.id} style={styles.activityRow}>
-              <View style={styles.activityDot} />
+              <View style={[styles.activityDot, { backgroundColor: activityDotColor(row.label) }]} />
               <Text numberOfLines={1} style={styles.activityText}>
                 <Text style={styles.activityTitle}>{row.label}</Text> · {row.detail}
               </Text>
