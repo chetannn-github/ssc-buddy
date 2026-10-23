@@ -3,21 +3,24 @@ import { AnimatedTimeChips } from "./AnimatedTimeChips";
 import { UppercaseTextInput as TextInput } from "./UppercaseTextInput";
 import { colors } from "../theme";
 import { createThemedStyles } from "../theme";
-import { IS_EXPO_GO } from "../lib/native-notifications";
 import { StatusBar } from "expo-status-bar";
 import { HabitTimePicker } from "./HabitTimePicker";
 import { HabitIconSheet } from "./HabitIconSheet";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ActivityIndicator,
+  AccessibilityInfo,
+  Animated,
+  Easing,
   KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
+  StatusBar as NativeStatusBar,
   Switch,
   Text,
   View,
@@ -53,6 +56,8 @@ export function HabitEditor({
   onClose: () => void;
   onSave: (details: HabitSaveDetails) => Promise<void>;
 }) {
+  const insets = useSafeAreaInsets();
+  const topSpace = Math.max(insets.top, Platform.OS === "android" ? NativeStatusBar.currentHeight ?? 0 : 0);
   const [saving, setSaving] = useState(false);
   const saveLock = useRef(false);
   const busy = parentBusy || saving;
@@ -305,14 +310,17 @@ export function HabitEditor({
     <Modal
       visible
       animationType="slide"
+      statusBarTranslucent
       onRequestClose={() => {
         if (!busy) onClose();
       }}
     >
       <StatusBar hidden style="light" />
-      <SafeAreaView style={s.page} edges={["top", "left", "right", "bottom"]}><AccentBackdrop />
+      <View style={s.page}>
+        <View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: 0.25 }]}><AccentBackdrop /></View>
+        <SafeAreaView style={[s.transparentPage, { paddingTop: topSpace }]} edges={["left", "right", "bottom"]}>
         <KeyboardAvoidingView
-          style={s.page}
+          style={s.transparentPage}
           behavior={Platform.OS === "ios" ? "padding" : "height"}
         >
           <View style={s.header}>
@@ -399,6 +407,8 @@ export function HabitEditor({
                   <Pressable
                     disabled={busy}
                     accessibilityLabel="Choose habit color"
+                    accessibilityRole="button"
+                    accessibilityState={{ expanded: colorsOpen }}
                     onPress={() => setColorsOpen((value) => !value)}
                     style={{ flexDirection: "row", gap: 12, alignItems: "center" }}
                   >
@@ -421,7 +431,7 @@ export function HabitEditor({
                     <Text style={s.text}>Icon</Text>
                   </Pressable>
                 </View>
-                {colorsOpen && palette}
+                <HabitEditorReveal open={colorsOpen} height={24 + Math.max(...HABIT_COLOR_COLUMNS.map(column => column.length)) * 42 - 12} testID="habit-color-reveal">{palette}</HabitEditorReveal>
                 <View style={s.section}>
                   <Text style={s.label}>Type</Text>
                   <AnimatedTimeChips options={[0, 1]} labels={["Build A Habit", "Quit A Habit"]} value={settings.type === "quit" ? 1 : 0} disabled={busy} onChange={value => {
@@ -431,7 +441,7 @@ export function HabitEditor({
                   }} color={tint + "40"} ink={colors.text} muted={colors.text} background="#191919" radius={12} height={44} textStyle={s.text} />
                   <Text style={s.hint}>
                     {settings.type === "quit"
-                      ? "Completed by default – only mark the days you slipped. Streak is counted as slip-free days."
+                      ? "Mark only the days you slip."
                       : "Do it regularly. Tap to mark it done."}
                   </Text>
                 </View>
@@ -482,7 +492,7 @@ export function HabitEditor({
                       </View>
                       <Text style={s.hint}>
                         {settings.type === "quit"
-                          ? "Going over this amount counts as a slip."
+                          ? "Over this limit counts as a slip."
                           : "Reaching this amount completes the day."}
                       </Text>
                       <Text style={s.smallLabel}>UNIT (optional)</Text>
@@ -566,20 +576,14 @@ export function HabitEditor({
                       thumbColor={settings.reminder ? tint : "#fafafa"}
                     />
                   </View>
-                  {settings.reminder && (
+                  <HabitEditorReveal open={!!settings.reminder} testID="habit-reminder-reveal">
                     <HabitTimePicker
-                      value={settings.reminder}
+                      value={settings.reminder ?? "09:00"}
                       tint={tint}
                       onChange={(reminder) => patch({ reminder })}
                       disabled={busy}
                     />
-                  )}
-                  {settings.reminder && IS_EXPO_GO && (
-                    <Text style={s.hint}>
-                      Reminder saved with your habit. Notifications run in the installed Android
-                      app.
-                    </Text>
-                  )}
+                  </HabitEditorReveal>
                   <Text style={[s.label, { marginTop: 6 }]}>Challenge target (optional)</Text>
                   <TextInput
                     editable={!busy}
@@ -683,11 +687,37 @@ export function HabitEditor({
           </Modal>
         </KeyboardAvoidingView>
       </SafeAreaView>
+      </View>
     </Modal>
   );
 }
+function HabitEditorReveal({ open, children, height: fixedHeight, testID }: { open: boolean; children: ReactNode; height?: number; testID: string }) {
+  const phase = useRef(new Animated.Value(0)).current;
+  const [measuredHeight, setMeasuredHeight] = useState(0);
+  const [reduced, setReduced] = useState(false);
+  const height = fixedHeight ?? measuredHeight;
+  useEffect(() => {
+    let active = true;
+    void AccessibilityInfo.isReduceMotionEnabled().then(value => { if (active) setReduced(value); }).catch(() => undefined);
+    const listener = AccessibilityInfo.addEventListener("reduceMotionChanged", setReduced);
+    return () => { active = false; listener.remove(); };
+  }, []);
+  useEffect(() => {
+    const animation = Animated.timing(phase, {
+      toValue: open ? 1 : 0, duration: reduced ? 0 : open ? 260 : 200,
+      easing: Easing.inOut(Easing.cubic), useNativeDriver: false,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [open, phase, reduced]);
+  return <Animated.View testID={testID} pointerEvents={open ? "auto" : "none"} accessibilityElementsHidden={!open} importantForAccessibility={open ? "auto" : "no-hide-descendants"} style={{ overflow: "hidden", height: phase.interpolate({ inputRange: [0, 1], outputRange: [0, height] }), opacity: phase }}>
+    <View onLayout={event => { if (fixedHeight === undefined) setMeasuredHeight(event.nativeEvent.layout.height); }} style={{ position: "absolute", top: 0, left: 0, right: 0, ...(fixedHeight === undefined ? {} : { height: fixedHeight }) }}>{children}</View>
+  </Animated.View>;
+}
+
 const s = createThemedStyles({
-  page: { flex: 1, backgroundColor: "#000", paddingTop: 0 },
+  page: { flex: 1, backgroundColor: "#181818", paddingTop: 0 },
+  transparentPage: { flex: 1, backgroundColor: "transparent" },
   header: {
     flexDirection: "row",
     gap: 18,

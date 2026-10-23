@@ -839,6 +839,7 @@ export function ProfileScreen({
           transparent
           visible={editing}
           animationType="fade"
+          statusBarTranslucent
           onRequestClose={() => !savingProfile && !isInitialProfileSetup && setEditing(false)}
         >
           <KeyboardAvoidingView
