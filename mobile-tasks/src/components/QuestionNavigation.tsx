@@ -43,6 +43,7 @@ export function QuestionPalette({
   return (
     <ScrollView
       ref={scroll}
+      style={styles.spacing}
       horizontal
       directionalLockEnabled
       showsHorizontalScrollIndicator={false}
@@ -73,6 +74,7 @@ export function QuestionPalette({
 }
 
 const styles = createThemedStyles({
+  spacing: { marginTop: 10 },
   row: { flexDirection: "row", alignItems: "center", gap: QUESTION_PALETTE_GAP },
   item: {
     width: QUESTION_PALETTE_ITEM_WIDTH,
