@@ -8,6 +8,7 @@ import { UppercaseTextInput as TextInput } from "./src/components/UppercaseTextI
 import { setAppAccent, useAppAccent } from "./src/theme";
 import { createThemedStyles } from "./src/theme";
 import { TaskOverview } from "./src/components/TaskOverview";
+import { TaskEmptyState } from "./src/components/TaskEmptyState";
 import { DailyFocusReward } from "./src/components/DailyFocusReward";
 import { StudyLock } from "./src/components/StudyLock";
 import { DailySectionHeader } from "./src/components/DailySectionHeader";
@@ -979,7 +980,7 @@ export default function App() {
             <View style={styles.tasksList}>
             <DailyFocusReward uid={user?.uid} date={activeTaskDate} />
             {visibleTasks.length === 0 ? (
-                taskDueOnly && todayTasks.length > 0 ? <View style={{padding:22}}><Text style={styles.muted}>All tasks complete for this day.</Text></View> : isTaskHistory ? <View style={{padding:22}}><Text style={styles.muted}>No tasks recorded for this day.</Text></View> : <Empty onPress={openNew} />
+                <TaskEmptyState mode={taskDueOnly && todayTasks.length > 0 ? "complete" : isTaskHistory ? "history" : "empty"} />
             ) : (
               visibleTasks.map((task, index) => (
                 <TaskRow
@@ -1198,16 +1199,6 @@ function TaskDropdown({ label, open, onToggle, options, onSelect, compact = fals
   </View>;
 }
 
-function Empty({ onPress }: { onPress: () => void }) {
-  return (
-    <View style={styles.empty}>
-      <Text style={styles.muted}>Nothing planned for today.</Text>
-      <Pressable onPress={onPress}>
-        <Text style={styles.link}>Add your first task</Text>
-      </Pressable>
-    </View>
-  );
-}
 function Metric({ label, value, note }: { label: string; value: ReactNode; note: ReactNode }) {
   return (
     <View style={styles.metric}>
@@ -1360,15 +1351,6 @@ const styles = createThemedStyles({
   taskMeta: { color: "#a1a1aa", fontSize: 12, marginTop: 4 },
   strike: { textDecorationLine: "line-through", color: "#a1a1aa" },
   delete: { fontSize: 27, color: "#a1a1aa", paddingHorizontal: 4 },
-  empty: {
-    alignItems: "center",
-    borderRadius: 17,
-    padding: 30,
-    backgroundColor: "#1b1b1b",
-    borderWidth: 1,
-    borderColor: "#303030",
-  },
-  link: { color: dailyTaskColors.accent, fontWeight: "700", marginTop: 10 },
   metric: {
     width: "48.8%",
     minHeight: 92,

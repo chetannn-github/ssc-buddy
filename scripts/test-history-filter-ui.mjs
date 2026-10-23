@@ -18,6 +18,7 @@ assert.ok(styles);
 const entry = `
 import React, {useState,useRef,useEffect} from 'react';
 import {createRoot} from 'react-dom/client';
+import {HISTORY_TIME_RANGES,matchesHistoryTimeRange} from '${fileURLToPath(new URL('../mobile-tasks/src/domain/practice-history-range.ts',import.meta.url)).replaceAll('\\','/')}';
 import {View,Text,Pressable,ScrollView,ScrollView as NativeScrollView,Animated,Easing,StyleSheet,StyleSheet as NativeStyleSheet} from 'react-native';
 const colors=new Proxy({}, {get:(_,key)=>key==='text'?'#fafafa':key==='accent'?'#ff88aa':'#333333'});
 const examAccentSurface='#162c45';const s=StyleSheet.create(${styles});
@@ -29,7 +30,8 @@ const friendlyRecordDate=()=> 'Today';
 const ProfileNumber=({value})=><Text>{value}</Text>;
 const Info=()=>null;
 ${history.replaceAll('<MaterialCommunityIcons ', '<MaterialCommunityIcons.default ')}
-createRoot(document.getElementById('root')).render(<View style={{flex:1,paddingTop:60}}><History records={[]} subjects={[]} onBack={()=>{}} onDelete={()=>{}} onUpdate={()=>{}} onReattempt={()=>{}}/></View>);
+const records=[0,10].map(ago=>{const date=new Date();date.setDate(date.getDate()-ago);return {id:String(ago),subject:ago?'Older session':'Today session',chapter:'Chapter',exercise:'Ex1',startNumber:1,date:date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0')+'-'+String(date.getDate()).padStart(2,'0'),createdAt:date.toISOString(),answers:['A'],score:1,correct:1,wrong:0};});
+createRoot(document.getElementById('root')).render(<View style={{flex:1,paddingTop:60}}><History records={records} subjects={[]} onBack={()=>{}} onDelete={()=>{}} onUpdate={()=>{}} onReattempt={()=>{}}/></View>);
 `;
 const id = '\0history-fixture.tsx';
 const built = await build({ configFile:false, logLevel:'silent', resolve:{alias:{'react-native':fileURLToPath(new URL('../mobile-tasks/node_modules/react-native-web/dist/index.js',import.meta.url))},dedupe:['react','react-dom']},define:{'process.env.NODE_ENV':'"development"',__DEV__:'true'},plugins:[{name:'history-fixture',resolveId(value){if(value.endsWith('history-fixture'))return id;},load(value){if(value===id)return entry;}}],build:{write:false,minify:false,lib:{entry:'history-fixture',formats:['iife'],name:'HistoryFixture'}}});
@@ -45,7 +47,11 @@ try {
     await page.addScriptTag({content:output.find(item=>item.type==='chunk').code});
     await page.waitForTimeout(200);
     assert.deepEqual(errors,[]);
-    for(const label of ['All subjects','All chapters']) {
+    assert.equal(await page.getByRole('button',{name:'All chapters',exact:true}).count(),0);
+    const rangeBox=await page.getByRole('button',{name:'Today',exact:false}).boundingBox();
+    const subjectBox=await page.getByRole('button',{name:'All subjects',exact:false}).boundingBox();
+    assert.ok(Math.abs(rangeBox.y-subjectBox.y)<1 && rangeBox.x<subjectBox.x,'time range and subject sit side by side');
+    for(const label of ['Today','All subjects']) {
       const trigger=page.getByRole('button',{name:label,exact:false});
       await trigger.waitFor({timeout:3000});
       const input=await trigger.boundingBox();
@@ -66,6 +72,15 @@ try {
       await page.getByRole('button',{name:'Close history filter'}).click({position:{x:2,y:2}});
       await page.getByRole('button',{name:'Close history filter'}).waitFor({state:'detached',timeout:3000});
     }
+    await page.getByRole('button',{name:'Today',exact:false}).click();
+    await page.getByRole('button',{name:'Today',exact:true}).click();
+    await page.getByRole('button',{name:'Close history filter'}).waitFor({state:'detached'});
+    assert.equal(await page.getByText('Today session',{exact:true}).count(),1);
+    assert.equal(await page.getByText('Older session',{exact:true}).count(),0,'native time filter removes older sessions');
+    await page.getByRole('button',{name:'Today',exact:false}).first().click();
+    await page.getByRole('button',{name:'All time',exact:true}).click();
+    await page.getByRole('button',{name:'Close history filter'}).waitFor({state:'detached'});
+    assert.equal(await page.getByText('Older session',{exact:true}).count(),1,'all time restores older sessions');
     assert.deepEqual(errors,[]);
     await page.close();
   }
