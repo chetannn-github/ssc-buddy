@@ -3,9 +3,9 @@ import { clockValueFromPoint } from "../domain/clock-hand";
 import { useRef, useState } from "react";
 import { Modal, Pressable, Text, TextInput, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import Svg, { Line, Circle } from "react-native-svg";
 import { ClockFaceMotion } from "./ClockFaceMotion";
 import { ClockDigitHighlight } from "./ClockDigitHighlight";
+import { ClockHand } from "./ClockHand";
 export function HabitTimePicker({
   value,
   tint,
@@ -22,7 +22,7 @@ export function HabitTimePicker({
     [minute, setMinute] = useState("00"),
     [pm, setPm] = useState(false),
     [part, setPart] = useState<"hour" | "minute">("hour"),
-    [keyboard, setKeyboard] = useState(false);
+    [keyboard, setKeyboard] = useState(false),[dragging,setDragging]=useState(false);
   const gesture = useRef<{ active: boolean; changed: boolean; part: "hour" | "minute" }>({
     active: false,
     changed: false,
@@ -54,6 +54,7 @@ export function HabitTimePicker({
     r = 87,
     c = 110;
   const start = () => {
+    setDragging(false);
     setHour(String(hour24 % 12 || 12));
     setMinute(String(mm).padStart(2, "0"));
     setPm(hour24 >= 12);
@@ -190,23 +191,7 @@ export function HabitTimePicker({
             </View>
             {!keyboard && (
               <ClockFaceMotion mode={part} style={{ width: 220, height: 220, alignSelf: "center" }}>
-                <Svg pointerEvents="none" width={220} height={220} style={{ position: "absolute" }}>
-                  <Line
-                    x1={c}
-                    y1={c}
-                    x2={c + Math.cos(angle) * r}
-                    y2={c + Math.sin(angle) * r}
-                    stroke={tint}
-                    strokeWidth={2}
-                  />
-                  <Circle cx={c} cy={c} r={4} fill={tint} />
-                  <Circle
-                    cx={c + Math.cos(angle) * r}
-                    cy={c + Math.sin(angle) * r}
-                    r={19}
-                    fill={tint}
-                  />
-                </Svg>
+                <ClockHand angle={part==="hour"?(h%12)*30:m*6} color={tint} radius={r} markerRadius={19} dragging={dragging}/>
                 {Array.from({ length: 12 }, (_, index) => {
                   const tick = part === "hour" ? index + 1 : index * 5;
                   const a = (part === "hour" ? tick / 12 : tick / 60) * Math.PI * 2 - Math.PI / 2;
@@ -228,7 +213,7 @@ export function HabitTimePicker({
                         width: 38,
                         height: 38,
                         borderRadius: 19,
-                        backgroundColor: selected ? tint : "transparent",
+                        backgroundColor: "transparent",
                         alignItems: "center",
                         justifyContent: "center",
                       }}
@@ -266,14 +251,17 @@ export function HabitTimePicker({
                   onMoveShouldSetResponder={() => true}
                   onResponderTerminationRequest={() => false}
                   onResponderGrant={(event) => {
+                    setDragging(false);
                     gesture.current = { active: true, changed: false, part };
                     dragHand(event.nativeEvent.locationX, event.nativeEvent.locationY);
                   }}
                   onResponderMove={(event) => {
+                    setDragging(true);
                     if (gesture.current.active)
                       dragHand(event.nativeEvent.locationX, event.nativeEvent.locationY);
                   }}
                   onResponderRelease={(event) => {
+                    setDragging(false);
                     if (!gesture.current.active) return;
                     dragHand(event.nativeEvent.locationX, event.nativeEvent.locationY);
                     gesture.current.active = false;
@@ -281,6 +269,7 @@ export function HabitTimePicker({
                       setPart("minute");
                   }}
                   onResponderTerminate={() => {
+                    setDragging(false);
                     gesture.current.active = false;
                   }}
                 />

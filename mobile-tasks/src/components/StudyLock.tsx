@@ -2,7 +2,6 @@ import { effectiveStudySession, maxStudyBreaks, onStudyBreak, studyBreakState, s
 import { useEffect, useRef, useState } from "react";
 import { AccessibilityInfo, Alert, Animated, Easing, ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import Svg, { Circle, Line } from "react-native-svg";
 import * as Crypto from "expo-crypto";
 import { collection, doc, onSnapshot, runTransaction, serverTimestamp } from "firebase/firestore";
 import { createStudyController, type StudyControl } from "../../../shared/study-controller";
@@ -19,6 +18,7 @@ import { MAX_STUDY_WEBSITES } from "../../../shared/study-selection";
 import { FocusSchedules } from "./FocusSchedules";
 import { ClockFaceMotion } from "./ClockFaceMotion";
 import { ClockDigitHighlight } from "./ClockDigitHighlight";
+import { ClockHand } from "./ClockHand";
 
 // Use the mobile app's SDK instance and native UUID source with the shared contract.
 export const controller = createStudyController({ collection, doc, onSnapshot, runTransaction, serverTimestamp }, () => Crypto.randomUUID());
@@ -177,7 +177,8 @@ export function StudyLock({ uid, taskButton = false, openRequest = 0, onRequestO
 function StudyClock({ minutes, accent, onCancel, onSave, timeOfDay=false, title="Focus time" }: { minutes: number; accent: string; onCancel: () => void; onSave: (value: number) => void; timeOfDay?:boolean; title?:string }) {
   const [hour, setHour] = useState(Math.floor(minutes / 60)), [minute, setMinute] = useState(minutes % 60);
   const [part, setPart] = useState<"hour" | "minute">(minutes < 60 ? "minute" : "hour"), [keyboard, setKeyboard] = useState(false);
-  const selected = part === "hour" ? (timeOfDay ? hour % 12 : hour) : minute, angle = selected * (part === "hour" ? 30 : 6) * Math.PI / 180;
+  const selected = part === "hour" ? (timeOfDay ? hour % 12 : hour) : minute, angle = selected * (part === "hour" ? 30 : 6);
+  const [dragging,setDragging]=useState(false);
   const displayHour = timeOfDay ? hour % 12 || 12 : hour;
   const total = hour * 60 + minute, valid = timeOfDay ? total>=0&&total<1440 : total >= 1 && total <= 720;
   const choose = (value: number) => { if (part === "hour") setHour(timeOfDay?value%12+(hour>=12?12:0):value); else setMinute(value); };
@@ -199,8 +200,8 @@ function StudyClock({ minutes, accent, onCancel, onSave, timeOfDay=false, title=
       {timeOfDay&&<AnimatedTimeChips vertical options={[0,12]} labels={["AM","PM"]} value={hour>=12?12:0} onChange={value=>setHour(hour%12+value)} color="#f9fcf5" ink="#111" height={33} radius={0} gap={0} style={{width:48,height:66,alignSelf:"flex-start",borderRadius:12,overflow:"hidden",backgroundColor:"#202020"}} />}
     </View>
     {!keyboard && <ClockFaceMotion mode={part} style={s.clock}>
-      <Svg pointerEvents="none" width={220} height={220} style={StyleSheet.absoluteFill}><Line x1={110} y1={110} x2={110 + Math.sin(angle) * 82} y2={110 - Math.cos(angle) * 82} stroke={accent} strokeWidth={2} /><Circle cx={110} cy={110} r={4} fill={accent} /><Circle cx={110 + Math.sin(angle) * 82} cy={110 - Math.cos(angle) * 82} r={17} fill={accent} /></Svg>
-      <View style={StyleSheet.absoluteFill} onStartShouldSetResponder={() => true} onMoveShouldSetResponder={() => true} onResponderGrant={event => { const value = clockValueFromPoint(event.nativeEvent.locationX, event.nativeEvent.locationY, part); if (value !== null) choose(part === "hour" ? value % 12 : value); }} onResponderMove={event => { const value = clockValueFromPoint(event.nativeEvent.locationX, event.nativeEvent.locationY, part); if (value !== null) choose(part === "hour" ? value % 12 : value); }} onResponderRelease={() => { if (part === "hour") setPart("minute"); }} />
+      <ClockHand angle={angle} color={accent} dragging={dragging}/>
+      <View style={StyleSheet.absoluteFill} onStartShouldSetResponder={() => true} onMoveShouldSetResponder={() => true} onResponderGrant={event => {setDragging(false); const value = clockValueFromPoint(event.nativeEvent.locationX, event.nativeEvent.locationY, part); if (value !== null) choose(part === "hour" ? value % 12 : value); }} onResponderMove={event => {setDragging(true); const value = clockValueFromPoint(event.nativeEvent.locationX, event.nativeEvent.locationY, part); if (value !== null) choose(part === "hour" ? value % 12 : value); }} onResponderTerminate={()=>setDragging(false)} onResponderRelease={() => {setDragging(false); if (part === "hour") setPart("minute"); }} />
       {Array.from({ length: 12 }, (_, index) => { const value = part === "hour" ? index : index * 5, label=timeOfDay&&part==="hour"&&value===0?12:value; return <Pressable key={value} accessibilityRole="button" accessibilityLabel={`${label} ${part === "hour" ? "hours" : "minutes"}`} style={[s.clockNumber, { left: 110 + Math.sin(index * Math.PI / 6) * 82 - 17, top: 110 - Math.cos(index * Math.PI / 6) * 82 - 17 }]} onPress={() => { choose(value); if (part === "hour") setPart("minute"); }}><Text style={{ fontSize: 15, color: selected === value ? accentInk(accent) : "#eee" }}>{label}</Text></Pressable>; })}
     </ClockFaceMotion>}
     {!valid && <Text style={s.error}>Choose 1 minute to 12 hours.</Text>}

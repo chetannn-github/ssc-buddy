@@ -103,6 +103,17 @@ export async function run() {
     if(face().dataset.clockMode!=='minute'||face()!==stableFace||face().getAnimations().length)throw Error("clock dial blinked during automatic field switch");
     if(container.querySelector('.study-duration-digits .sliding-highlight')!==digitHighlight||digitHighlight.style.transform===hourPosition||!digitHighlight.style.transition.includes('transform'))throw Error("hour-to-minute background did not slide");
     await act(async()=>clockButton('10 minutes').click());
+    const hand=container.querySelector<SVGGElement>('[data-clock-hand]')!;
+    if(!hand.style.transition.includes('transform'))throw Error("clock hand rotation is not animated");
+    const finishHand=()=>{getComputedStyle(hand).transform;hand.getAnimations().forEach(animation=>animation.finish());};
+    const handAngle=()=>Number(hand.style.transform.match(/rotate\(([-\d.]+)deg\)/)![1]);
+    finishHand();
+    await act(async()=>clockButton('55 minutes').click());finishHand();const beforeWrap=handAngle();
+    await act(async()=>clockButton('0 minutes').click());
+    if(container.querySelector('[data-clock-hand]')!==hand||Math.abs(handAngle()-beforeWrap)!==30)throw Error("clock hand jumped the long way across 00 or remounted");
+    finishHand();await act(async()=>clockButton('55 minutes').click());
+    if(Math.abs(handAngle()-(beforeWrap+30))!==30)throw Error("reverse clock wrap did not take the shorter arc");
+    finishHand();await act(async()=>clockButton('10 minutes').click());
     await act(async()=>clockButton('Select hours').click());
     if(face().dataset.clockMode!=='hour'||face()!==stableFace||face().getAnimations().length||digitHighlight.style.transform!==hourPosition)throw Error("minute-to-hour background did not return without blinking");
     if(!clockButton('Select hours').style.transition.includes('background-color'))throw Error("clock digit background transition missing");
@@ -114,7 +125,7 @@ export async function run() {
     try{
       window.matchMedia=(()=>({matches:true})) as any;
       await act(async()=>clockButton('Select hours').click());
-      if(face().getAnimations().length||digitHighlight.style.transition!=='none')throw Error("clock ignored reduced-motion preference");
+      if(face().getAnimations().length||digitHighlight.style.transition!=='none'||hand.style.transition!=='none')throw Error("clock ignored reduced-motion preference");
     }finally{window.matchMedia=originalMatchMedia;}
     await act(async()=>clockRoot.unmount());
     return "sliding schedule/hour-minute backgrounds without remount/fade, fixed selected time, save closes dialog, reduced motion, freeze, cleanup";
