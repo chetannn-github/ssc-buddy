@@ -2,6 +2,8 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { useProfileFocusData } from "../../shared/use-profile-focus";
 import { focusDayKey } from "../../shared/study-focus";
+import { ProfileFocusProvider, useOwnProfileFocusData } from "../../mobile-tasks/src/components/ProfileFocusProvider";
+import { selectProfileFocusRange } from "../../shared/profile-focus-range";
 
 export async function runFocusHookRegression() {
   const realNow = Date.now, fixedNow = Date.now();
@@ -34,9 +36,12 @@ export async function runFocusHookRegression() {
   const root = createRoot(container);
   try {
     await act(async () => root.render(<Profile uid="alice" />));
+    check(!current!.ready, "XP must wait for focus history and control");
     const aliceDays = { [day]: { totalMilliseconds: 600000, sessionCredits: {} } };
     await emit("alice", "days", aliceDays);
+    check(!current!.ready, "history alone cannot expose partial XP");
     await emit("alice", "control", { session: { id: "alice-session", startedAt: Date.now() - 30000, endsAt: Date.now() + 60000, timeZone: "UTC" } });
+    check(current!.ready, "XP becomes ready after both inputs");
     check(current!.milliseconds >= 630000 && current!.milliseconds < 635000, "live focus added exactly once");
     for (let i = 0; i < 20; i++) await emit("alice", "days", structuredClone(aliceDays));
     check(publications.length === 1, "unchanged history events must share publication cache");
@@ -65,6 +70,40 @@ export async function runFocusHookRegression() {
     check(publications.length === 2, "remount in same runtime does not repeat successful history publication");
     await act(async () => root.unmount());
     check(listeners.every(entry => !entry.active), "unmount releases every subscription");
-    return { passed: true, scenarios: ["live totals", "unchanged snapshots", "account switch", "late callbacks", "public privacy", "XP", "navigation", "listener cleanup"] };
+    (globalThis as any).__profileFocusTest = { reader, db };
+    const providerContainer = document.createElement("div"); document.body.append(providerContainer);
+    const providerRoot = createRoot(providerContainer);
+    let visible: ReturnType<typeof useOwnProfileFocusData>;
+    function Tab({ uid, tab }: { uid: string; tab: string }) {
+      visible = useOwnProfileFocusData(uid);
+      return <div>{tab === "profile" && visible?.ready ? visible.totalPoints : "—"}</div>;
+    }
+    function Workspace({ uid, tab }: { uid: string; tab: string }) {
+      return <ProfileFocusProvider uid={uid}><Tab key={tab} uid={uid} tab={tab} /></ProfileFocusProvider>;
+    }
+    try {
+      const before = listeners.length;
+      await act(async () => providerRoot.render(<Workspace uid="alice" tab="tasks" />));
+      check(listeners.length === before + 2 && !visible!.ready, "one app-level history/control pair starts");
+      await emit("alice", "days", aliceDays);
+      await emit("alice", "control", null);
+      check(visible!.ready && visible!.totalPoints === 1, "app-level cache receives complete data");
+      await emit("alice", "days", { [day]: { totalMilliseconds: 1800000, sessionCredits: {} } });
+      for (let index = 0; index < 20; index++) await act(async () => providerRoot.render(<Workspace uid="alice" tab={index % 2 ? "tasks" : "profile"} />));
+      await act(async () => providerRoot.render(<Workspace uid="alice" tab="profile" />));
+      check(visible!.ready && visible!.totalPoints === 3 && providerContainer.textContent === "3", "profile first render uses latest XP after tab remount");
+      check(listeners.length === before + 2, "tab switches never reattach history/control listeners");
+      check(selectProfileFocusRange(visible!, date => date === day).milliseconds === 1800000, "date filtering reuses the live totals");
+      check(selectProfileFocusRange(visible!, () => false).milliseconds === 0 && visible!.totalPoints === 3, "date filtering cannot reduce all-time XP");
+      await act(async () => providerRoot.render(<Workspace uid="bob" tab="profile" />));
+      check(!visible!.ready && providerContainer.textContent === "—", "account switch never flashes another account XP");
+      await emit("bob", "control", null);
+      await emit("bob", "days", {});
+      check(visible!.ready && visible!.totalPoints === 0 && providerContainer.textContent === "0", "confirmed empty account is ready with zero focus XP");
+    } finally {
+      await act(async () => providerRoot.unmount()); providerContainer.remove(); delete (globalThis as any).__profileFocusTest;
+    }
+    check(listeners.every(entry => !entry.active), "app-level provider cleanup releases all listeners");
+    return { passed: true, scenarios: ["live totals", "unchanged snapshots", "account switch", "late callbacks", "public privacy", "XP readiness", "20 tab switches without refetch", "latest first-render XP", "date filters", "listener cleanup"] };
   } finally { await act(async () => root.unmount()); container.remove(); Date.now = realNow; }
 }

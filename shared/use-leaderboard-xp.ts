@@ -1,21 +1,22 @@
 import { useEffect, useState } from "react";
 import { collection, doc, getDoc, getDocs, onSnapshot, type DocumentData, type DocumentSnapshot, type QuerySnapshot, type Firestore } from "firebase/firestore";
 import { observeOnce } from "./read-once";
-import { getXpSummary } from "../mobile-tasks/src/domain/xp";
+import { currentLeaderboardXp, type PublicXpData } from "./leaderboard-xp";
+import { focusRewardTotal } from "./focus-rewards";
 import type { Task } from "../mobile-tasks/src/domain/tasks";
 
 type Entry = { uid: unknown; username?: unknown; xp?: unknown; level?: unknown; focusDays?: unknown; focusXp?: unknown };
 type Xp = { xp: number; level: number };
-const meta = (entry: Entry): Xp => {
-  const xp = Number(entry.xp) || 0;
-  return { xp, level: Number.isFinite(Number(entry.level)) ? Number(entry.level) : xp < 0 ? 0 : 1 };
-};
 
 /** Match mobile's current XP fallback for legacy and historical leaderboard entries. */
-export function useLeaderboardXp(entries: Entry[], week: string, currentWeek: string, getDatabase: () => Firestore, viewerUid?: string, viewerTasks?: Task[], live = true) {
-  const members = JSON.stringify(entries.map(entry => [String(entry.uid), String(entry.username ?? ""), !live && entry.focusDays && typeof entry.xp === "number" ? "complete" : "fallback"]).sort((a, b) => a[0]!.localeCompare(b[0]!)));
-  const [profiles, setProfiles] = useState<{ key: string; tasks: Record<string, Task[] | null> }>({ key: "", tasks: {} });
+export function useLeaderboardXp(entries: Entry[], week: string, currentWeek: string, getDatabase: () => Firestore, viewerUid?: string, viewerTasks?: Task[], live = true, viewerFocusXp?: number) {
   const [current, setCurrent] = useState<{ week: string; entries: Record<string, Entry> }>({ week: "", entries: {} });
+  const members = JSON.stringify(entries.map(entry => {
+    const latest = week === currentWeek ? entry : current.week === currentWeek ? current.entries[String(entry.uid)] : undefined;
+    const state = !live && week !== currentWeek && current.week !== currentWeek ? "waiting" : !live && latest?.focusDays && typeof latest.xp === "number" ? "complete" : "fallback";
+    return [String(entry.uid), String(entry.username ?? ""), state];
+  }).sort((a, b) => a[0]!.localeCompare(b[0]!)));
+  const [profiles, setProfiles] = useState<{ key: string; values: Record<string, PublicXpData> }>({ key: "", values: {} });
   useEffect(() => {
     if (week === currentWeek) return;
     const db = getDatabase(), reference = collection(db, "leaderboards", currentWeek, "entries");
@@ -27,26 +28,25 @@ export function useLeaderboardXp(entries: Entry[], week: string, currentWeek: st
   }, [week, currentWeek, getDatabase, live]);
   useEffect(() => {
     let active = true;
-    setProfiles({ key: members, tasks: {} });
-    const stops = (JSON.parse(members) as string[][]).filter(([uid, username, state]) => uid !== viewerUid && /^[a-z0-9._-]{3,24}$/.test(username!) && state !== "complete").map(([uid, username]) => {
-      const update = (tasks: Task[] | null) => {
-        if (active) setProfiles(previous => ({ key: members, tasks: { ...(previous.key === members ? previous.tasks : {}), [uid!]: tasks } }));
+    setProfiles({ key: members, values: {} });
+    const stops = (JSON.parse(members) as string[][]).filter(([uid, username, state]) => uid !== viewerUid && /^[a-z0-9._-]{3,24}$/.test(username!) && state === "fallback").map(([uid, username]) => {
+      const update = (value: PublicXpData) => {
+        if (active) setProfiles(previous => ({ key: members, values: { ...(previous.key === members ? previous.values : {}), [uid!]: value } }));
       };
       const db = getDatabase(), reference = doc(db, "publicProfiles", username!);
       const next = (snapshot: DocumentSnapshot<DocumentData>) => {
         const profile = snapshot.data();
-        update(profile?.["uid"] === uid && Array.isArray(profile?.["dashboard"]?.dailyTasks) ? profile["dashboard"].dailyTasks : null);
+        const owned = profile?.["uid"] === uid;
+        update({ tasks: owned && Array.isArray(profile?.["dashboard"]?.dailyTasks) ? profile["dashboard"].dailyTasks : null,
+          ...(owned && profile?.["focusDays"] && typeof profile["focusDays"] === "object" ? { focusXp: focusRewardTotal(profile["focusDays"]) } : {}) });
       };
-      return live ? onSnapshot(reference, next, () => update(null)) : observeOnce(db, JSON.stringify(["xp-profile", username]), () => getDoc(reference), next, () => update(null));
+      return live ? onSnapshot(reference, next, () => update({ tasks: null })) : observeOnce(db, JSON.stringify(["xp-profile", username]), () => getDoc(reference), next, () => update({ tasks: null }));
     });
     return () => { active = false; stops.forEach(stop => stop()); };
   }, [members, viewerUid, getDatabase, live]);
   return Object.fromEntries(entries.map(entry => {
     const uid = String(entry.uid);
-    if (entry.focusDays && typeof entry.xp === "number") return [uid, meta(entry)];
-    const tasks = uid === viewerUid ? viewerTasks : profiles.key === members ? profiles.tasks[uid] : null;
-    if (tasks) return [uid, getXpSummary(tasks, Number(entry.focusXp) || 0)];
-    const latest = week === currentWeek ? entry : current.week === currentWeek ? current.entries[uid] : null;
-    return [uid, latest && typeof latest.xp === "number" && Number.isFinite(latest.xp) ? meta(latest) : null];
+    return [uid, currentLeaderboardXp(entry, week, currentWeek, current.week === currentWeek ? current.entries[uid] : undefined,
+      profiles.key === members ? profiles.values[uid] : undefined, { uid: viewerUid, tasks: viewerTasks, focusXp: viewerFocusXp })];
   })) as Record<string, Xp | null>;
 }

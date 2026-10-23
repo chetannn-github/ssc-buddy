@@ -2,6 +2,8 @@
 import { StudyLock, controller as focusReader } from "../components/StudyLock";
 import { PublicFocusTime } from "../components/PublicFocusTime";
 import { useProfileFocusData } from "../../../shared/use-profile-focus";
+import { selectProfileFocusRange } from "../../../shared/profile-focus-range";
+import { useOwnProfileFocusData } from "../components/ProfileFocusProvider";
 import { getFirebaseFirestore } from "../lib/firebase";
 import { DestructiveDialog } from "../components/DestructiveDialog";
 import { createThemedStyles, setAppAccent, useAppAccent } from "../theme";
@@ -127,6 +129,7 @@ type Props = {
   sharedTracker?: Record<string, any>;
   sharedMockTests?: MockTestLog[];
   sharedActivityReady?: boolean;
+  sharedTasksReady?: boolean;
   sharedRank?: number | null;
   /** Reuses this exact screen for another user's shared, read-only profile. */
   readOnly?: boolean;
@@ -207,6 +210,7 @@ export function ProfileScreen({
   sharedTracker,
   sharedMockTests = [],
   sharedActivityReady = true,
+  sharedTasksReady = true,
   readOnly = false,
   publicUid,
   onBack,
@@ -247,7 +251,10 @@ export function ProfileScreen({
     ? profileName.trim() || user?.displayName?.trim() || user?.email?.split("@")[0] || "Student"
     : "";
   const [range, setRange] = useState<Range>("week");
-  const focusData = useProfileFocusData(getFirebaseFirestore, focusReader, readOnly ? publicUid : user?.uid, readOnly ? profileSettings?.username : undefined, readOnly, date => withinRange(date, range));
+  const sharedFocus = useOwnProfileFocusData(readOnly ? undefined : user?.uid);
+  const localFocus = useProfileFocusData(getFirebaseFirestore, focusReader, sharedFocus ? undefined : readOnly ? publicUid : user?.uid, readOnly ? profileSettings?.username : undefined, readOnly, date => withinRange(date, range));
+  const focusData = sharedFocus ? selectProfileFocusRange(sharedFocus, date => withinRange(date, range)) : localFocus;
+  const xpReady = focusData.ready && (readOnly || sharedTasksReady);
   const xpSummary = useMemo(() => getXpSummary(tasks, focusData.totalPoints), [tasks, focusData.totalPoints]);
   const xpTimelineStart = Math.max(0, xpSummary.level - 3);
   const xpTimelineLevels = Array.from({ length: 6 }, (_, index) => xpTimelineStart + index);
@@ -634,9 +641,9 @@ export function ProfileScreen({
                 </View>
               ))}
             </View>
-            <Pressable accessibilityRole="button" accessibilityLabel="View XP level roadmap" style={styles.xpBlock} onPress={() => setXpTimelineOpen(true)}>
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", flexWrap: "wrap", gap: 3 }}><Text style={styles.xpText}>Lv.</Text><ProfileNumber value={xpSummary.level} style={styles.xpText} /><Text style={styles.xpText}>· {levelName(xpSummary.level)} ·</Text><ProfileNumber value={xpSummary.xp} prefix={xpSummary.xp > 0 ? "+" : ""} suffix=" XP" style={[styles.xpText, xpSummary.xp < 0 && styles.xpNegative]} /></View>
-              {xpSummary.level > 0 && <ProfileXpBar progress={xpSummary.progress} />}
+            <Pressable accessibilityRole="button" accessibilityLabel="View XP level roadmap" disabled={!xpReady} style={styles.xpBlock} onPress={() => setXpTimelineOpen(true)}>
+              {xpReady ? <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", flexWrap: "wrap", gap: 3 }}><Text style={styles.xpText}>Lv.</Text><ProfileNumber value={xpSummary.level} style={styles.xpText} /><Text style={styles.xpText}>· {levelName(xpSummary.level)} ·</Text><ProfileNumber value={xpSummary.xp} prefix={xpSummary.xp > 0 ? "+" : ""} suffix=" XP" style={[styles.xpText, xpSummary.xp < 0 && styles.xpNegative]} /></View> : <Text accessibilityLabel="Loading XP" style={[styles.xpText, { textAlign: "center" }]}>—</Text>}
+              {xpReady && xpSummary.level > 0 && <ProfileXpBar progress={xpSummary.progress} />}
             </Pressable>
           </View>
         </View>

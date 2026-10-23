@@ -52,7 +52,6 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
   private var foreground = ""
   private var protectionState = ""
   private var motivation: ImageView? = null
-  private var lastImageRotation = -60000L
   private var imageBusy = false
   private val imageWorker = java.util.concurrent.Executors.newSingleThreadExecutor()
   private lateinit var preferences: SharedPreferences
@@ -68,7 +67,6 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
       enforce()
       updateTimer()
       updateBreakButton()
-      rotateMotivation()
       handler.postDelayed(this, if (overlay == null) 1000 else 250)
     }
   }
@@ -132,14 +130,13 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
     setPadding(dp(10), dp(8), dp(10), dp(8))
   }
   private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
-  private fun rotateMotivation(force: Boolean = false) {
+  private fun rotateMotivation() {
     val host = overlay ?: return
     val imageView = motivation ?: return
     if (!host.isAttachedToWindow || !shouldBlockForeground()) return
     val sessionId = preferences.getString("session", "")
-    val now = android.os.SystemClock.elapsedRealtime()
-    if (imageBusy || (!force && now - lastImageRotation < 60000)) return
-    imageBusy = true; lastImageRotation = now
+    if (imageBusy) return
+    imageBusy = true
     imageWorker.execute {
       val bitmap = runCatching {
         val next = FocusImages.next(this, FocusImages.current(this)) ?: return@runCatching null
@@ -313,7 +310,7 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
     }
     val imageGestures = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
       override fun onDown(event: MotionEvent) = true
-      override fun onDoubleTap(event: MotionEvent): Boolean { rotateMotivation(force = true); return true }
+      override fun onDoubleTap(event: MotionEvent): Boolean { rotateMotivation(); return true }
     })
     imageView.setOnTouchListener { _, event -> imageGestures.onTouchEvent(event) }
     imageView.isFocusable = true
@@ -323,7 +320,7 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
         info.addAction(android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK, "Change image"))
       }
       override fun performAccessibilityAction(host: View, action: Int, args: android.os.Bundle?): Boolean {
-        if (action == android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK) { rotateMotivation(force = true); return true }
+        if (action == android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK) { rotateMotivation(); return true }
         return super.performAccessibilityAction(host, action, args)
       }
     }

@@ -1,4 +1,5 @@
 import { initializeApp } from "firebase/app";
+import { createTaskPublicationReader, type TaskPublicationChange } from "./observed-publication";
 import { rankWeeklyEntries, resolveWeeklyResults } from "../../../mobile-tasks/src/domain/weekly-results";
 import { appendRecallQuestionSnapshots, type RecallQuestionInput } from "../../../mobile-tasks/src/domain/quick-recall-solutions";
 import {
@@ -64,6 +65,11 @@ const tasksFor = (user: User) => collection(db!, "users", user.uid, "tasks");
 const taskRef = (user: User, id: string) => doc(db!, "users", user.uid, "tasks", id);
 const profileRef = (user: User) => doc(db!, "users", user.uid, "profile", "current");
 
+const taskPublication = createTaskPublicationReader<DailyTask, Record<string, unknown>>({
+  tasks: async uid => (await getDocs(collection(db!, "users", uid, "tasks"))).docs.map(entry => ({ id: entry.id, ...entry.data() } as DailyTask)),
+  profile: async uid => (await getDoc(doc(db!, "users", uid, "profile", "current"))).data() ?? {},
+});
+
 const dayKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 const currentWeekKey = () => {
   const start = new Date();
@@ -91,9 +97,8 @@ const overallXpSummary = (tasks: DailyTask[]) => {
 };
 
 /** Rebuilds the same weekly leaderboard entry used by the web and mobile apps. */
-async function publishLeaderboardAfterTaskChange(user: User) {
-  const [profileSnapshot, taskSnapshot] = await Promise.all([getDoc(profileRef(user)), getDocs(tasksFor(user))]);
-  const profile = profileSnapshot.data() ?? {};
+async function publishLeaderboardAfterTaskChange(user: User, change: TaskPublicationChange<DailyTask>) {
+  const { tasks, profile } = await taskPublication.read(user.uid, change);
   const username = typeof profile.username === "string" ? profile.username.trim().toLowerCase() : "";
   if (!username) return;
 
@@ -102,7 +107,6 @@ async function publishLeaderboardAfterTaskChange(user: User) {
   end.setDate(end.getDate() + 6);
   const endKey = dayKey(end);
   const today = dayKey(new Date());
-  const tasks = taskSnapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() } as DailyTask));
   const { xp, level } = overallXpSummary(tasks);
   const scoped = tasks.filter((task) => task.date >= week && task.date <= endKey);
   const completed = scoped.filter((task) => task.completed);
@@ -164,12 +168,15 @@ export async function signInGoogle() {
 export async function logout() { if (auth) await signOut(auth); }
 
 export function watchTasks(user: User, onChange: (tasks: DailyTask[], source: "cache" | "server") => void) {
-  return onSnapshot(tasksFor(user), { includeMetadataChanges: true }, (snapshot) => {
+  const observed = taskPublication.tasks.observe(user.uid);
+  const stop = onSnapshot(tasksFor(user), { includeMetadataChanges: true }, (snapshot) => {
     const unique = new Map<string, DailyTask>();
     snapshot.docs.forEach((entry) => unique.set(entry.id, { id: entry.id, ...entry.data() } as DailyTask));
     const tasks = [...unique.values()].sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+    observed.update(tasks, snapshot.metadata.fromCache);
     onChange(tasks, snapshot.metadata.fromCache ? "cache" : "server");
-  });
+  }, error => { observed.release(); console.error("Task listener failed", error); });
+  return () => { observed.release(); stop(); };
 }
 
 /** Live weekly leaderboard rank for the desktop task widget header. */
@@ -284,11 +291,11 @@ export async function recordQuickRecallPractice(user: User, input: QuickRecallPr
 /** One document per task, matching the existing web's document-level CRUD. */
 export async function saveTask(user: User, task: DailyTask) {
   await setDoc(taskRef(user, task.id), task);
-  await publishLeaderboardAfterTaskChange(user);
+  await publishLeaderboardAfterTaskChange(user, { type: "save", task });
 }
 export async function removeTask(user: User, id: string) {
   await deleteDoc(taskRef(user, id));
-  await publishLeaderboardAfterTaskChange(user);
+  await publishLeaderboardAfterTaskChange(user, { type: "remove", id });
 }
 export const makeTaskId = () => `${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
 export const todayKey = () => {
@@ -303,7 +310,12 @@ export function watchRecallBank(user: User, callback: (subjects: Array<Record<st
 
 /** Read the same private accent setting saved by the mobile app. */
 export function watchProfileAccent(user: User, callback: (value: unknown) => void) {
-  return onSnapshot(profileRef(user), (snapshot) => callback(snapshot.data()?.accentColor), () => callback(undefined));
+  const observed = taskPublication.profiles.observe(user.uid);
+  const stop = onSnapshot(profileRef(user), { includeMetadataChanges: true }, (snapshot) => {
+    observed.update(snapshot.data() ?? {}, snapshot.metadata.fromCache);
+    callback(snapshot.data()?.accentColor);
+  }, () => { observed.release(); callback(undefined); });
+  return () => { observed.release(); stop(); };
 }
 
 export function getFirebaseFirestore() {

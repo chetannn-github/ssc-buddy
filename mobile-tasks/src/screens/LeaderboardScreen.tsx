@@ -15,7 +15,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { collection, doc, onSnapshot } from "firebase/firestore";
+import { collection, onSnapshot } from "firebase/firestore";
 import type { User } from "firebase/auth";
 import { getFirebaseFirestore, readPublicProfile, type PublicProfile } from "../lib/firebase";
 import { colors, dailyTaskColors } from "../theme";
@@ -24,7 +24,8 @@ import { avatarAssets, ProfileScreen } from "./ProfileScreen";
 import { ALL_LEADERBOARD_DAYS, leaderboardPeriodStats, leaderboardPeriodTasks } from "../domain/leaderboard-period";
 import { leaderboardWeekLabel, shiftLeaderboardWeek, resolveWeeklyResults } from "../domain/weekly-results";
 import { useLeaderboardWeek } from "../hooks/use-weekly-results";
-import { getXpSummary } from "../domain/xp";
+import { useLeaderboardXp } from "../../../shared/use-leaderboard-xp";
+import { useOwnProfileFocusData } from "../components/ProfileFocusProvider";
 
 const dayKey = (date = new Date()) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -48,10 +49,6 @@ const formatPoints = (value: unknown) => {
 const formatPointValue = (value: unknown) => {
   const points = Number(value) || 0;
   return `${points > 0 ? "+" : points < 0 ? "-" : ""}${Math.abs(points)}`;
-};
-const xpMeta = (entry: { xp?: unknown; level?: unknown }) => {
-  const xp = Number(entry.xp) || 0;
-  return { xp, level: Number.isFinite(Number(entry.level)) ? Number(entry.level) : xp < 0 ? 0 : 1 };
 };
 
 const pointsColor = (points: number) => points > 0 ? "#86efac" : points < 0 ? "#fca5a5" : colors.subdued;
@@ -198,40 +195,9 @@ export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { 
   const currentWeek = useLeaderboardWeek();
   const [historyWeek, setHistoryWeek] = useState<string | null>(null);
   const selectedWeek = historyWeek ?? currentWeek;
-  const membersKey = JSON.stringify(rows.map(row => [String(row.uid), String(row.username ?? "")]).sort((a,b) => a[0].localeCompare(b[0])));
-  const [profileTasks, setProfileTasks] = useState<{ key: string; values: Record<string, any[] | null> }>({ key: "", values: {} });
-  const [currentEntries, setCurrentEntries] = useState<{ week: string; values: Record<string, any> }>({ week: "", values: {} });
-  useEffect(() => {
-    if (selectedWeek === currentWeek) return;
-    let active = true;
-    const stop = onSnapshot(collection(getFirebaseFirestore(), "leaderboards", currentWeek, "entries"), snapshot => {
-      if (active) setCurrentEntries({ week: currentWeek, values: Object.fromEntries(snapshot.docs.map(item => [item.id, item.data()])) });
-    }, () => { if (active) setCurrentEntries({ week: currentWeek, values: {} }); });
-    return () => { active = false; stop(); };
-  }, [selectedWeek, currentWeek]);
-  useEffect(() => {
-    let active = true;
-    setProfileTasks({ key: membersKey, values: {} });
-    const stops = (JSON.parse(membersKey) as string[][]).filter(([uid, username]) => uid !== user?.uid && /^[a-z0-9._-]{3,24}$/.test(username!)).map(([uid, username]) => {
-      const update = (tasks: any[] | null) => {
-        if (active) setProfileTasks(previous => ({ key: membersKey, values: { ...(previous.key === membersKey ? previous.values : {}), [uid!]: tasks } }));
-      };
-      return onSnapshot(doc(getFirebaseFirestore(), "publicProfiles", username!), snapshot => {
-        const profile = snapshot.data();
-        update(profile?.uid === uid && Array.isArray(profile?.dashboard?.dailyTasks) ? profile.dashboard.dailyTasks : null);
-      }, () => update(null));
-    });
-    return () => { active = false; stops.forEach(stop => stop()); };
-  }, [membersKey, user?.uid]);
-  const currentXpFor = (row: any) => {
-    if (!row) return null;
-    if (row.focusDays && typeof row.xp === "number") return xpMeta(row);
-    if (row.uid === user?.uid) return getXpSummary(viewerTasks, Number(row.focusXp) || 0);
-    const tasks = profileTasks.key === membersKey ? profileTasks.values[row.uid] : null;
-    if (tasks) return getXpSummary(tasks, Number(row.focusXp) || 0);
-    const current = selectedWeek === currentWeek ? row : currentEntries.week === currentWeek ? currentEntries.values[row.uid] : null;
-    return current && typeof current.xp === "number" && Number.isFinite(current.xp) ? xpMeta(current) : null;
-  };
+  const ownFocus = useOwnProfileFocusData(user?.uid);
+  const currentXp = useLeaderboardXp(rows, selectedWeek, currentWeek, getFirebaseFirestore, user?.uid, viewerTasks, true, ownFocus?.ready ? ownFocus.totalPoints : undefined);
+  const currentXpFor = (row: any) => row ? currentXp[String(row.uid)] ?? null : null;
   const selectedXp = currentXpFor(selected);
   const changeWeek = (next: string) => { setSelected(null); setPublicEntry(null); setRows([]); setHistoryWeek(next === currentWeek ? null : next); setSelectedDate(next === currentWeek ? dayKey() : ALL_LEADERBOARD_DAYS); };
   useEffect(() => {

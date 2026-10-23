@@ -1,6 +1,7 @@
 import { DestructiveDialog } from "./src/components/DestructiveDialog";
 import { DeviceFocusSync } from "./src/components/DeviceFocusSync";
 import { FocusWidgetSync } from "./src/components/FocusWidgetSync";
+import { ProfileFocusProvider } from "./src/components/ProfileFocusProvider";
 import { AccentBackdrop } from "./src/components/AccentBackdrop";
 import { launchImages } from "./src/lib/launch-images";
 import { LaunchMotivation } from "./src/components/LaunchMotivation";
@@ -249,6 +250,7 @@ export default function App() {
   const [celebratedStreak, setCelebratedStreak] = useState<number | null>(null);
   const [celebratedLevel, setCelebratedLevel] = useState<number | null>(null);
   const [profileSettings, setProfileSettings] = useState<PracticeProfile | null>(null);
+  const hasProfileSettings = profileSettings !== null;
   const launchQuotesEnabled = useRef(true);
   launchQuotesEnabled.current = profileSettings?.randomQuotesEnabled !== false;
   useEffect(() => { if (profileSettings?.randomQuotesEnabled === false) setShowLaunchMotivation(false); }, [profileSettings?.randomQuotesEnabled]);
@@ -472,7 +474,7 @@ export default function App() {
     };
     void start();
     return () => { cancelled = true; unsubscribe?.(); };
-  }, [authenticated, user?.uid]);
+  }, [authenticated, user?.uid, hasProfileSettings]);
 
   const saveSharedProfile = async (next: PracticeProfile) => {
     const normalized = normalizeProfile(next);
@@ -928,7 +930,7 @@ export default function App() {
   const selectDailyDate = (day: string) => { if (day === tomorrow) setTaskDay("tomorrow"); else if (day === today) setTaskDay("today"); else setTaskHistoryDate(day); };
   const dailyRankAction = widgetRank !== null && <Pressable accessibilityRole="button" accessibilityLabel="Open weekly leaderboard" onPress={() => setLeaderboardOpen(true)} style={styles.taskRank}>{widgetRank <= 3 ? <Image source={rankMedals[widgetRank - 1]} style={styles.taskRankMedal} /> : <MaterialCommunityIcons name="trophy" size={15} color="#fcd34d" />}<RollingMetric value={widgetRank} prefix="#" color="#e4e4e7" fontSize={12} /></Pressable>;
   return (
-    <SafeAreaProvider>
+    <SafeAreaProvider><ProfileFocusProvider uid={user?.uid}>
       <View style={{ flex: 1, backgroundColor: colors.background }}><AccentBackdrop />
       <SafeAreaView style={[styles.safe, { backgroundColor: "transparent" }]} edges={["top", "left", "right"]} onTouchStart={() => resetBottomNavigation()}>
       <StatusBar hidden style="light" />
@@ -950,6 +952,7 @@ export default function App() {
           sharedTracker={publicTracker}
           sharedMockTests={profileMockTests}
           sharedActivityReady={profileActivityReady}
+          sharedTasksReady={tasksLoaded && publicTasksOwner === user?.uid}
           sharedRank={widgetRank}
           onLogout={() => {
             void logout();
@@ -1126,7 +1129,7 @@ export default function App() {
       />
       </SafeAreaView>
       </View>
-    </SafeAreaProvider>
+    </ProfileFocusProvider></SafeAreaProvider>
   );
 }
 

@@ -19,10 +19,10 @@ export function useProfileFocusData(getDatabase: () => Firestore, reader: FocusR
     const setDays = (value: Record<string, FocusDay> | null) => { if (active) setFocusDays(value && uid ? { uid, readOnly, days: value } : null); };
     const setSession = (value: StudySession | null) => { if (active) setFocusSession(uid ? { uid, session: value } : null); };
     setDays(null);
-    setSession(null);
+    setFocusSession(null);
     if (!uid) return;
     const stops: (() => void)[] = [];
-    const failed = () => { setDays(null); setSession(null); };
+    const failed = () => { setDays(null); if (active) setFocusSession(null); };
     try {
       const db = getDatabase();
       if (readOnly) {
@@ -52,7 +52,8 @@ export function useProfileFocusData(getDatabase: () => Firestore, reader: FocusR
   const current = session ? effectiveStudySession(session, now) : null;
   if (!readOnly && current) for (const slice of focusSlices(current, now)) totals[slice.date] = (totals[slice.date] ?? 0) + Math.max(0, slice.milliseconds - (days?.[slice.date]?.sessionCredits[current.id] ?? 0));
   const milliseconds = rangeFocusMilliseconds(days ?? {}, readOnly ? null : session, includesDay, now);
-  return { days: totals, text: days ? formatFocusTime(milliseconds) : "—", milliseconds, points: Object.entries(totals).reduce((sum, [date, value]) => sum + (includesDay(date) ? focusPoints(value) : 0), 0), totalPoints: focusRewardTotal(totals) };
+  const ready = !!uid && days !== null && (readOnly || focusSession?.uid === uid);
+  return { uid, ready, days: totals, text: days ? formatFocusTime(milliseconds) : "—", milliseconds, points: Object.entries(totals).reduce((sum, [date, value]) => sum + (includesDay(date) ? focusPoints(value) : 0), 0), totalPoints: focusRewardTotal(totals) };
 }
 
 export function useProfileFocus(...args: Parameters<typeof useProfileFocusData>) { return useProfileFocusData(...args).text; }

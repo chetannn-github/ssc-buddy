@@ -19,7 +19,7 @@ export function FocusSessionGate({ user }: { user: User | null }) {
   const [controlReady, setControlReady] = useState(false);
   const [now, setNow] = useState(Date.now());
   const [recall, setRecall] = useState(false);
-  const [imageIndex, setImageIndex] = useState(() => Math.floor(Math.random() * launchImages.length));
+  const [imageIndex] = useState(() => Math.floor(Math.random() * launchImages.length));
   const image = launchImages[imageIndex];
   useEffect(() => {
     setSession(null);
@@ -42,17 +42,6 @@ export function FocusSessionGate({ user }: { user: User | null }) {
     return () => { disposed = true; clearInterval(timer); };
   }, [active]);
   useEffect(() => { if (!active) setRecall(false); }, [active]);
-  useEffect(() => {
-    if (!active || launchImages.length < 2) return;
-    const rotate = () => setImageIndex(current => (current + 1) % launchImages.length);
-    const untilNextMinute = 60_000 - (Date.now() % 60_000);
-    let interval: ReturnType<typeof setInterval> | undefined;
-    const first = setTimeout(() => {
-      rotate();
-      interval = setInterval(rotate, 60_000);
-    }, untilNextMinute);
-    return () => { clearTimeout(first); if (interval) clearInterval(interval); };
-  }, [active]);
   useEffect(() => {
     if (!user || !session) return;
     void controller.recordStudyFocus(getFirebaseFirestore(), user.uid, session).catch(() => {});
