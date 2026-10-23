@@ -310,8 +310,12 @@ export function PracticeScreen({ user, onOpenQuickRecall, focusLocked = false }:
     setBank(next);
     void AsyncStorage.setItem(STORE, JSON.stringify(next.subjects));
     void AsyncStorage.setItem(MARKING, JSON.stringify(next.marking));
+    const markingChanged = previous.marking.positive !== next.marking.positive || previous.marking.negative !== next.marking.negative;
     return user
-      ? syncPracticeEntities(user, "practiceSubjects", toCloudSubjects(previous.subjects) as any, toCloudSubjects(next.subjects) as any)
+      ? Promise.all([
+          syncPracticeEntities(user, "practiceSubjects", toCloudSubjects(previous.subjects) as any, toCloudSubjects(next.subjects) as any),
+          markingChanged ? patchPracticeSettings(user, { marking: next.marking }) : Promise.resolve(),
+        ]).then(() => undefined)
       : Promise.resolve();
   };
   const saveHistory = (next: Record[]) => {
@@ -370,7 +374,7 @@ export function PracticeScreen({ user, onOpenQuickRecall, focusLocked = false }:
     if (!chapter) return;
     if (isAllExercises && combinedExercise) {
       setFixed(true); setStart("1");
-      setCount((current) => String(Math.max(1, Math.min(500, combinedExercise.questionCount, Number(current) || 20))));
+      setCount(String(Math.min(500, combinedExercise.questionCount)));
       return;
     }
     if (!chapter.exercises.some((item) => item.id === exerciseId))
@@ -876,10 +880,10 @@ export function PracticeScreen({ user, onOpenQuickRecall, focusLocked = false }:
         />
         <SetupSelect
           label="Exercise"
-          value={exercise?.name ?? "Select exercise"}
+          value={exercise ? `${exercise.name} · ${exercise.questions?.length ?? exercise.questionCount}Q` : "Select exercise"}
           open={menu === "exercise"}
           onPress={() => setMenu(menu === "exercise" ? null : "exercise")}
-          items={[...(combinedExercise ? [{ id: ALL_PRACTICE_EXERCISES, label: `${ALL_PRACTICE_EXERCISES_LABEL} · ${combinedExercise.questionCount}Q` }] : []), ...(chapter?.exercises.map((x) => ({ id: x.id, label: x.name })) ?? [])]}
+          items={[...(combinedExercise ? [{ id: ALL_PRACTICE_EXERCISES, label: `${ALL_PRACTICE_EXERCISES_LABEL} · ${combinedExercise.questionCount}Q` }] : []), ...(chapter?.exercises.map((x) => ({ id: x.id, label: `${x.name} · ${x.questions?.length ?? x.questionCount}Q` })) ?? [])]}
           onSelect={(value) => {
             setExerciseId(value);
             setMenu(null);
@@ -979,7 +983,9 @@ export function PracticeScreen({ user, onOpenQuickRecall, focusLocked = false }:
           </Text>
         </View>
         <View style={s.configDivider} />
-        <MarkingCard embedded marking={bank.marking} onSave={(marking) => saveBank({ ...bank, marking })} />
+        <MarkingCard embedded marking={bank.marking} onSave={(marking) => {
+          void saveBank({ ...bankRef.current, marking }).catch(() => Alert.alert("Sync pending", "Marking scheme is saved on this phone. Connect to sync this change."));
+        }} />
         <Pressable disabled={!canContinue} style={[s.primary, s.setupContinue, !canContinue && s.disabled]} onPress={begin}>
           <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72} style={[s.primaryText, s.primaryWideText]}>Continue to instructions</Text>
           <MaterialCommunityIcons name="arrow-right" size={19} color={colors.buttonInk} />

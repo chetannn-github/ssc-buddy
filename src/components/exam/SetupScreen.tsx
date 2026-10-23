@@ -278,7 +278,7 @@ export function SetupScreen({
       setExercise(ALL_PRACTICE_EXERCISES);
       setCountMode("fixed");
       setStartNumber("1");
-      setQuestionCount(String(Math.min(50, combined?.questionCount ?? 1)));
+      setQuestionCount(String(Math.min(500, combined?.questionCount ?? 1)));
       return;
     }
     const ex = getExercise(subject, name, exerciseName ?? null);
