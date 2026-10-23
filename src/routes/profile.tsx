@@ -1078,24 +1078,18 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
     const previousTimers = timersEnabledDraft;
     const previousPractice = practiceSessionEnabledDraft;
     const previousTrack = trackProgressEnabledDraft;
-    const nextManifestation = manifestationDraft.trim() || profile?.manifestation || "";
-    const nextExamName = examNameDraft.trim() || profile?.examName || "";
     setPracticeSessionEnabledDraft(nextPractice);
     setTrackProgressEnabledDraft(nextTrack);
     setTimersEnabledDraft(nextTimers);
     setHabitsEnabledDraft(nextHabits);
     setRandomQuotesEnabledDraft(nextQuotes);
     setSavingFeature(feature);
+    setAccentError("");
     const next = {
+      ...profile,
       accentColor: normalizeAppAccent(profile?.accentColor),
-      name: nameDraft.trim() || profile?.name || "Student",
-      ...(normalizeUsername(usernameDraft || profile?.username || "")
-        ? { username: normalizeUsername(usernameDraft || profile?.username || "") }
-        : {}),
-      questionGoal: Math.min(100000, Number(goalDraft) || profile?.questionGoal || 100),
-      ...(profile?.avatar ? { avatar: profile.avatar } : {}),
-      ...(nextManifestation ? { manifestation: nextManifestation } : {}),
-      ...(nextExamName ? { examName: nextExamName } : {}),
+      name: profile?.name || "Student",
+      questionGoal: profile?.questionGoal || 100,
       practiceSessionEnabled: nextPractice,
       trackProgressEnabled: nextTrack,
       showTrackerOnProfile: nextProfileTracker,
@@ -1115,7 +1109,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
       setHabitsEnabledDraft(previousHabits);
       setRandomQuotesEnabledDraft(previousQuotes);
       const message = error instanceof Error ? error.message : "Could not update this setting.";
-      setUsernameMessage(message);
+      setAccentError(message);
     } finally {
       setSavingFeature(null);
     }

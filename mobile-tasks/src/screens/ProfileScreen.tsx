@@ -548,8 +548,9 @@ export function ProfileScreen({
     const nextTimers = feature === "timers" ? !timersEnabled : timersEnabled;
     setPracticeSessionEnabled(nextPractice); setTrackProgressEnabled(nextTrack); setTimersEnabled(nextTimers); setHabitsEnabled(nextHabits); setRandomQuotesEnabled(nextQuotes);
     setSavingFeature(feature);
-    try { await onProfileSaved({ ...profileSettings, accentColor: appAccent, name: profileName, username: normalizeUsername(username), examName, questionGoal: Number(goal) || 100, manifestation, avatar: avatarFile, practiceSessionEnabled: nextPractice, trackProgressEnabled: nextTrack, showTrackerOnProfile: nextProfileTracker, timersEnabled: nextTimers, habitsEnabled: nextHabits, randomQuotesEnabled: nextQuotes }); }
-    catch { setShowTrackerOnProfile(showTrackerOnProfile); setPracticeSessionEnabled(practiceSessionEnabled); setTrackProgressEnabled(trackProgressEnabled); setTimersEnabled(timersEnabled); setHabitsEnabled(habitsEnabled); setRandomQuotesEnabled(randomQuotesEnabled); }
+    setAccentSaveError("");
+    try { await onProfileSaved({ ...profileSettings, accentColor: appAccent, name: profileSettings?.name || "Student", questionGoal: profileSettings?.questionGoal || 100, practiceSessionEnabled: nextPractice, trackProgressEnabled: nextTrack, showTrackerOnProfile: nextProfileTracker, timersEnabled: nextTimers, habitsEnabled: nextHabits, randomQuotesEnabled: nextQuotes }); }
+    catch { setShowTrackerOnProfile(showTrackerOnProfile); setPracticeSessionEnabled(practiceSessionEnabled); setTrackProgressEnabled(trackProgressEnabled); setTimersEnabled(timersEnabled); setHabitsEnabled(habitsEnabled); setRandomQuotesEnabled(randomQuotesEnabled); setAccentSaveError("Could not save this setting. Please try again."); }
     finally { setSavingFeature(null); }
   };
   useEffect(() => {

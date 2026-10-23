@@ -69,12 +69,12 @@ export function savePracticeProfile(profile: PracticeProfile) {
         ? { manifestation: profile.manifestation.trim().toUpperCase() }
         : {}),
       ...(profile.examName?.trim() ? { examName: profile.examName.trim() } : {}),
-      ...(profile.practiceSessionEnabled === false ? { practiceSessionEnabled: false } : {}),
-      ...(profile.trackProgressEnabled === false ? { trackProgressEnabled: false } : {}),
-      ...(profile.showTrackerOnProfile === false ? { showTrackerOnProfile: false } : {}),
-      ...(profile.timersEnabled === false ? { timersEnabled: false } : {}),
-      ...(profile.habitsEnabled === false ? { habitsEnabled: false } : {}),
-      ...(profile.randomQuotesEnabled === false ? { randomQuotesEnabled: false } : {}),
+      practiceSessionEnabled: profile.practiceSessionEnabled !== false,
+      trackProgressEnabled: profile.trackProgressEnabled !== false,
+      showTrackerOnProfile: profile.showTrackerOnProfile !== false,
+      timersEnabled: profile.timersEnabled !== false,
+      habitsEnabled: profile.habitsEnabled !== false,
+      randomQuotesEnabled: profile.randomQuotesEnabled !== false,
     }),
   );
   window.dispatchEvent(new Event("cbt-profile-updated"));
