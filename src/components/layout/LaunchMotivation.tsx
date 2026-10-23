@@ -23,6 +23,11 @@ function launchImage() {
 export function LaunchMotivation({ enabled }: { enabled: boolean }) {
   const [image, setImage] = useState<string | null>(null);
   const close = () => { dismissed = true; setImage(null); };
+  useEffect(()=>{
+    if(!enabled||!image)return;
+    const timer=window.setTimeout(()=>{dismissed=true;setImage(null);},5000);
+    return()=>window.clearTimeout(timer);
+  },[enabled,image]);
   useEffect(() => {
     let active = true;
     void launchImage().then(source => { if (active && !dismissed) setImage(source); });
@@ -34,7 +39,7 @@ export function LaunchMotivation({ enabled }: { enabled: boolean }) {
       <Dialog.Overlay className="fixed inset-0 z-[90] bg-black" />
       <Dialog.Content aria-describedby={undefined} className="fixed left-1/2 top-1/2 z-[91] w-fit max-w-[calc(100vw-48px)] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-2xl bg-[#0e0e0e] outline-none data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95">
         <Dialog.Title className="sr-only">Motivational image</Dialog.Title>
-        {image && <img src={image} alt="Motivational image" onError={close} className="block h-auto max-h-[68dvh] w-auto max-w-[min(360px,calc(100vw-48px))] object-contain" />}
+        {image && <button type="button" aria-label="Dismiss motivational image" onClick={close} className="block cursor-pointer border-0 bg-transparent p-0"><img src={image} alt="Motivational image" onError={close} className="block h-auto max-h-[68dvh] w-auto max-w-[min(360px,calc(100vw-48px))] object-contain" /></button>}
       </Dialog.Content>
     </Dialog.Portal>
   </Dialog.Root>;
