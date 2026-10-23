@@ -146,9 +146,7 @@ function ResultDetail() {
       title={record ? record.subject : "Result details"}
       subtitle={
         record
-          ? record.exercise
-            ? `${record.chapter} · ${record.exercise}`
-            : record.chapter
+          ? [record.chapter !== record.subject ? record.chapter : "", record.exercise].filter(Boolean).join(" · ") || undefined
           : undefined
       }
     >

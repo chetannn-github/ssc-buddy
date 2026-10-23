@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { Trash2, RotateCcw } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogContent, AlertDialogTitle, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog";
@@ -136,7 +137,7 @@ function HistoryPage() {
           <PageLoader label="Loading test history" />
         ) : (
           <div className="space-y-4">
-            <div className="card-surface grid gap-3 p-4 sm:grid-cols-2">
+            <div className="grid gap-3 rounded-2xl border border-white/10 bg-[#161616] p-3 sm:grid-cols-2">
               <Select
                 value={subject}
                 onValueChange={(v) => {
@@ -198,52 +199,55 @@ function HistoryPage() {
                       tabIndex={0}
                       onClick={() => navigate({ to: "/history/$id", params: { id: r.id } })}
                       onKeyDown={(e) => {
+                        if (e.target !== e.currentTarget) return;
                         if (e.key === "Enter" || e.key === " ") {
                           e.preventDefault();
                           navigate({ to: "/history/$id", params: { id: r.id } });
                         }
                       }}
-                      className="card-surface group flex cursor-pointer flex-col p-4 transition-shadow hover:shadow-[var(--shadow-lift)] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                      className="group flex min-w-0 cursor-pointer flex-col rounded-2xl border border-white/10 bg-[#161616] p-4 transition-colors hover:border-white/20 hover:bg-[#1a1a1a] focus:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
                     >
-                      <div className="flex items-center gap-4">
+                      <div className="flex min-h-20 items-start gap-3">
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
                             <h2 className="truncate text-sm font-semibold">{r.subject}</h2>
                             {isReattempt && (
-                              <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                              <span className="shrink-0 rounded-full bg-white/5 px-2 py-0.5 text-[10px] font-medium text-zinc-400">
                                 {g.attempts.length} attempts
                               </span>
                             )}
                           </div>
-                          <p className="truncate text-xs text-muted-foreground">
+                          <p className="mt-1 truncate text-xs text-zinc-400">
                             {isRecall ? `Daily summary · ${r.answers.length} questions` : r.chapter}
                           </p>
                           {!isRecall && r.exercise && (
-                            <p className="truncate text-xs font-medium text-primary">
+                            <p className="mt-0.5 truncate text-xs text-zinc-300">
                               {r.exercise}
                             </p>
                           )}
-                          <p className="mt-1 text-xs text-muted-foreground">
+                          <p className="mt-2 text-[11px] text-zinc-500">
                             {isRecall
                               ? friendlyDate(r.date, undefined, false)
                               : friendlyDate(r.createdAt ?? r.date, r.date, false)}
                           </p>
                         </div>
                         <div className="shrink-0 text-right tabular-nums">
-                          <p className="text-lg font-bold leading-tight">{r.score ?? "—"}</p>
-                          <p className="mt-1 text-[10px] text-muted-foreground">/ {maxMarks} marks</p>
+                          <p className="text-xl font-semibold leading-tight tracking-tight">{r.score ?? "—"}</p>
+                          <p className="mt-1 text-[10px] text-zinc-500">/ {maxMarks} marks</p>
                         </div>
                       </div>
 
-                      <p className="mt-3 text-xs text-muted-foreground">
-                        <span className="text-[var(--color-answered)]">{correct} correct</span> · <span className="text-destructive">{wrong} wrong</span> · {unattempted} skipped
-                      </p>
+                      <dl className="mt-4 grid grid-cols-3 divide-x divide-white/10 border-y border-white/5 py-2.5">
+                        {[{label:"Correct",value:correct,color:"text-emerald-400"},{label:"Wrong",value:wrong,color:"text-rose-400"},{label:"Skipped",value:unattempted,color:"text-zinc-400"}].map(item=><div key={item.label} className="text-center">
+                          <dt className="text-[10px] text-zinc-500">{item.label}</dt>
+                          <dd className={`mt-0.5 text-sm font-semibold tabular-nums ${item.color}`}>{item.value}</dd>
+                        </div>)}
+                      </dl>
 
-                      <div className="mt-3 flex gap-2">
+                      <div className="mt-auto flex items-center justify-between gap-2 pt-3">
                         <Button
-                          variant="outline"
                           size="sm"
-                          className="h-7 text-xs"
+                          className="h-8 gap-1.5 rounded-full bg-[#f6f8f2] px-3 text-xs font-medium text-[#171717] hover:bg-white"
                           onClick={(e) => {
                             e.stopPropagation();
                             if (isRecall) {
@@ -263,18 +267,20 @@ function HistoryPage() {
                             });
                           }}
                         >
-                          {isRecall ? "Practice again" : "Reattempt"}
+                          <RotateCcw className="h-3 w-3" />{isRecall ? "Practice again" : "Reattempt"}
                         </Button>
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-7 text-xs text-muted-foreground"
+                          className="h-8 w-8 rounded-full p-0 text-zinc-500 hover:bg-rose-400/10 hover:text-rose-300"
+                          aria-label={isReattempt ? "Delete latest attempt" : "Delete attempt"}
+                          title={isReattempt ? "Delete latest attempt" : "Delete attempt"}
                           onClick={(e) => {
                             e.stopPropagation();
                             setPendingDelete(r.id);
                           }}
                         >
-                          {isReattempt ? "Delete latest" : "Delete"}
+                          <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       </div>
                     </article>
