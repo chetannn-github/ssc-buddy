@@ -4,6 +4,20 @@
 @source "../shared";
 @import "tw-animate-css";
 
+/* The app navigation and screen controls stay visible while page content scrolls. */
+.web-app-header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  flex-shrink: 0;
+}
+.web-sticky-section {
+  position: sticky;
+  top: 64px;
+  z-index: 20;
+  background: #121212;
+}
+
 .habit-editor input[type="number"] {
   appearance: textfield;
   -moz-appearance: textfield;

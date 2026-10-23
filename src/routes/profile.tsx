@@ -1184,7 +1184,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
     <AppShell title={readOnly ? displayName : "Your Profile"}>
       <div className="profile-dark -mx-4 -my-6 min-h-[calc(100vh-4rem)] bg-[#121212] px-4 pt-5 pb-10 text-zinc-100 sm:-mx-6 sm:px-6 sm:pt-6 sm:pb-14">
         <div className="mx-auto max-w-4xl space-y-7">
-          <section className="relative flex flex-col items-center gap-4 text-center sm:flex-row sm:items-start sm:text-left">
+          <section aria-label="Profile header" className="web-sticky-section relative flex flex-col items-center gap-4 pb-3 text-center sm:flex-row sm:items-start sm:text-left">
             <div className="relative flex w-28 min-w-0 flex-col items-center">
               {avatar ? (
                 <button
