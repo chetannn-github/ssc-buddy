@@ -11,7 +11,8 @@ export function questionAfterSwipe(current: number, count: number, dx: number, d
 
 export const QUESTION_PALETTE_ITEM_WIDTH = 35;
 export const QUESTION_PALETTE_GAP = 7;
-export const questionPaletteOffset = (index: number) =>
-  Math.max(0, index) * (QUESTION_PALETTE_ITEM_WIDTH + QUESTION_PALETTE_GAP);
+export const questionPaletteOffset = (index: number, viewportWidth: number) =>
+  Math.max(0, Math.max(0, index) * (QUESTION_PALETTE_ITEM_WIDTH + QUESTION_PALETTE_GAP)
+    - questionPaletteEndPadding(viewportWidth));
 export const questionPaletteEndPadding = (viewportWidth: number) =>
-  Math.max(0, viewportWidth - QUESTION_PALETTE_ITEM_WIDTH);
+  Math.max(0, (viewportWidth - QUESTION_PALETTE_ITEM_WIDTH) / 2);

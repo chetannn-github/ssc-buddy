@@ -33,8 +33,9 @@ export function QuestionPalette({
   const scroll = useRef<ScrollView>(null);
   const [viewportWidth, setViewportWidth] = useState(0);
   const align = useCallback((index: number, animated: boolean) => {
-    scroll.current?.scrollTo({ x: questionPaletteOffset(index), y: 0, animated });
-  }, []);
+    if (viewportWidth <= 0) return;
+    scroll.current?.scrollTo({ x: questionPaletteOffset(index, viewportWidth), y: 0, animated });
+  }, [viewportWidth]);
   useEffect(() => {
     align(current, true);
   }, [align, current, count, viewportWidth]);
