@@ -8,6 +8,7 @@ import { StudyDurationPicker } from "../../shared/StudyDurationPicker";
 import "../../shared/study-lock.css";
 import { AccentPicker } from "../../src/components/profile/AccentPicker";
 import { useState } from "react";
+import { TimeOfDayField } from "../../shared/TimeOfDayField";
 
 export async function run() {
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT=true;
@@ -40,6 +41,11 @@ export async function run() {
     await act(async()=>root.render(<View/>));
     if(transactions)throw Error("scheduler polled DB before a due start");
     if(container.querySelector<HTMLInputElement>('[aria-label="Schedule name"]')?.value!=="Sleep")throw Error("existing schedule editor did not open immediately");
+    await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Schedule start"]')!.click());
+    if(!container.querySelector('.study-duration-clock')||container.querySelector<HTMLButtonElement>('[aria-label="PM"]')?.getAttribute('aria-pressed')!=='true')throw Error('schedule start did not open a clock with PM');
+    if(container.querySelector<HTMLButtonElement>('[aria-label="Select hours"]')?.textContent!=='10')throw Error('schedule clock did not display 12-hour time');
+    await act(async()=>button('Cancel').click());
+    if(container.querySelector<HTMLButtonElement>('[aria-label="Schedule start"]')?.textContent!=='Start22:00')throw Error('clock cancellation changed schedule start');
     const previewCards=[...container.querySelectorAll<HTMLButtonElement>('[data-schedule-preview]')];
     if(previewCards.length)throw Error("temporary preview schedules remain visible");
     const savedRow=container.querySelector<HTMLElement>('[aria-label="Saved schedules"]')!,addButton=container.querySelector<HTMLElement>('[aria-label="Add focus schedule"]')!;
@@ -139,6 +145,19 @@ export async function run() {
     await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Green"]')!.click());
     if(container.querySelector('.sliding-highlight')!==ring||ring.style.borderColor!=='rgb(142, 229, 63)')throw Error('rapid accent switching replaced the selection ring');
     await act(async()=>accentRoot.unmount());
+    const reminderRoot=createRoot(container),reminders:string[]=[];
+    function ReminderView(){const [value,setValue]=useState('00:05');return <TimeOfDayField value={value} onChange={next=>{setValue(next);reminders.push(next);}}/>;}
+    await act(async()=>reminderRoot.render(<ReminderView/>));
+    await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Reminder time"]')!.click());
+    if(!document.querySelector('.study-duration-clock')||document.querySelector<HTMLButtonElement>('[aria-label="Select hours"]')?.textContent!=='12')throw Error('habit reminder clock missing or midnight displays incorrectly');
+    await act(async()=>document.querySelector<HTMLButtonElement>('[aria-label="PM"]')!.click());
+    await act(async()=>[...document.querySelectorAll<HTMLButtonElement>('.study-duration-actions button')].find(item=>item.textContent==='Save')!.click());
+    if(reminders[0]!=='12:05'||document.querySelector('.study-duration-clock'))throw Error('habit clock PM save/close failed');
+    await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Reminder time"]')!.click());
+    await act(async()=>document.querySelector<HTMLButtonElement>('[aria-label="AM"]')!.click());
+    await act(async()=>[...document.querySelectorAll<HTMLButtonElement>('.study-duration-actions button')].find(item=>item.textContent==='Save')!.click());
+    if(reminders[1]!=='00:05')throw Error('habit clock midnight AM conversion failed');
+    await act(async()=>reminderRoot.unmount());
     return "sliding schedule/hour-minute backgrounds without remount/fade, fixed selected time, save closes dialog, reduced motion, freeze, cleanup";
   }finally{
     Date.now=originals.now;window.setInterval=originals.interval;window.setTimeout=originals.timeout;window.clearInterval=originals.clearInterval;window.clearTimeout=originals.clearTimeout;

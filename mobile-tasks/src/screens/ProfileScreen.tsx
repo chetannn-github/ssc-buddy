@@ -7,6 +7,7 @@ import { DestructiveDialog } from "../components/DestructiveDialog";
 import { createThemedStyles, setAppAccent, useAppAccent } from "../theme";
 import { type AppAccent } from "../domain/app-accent";
 import { AccentPicker } from "../components/AccentPicker";
+import { ConsistencyCard } from "../components/ConsistencyCard";
 import { DropdownChevron } from "../components/DropdownChevron";
 import { NumberFlow } from "number-flow-react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -230,6 +231,7 @@ export function ProfileScreen({
     profileSettings?.practiceSessionEnabled !== false,
   );
   const [profileSettingsOpen, setProfileSettingsOpen] = useState(false);
+  const [consistencyOpen,setConsistencyOpen]=useState(false);
   const appAccent = useAppAccent();
   const [savingAccent, setSavingAccent] = useState(false);
   const [accentSaveError, setAccentSaveError] = useState("");
@@ -579,6 +581,7 @@ export function ProfileScreen({
   }, [rangeOpen, rangeMenuProgress, rangeMenuVisible]);
   return (
     <View style={styles.page}>
+      <ConsistencyCard visible={consistencyOpen} streak={streak} onClose={()=>setConsistencyOpen(false)}/>
       <View style={styles.profileTop}>
         <View style={styles.profileRow}>
           {readOnly && <Pressable accessibilityRole="button" accessibilityLabel="Back" hitSlop={8} onPress={onBack} style={styles.publicBackRow}>
@@ -586,13 +589,13 @@ export function ProfileScreen({
           </Pressable>}
           <View style={styles.profileTopActions}>
 
-          <View
+          <Pressable accessibilityRole="button" onPress={()=>setConsistencyOpen(true)}
             accessibilityLabel={`Practice streak: ${streak} days`}
             style={[styles.profileStreak, { position: "relative", top: undefined, right: undefined }, streak > 0 && styles.profileStreakActive]}
           >
             {streak > 0 ? <StreakFlame streak={streak} /> : <MaterialCommunityIcons name="fire" size={15} color="#a1a1aa" />}
             <ProfileNumber value={streak} style={[styles.profileStreakText, streak > 0 && styles.profileStreakTextActive]} />
-          </View>
+          </Pressable>
           {!readOnly && <Pressable accessibilityRole="button" accessibilityLabel="Profile settings"
             hitSlop={6} style={styles.profileSettingsAction}
             onPress={() => {
