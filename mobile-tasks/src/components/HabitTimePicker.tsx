@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { Modal, Pressable, Text, TextInput, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import Svg, { Line, Circle } from "react-native-svg";
+import { ClockFaceMotion } from "./ClockFaceMotion";
 export function HabitTimePicker({
   value,
   tint,
@@ -181,7 +182,7 @@ export function HabitTimePicker({
               </View>
             </View>
             {!keyboard && (
-              <View style={{ width: 220, height: 220, alignSelf: "center" }}>
+              <ClockFaceMotion mode={part} style={{ width: 220, height: 220, alignSelf: "center" }}>
                 <Svg pointerEvents="none" width={220} height={220} style={{ position: "absolute" }}>
                   <Line
                     x1={c}
@@ -276,7 +277,7 @@ export function HabitTimePicker({
                     gesture.current.active = false;
                   }}
                 />
-              </View>
+              </ClockFaceMotion>
             )}
             <View style={{ flexDirection: "row", alignItems: "center", gap: 24 }}>
               <Pressable
