@@ -883,7 +883,16 @@ export function PracticeScreen({ user, onOpenQuickRecall, focusLocked = false }:
           value={exercise ? `${exercise.name} · ${exercise.questions?.length ?? exercise.questionCount}Q` : "Select exercise"}
           open={menu === "exercise"}
           onPress={() => setMenu(menu === "exercise" ? null : "exercise")}
-          items={[...(combinedExercise ? [{ id: ALL_PRACTICE_EXERCISES, label: `${ALL_PRACTICE_EXERCISES_LABEL} · ${combinedExercise.questionCount}Q` }] : []), ...(chapter?.exercises.map((x) => ({ id: x.id, label: `${x.name} · ${x.questions?.length ?? x.questionCount}Q` })) ?? [])]}
+          items={[
+            ...(combinedExercise ? [{ id: ALL_PRACTICE_EXERCISES, label: `${ALL_PRACTICE_EXERCISES_LABEL} · ${combinedExercise.questionCount}Q` }] : []),
+            ...[true, false].flatMap(questionBased => {
+              const exercises = (chapter?.exercises ?? []).filter(x => Array.isArray(x.questions) === questionBased);
+              return exercises.length ? [
+                { id: questionBased ? "question-heading" : "answer-key-heading", label: questionBased ? "Question-based exercises" : "Answer-key exercises", heading: true },
+                ...exercises.map(x => ({ id: x.id, label: `${x.name} · ${x.questions?.length ?? x.questionCount}Q` })),
+              ] : [];
+            }),
+          ]}
           onSelect={(value) => {
             setExerciseId(value);
             setMenu(null);
@@ -1038,7 +1047,7 @@ function SetupSelect({
   label: string;
   value: string;
   open: boolean;
-  items: { id: string; label: string }[];
+  items: { id: string; label: string; heading?: boolean }[];
   disabled?: boolean;
   onPress: () => void;
   onSelect: (id: string) => void;
@@ -1070,7 +1079,9 @@ function SetupSelect({
       {renderMenu && (
         <Animated.View style={[s.menu, { opacity: visibility, transform: [{ translateY: visibility.interpolate({ inputRange: [0, 1], outputRange: [-6, 0] }) }, { scale: visibility.interpolate({ inputRange: [0, 1], outputRange: [0.98, 1] }) }] }]} pointerEvents={open ? "auto" : "none"}>
           <NativeScrollView nestedScrollEnabled style={s.menuList} keyboardShouldPersistTaps="handled">
-            {items.map((item) => (
+            {items.map((item) => item.heading ? (
+              <Text key={item.id} accessibilityRole="header" style={{ color: colors.muted, fontSize: 10, fontWeight: "700", paddingHorizontal: 12, paddingTop: 12, paddingBottom: 6 }}>{item.label}</Text>
+            ) : (
               <Pressable key={item.id} onPress={() => onSelect(item.id)} style={[s.menuItem, item.label === value && s.menuItemSelected]}>
                 <Text numberOfLines={1} style={[s.menuText, item.label === value && s.menuTextSelected]}>{item.label}</Text>
                 {item.label === value && <MaterialCommunityIcons name="check" size={16} color="#171717" />}
