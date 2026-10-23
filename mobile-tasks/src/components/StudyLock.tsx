@@ -137,9 +137,9 @@ export function StudyLock({ uid, taskButton = false, openRequest = 0, onRequestO
               </View>
               <Pressable accessibilityRole="button" accessibilityLabel="Start Focus Lock" disabled={busy || !ready} style={[s.primary, (busy || !ready) && { opacity: 0.4 }]} onPress={() => void run(async () => {
                 if (Platform.OS === "android" && supportsDeviceFocus && !(await deviceFocusStatus()).enabled) {
-                  Alert.alert("Enable app blocking", "Turn on SSC Buddy Focus Lock in Accessibility settings, then return to start.", [
+                  Alert.alert("Enable app blocking", "Allow Usage access and Display over other apps, then return to start.", [
                     { text: "Not now", style: "cancel" },
-                    { text: "Enable", onPress: () => { void openDeviceFocusSettings().catch(() => setError("Could not open Accessibility settings.")); } },
+                    { text: "Enable", onPress: () => { void openDeviceFocusSettings().catch(() => setError("Could not open app blocking settings.")); } },
                   ]);
                   return;
                 }

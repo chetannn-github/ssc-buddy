@@ -5,7 +5,9 @@ import type { StudySession, OverlayBreak } from "../../../shared/study-controlle
 
 type FocusModule = {
   syncFocusStateWithBreaks?: (state: string, accent: string, image: string) => Promise<void>;
-  getFocusLockStatus?: () => Promise<{ enabled: boolean; allowedCount: number; serviceConnected?: boolean; sessionActive?: boolean; unlockAt?: number; error?: string }>;
+  getFocusLockStatus?: () => Promise<{ enabled: boolean; allowedCount: number; usageAccess?: boolean; overlayAccess?: boolean; serviceConnected?: boolean; sessionActive?: boolean; unlockAt?: number; error?: string }>;
+  openFocusUsageSettings?: () => Promise<void>;
+  openFocusOverlaySettings?: () => Promise<void>;
   syncFocusLock?: (id: string, endsAt: number, accent: string) => Promise<void>;
   syncFocusState?: (id: string, endsAt: number, accent: string, paused: boolean, remainingMs: number, image: string) => Promise<void>;
   syncFocusStateWithLimit?: (id: string, endsAt: number, accent: string, paused: boolean, remainingMs: number, image: string, appLimit: number) => Promise<void>;
@@ -21,6 +23,8 @@ export const deviceFocusStatus = () => native?.getFocusLockStatus?.() ?? Promise
 export const syncDeviceFocus = (id: string, endsAt: number, accent: string) => native?.syncFocusLock?.(id, endsAt, accent) ?? Promise.resolve();
 export const syncDeviceFocusState = (session: StudySession | null, accent: string, image: string) => native?.syncFocusStateWithBreaks?.(JSON.stringify(session ? effectiveStudySession(session) : {}), accent, image) ?? native?.syncFocusStateWithLimit?.(session?.lockId ?? session?.id ?? "", session?.endsAt ?? 0, accent, session?.paused === true, session?.remainingMs ?? 0, image, session?.appLimit ?? 2) ?? native?.syncFocusState?.(session?.lockId ?? session?.id ?? "", session?.endsAt ?? 0, accent, session?.paused === true, session?.remainingMs ?? 0, image) ?? syncDeviceFocus(session?.lockId ?? session?.id ?? "", session?.endsAt ?? 0, accent);
 export const openDeviceFocusSettings = () => native?.openFocusLockSettings?.() ?? Promise.resolve();
+export const openDeviceUsageSettings = () => native?.openFocusUsageSettings?.() ?? openDeviceFocusSettings();
+export const openDeviceOverlaySettings = () => native?.openFocusOverlaySettings?.() ?? openDeviceFocusSettings();
 export const consumeFocusRecall = () => native?.consumeFocusRecall?.() ?? Promise.resolve(false);
 export const readFocusBreaks = async (): Promise<OverlayBreak[]> => JSON.parse(await native?.readFocusBreaks?.() ?? "[]");
 export const acknowledgeFocusBreak = (id: string) => native?.acknowledgeFocusBreak?.(id) ?? Promise.resolve();

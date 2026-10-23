@@ -4,6 +4,9 @@
   <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+  <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
+  <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
   <queries>
     <intent><action android:name="android.intent.action.DIAL" /><data android:scheme="tel" /></intent>
     <intent><action android:name="android.intent.action.VIEW" /><data android:mimeType="vnd.android.cursor.dir/contact" /></intent>
@@ -22,9 +25,8 @@
         <action android:name="android.intent.action.TIME_SET" />
       </intent-filter>
     </receiver>
-    <service android:name="expo.modules.buddymusic.BuddyFocusService" android:label="@string/buddy_focus_label" android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE" android:exported="true">
-      <intent-filter><action android:name="android.accessibilityservice.AccessibilityService" /></intent-filter>
-      <meta-data android:name="android.accessibilityservice" android:resource="@xml/buddy_focus_accessibility" />
+    <service android:name="expo.modules.buddymusic.BuddyFocusService" android:label="@string/buddy_focus_label" android:foregroundServiceType="specialUse" android:exported="false">
+      <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User-started Focus Lock session: check foreground app usage events and display a distraction-blocking overlay until the saved focus deadline, with timed breaks." />
     </service>
     <service android:name="expo.modules.buddymusic.BuddyMusicService" android:exported="true" android:foregroundServiceType="mediaPlayback">
       <intent-filter><action android:name="androidx.media3.session.MediaSessionService" /></intent-filter>

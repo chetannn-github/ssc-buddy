@@ -1,13 +1,12 @@
 import { useEffect, useState } from "react";
 import { ActivityIndicator, AppState, Pressable, StyleSheet, Text, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { deviceFocusStatus, openDeviceFocusSettings, supportsDeviceFocus } from "../lib/native-focus-lock";
-import { useAppAccent } from "../theme";
+import { deviceFocusStatus, openDeviceUsageSettings, openDeviceOverlaySettings, supportsDeviceFocus } from "../lib/native-focus-lock";
 
 export function DeviceFocusSetup() {
-  const accent = useAppAccent();
   const [enabled, setEnabled] = useState<boolean | null>(null);
-  const [connected, setConnected] = useState<boolean | undefined>();
+  const [usageAccess, setUsageAccess] = useState(false);
+  const [overlayAccess, setOverlayAccess] = useState(false);
   const [opening, setOpening] = useState(false);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -16,7 +15,8 @@ export function DeviceFocusSetup() {
     const refresh = () => { void deviceFocusStatus().then(value => {
       if (disposed) return;
       setEnabled(value.enabled);
-      setConnected("serviceConnected" in value ? value.serviceConnected : undefined);
+      setUsageAccess("usageAccess" in value && value.usageAccess === true);
+      setOverlayAccess("overlayAccess" in value && value.overlayAccess === true);
       setError("error" in value && value.error ? "App blocking needs attention." : "");
     }).catch(() => { if (!disposed) setError("Could not check app blocking access."); }); };
     refresh();
@@ -24,23 +24,20 @@ export function DeviceFocusSetup() {
     const timer = setInterval(refresh, 3000);
     return () => { disposed = true; listener.remove(); clearInterval(timer); };
   }, []);
-  if (!supportsDeviceFocus || (enabled && connected !== false && !error)) return null;
+  if (!supportsDeviceFocus || (enabled && !error)) return null;
   const checking = enabled === null && !error;
   return <View style={styles.card}>
-    <Pressable accessibilityRole="button" accessibilityLabel="Enable app blocking in Accessibility settings" disabled={opening || checking} style={styles.row} onPress={() => {
-      setOpening(true);
-      void openDeviceFocusSettings().catch(() => setError("Could not open Accessibility settings.")).finally(() => setOpening(false));
-    }}>
-      <MaterialCommunityIcons name="shield-lock-outline" size={23} color={accent} />
-      <View style={styles.copy}>
-        <Text style={styles.title}>App blocking</Text>
-        <Text style={styles.subtitle}>{checking ? "Checking access…" : "Accessibility access"}</Text>
-      </View>
-      {opening || checking ? <ActivityIndicator size="small" color={accent} /> : <>
-        <Text style={[styles.action, { color: accent }]}>{enabled ? "Reconnect" : "Enable"}</Text>
-        <MaterialCommunityIcons name="chevron-right" size={18} color={accent} />
-      </>}
-    </Pressable>
+    {[
+      { label: "Usage access", granted: usageAccess, icon: "cellphone-check" as const, open: openDeviceUsageSettings },
+      { label: "Display over other apps", granted: overlayAccess, icon: "layers-outline" as const, open: openDeviceOverlaySettings },
+    ].map(item => <Pressable key={item.label} accessibilityRole="button" accessibilityLabel={item.label} disabled={opening || checking || item.granted} style={styles.row} onPress={() => {
+        setOpening(true); setError("");
+        void item.open().catch(() => setError("Could not open permission settings.")).finally(() => setOpening(false));
+      }}>
+        <MaterialCommunityIcons name={item.icon} size={23} color="#f5f5f5" />
+        <View style={styles.copy}><Text style={styles.title}>{item.label}</Text></View>
+        {opening || checking ? <ActivityIndicator size="small" color="#f5f5f5" /> : item.granted ? <MaterialCommunityIcons name="check" size={20} color="#86efac" /> : <Text style={[styles.action, { color: "#f5f5f5" }]}>Allow</Text>}
+      </Pressable>)}
     {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
   </View>;
 }
