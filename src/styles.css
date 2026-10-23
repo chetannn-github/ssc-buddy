@@ -1,7 +1,18 @@
 @import "tailwindcss" source(none);
 @source "../src";
 @source "../tracker/src";
+@source "../shared";
 @import "tw-animate-css";
+
+.habit-editor input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+.habit-editor input[type="number"]::-webkit-inner-spin-button,
+.habit-editor input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
 
 /* Edge/WebView2 renders its own password-reveal glyph. Auth already provides
    a deliberate custom eye control, so keep only that one visible. */
