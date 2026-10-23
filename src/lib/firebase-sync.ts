@@ -1,4 +1,5 @@
 import { initializeApp, type FirebaseApp } from "firebase/app";
+import { createPublicDashboardPublisher } from "../../shared/public-dashboard";
 import { appendRecallQuestionSnapshots, type RecallQuestionInput } from "../../mobile-tasks/src/domain/quick-recall-solutions";
 import {
   getAuth,
@@ -473,6 +474,7 @@ export async function readPublicProfile(value: string): Promise<PublicProfile | 
 }
 
 /** Publishes only daily activity totals needed for a public heatmap. */
+const publishDashboard = createPublicDashboardPublisher({ doc, runTransaction, serverTimestamp });
 export async function savePublicProfileActivity(
   user: User,
   profile: Record<string, unknown>,
@@ -489,11 +491,7 @@ export async function savePublicProfileActivity(
     ),
   );
   const { db: dbValue } = services();
-  await setDoc(
-    publicProfileDoc(dbValue, username),
-    { ...publicProfileFields(user, username, profile), activity: sanitizedActivity, dashboard, updatedAt: serverTimestamp() },
-    { merge: true },
-  );
+  await publishDashboard(dbValue, user.uid, username, { ...publicProfileFields(user, username, profile), activity: sanitizedActivity, dashboard });
 }
 
 export async function checkUsernameAvailability(user: User, value: string) {

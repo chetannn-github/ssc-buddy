@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "SSC Buddy",
-    "slug": "sdsd",
+    "slug": "ereweewq2",
     "scheme": "sscbuddy",
     "version": "1.0.0",
     "icon": "./assets/auth.png",
@@ -84,9 +84,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "b355ec69-3508-42c4-b5ab-aa5f4bcc8478"
+        "projectId": "e6f6b499-c877-4cc4-b9fb-5901b97a5d88"
       }
     },
-    "owner": "ssddsdss-team"
+    "owner": "hbjks-team"
   }
 }

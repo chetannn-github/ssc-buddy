@@ -1,4 +1,5 @@
 import { canReopenDailyWidgetTask } from "../domain/daily-task-widget";
+import { createPublicDashboardPublisher } from "../../../shared/public-dashboard";
 import { mergeQuestionDeletions } from "../domain/question-deletion";
 import { appendRecallQuestionSnapshots, type RecallQuestionInput } from "../domain/quick-recall-solutions";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -194,6 +195,7 @@ export async function readPublicProfile(value: string): Promise<PublicProfile | 
 }
 
 /** Publishes the read-only dashboard used by public profiles and streaks. */
+const publishDashboard = createPublicDashboardPublisher({ doc, runTransaction, serverTimestamp });
 export async function savePublicProfileActivity(
   user: User,
   profile: Record<string, unknown>,
@@ -207,11 +209,7 @@ export async function savePublicProfileActivity(
       .filter(([date, count]) => /^\d{4}-\d{2}-\d{2}$/.test(date) && Number(count) > 0)
       .map(([date, count]) => [date, Math.max(1, Math.round(Number(count)))]),
   );
-  await setDoc(
-    publicProfileDoc(username),
-    { ...publicProfileFields(user, username, profile), activity: sanitizedActivity, dashboard, updatedAt: serverTimestamp() },
-    { merge: true },
-  );
+  await publishDashboard(getFirebaseFirestore(), user.uid, username, { ...publicProfileFields(user, username, profile), activity: sanitizedActivity, dashboard });
 }
 
 function publicProfileFields(user: User, username: string, fields: Record<string, unknown>) {
@@ -286,8 +284,11 @@ export async function migrateTasksIfEmpty(user: User, tasks: CloudTask[]) {
   await batch.commit();
 }
 
-export function watchTasks(user: User, callback: (tasks: CloudTask[]) => void) {
-  return onSnapshot(taskCollection(user), (snapshot) => callback(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as CloudTask)).sort((a, b) => String(b["createdAt"]).localeCompare(String(a["createdAt"])))));
+export function watchTasks(user: User, callback: (tasks: CloudTask[]) => void, onServerReady?: () => void) {
+  return onSnapshot(taskCollection(user), { includeMetadataChanges: !!onServerReady }, (snapshot) => {
+    callback(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as CloudTask)).sort((a, b) => String(b["createdAt"]).localeCompare(String(a["createdAt"]))));
+    if (!snapshot.metadata.fromCache) onServerReady?.();
+  });
 }
 
 /**
@@ -396,8 +397,11 @@ export async function deletePracticeEntity(user: User, name: string, id: string)
   }
 }
 
-export function watchPracticeEntities(user: User, name: string, callback: (entities: PracticeEntity[]) => void) {
-  return onSnapshot(practiceCollection(user, name), { includeMetadataChanges: name === "practiceSubjects" }, (snapshot) => callback(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as PracticeEntity))));
+export function watchPracticeEntities(user: User, name: string, callback: (entities: PracticeEntity[]) => void, onServerReady?: () => void) {
+  return onSnapshot(practiceCollection(user, name), { includeMetadataChanges: !!onServerReady || name === "practiceSubjects" }, (snapshot) => {
+    callback(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as PracticeEntity)));
+    if (!snapshot.metadata.fromCache) onServerReady?.();
+  });
 }
 
 export async function readPracticeSettings(user: User) {
@@ -423,8 +427,11 @@ export async function migrateTrackerSections(user: User, sections: Record<string
 export async function syncTrackerSections(user: User, before: Record<string, unknown>, next: Record<string, unknown>) {
   await Promise.all(Object.keys(next).filter((key) => JSON.stringify(before[key]) !== JSON.stringify(next[key])).map((key) => setDoc(doc(trackerCollection(user), key), { value: next[key] }, { merge: true })));
 }
-export function watchTrackerSections(user: User, callback: (sections: Record<string, unknown>) => void) {
-  return onSnapshot(trackerCollection(user), (snapshot) => callback(Object.fromEntries(snapshot.docs.map((item) => [item.id, item.data().value]))));
+export function watchTrackerSections(user: User, callback: (sections: Record<string, unknown>) => void, onServerReady?: () => void) {
+  return onSnapshot(trackerCollection(user), { includeMetadataChanges: !!onServerReady }, (snapshot) => {
+    callback(Object.fromEntries(snapshot.docs.map((item) => [item.id, item.data().value])));
+    if (!snapshot.metadata.fromCache) onServerReady?.();
+  });
 }
 
 /** Canonical web tracker test-log API: users/{uid}/tracker/tests.value.log. */
@@ -435,10 +442,11 @@ const normaliseTrackerTest = (value: unknown): TrackerTestLog | null => {
   if (!test?.id || !test.date) return null;
   return { id: String(test.id), date: String(test.date), createdAt: String(test.createdAt ?? test.date), subjectId: String(test.subjectId ?? ""), type: String(test.type ?? ""), score: test.score == null ? null : Number(test.score), total: test.total == null ? null : Number(test.total), accuracy: test.accuracy == null ? null : Number(test.accuracy), notes: String(test.notes ?? "") };
 };
-export function watchTrackerTests(user: User, callback: (tests: TrackerTestLog[]) => void) {
-  return onSnapshot(trackerTestsDoc(user), (snapshot) => {
+export function watchTrackerTests(user: User, callback: (tests: TrackerTestLog[]) => void, onServerReady?: () => void) {
+  return onSnapshot(trackerTestsDoc(user), { includeMetadataChanges: !!onServerReady }, (snapshot) => {
     const raw = snapshot.data()?.value as { log?: unknown[] } | undefined;
     callback((Array.isArray(raw?.log) ? raw.log : []).map(normaliseTrackerTest).filter((item): item is TrackerTestLog => item !== null));
+    if (!snapshot.metadata.fromCache) onServerReady?.();
   });
 }
 export async function appendTrackerTest(user: User, test: TrackerTestLog, subjectName?: string) {

@@ -47,7 +47,7 @@ import { getFirebaseFirestore } from "@/lib/firebase-sync";
 import { loadPracticeProfile, savePracticeProfile, type PracticeProfile } from "@/lib/profile";
 import { checkUsernameAvailability, normalizeUsername, readCloudProfile, saveProfileWithUsername, savePublicProfileActivity, usernameValidationMessage } from "@/lib/firebase-sync";
 import type { User } from "firebase/auth";
-import { useAuthUser } from "@/lib/auth-context";
+import { useAuthUser, useWorkspaceHydrated } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 import { WeeklyAwardCelebration } from "@/components/WeeklyAwardCelebration";
 import { CelebrationFireworks } from "@/components/CelebrationFireworks";
@@ -1168,12 +1168,14 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
   const [xpLevelReady, setXpLevelReady] = useState(false);
   const [profile, setProfile] = useState<PracticeProfile | null | undefined>(() => loadPracticeProfile());
   const [profileHydrated, setProfileHydrated] = useState(false);
+  const [publicProfileOwner, setPublicProfileOwner] = useState<string | null>(null);
   useEffect(() => { applyWebAccent(profile?.accentColor); }, [profile?.accentColor]);
   const [celebratedStreak, setCelebratedStreak] = useState<number | null>(null);
   const [celebratedLevel, setCelebratedLevel] = useState<number | null>(null);
   const [streakReady, setStreakReady] = useState(false);
   const [manifestationOpen, setManifestationOpen] = useState(false);
   const authUser = useAuthUser();
+  const workspaceHydrated = useWorkspaceHydrated();
   useEffect(() => {
     setFocusXp(0);
     setFocusXpReady(false);
@@ -1280,6 +1282,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
 
   useEffect(() => {
     let active = true;
+    setPublicProfileOwner(null);
     if (!authUser) { setProfileHydrated(true); return; }
     setProfileHydrated(false);
     const applyCloudProfile = (raw: Record<string, unknown> | null) => {
@@ -1287,6 +1290,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
       const next = cloudPracticeProfile(raw);
       if (next) savePracticeProfile(next);
       if (active && next) setProfile(next);
+      if (active) setPublicProfileOwner(authUser.uid);
       if (active) setProfileHydrated(true);
     };
     void readCloudProfile(authUser).then(applyCloudProfile).catch(() => { if (active) setProfileHydrated(true); });
@@ -1301,7 +1305,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
   }, [profile]);
 
   useEffect(() => {
-    if (!authUser || !profile?.username) return;
+    if (!authUser || !profile?.username || !profileHydrated || !workspaceHydrated || publicProfileOwner !== authUser.uid) return;
     const activity: Record<string, number> = {};
     const add = (value: string, count = 1) => {
       const date = value.slice(0, 10);
@@ -1323,7 +1327,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
       tracker,
       dailyTasks: loadDailyTasks(),
     }).catch(() => undefined);
-  }, [authUser, profile, records, trackerActivityDates]);
+  }, [authUser, profile, records, trackerActivityDates, taskActivityDates, profileHydrated, workspaceHydrated, publicProfileOwner]);
 
   const currentStreak = getStreaks([
     ...records,

@@ -243,6 +243,9 @@ export default function App() {
   const [publicTracker, setPublicTracker] = useState<Record<string, any>>({ subjects: [], revision: {}, activity: [], tests: { log: [] } });
   const [profileMockTests, setProfileMockTests] = useState<any[]>([]);
   const [profileActivityReady, setProfileActivityReady] = useState(false);
+  const [publicActivityOwner, setPublicActivityOwner] = useState<string | null>(null);
+  const [publicTasksOwner, setPublicTasksOwner] = useState<string | null>(null);
+  const [publicProfileOwner, setPublicProfileOwner] = useState<string | null>(null);
   const [celebratedStreak, setCelebratedStreak] = useState<number | null>(null);
   const [celebratedLevel, setCelebratedLevel] = useState<number | null>(null);
   const [profileSettings, setProfileSettings] = useState<PracticeProfile | null>(null);
@@ -453,12 +456,14 @@ export default function App() {
       } catch {}
     };
     const start = async () => {
+      setPublicProfileOwner(null);
       try {
         const remote = await readCloudProfile(user);
         if (cancelled) return;
         if (remote) { applyingRemote = true; await apply(remote); applyingRemote = false; }
         else await patchCloudProfile(user, profileSettings);
         if (cancelled) return;
+        setPublicProfileOwner(user.uid);
         unsubscribe = watchCloudProfile(user, (value) => {
           if (value && !applyingRemote) void apply(value);
         });
@@ -613,6 +618,7 @@ export default function App() {
   }, [tasks, tasksLoaded]);
   useEffect(() => {
     if (!authenticated || !user || !tasksLoaded) return;
+    setPublicTasksOwner(null);
     let cancelled = false;
     let unsubscribe: (() => void) | undefined;
     void (async () => {
@@ -620,11 +626,12 @@ export default function App() {
         await migrateTasksIfEmpty(user, tasks);
         if (cancelled) return;
         unsubscribe = watchTasks(user, (remote) => {
+          if (cancelled) return;
           const next = remote as Task[];
           setTasks(next);
           void AsyncStorage.setItem(TASK_STORAGE_KEY, JSON.stringify(next));
           refreshDailyTasksWidget(next);
-        });
+        }, () => { if (!cancelled) setPublicTasksOwner(user.uid); });
       } catch {}
     })();
     return () => { cancelled = true; unsubscribe?.(); };
@@ -633,35 +640,34 @@ export default function App() {
   }, [authenticated, user?.uid, tasksLoaded]);
   // Matches the web consistency count: practice, tracker, and completed tasks.
   useEffect(() => {
+    setPublicActivityOwner(null);
     if (!user) { setPracticeActivityDates([]); setTrackerActivityDates([]); setProfileActivityReady(false); return; }
+    let active = true;
     let attemptsReady = false;
     let trackerReady = false;
     let testsReady = false;
     const markReady = () => {
-      if (attemptsReady && trackerReady && testsReady) setProfileActivityReady(true);
+      if (active && attemptsReady && trackerReady && testsReady) { setProfileActivityReady(true); setPublicActivityOwner(user.uid); }
     };
     setProfileActivityReady(false);
     const stopAttempts = watchPracticeEntities(user, "practiceAttempts", (items) => {
+      if (!active) return;
       setPracticeActivityDates(items.map((item) => typeof item.date === "string" ? item.date : "").filter(Boolean));
       setPublicPracticeRecords(items.map((item) => ({ ...item, answers: Array.isArray(item.answers) ? item.answers.map((answer) => answer ? "A" : null) : [] })));
-      attemptsReady = true;
-      markReady();
-    });
+    }, () => { attemptsReady = true; markReady(); });
     const stopTracker = watchTrackerSections(user, (sections) => {
+      if (!active) return;
       setTrackerActivityDates(Array.isArray(sections.activity) ? sections.activity.map((entry: any) => typeof entry?.date === "string" ? entry.date : "").filter(Boolean) : []);
       setPublicTracker(sections);
-      trackerReady = true;
-      markReady();
-    });
+    }, () => { trackerReady = true; markReady(); });
     const stopTests = watchTrackerTests(user, (tests) => {
+      if (!active) return;
       setProfileMockTests(tests);
-      testsReady = true;
-      markReady();
-    });
-    return () => { stopAttempts?.(); stopTracker?.(); stopTests?.(); };
+    }, () => { testsReady = true; markReady(); });
+    return () => { active = false; stopAttempts?.(); stopTracker?.(); stopTests?.(); };
   }, [user?.uid]);
   useEffect(() => {
-    if (!user || !profileSettings?.username) return;
+    if (!user || !profileSettings?.username || !tasksLoaded || !profileActivityReady || publicActivityOwner !== user.uid || publicTasksOwner !== user.uid || publicProfileOwner !== user.uid) return;
     const activity: Record<string, number> = {};
     const add = (value: unknown, count = 1) => {
       const date = typeof value === "string" ? value.slice(0, 10) : "";
@@ -677,7 +683,7 @@ export default function App() {
       tracker: publicTracker,
       dailyTasks: tasks as any,
     }).catch(() => undefined);
-  }, [profileSettings, publicPracticeRecords, publicTracker, tasks, user]);
+  }, [profileSettings, publicPracticeRecords, publicTracker, tasks, user, tasksLoaded, profileActivityReady, publicActivityOwner, publicTasksOwner, publicProfileOwner]);
   const persist = (next: Task[]) => {
     const previous = tasks;
     setTasks(next);
