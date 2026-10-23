@@ -1381,6 +1381,15 @@ function History({
   const [subject, setSubject] = useState("All subjects");
   const [chapter, setChapter] = useState("All chapters");
   const [filterMenu, setFilterMenu] = useState<"subject" | "chapter" | null>(null);
+  const lastFilter = useRef<"subject" | "chapter">("subject");
+  const [pageHeight, setPageHeight] = useState(0);
+  const [filterRowLayout, setFilterRowLayout] = useState({ x: 0, y: 0, width: 0, height: 0 });
+  const [filterLayouts, setFilterLayouts] = useState({ subject: { x: 0, y: 0, width: 0, height: 0 }, chapter: { x: 0, y: 0, width: 0, height: 0 } });
+  const toggleFilter = (kind: "subject" | "chapter") => {
+    lastFilter.current = kind;
+    setFilterMenu(current => current === kind ? null : kind);
+  };
+  const activeFilter = filterMenu ?? lastFilter.current;
   const [selected, setSelected] = useState<{ record: Record; attempts: Record[] } | null>(null);
   const [confirmAttemptDelete, setConfirmAttemptDelete] = useState(false);
   useAndroidBack(() => {
@@ -1475,7 +1484,7 @@ function History({
       </>
     );
   return (
-    <View style={s.page}>
+    <View style={s.page} onLayout={event => setPageHeight(event.nativeEvent.layout.height)}>
       <View style={s.header}>
         <View>
           <Text style={s.eyebrow}>PRACTICE</Text>
@@ -1485,22 +1494,18 @@ function History({
           <Text style={s.back}>New session</Text>
         </Pressable>
       </View>
-        <View style={[s.historyFilters, s.fixedFilters]}>
+        <View style={[s.historyFilters, s.fixedFilters]} onLayout={event => setFilterRowLayout(event.nativeEvent.layout)}>
           <HistoryFilter
             label={subject}
             open={filterMenu === "subject"}
-            onPress={() => setFilterMenu(filterMenu === "subject" ? null : "subject")}
-            onClose={() => setFilterMenu(null)}
-            options={["All subjects", ...subjects]}
-            onSelect={(next) => { setSubject(next); setChapter("All chapters"); setFilterMenu(null); }}
+            onPress={() => toggleFilter("subject")}
+            onLayout={event => { const layout = event.nativeEvent.layout; setFilterLayouts(current => ({ ...current, subject: layout })); }}
           />
           <HistoryFilter
             label={chapter}
             open={filterMenu === "chapter"}
-            onPress={() => setFilterMenu(filterMenu === "chapter" ? null : "chapter")}
-            onClose={() => setFilterMenu(null)}
-            options={["All chapters", ...chapters]}
-            onSelect={(next) => { setChapter(next); setFilterMenu(null); }}
+            onPress={() => toggleFilter("chapter")}
+            onLayout={event => { const layout = event.nativeEvent.layout; setFilterLayouts(current => ({ ...current, chapter: layout })); }}
           />
         </View>
       <ScrollView style={s.filteredList} contentContainerStyle={s.content}>
@@ -1524,7 +1529,7 @@ function History({
                     <Text numberOfLines={1} style={s.historyChapter}>
                       {isQuickRecallRecord(record) ? `Daily summary · ${record.answers.length} questions` : `${record.chapter} · ${record.exercise}`}
                     </Text>
-                    <Text style={s.historyDate}>{friendlyRecordDate(isQuickRecallRecord(record) ? record.date?.slice(0, 10) : record.createdAt, record.date ?? record.createdAt)}</Text>
+                    <Text style={s.historyDate}>{friendlyRecordDate(isQuickRecallRecord(record) ? record.date?.slice(0, 10) : record.createdAt, record.date ?? record.createdAt, false)}</Text>
                   </View>
                   <View style={s.historyScore}>
                     <Text style={s.historyScoreValue}>{record.score}</Text>
@@ -1551,70 +1556,56 @@ function History({
           </View>
         )}
       </ScrollView>
+      <HistoryFilterMenu
+        open={filterMenu !== null}
+        label={activeFilter === "subject" ? subject : chapter}
+        options={activeFilter === "subject" ? ["All subjects", ...subjects] : ["All chapters", ...chapters]}
+        anchor={{ x: filterRowLayout.x + filterLayouts[activeFilter].x, y: filterRowLayout.y + filterLayouts[activeFilter].y, width: filterLayouts[activeFilter].width, height: filterLayouts[activeFilter].height }}
+        pageHeight={pageHeight}
+        onClose={() => setFilterMenu(null)}
+        onSelect={next => {
+          if (activeFilter === "subject") { setSubject(next); setChapter("All chapters"); }
+          else setChapter(next);
+          setFilterMenu(null);
+        }}
+      />
     </View>
   );
 }
-function HistoryFilter({ label, open, onPress, onClose, options, onSelect }: { label: string; open: boolean; onPress: () => void; onClose: () => void; options: string[]; onSelect: (value: string) => void }) {
-  const trigger = useRef<View>(null);
-  const menuRoot = useRef<View>(null);
-  const window = useWindowDimensions();
-  const [menuFrame, setMenuFrame] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
-  const [anchor, setAnchor] = useState({ x: 14, y: 80, width: 160, height: 42 });
-  const visibility = useRef(new Animated.Value(open ? 1 : 0)).current;
-  const [renderMenu, setRenderMenu] = useState(open);
+function HistoryFilter({ label, open, onPress, onLayout }) {
+  return <Pressable onLayout={onLayout} onPress={onPress} accessibilityRole="button" accessibilityState={{ expanded: open }} style={[s.historyFilterButton, { flex: 1 }]}>
+    <Text numberOfLines={1} style={s.historyFilterText}>{label}</Text>
+    <DropdownChevron open={open} size={17} color={colors.muted} />
+  </Pressable>;
+}
 
+function HistoryFilterMenu({ label, open, onClose, options, onSelect, anchor, pageHeight }) {
+  const visibility = useRef(new Animated.Value(0)).current;
+  const [renderMenu, setRenderMenu] = useState(false);
   useEffect(() => {
     visibility.stopAnimation();
     if (open) {
       setRenderMenu(true);
       Animated.timing(visibility, { toValue: 1, duration: 180, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
-      return;
+    } else if (renderMenu) {
+      Animated.timing(visibility, { toValue: 0, duration: 130, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(({ finished }) => {
+        if (finished) setRenderMenu(false);
+      });
     }
-    if (!renderMenu) return;
-    Animated.timing(visibility, { toValue: 0, duration: 130, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(({ finished }) => {
-      if (finished) setRenderMenu(false);
-    });
   }, [open, renderMenu, visibility]);
-
-  // Native window and transparent Modal coordinates can have different origins
-  // (status bar / edge-to-edge). Position relative to the measured Modal root.
-  const frame = menuFrame ?? { x: 0, y: 0, width: window.width, height: window.height };
-  const localX = anchor.x - frame.x;
-  const localY = anchor.y - frame.y;
-  const menuHeight = Math.min(210, Math.max(42, options.length * 42), Math.max(42, frame.height - 32));
-  const menuTop = localY + anchor.height + 5 + menuHeight <= frame.height - 16
-    ? localY + anchor.height + 5
-    : Math.max(16, localY - menuHeight - 5);
-  const toggle = () => {
-    if (open) { onClose(); return; }
-    if (!renderMenu) setMenuFrame(null);
-    trigger.current?.measureInWindow((x, y, width, height) => {
-      setAnchor({ x, y, width, height });
-      onPress();
-    });
-  };
-  return (
-    <View style={s.historyFilterWrap}>
-      <View ref={trigger} collapsable={false}>
-      <Pressable onPress={toggle} accessibilityRole="button" accessibilityState={{ expanded: open }} style={s.historyFilterButton}>
-        <Text numberOfLines={1} style={s.historyFilterText}>{label}</Text>
-        <DropdownChevron open={open} size={17} color={colors.muted} />
-      </Pressable>
-      </View>
-      <Modal transparent visible={renderMenu} statusBarTranslucent onRequestClose={onClose}>
-        <View ref={menuRoot} collapsable={false} style={{ flex: 1 }} onLayout={() => {
-          menuRoot.current?.measureInWindow((x, y, width, height) => setMenuFrame({ x, y, width, height }));
-        }}>
-          <Pressable accessibilityLabel="Close history filter" style={NativeStyleSheet.absoluteFill} onPress={onClose} />
-          <Animated.View pointerEvents={open && menuFrame ? "auto" : "none"} style={[s.historyFilterMenu, { top: menuTop, left: Math.max(8, Math.min(localX, frame.width - anchor.width - 8)), right: undefined, width: anchor.width, maxHeight: menuHeight, opacity: menuFrame ? visibility : 0, transform: [{ translateY: visibility.interpolate({ inputRange: [0, 1], outputRange: [-6, 0] }) }, { scale: visibility.interpolate({ inputRange: [0, 1], outputRange: [0.98, 1] }) }] }]}>
-            <NativeScrollView nestedScrollEnabled keyboardShouldPersistTaps="always" style={{ maxHeight: menuHeight }}>
-              {options.map((option) => { const selected = option === label; return <Pressable key={option} accessibilityRole="button" accessibilityState={{ selected }} onPress={() => onSelect(option)} style={[s.historyFilterOption, selected && s.historyFilterOptionActive]}><Text numberOfLines={1} style={[s.historyFilterOptionText, selected && s.historyFilterOptionTextActive]}>{option}</Text>{selected && <MaterialCommunityIcons name="check" size={16} color="#171717" />}</Pressable>; })}
-            </NativeScrollView>
-          </Animated.View>
-        </View>
-      </Modal>
-    </View>
-  );
+  if (!renderMenu) return null;
+  // Anchor and popup both use History's local layout, without native-window offsets.
+  const below = Math.max(0, pageHeight - anchor.y - anchor.height - 13);
+  const menuHeight = Math.min(210, Math.max(42, options.length * 42), below);
+  const top = anchor.y + anchor.height + 5;
+  return <View pointerEvents={open ? "auto" : "none"} style={[NativeStyleSheet.absoluteFill, { zIndex: 100, elevation: 100 }]}>
+    <Pressable accessibilityRole="button" accessibilityLabel="Close history filter" style={NativeStyleSheet.absoluteFill} onPress={onClose} />
+    <Animated.View style={[s.historyFilterMenu, { top, left: anchor.x, right: undefined, width: anchor.width, maxHeight: menuHeight, opacity: visibility, transform: [{ translateY: visibility.interpolate({ inputRange: [0, 1], outputRange: [-6, 0] }) }, { scale: visibility.interpolate({ inputRange: [0, 1], outputRange: [0.98, 1] }) }] }]}>
+      <NativeScrollView nestedScrollEnabled keyboardShouldPersistTaps="always" style={{ maxHeight: menuHeight }}>
+        {options.map(option => { const selected = option === label; return <Pressable key={option} accessibilityRole="button" accessibilityState={{ selected }} onPress={() => onSelect(option)} style={[s.historyFilterOption, selected && s.historyFilterOptionActive]}><Text numberOfLines={1} style={[s.historyFilterOptionText, selected && s.historyFilterOptionTextActive]}>{option}</Text>{selected && <MaterialCommunityIcons name="check" size={16} color="#171717" />}</Pressable>; })}
+      </NativeScrollView>
+    </Animated.View>
+  </View>;
 }
 function HistoryDetail({
   subjects,
@@ -1886,7 +1877,7 @@ function SolutionView({ record, subjects, onBack }: { record: Record; subjects: 
     </View>
   );
 }
-function friendlyRecordDate(timestamp?: string | null, fallbackDate?: string | null) {
+function friendlyRecordDate(timestamp?: string | null, fallbackDate?: string | null, showTime = true) {
   const isValidDate = (value: unknown): value is string =>
     typeof value === "string" && value.trim().length > 0 && Number.isFinite(new Date(value).getTime());
   const iso = isValidDate(timestamp) ? timestamp : isValidDate(fallbackDate) ? fallbackDate : null;
@@ -1898,8 +1889,8 @@ function friendlyRecordDate(timestamp?: string | null, fallbackDate?: string | n
     new Date(value.getFullYear(), value.getMonth(), value.getDate()).getTime();
   const difference = Math.round((day(today) - day(date)) / 86_400_000);
   const time = date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-  if (difference === 0) return hasClock ? `Today, ${time}` : "Today";
-  if (difference === 1) return hasClock ? `Yesterday, ${time}` : "Yesterday";
+  if (difference === 0) return hasClock && showTime ? `Today, ${time}` : "Today";
+  if (difference === 1) return hasClock && showTime ? `Yesterday, ${time}` : "Yesterday";
   return date.toLocaleDateString([], {
     day: "numeric",
     month: "short",
@@ -2728,7 +2719,6 @@ const s = StyleSheet.create({
   outlineText: { color: colors.text, fontWeight: "700", fontSize: 13 },
   resultRow: { flexDirection: "row", marginTop: 17 },
   historyFilters: { zIndex: 20, flexDirection: "row", gap: 8 },
-  historyFilterWrap: { flex: 1, position: "relative", zIndex: 20 },
   historyFilterButton: { height: 42, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 6, borderRadius: 12, paddingHorizontal: 12, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   historyFilterText: { flex: 1, color: colors.text, fontSize: 12, fontWeight: "700" },
   historyFilterMenu: { position: "absolute", zIndex: 40, elevation: 40, top: 47, right: 0, left: 0, maxHeight: 210, overflow: "hidden", borderRadius: 12, backgroundColor: "#292929", borderWidth: 1, borderColor: "#454545", shadowColor: "#000", shadowOpacity: 0.5, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } },
