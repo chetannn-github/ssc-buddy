@@ -1530,7 +1530,6 @@ function History({
                     <Text style={s.historyScoreValue}>{record.score}</Text>
                     <Text style={s.historyScoreLabel}>score</Text>
                   </View>
-                  <MaterialCommunityIcons name="chevron-right" size={20} color={colors.subdued} />
                 </View>
                 <View style={s.historyResultRow}>
                   <Info icon="check" label="Correct" value={String(record.correct)} />
