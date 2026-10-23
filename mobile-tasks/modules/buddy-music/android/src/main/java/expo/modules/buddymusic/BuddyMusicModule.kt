@@ -78,7 +78,8 @@ class BuddyMusicModule : Module() {
     }.runOnQueue(Queues.MAIN)
     AsyncFunction("acknowledgeScheduledFocus") { id: String, uid: String ->
       val prefs = BuddyFocusService.prefs(requireNotNull(appContext.reactContext))
-      val previous = JSONArray(prefs.getString("scheduledFocusJournal", "[]")), next = JSONArray()
+      val previous = JSONArray(prefs.getString("scheduledFocusJournal", "[]"))
+      val next = JSONArray()
       for (index in 0 until previous.length()) {
         val value = previous.getJSONObject(index)
         if (value.optString("uid") != uid || value.getJSONObject("session").optString("id") != id) next.put(value)
