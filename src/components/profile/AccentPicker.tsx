@@ -1,5 +1,7 @@
 import { Check, LoaderCircle } from "lucide-react";
-import { APP_ACCENTS, accentInk, normalizeAppAccent, type AppAccent } from "@/lib/app-accent";
+import { useRef } from "react";
+import { SlidingHighlight } from "../../../shared/SlidingHighlight";
+import { APP_ACCENTS, accentInk, normalizeAppAccent, type AppAccent } from "../../lib/app-accent";
 
 export function AccentPicker({
   value,
@@ -13,6 +15,7 @@ export function AccentPicker({
   saving?: boolean;
 }) {
   const current = normalizeAppAccent(value);
+  const row=useRef<HTMLDivElement>(null);
   return (
     <section className="rounded-xl border border-white/10 bg-[#111] p-4">
       <div className="mb-3 flex items-center justify-between">
@@ -20,13 +23,16 @@ export function AccentPicker({
         {saving && <LoaderCircle className="h-4 w-4 animate-spin text-primary" />}
       </div>
       <div
+        ref={row}
         role="radiogroup"
         aria-label="App accent"
-        className="flex gap-3 overflow-x-auto py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="relative isolate flex gap-3 overflow-x-auto py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
+        <SlidingHighlight container={row} active={current} color="transparent" borderColor={current} radius={999}/>
         {APP_ACCENTS.map((option) => (
           <button
             key={option.color}
+            data-slide-key={option.color}
             type="button"
             role="radio"
             aria-label={option.name}
@@ -34,7 +40,7 @@ export function AccentPicker({
             disabled={disabled}
             title={option.name}
             onClick={() => onChange(option.color)}
-            className={`grid h-9 w-9 shrink-0 place-items-center rounded-full border-2 disabled:opacity-50 ${current === option.color ? "border-white" : "border-transparent"}`}
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-full border-2 border-transparent disabled:opacity-50"
           >
             <span
               className="grid h-7 w-7 place-items-center rounded-full"

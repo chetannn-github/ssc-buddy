@@ -5,7 +5,8 @@ import { useProfileFocusData } from "../../../shared/use-profile-focus";
 import { getFirebaseFirestore } from "../lib/firebase";
 import { DestructiveDialog } from "../components/DestructiveDialog";
 import { createThemedStyles, setAppAccent, useAppAccent } from "../theme";
-import { APP_ACCENTS, accentInk, type AppAccent } from "../domain/app-accent";
+import { type AppAccent } from "../domain/app-accent";
+import { AccentPicker } from "../components/AccentPicker";
 import { DropdownChevron } from "../components/DropdownChevron";
 import { NumberFlow } from "number-flow-react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -918,18 +919,7 @@ export function ProfileScreen({
                       {savingAccent && <ActivityIndicator size="small" color={colors.accent} />}
                     </View>
                     <Text style={styles.featureToggleCopy}>Choose a color for buttons and selected controls.</Text>
-                    <NativeScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator={false}
-                      style={{ marginTop: 14 }} contentContainerStyle={styles.accentChoices}>
-                      {APP_ACCENTS.map((option) => <Pressable key={option.color}
-                        accessibilityRole="radio" accessibilityLabel={option.name + " accent"}
-                        accessibilityState={{ selected: appAccent === option.color, disabled: savingAccent || savingFeature !== null }}
-                        disabled={savingAccent || savingFeature !== null} onPress={() => void chooseAccent(option.color)}
-                        style={[styles.accentChoice, appAccent === option.color && { borderColor: colors.text }]}>
-                        <View style={[styles.accentSwatch, { backgroundColor: option.color }]}>
-                          {appAccent === option.color && <MaterialCommunityIcons name="check-bold" size={16} color={accentInk(option.color)} />}
-                        </View>
-                      </Pressable>)}
-                    </NativeScrollView>
+                    <AccentPicker value={appAccent} disabled={savingAccent || savingFeature !== null} onChange={value=>void chooseAccent(value)}/>
                     {!!accentSaveError && <Text style={{ color: "#fca5a5", fontSize: 11 }}>{accentSaveError}</Text>}
                   </View>
                   </NativeScrollView>
