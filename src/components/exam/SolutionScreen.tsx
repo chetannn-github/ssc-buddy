@@ -53,15 +53,15 @@ export function SolutionScreen({ record, onExit }: Props) {
         ? "border-answered bg-answered text-answered-foreground"
         : verdicts[i] === "incorrect"
           ? "border-destructive bg-destructive text-destructive-foreground"
-          : "border-border bg-muted text-muted-foreground",
-      i === current && "border-primary ring-2 ring-primary ring-offset-2 ring-offset-background",
+          : "border-white/10 bg-white/[0.03] text-zinc-400 hover:bg-white/10",
+      i === current && "ring-2 ring-primary ring-offset-2 ring-offset-[#1b1b1b]",
     );
 
   const optionClass = (opt: Option) => {
     // Keep the key hidden until an answer is selected. After a wrong retry,
     // reveal the correct option alongside the selected wrong option.
     if (reattempt) {
-      if (!retry) return "border-border bg-surface hover:border-primary/40 hover:bg-accent/50";
+      if (!retry) return "border-white/10 bg-black/10 text-zinc-300 hover:border-primary/40 hover:bg-white/5";
       if (opt === retry) {
         return retry === correctOpt
           ? "border-answered bg-answered/15 font-semibold ring-1 ring-answered/45"
@@ -73,13 +73,13 @@ export function SolutionScreen({ record, onExit }: Props) {
       if (retry === correctOpt && original && original !== correctOpt && opt === original) {
         return "border-destructive bg-destructive/10 font-semibold ring-1 ring-destructive/45";
       }
-      return "border-border bg-surface";
+      return "border-white/10 bg-black/10 text-zinc-300";
     }
     if (correctOpt && opt === correctOpt)
       return "border-answered bg-answered/15 font-semibold ring-1 ring-answered/45";
     if (opt === original)
       return "border-destructive bg-destructive/10 font-semibold ring-1 ring-destructive/45";
-    return "border-border bg-surface";
+    return "border-white/10 bg-black/10 text-zinc-300";
   };
 
   const badgeClass = (opt: Option) => {
@@ -94,7 +94,7 @@ export function SolutionScreen({ record, onExit }: Props) {
     const active = reattempt
       ? opt === retry || showCorrectAfterWrongRetry || showOriginalWrongAfterCorrectRetry
       : opt === original || opt === correctOpt;
-    if (!active) return "border-border text-muted-foreground";
+    if (!active) return "border-white/10 text-zinc-400";
     if (
       showCorrectAfterWrongRetry ||
       (reattempt && retry === correctOpt && opt === correctOpt) ||
@@ -106,37 +106,26 @@ export function SolutionScreen({ record, onExit }: Props) {
   };
 
   return (
-    <div className="exam-dark min-h-screen bg-[#121212] text-zinc-100">
+    <div className="exam-dark bg-[#121212] text-zinc-100">
       <main className="mx-auto grid max-w-7xl items-start gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
         <section className="rounded-xl border border-white/10 bg-[#121212] p-5 sm:p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3 pb-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-3">
           <div className="min-w-0">
-            <h1 className="text-xs font-semibold tracking-[0.14em] uppercase opacity-80">
-              Solutions
-            </h1>
-            <p className="truncate text-sm font-medium">
-              {record.chapter}
-              {record.exercise ? ` · ${record.exercise}` : ""}
+            <p className="text-xs text-zinc-500">
+              {[record.subject, record.chapter, record.exercise].filter(Boolean).join(" · ")}
             </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <ReattemptButton active={reattempt} onChange={setReattempt} />
-            <Button size="sm" variant="secondary" onClick={onExit}>
-              Close
-            </Button>
-          </div>
-        </div>
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3">
-            <h2 className="text-lg font-semibold">
+            <h2 className="mt-1 text-lg font-semibold">
               Question {record.questionNumbers?.[current] ?? record.startNumber + current}
             </h2>
-            <span className="text-sm text-muted-foreground">
-              Question {current + 1} of {total}
-            </span>
           </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <ReattemptButton active={reattempt} onChange={setReattempt} />
+            <span className="text-xs text-zinc-500">{current + 1} / {total}</span>
+          </div>
+        </div>
 
           {question && (
-            <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-foreground">
+            <p className="mt-5 whitespace-pre-wrap text-sm leading-6 text-zinc-100">
               {question.question}
             </p>
           )}
@@ -152,6 +141,7 @@ export function SolutionScreen({ record, onExit }: Props) {
                 key={opt}
                 type="button"
                 disabled={!reattempt}
+                aria-pressed={reattempt ? retry === opt : undefined}
                 onClick={() =>
                   reattempt &&
                   setRetryAnswers((prev) =>
@@ -160,20 +150,20 @@ export function SolutionScreen({ record, onExit }: Props) {
                 }
                 className={cn(
                   "flex w-full items-center gap-3 rounded-lg border px-4 py-4 text-left text-sm transition-all",
-                  reattempt && "active:scale-[0.99]",
+                  reattempt && "active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
                   optionClass(opt),
                 )}
               >
                 <span
                   className={cn(
-                    "flex h-8 w-8 items-center justify-center rounded-full border text-sm font-semibold",
+                    "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-sm font-semibold",
                     badgeClass(opt),
                   )}
                 >
                   {opt}
                 </span>
-                {question?.options[OPTIONS.indexOf(opt)] ?? `Option ${opt}`}
-                <span className="ml-auto flex items-center gap-1.5 text-[10px] font-medium">
+                <span className="min-w-0 whitespace-pre-wrap break-words">{question?.options[OPTIONS.indexOf(opt)] ?? `Option ${opt}`}</span>
+                <span className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-1.5 text-[10px] font-medium">
                   {(!reattempt || (retry !== null && retry !== correctOpt)) &&
                     correctOpt === opt && (
                       <span className="rounded-full bg-answered/15 px-2 py-0.5 text-answered">
@@ -199,15 +189,16 @@ export function SolutionScreen({ record, onExit }: Props) {
             <p className="mt-4 text-sm text-muted-foreground">Not attempted · 0 marks</p>
           )}
           {question?.explanation && (!reattempt || retry) && (
-            <div className="mt-4 rounded-lg border border-primary/25 bg-primary/10 p-3 text-sm">
+            <div className="mt-4 rounded-lg border border-primary/25 bg-primary/10 p-3 text-sm leading-6 text-zinc-200">
               <span className="font-semibold">Explanation: </span>
               {question.explanation}
             </div>
           )}
 
-          <div className="mt-6 flex flex-wrap gap-2 border-t border-border pt-4">
+          <div className="mt-6 flex flex-wrap gap-2 border-t border-white/10 pt-4">
             <Button
               variant="outline"
+              className="border-white/15 bg-white/5 text-zinc-200 hover:bg-white/10 hover:text-white"
               onClick={() => setCurrent((c) => Math.max(0, c - 1))}
               disabled={current === 0}
             >
@@ -219,12 +210,13 @@ export function SolutionScreen({ record, onExit }: Props) {
             >
               Next
             </Button>
+            <Button variant="ghost" className="ml-auto text-zinc-400 hover:bg-white/10 hover:text-zinc-100" onClick={onExit}>Back to results</Button>
           </div>
         </section>
 
         <aside className="h-fit rounded-xl border border-white/10 bg-[#121212] p-4 lg:sticky lg:top-24">
-          <h3 className="text-sm font-semibold">Question Palette</h3>
-          <ul className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+          <h3 className="text-sm font-semibold">Question palette</h3>
+          <ul className="mt-3 grid grid-cols-2 gap-2 text-xs text-zinc-500">
             <li className="flex items-center gap-2">
               <span className="h-3 w-3 rounded-sm bg-answered" /> Correct
             </li>
