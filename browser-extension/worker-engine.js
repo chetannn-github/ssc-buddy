@@ -1,4 +1,5 @@
 import { onStudyBreak } from "../shared/study-breaks.ts";
+import { dueFocusOccurrence, focusOccurrences, scheduledFocusSession } from '../shared/focus-schedules.ts';
 import { validSession, rulesFor, allowed, normalizeWebsite, RULE_IDS } from './policy.js';
 function blockedTarget(value) { try { const hash = new URL(value).hash; const raw = hash.startsWith('#site=') ? hash.slice(6) : hash.startsWith('#youtube=') ? hash.slice(9) : ''; const url = new URL(/^https?:\/\//.test(raw) ? raw : decodeURIComponent(raw)); return ['http:', 'https:'].includes(url.protocol) ? url.href : null; } catch { return null; } }
 import { MAX_STUDY_WEBSITES, isSocialHost, websiteDomain } from '../shared/study-selection.ts';
@@ -41,7 +42,21 @@ export function startWorker(cloud) {
   async function expire() {
     const { study } = await get(); const session = validSession(study?.session ?? null);
     if (study?.session && JSON.stringify(session) !== JSON.stringify(study.session)) await apply(session, study.revision, study.uid);
+    const { focusScheduleCache }=await chrome.storage.local.get('focusScheduleCache');
+    const due=focusScheduleCache&&focusScheduleCache.uid===study?.uid?dueFocusOccurrence(focusScheduleCache.items??[]):null;
+    if(!session&&due){
+      const next=scheduledFocusSession(due,study?.session?.endsAt??0);
+      if(next.startedAt<next.endsAt){await apply(next,`local-${due.id}`,study.uid);await armSchedules();return next;}
+    }
+    await armSchedules();
     return session;
+  }
+  async function armSchedules(){
+    const {focusScheduleCache,study}=await chrome.storage.local.get(['focusScheduleCache','study']);
+    if(!focusScheduleCache||focusScheduleCache.uid!==study?.uid)return;
+    const now=Date.now(),future=(focusScheduleCache.items??[]).flatMap(schedule=>focusOccurrences(schedule,now)).map(window=>window.startedAt).filter(time=>time>now);
+    if(future.length)await chrome.alarms.create('focus-schedule',{when:Math.min(...future)});
+    else await chrome.alarms.clear('focus-schedule');
   }
   async function receive(packet, uid) {
     if (packet.version !== 1 || typeof packet.revision !== 'string' || packet.revision.length > 128) throw Error('Could not load your focus session');
@@ -57,6 +72,7 @@ export function startWorker(cloud) {
       const resumed = session && !session.paused && sameSites && session.lockId === (locked.lockId ?? locked.id) && session.startedAt >= locked.startedAt && session.endsAt - session.startedAt <= (locked.paused ? locked.remainingMs : locked.endsAt - locked.startedAt);
       if (!paused && !resumed && (!session || session.id !== locked.id || session.startedAt !== locked.startedAt || session.endsAt !== locked.endsAt || Boolean(session.paused) !== Boolean(locked.paused) || Number(session.remainingMs ?? 0) !== Number(locked.remainingMs ?? 0) || oldItems.some(item => !nextItems.includes(item)))) throw Error('Your session stays locked until its timer ends.');
     }
+    await chrome.storage.local.set({focusScheduleCache:{uid,items:packet.focusSchedules??[]}});
     const domains = (session?.domains ?? packet.allowedDomains ?? []).slice(0, MAX_STUDY_WEBSITES);
     await chrome.storage.local.set({ websiteDraft: { uid, domains } });
     const { study } = await get();
@@ -64,6 +80,7 @@ export function startWorker(cloud) {
       await apply(session, packet.revision, uid);
 
     }
+    await armSchedules();
     return session;
   }
   async function sync() {
@@ -162,6 +179,6 @@ export function startWorker(cloud) {
     const { study } = await get();
     await apply(validSession(study?.session ?? null), study?.revision ?? 'empty', study?.uid ?? null);
     await chrome.alarms.create('study-watch', { periodInMinutes: 0.5 });
-  }).then(() => { cloud.subscribe(() => { void sync(); }); void sync(); }).catch(e => { error = String(e); });
+  }).then(async () => { await serialize(expire); cloud.subscribe(() => { void sync(); }); void sync(); }).catch(e => { error = String(e); });
   setInterval(() => { void serialize(expire).then(sync); }, 10000);
 }

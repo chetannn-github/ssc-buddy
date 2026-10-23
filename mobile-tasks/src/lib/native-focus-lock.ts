@@ -4,8 +4,12 @@ import { Platform } from "react-native";
 import type { StudySession, OverlayBreak } from "../../../shared/study-controller";
 
 type FocusModule = {
+  configureFocusSchedules?: (uid:string,json:string)=>Promise<void>;
+  openFocusScheduleSettings?: ()=>Promise<void>;
+  readScheduledFocus?: ()=>Promise<string>;
+  acknowledgeScheduledFocus?: (id:string,uid:string)=>Promise<void>;
   syncFocusStateWithBreaks?: (state: string, accent: string, image: string) => Promise<void>;
-  getFocusLockStatus?: () => Promise<{ enabled: boolean; allowedCount: number; serviceConnected?: boolean; sessionActive?: boolean; unlockAt?: number; error?: string }>;
+  getFocusLockStatus?: () => Promise<{ enabled: boolean; allowedCount: number; serviceConnected?: boolean; sessionActive?: boolean; unlockAt?: number; error?: string; scheduleAlarmAccess?:boolean }>;
   syncFocusLock?: (id: string, endsAt: number, accent: string) => Promise<void>;
   syncFocusState?: (id: string, endsAt: number, accent: string, paused: boolean, remainingMs: number, image: string) => Promise<void>;
   syncFocusStateWithLimit?: (id: string, endsAt: number, accent: string, paused: boolean, remainingMs: number, image: string, appLimit: number) => Promise<void>;
@@ -17,6 +21,11 @@ type FocusModule = {
 };
 const native = Platform.OS === "android" ? requireOptionalNativeModule<FocusModule>("BuddyMusic") : null;
 export const supportsDeviceFocus = !!native?.getFocusLockStatus;
+export const supportsDeviceSchedules = !!native?.configureFocusSchedules;
+export const configureDeviceFocusSchedules = (uid:string,items:unknown[])=>native?.configureFocusSchedules?.(uid,JSON.stringify(items))??Promise.resolve();
+export const openScheduleAlarmSettings = ()=>native?.openFocusScheduleSettings?.()??Promise.resolve();
+export const readScheduledFocus = async ():Promise<Array<{uid:string;session:StudySession}>>=>JSON.parse(await native?.readScheduledFocus?.()??"[]");
+export const acknowledgeScheduledFocus = (id:string,uid:string)=>native?.acknowledgeScheduledFocus?.(id,uid)??Promise.resolve();
 export const deviceFocusStatus = () => native?.getFocusLockStatus?.() ?? Promise.resolve({ enabled: false, allowedCount: 0 });
 export const syncDeviceFocus = (id: string, endsAt: number, accent: string) => native?.syncFocusLock?.(id, endsAt, accent) ?? Promise.resolve();
 export const syncDeviceFocusState = (session: StudySession | null, accent: string, image: string) => native?.syncFocusStateWithBreaks?.(JSON.stringify(session ? effectiveStudySession(session) : {}), accent, image) ?? native?.syncFocusStateWithLimit?.(session?.lockId ?? session?.id ?? "", session?.endsAt ?? 0, accent, session?.paused === true, session?.remainingMs ?? 0, image, session?.appLimit ?? 2) ?? native?.syncFocusState?.(session?.lockId ?? session?.id ?? "", session?.endsAt ?? 0, accent, session?.paused === true, session?.remainingMs ?? 0, image) ?? syncDeviceFocus(session?.lockId ?? session?.id ?? "", session?.endsAt ?? 0, accent);

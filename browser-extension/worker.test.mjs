@@ -5,6 +5,36 @@ import { encode, decodeDocument } from './firestore-codec.js';
 import { MAX_STUDY_WEBSITES } from '../shared/study-selection.ts';
 import { beginStudyBreak } from '../shared/study-breaks.ts';
 const wait = async check => { for(let i=0;i<100;i++){ if(check()) return; await new Promise(r=>setTimeout(r,5)); } throw Error('Worker did not settle'); };
+
+test('cached schedules start offline at the original deadline and finish locally', async () => {
+  const realNow=Date.now,realInterval=globalThis.setInterval;
+  let now=Date.parse('2026-10-19T16:29:00Z'),onAlarm;
+  const start=Date.parse('2026-10-19T16:30:00Z'),end=Date.parse('2026-10-20T00:30:00Z');
+  const schedule={id:'sleep',name:'Sleep',weekdays:[1],startMinute:1320,endMinute:360,timeZone:'Asia/Kolkata',appLimit:0,domains:['study.example'],enabled:true,createdAt:0};
+  const data={study:{uid:'student',revision:'saved',session:null},focusScheduleCache:{uid:'student',items:[schedule]}},rules=[],alarms=[],redirected=[];
+  Date.now=()=>now;globalThis.setInterval=()=>({unref(){}});
+  globalThis.chrome={
+    runtime:{getURL:p=>`chrome-extension://test/${p}`,onMessage:{addListener:()=>{}}},
+    storage:{local:{get:async()=>structuredClone(data),set:async value=>Object.assign(data,structuredClone(value)),setAccessLevel:async()=>{}}},
+    declarativeNetRequest:{getSessionRules:async()=>[],updateSessionRules:async()=>{},updateDynamicRules:async value=>rules.splice(0,rules.length,...value.addRules)},
+    alarms:{clear:async()=>{},create:async(name,value)=>alarms.push({name,...value}),onAlarm:{addListener:fn=>onAlarm=fn}},
+    action:{setBadgeText:async()=>{},setBadgeBackgroundColor:async()=>{}},
+    tabs:{query:async()=>[{id:1,url:'https://social.example/'}],update:async(id,value)=>redirected.push({id,...value})},
+  };
+  try{
+    startWorker({ready:Promise.resolve(),user:()=>null,subscribe:()=>{}});
+    await wait(()=>alarms.some(item=>item.name==='focus-schedule'));
+    assert.equal(alarms.find(item=>item.name==='focus-schedule').when,start);
+    assert.equal(rules.length,0);
+    now=start+60000;onAlarm({name:'focus-schedule'});
+    await wait(()=>data.study.session?.id===`schedule-sleep-${start}`);
+    assert.equal(data.study.session.endsAt,end);assert.equal(data.study.session.startedAt,start);
+    assert.equal(data.study.session.breakLimit,0);assert.equal(rules.length,2);
+    await wait(()=>redirected.length===1);
+    now=end;onAlarm({name:'study-end'});await wait(()=>data.study.session===null);
+    assert.equal(rules.length,0);
+  }finally{Date.now=realNow;globalThis.setInterval=realInterval;delete globalThis.chrome;}
+});
 test('Firebase Firestore REST values preserve the shared session contract', () => {
   const value={version:1,revision:'one',session:{id:'s',startedAt:1000,endsAt:61000,domains:['chatgpt.com']}};
   assert.deepEqual(decodeDocument({fields:encode(value).mapValue.fields}),value);

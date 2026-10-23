@@ -5,6 +5,8 @@ import { decodeDocument, encode } from './firestore-codec.js';
 import { creditFocusDay, focusSlices } from '../shared/study-focus.ts';
 import { editWebsites, startControl } from './policy.js';
 import { focusLeaderboardPatch, focusWeek } from '../shared/focus-rewards.ts';
+import { dueFocusOccurrence, scheduledFocusSession } from '../shared/focus-schedules.ts';
+import { validSession } from './policy.js';
 export function createCloud() {
   const config = __FIREBASE_CONFIG__;
   if (!config.apiKey || !config.projectId || !config.appId) throw Error('The extension is not configured. Please install the latest version.');
@@ -102,7 +104,23 @@ export function createCloud() {
     subscribe: callback => onAuthStateChanged(auth, callback),
     login: (email, password) => signInWithEmailAndPassword(auth, email, password),
     logout: () => signOut(auth),
-    async read() { const document = await request('studyLock/current'); return document ? decodeDocument(document) : { version: 1, revision: 'empty', session: null }; },
+    async read() {
+      for(let attempt=0;attempt<4;attempt++){
+        const document=await request('studyLock/current');
+        const control=document?decodeDocument(document):{version:1,revision:'empty',session:null};
+        const occurrence=dueFocusOccurrence(control.focusSchedules??[]);
+        if(!occurrence||validSession(control.session))return control;
+        const session=scheduledFocusSession(occurrence,control.session?effectiveStudySession(control.session).endsAt:0);
+        if(session.startedAt>=session.endsAt)return control;
+        if(control.session)await recordFocus(control.session);
+        const next={...control,session,revision:crypto.randomUUID(),source:'focus-schedule'};
+        try{
+          await request('studyLock/current?currentDocument.updateTime='+encodeURIComponent(document.updateTime),{method:'PATCH',body:JSON.stringify({fields:encode(next).mapValue.fields})});
+          return next;
+        }catch(error){if(![409,412].includes(error.status))throw error;}
+      }
+      throw Error('Your session changed on another device. Try again.');
+    },
     editWebsite: editSelection,
     async start(minutes) {
       for (let attempt = 0; attempt < 4; attempt++) {
