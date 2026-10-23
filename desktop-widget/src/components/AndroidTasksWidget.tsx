@@ -38,8 +38,7 @@ export function AndroidTasksWidget({ uid, resizeSuspended = false, tasks, today,
       <div className="android-task-meter"><small>Task Meter</small><strong><NumberFlow value={model.summary.percent} suffix="%" /></strong></div>
     </div>
     <div className="android-task-study">Study time&nbsp; {formatMinutes(model.summary.minutes)}</div>
-    <FocusRewardRow uid={uid} date={model.selected} getDatabase={getFirebaseFirestore} />
-    <section className="android-task-list" aria-label="Daily tasks">{model.visibleTasks.length ? model.visibleTasks.map(task => {
+    <section className="android-task-list" aria-label="Daily tasks"><FocusRewardRow uid={uid} date={model.selected} getDatabase={getFirebaseFirestore} compact />{model.visibleTasks.length ? model.visibleTasks.map(task => {
       const missed = !task.completed && model.selected < today, score = points.get(task.id) ?? 0;
       return <TaskWidgetRow key={task.id} task={task} missed={missed} score={score} readOnly={model.readOnly} onComplete={onComplete} onReopen={onReopen} onContextMenu={model.selected < today && onReschedule ? event => { event.preventDefault(); event.stopPropagation(); onReschedule(task, { x: event.clientX, y: event.clientY }); } : undefined} />;
     }) : <p className="android-task-empty">{dueOnly && model.summary.total ? "All tasks complete" : "No tasks planned"}</p>}</section>

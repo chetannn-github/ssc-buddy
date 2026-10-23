@@ -291,7 +291,6 @@ export function TasksWorkspace({
               </>
             )}
           </div>
-          {!isHabits && <FocusRewardRow uid={user?.uid} date={selected} getDatabase={getFirebaseFirestore} />}
           {!isHabits && (
             <>
               {error && (
@@ -303,6 +302,7 @@ export function TasksWorkspace({
                 aria-label="Tasks"
                 className="-mx-4 -mb-4 mt-3 divide-y divide-white/10 border-t border-white/10 bg-[#121212] sm:-mx-6 sm:-mb-6"
               >
+                <FocusRewardRow uid={user?.uid} date={selected} getDatabase={getFirebaseFirestore} />
                 {visible.length ? (
                   visible.map((task) => (
                     <TaskRow

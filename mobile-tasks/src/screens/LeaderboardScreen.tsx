@@ -25,6 +25,7 @@ import { ALL_LEADERBOARD_DAYS, leaderboardPeriodStats, leaderboardPeriodTasks } 
 import { leaderboardWeekLabel, shiftLeaderboardWeek, resolveWeeklyResults } from "../domain/weekly-results";
 import { useLeaderboardWeek } from "../hooks/use-weekly-results";
 import { useLeaderboardXp } from "../hooks/use-leaderboard-xp";
+import { formatFocusMinutes } from "../../../shared/study-focus";
 
 const dayKey = (date = new Date()) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -244,16 +245,16 @@ export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { 
     const taskList = tasksForDay.length ? (
       tasksForDay.map((task: any, index: number) => {
         const overdue = !task.completed && String(task.date ?? "") < dayKey();
-        const meta = [selectedDate === ALL_LEADERBOARD_DAYS ? dateLabel(task.date) : "", task.subject, task.type, task.minutesSpent ? `${task.minutesSpent}m` : ""]
+        const meta = [selectedDate === ALL_LEADERBOARD_DAYS ? dateLabel(task.date) : "", ...(task.focus ? [formatFocusMinutes(task.minutesSpent)] : [task.subject, task.type, task.minutesSpent ? `${task.minutesSpent}m` : ""])]
           .filter(Boolean)
           .join(" · ");
         return (
           <View key={`${task.name}-${index}`} style={[s.task, index === tasksForDay.length - 1 && s.taskLast]}>
-            <View style={[s.taskCheck, task.completed ? s.taskCheckDone : overdue ? s.taskCheckMissed : s.taskCheckPending]}>
+            {task.focus ? <MaterialCommunityIcons name="timer-outline" size={25} color="#a1a1aa" /> : <View style={[s.taskCheck, task.completed ? s.taskCheckDone : overdue ? s.taskCheckMissed : s.taskCheckPending]}>
               {task.completed ? <MaterialCommunityIcons name="check-bold" size={14} color={dailyTaskColors.ink} /> : overdue ? <MaterialCommunityIcons name="close-thick" size={12} color="#f19a9f" /> : null}
-            </View>
+            </View>}
             <View style={{ flex: 1 }}>
-              <Text style={[s.taskTitle, task.completed && s.taskTitleDone]} numberOfLines={2}>
+              <Text style={[s.taskTitle, task.completed && !task.focus && s.taskTitleDone]} numberOfLines={2}>
                 {task.name}
               </Text>
               {meta ? <Text style={s.taskMeta} numberOfLines={1}>{meta}</Text> : null}

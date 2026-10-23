@@ -974,10 +974,10 @@ export default function App() {
             <TaskOverview total={todaySummary.total} due={dueTasks.length} percent={todaySummary.percent}
               dueOnly={taskDueOnly} onFilterChange={setTaskDueOnly}
               studyTime={<RollingDuration minutes={todaySummary.minutes} fontSize={12} />} />
-            <DailyFocusReward uid={user?.uid} date={activeTaskDate} />
             </View>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.content, styles.tasksContent]}>
             <View style={styles.tasksList}>
+            <DailyFocusReward uid={user?.uid} date={activeTaskDate} />
             {visibleTasks.length === 0 ? (
                 taskDueOnly && todayTasks.length > 0 ? <View style={{padding:22}}><Text style={styles.muted}>All tasks complete for this day.</Text></View> : isTaskHistory ? <View style={{padding:22}}><Text style={styles.muted}>No tasks recorded for this day.</Text></View> : <Empty onPress={openNew} />
             ) : (
