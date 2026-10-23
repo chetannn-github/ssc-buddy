@@ -8,6 +8,7 @@
 .focus-schedule-toolbar h2{flex-shrink:0;margin:0;font-size:13px;color:#f4f4f5}
 .focus-schedule-toolbar .focus-schedule-list{position:relative;isolation:isolate;display:flex;grid-column:1/-1;grid-row:2;gap:6px;min-width:0;overflow:auto;scrollbar-width:none;order:0}
 .focus-schedule-list::-webkit-scrollbar{display:none}
+.focus-schedule-toolbar .focus-schedule-list:empty{display:none}
 .focus-schedules .focus-schedule-item{display:flex;flex-direction:row;align-items:center;justify-content:center;flex-shrink:0;gap:5px;margin:0;padding:9px 10px;white-space:nowrap;border-radius:16px;text-align:left}
 .focus-schedule-item b{font-size:11px}.focus-schedule-item small{margin:0;font-size:9px}
 .focus-schedules .focus-schedule-item{position:relative;background:transparent;transition:color 240ms ease}.focus-schedule-item::before{content:"";position:absolute;inset:0;border-radius:inherit;background:#262626;z-index:-2}

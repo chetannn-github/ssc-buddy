@@ -17,7 +17,8 @@ export async function run() {
   window.setInterval=((fn:()=>void,delay=0)=>{timers.set(++serial,{fn,at:now+delay,period:delay});return serial;}) as any;
   window.clearTimeout=window.clearInterval=((id:number)=>timers.delete(id)) as any;
   const schedule={id:"sleep",name:"Sleep",weekdays:[1,3,5],startMinute:1320,endMinute:360,timeZone:"Asia/Kolkata",appLimit:0,domains:[],enabled:true,createdAt:0};
-  const path="users/student/studyLock/current",docs=new Map<string,any>([[path,{version:1,revision:"initial",session:null,focusSchedules:[schedule]}]]);
+  const reading={...schedule,id:"reading",name:"Reading",weekdays:[2,4],startMinute:720,endMinute:780};
+  const path="users/student/studyLock/current",docs=new Map<string,any>([[path,{version:1,revision:"initial",session:null,focusSchedules:[schedule,reading]}]]);
   const snap=(ref:string)=>({exists:()=>docs.has(ref),data:()=>docs.get(ref),metadata:{hasPendingWrites:false}});
   (globalThis as any).__scheduleSdk={
     listen:(ref:string,...args:any[])=>{const next=args.find(value=>typeof value==="function"),listener={ref,next,active:true};listeners.push(listener);next(snap(ref));return()=>{listener.active=false;};},
@@ -38,16 +39,15 @@ export async function run() {
     if(transactions)throw Error("scheduler polled DB before a due start");
     if(container.querySelector<HTMLInputElement>('[aria-label="Schedule name"]')?.value!=="Sleep")throw Error("existing schedule editor did not open immediately");
     const previewCards=[...container.querySelectorAll<HTMLButtonElement>('[data-schedule-preview]')];
-    if(previewCards.length!==5)throw Error("expected five temporary preview schedules");
+    if(previewCards.length)throw Error("temporary preview schedules remain visible");
     const savedRow=container.querySelector<HTMLElement>('[aria-label="Saved schedules"]')!,addButton=container.querySelector<HTMLElement>('[aria-label="Add focus schedule"]')!;
     if(savedRow.getBoundingClientRect().top<addButton.getBoundingClientRect().bottom)throw Error("saved schedules should be in the next row");
-    if(savedRow.textContent?.includes('Preview')||savedRow.textContent?.includes(':')||savedRow.querySelectorAll('svg').length!==6)throw Error("saved chips should only show names and icons");
+    if(savedRow.textContent?.includes('Preview')||savedRow.textContent?.includes(':')||savedRow.querySelectorAll('svg').length!==2)throw Error("saved chips should only show real schedules with names and icons");
     const initialForm=container.querySelector('.focus-schedule-form'),savedHighlight=savedRow.querySelector<HTMLElement>('.sliding-highlight')!,savedPosition=savedHighlight.style.transform;
-    await act(async()=>previewCards[2]!.click());
+    await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Edit Reading"]')!.click());
     if(container.querySelector('.focus-schedule-form')!==initialForm||getComputedStyle(initialForm!).animationName!=='none')throw Error("schedule form remounted or faded during selection");
     if(savedRow.querySelector('.sliding-highlight')!==savedHighlight||savedHighlight.style.transform===savedPosition||!savedHighlight.style.transition.includes('transform'))throw Error("schedule background did not slide between chips");
-    await act(async()=>button("Save schedule").click());
-    if(transactions)throw Error("saving a preview touched the database");
+    if(transactions)throw Error("switching saved schedules touched the database");
     await act(async()=>button("Edit").click());
     if(container.textContent?.includes("Asia/Kolkata")||container.textContent?.includes("No breaks"))throw Error("extra setup descriptions remain visible");
     if(container.querySelector('[aria-label="Schedule preset"]'))throw Error("preset categories should be removed");

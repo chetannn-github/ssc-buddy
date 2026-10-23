@@ -52,9 +52,9 @@ export function FocusSchedules({items,now,renderClock,saveSchedule,onBack,onSave
       <Text style={[s.title,{fontSize:15,flex:1}]}>Add schedule</Text>
       <Pressable accessibilityRole="button" accessibilityLabel="Add focus schedule" disabled={busy} hitSlop={8} onPress={()=>{setError("");setDraft(fresh());}}><MaterialCommunityIcons name="plus" size={23} color="#eee"/></Pressable>
     </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} nestedScrollEnabled style={{marginTop:8,flexGrow:0}} contentContainerStyle={{paddingVertical:3}}>
+      {savedItems.length>0&&<ScrollView horizontal showsHorizontalScrollIndicator={false} nestedScrollEnabled style={{marginTop:8,flexGrow:0}} contentContainerStyle={{paddingVertical:3}}>
         <AnimatedTimeChips options={savedItems.map((_,index)=>index)} labels={savedItems.map(item=>item.name)} icons={savedItems.map(item=><MaterialCommunityIcons name={savedIcons[focusScheduleIconIndex(item.id)]!} size={13} color="#888"/>)} optionWidths={savedWidths} value={savedItems.findIndex(item=>item.id===draft?.id)} onChange={index=>{setError("");setDraft({...savedItems[index]!});}} disabled={busy} color="#f9fcf5" ink="#111" height={34} gap={6} radius={16} textStyle={{fontSize:11}} style={{width:savedWidths.reduce((sum,width)=>sum+width,0)+Math.max(0,savedItems.length-1)*6}}/>
-      </ScrollView>
+      </ScrollView>}
     {Platform.OS==="android"&&items.length>0&&alarmAccess===false&&<Pressable style={s.item} onPress={()=>void openScheduleAlarmSettings().catch(()=>setError("Could not open alarm settings."))}><MaterialCommunityIcons name="alarm-check" size={20} color="#eee"/><Text style={[s.title,{flex:1}]}>Allow scheduled starts</Text><Text style={s.small}>Enable</Text></Pressable>}
     {draft&&<View style={s.form}>
       <TextInput accessibilityLabel="Schedule name" maxLength={40} editable={!busy&&!frozen} style={s.input} value={draft.name} onChangeText={name=>setDraft({...draft,name})} placeholder="Schedule name" placeholderTextColor="#888" />
