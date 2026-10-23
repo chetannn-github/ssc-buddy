@@ -1,4 +1,6 @@
 import "../../src/components/layout/accent-top-glow.css";
+import { useFocusScheduleRunner } from "../../shared/use-focus-schedule-runner";
+import * as scheduleReader from "../../shared/study-lock";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { invoke, isTauri } from "@tauri-apps/api/core";
@@ -91,6 +93,7 @@ function App() {
   const [recallMenu, setRecallMenu] = useState<{ x: number; y: number } | null>(null);
   const [pinError, setPinError] = useState("");
   const [user, setUser] = useState<User | null>(null);
+  useFocusScheduleRunner(user?.uid,getFirebaseFirestore,scheduleReader);
   const [authReady, setAuthReady] = useState(!firebaseConfigured);
   const [tasks, setTasks] = useState<DailyTask[]>([]);
   const habitApi = useHabits(user?.uid);

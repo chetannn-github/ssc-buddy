@@ -3,9 +3,10 @@ import { creditFocusDay, emptyFocusDay, focusSlices, studyTimeZone, type FocusDa
 import { MAX_STUDY_WEBSITES, splitSelection } from "./study-selection.ts";
 import { focusLeaderboardPatch, focusWeek } from "./focus-rewards.ts";
 import { focusSettlementDue } from "./focus-sync-policy.ts";
+import { assertScheduleChange, dueFocusOccurrence, focusOccurrences, normalizeFocusSchedule, scheduledFocusSession, type FocusSchedule } from "./focus-schedules.ts";
 import type { collection, doc, onSnapshot, runTransaction, serverTimestamp, Firestore, Transaction } from "firebase/firestore";
 export type StudySession = { id: string; lockId?: string; startedAt: number; endsAt: number; domains: string[]; timeZone?: string; paused?: boolean; pausedAt?: number; remainingMs?: number; appLimit?: number; breakLimit?: number; breaksTaken?: number; breakUntil?: number };
-export type StudyControl = { version: 1; revision: string; session: StudySession | null; source: string; allowedDomains?: string[]; overlayBreakId?: string };
+export type StudyControl = { version: 1; revision: string; session: StudySession | null; source: string; allowedDomains?: string[]; overlayBreakId?: string; focusSchedules?: FocusSchedule[] };
 export type OverlayBreak = { id: string; lockId: string; at: number; paused: boolean };
 export type StudyDevice = { id: string; label: string; sessionId: string | null; lastSeenAt: number; error: string };
 export const studyControlPath = (uid: string) => ["users", uid, "studyLock", "current"] as const;
@@ -172,10 +173,11 @@ async function startStudySession(db: Firestore, uid: string, minutes: number, va
     const current = (await transaction.get(reference)).data();
     if (sessionIsActive(current?.["session"])) throw Error("The current focus session is locked until its timer ends.");
     const startedAt = Date.now();
+    if ((current?.["focusSchedules"] ?? []).some((schedule: FocusSchedule) => focusOccurrences(schedule, startedAt).some(window => window.startedAt < startedAt + minutes * 60000 && window.endsAt > startedAt))) throw Error("This session overlaps a focus schedule. Choose a shorter duration.");
     const creditPrevious = await prepareFocusCredits(transaction, db, uid, current?.["session"], startedAt);
     creditPrevious();
     const session: StudySession = { id: randomUUID(), startedAt, endsAt: startedAt + minutes * 60000, domains, timeZone: studyTimeZone(), breakLimit, breaksTaken: 0, ...(source === "mobile" ? { appLimit } : {}) };
-    transaction.set(reference, { version: 1, revision: randomUUID(), session, allowedDomains: domains, source, updatedAt: serverTimestamp() });
+    transaction.set(reference, { ...current, version: 1, revision: randomUUID(), session, allowedDomains: domains, source, updatedAt: serverTimestamp() });
     return session;
   });
 }
@@ -187,7 +189,7 @@ async function saveStudyWebsites(db: Firestore, uid: string, values: string[], s
     if (sessionIsActive(current?.["session"])) throw Error("Websites are locked during your session.");
     const creditPrevious = await prepareFocusCredits(transaction, db, uid, current?.["session"], Date.now());
     creditPrevious();
-    transaction.set(reference, { version: 1, revision: randomUUID(), session: null, allowedDomains: domains, source, updatedAt: serverTimestamp() });
+    transaction.set(reference, { ...current, version: 1, revision: randomUUID(), session: null, allowedDomains: domains, source, updatedAt: serverTimestamp() });
   });
 }
 async function pauseStudySession(db: Firestore, uid: string, source = "windows") {
@@ -249,5 +251,30 @@ async function reconcileStudySession(db: Firestore, uid: string) {
     if (next !== current.session) transaction.set(reference, { ...current, session: next, revision: randomUUID(), updatedAt: serverTimestamp() });
   });
 }
-return { repairStudyFocusDays, settleStudyFocus, reconcileStudySession, watchStudyControl, watchStudyDevices, watchStudyFocusDay, watchStudyFocusDays, watchPublicStudyFocus, publishStudyFocusDay, recordStudyFocus, startStudySession, saveStudyWebsites, pauseStudySession, resumeStudySession, applyOverlayBreak };
+async function saveFocusSchedule(db: Firestore, uid: string, draft: FocusSchedule | null, id: string) {
+  const reference=doc(db,...studyControlPath(uid));
+  await runTransaction(db,async transaction=>{
+    const current=(await transaction.get(reference)).data() as StudyControl|undefined;
+    const existing=current?.focusSchedules??[],now=Date.now();
+    const previous=existing.find(item=>item.id===id);
+    const next=draft?normalizeFocusSchedule({...draft,id,createdAt:previous?.createdAt??now}):null;
+    assertScheduleChange(existing,next,id,now);
+    if(next&&sessionIsActive(current?.session,now)&&focusOccurrences(next,now).some(window=>window.startedAt<effectiveStudySession(current!.session!,now).endsAt&&window.endsAt>now))throw Error("This schedule overlaps your running focus session.");
+    transaction.set(reference,{...current,version:1,session:current?.session??null,source:"focus-schedule",revision:randomUUID(),focusSchedules:[...existing.filter(item=>item.id!==id),...(next?[next]:[])],updatedAt:serverTimestamp()});
+  });
+}
+async function activateDueFocusSchedule(db: Firestore, uid: string) {
+  const reference=doc(db,...studyControlPath(uid));
+  return runTransaction(db,async transaction=>{
+    const current=(await transaction.get(reference)).data() as StudyControl|undefined,now=Date.now();
+    const occurrence=dueFocusOccurrence(current?.focusSchedules??[],now);
+    if(!occurrence||sessionIsActive(current?.session,now))return current?.session??null;
+    const session=scheduledFocusSession(occurrence,current?.session?effectiveStudySession(current.session,now).endsAt:0);
+    if(session.startedAt>=session.endsAt)return null;
+    const creditPrevious=await prepareFocusCredits(transaction,db,uid,current?.session,now);creditPrevious();
+    transaction.set(reference,{...current,version:1,session,source:"focus-schedule",revision:randomUUID(),updatedAt:serverTimestamp()});
+    return session;
+  });
+}
+return { saveFocusSchedule, activateDueFocusSchedule, repairStudyFocusDays, settleStudyFocus, reconcileStudySession, watchStudyControl, watchStudyDevices, watchStudyFocusDay, watchStudyFocusDays, watchPublicStudyFocus, publishStudyFocusDay, recordStudyFocus, startStudySession, saveStudyWebsites, pauseStudySession, resumeStudySession, applyOverlayBreak };
 }

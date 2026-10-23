@@ -32,6 +32,26 @@ function fixture() {
 const start = Date.parse('2026-10-19T10:00:00Z');
 const session = (id = 'long', hours = 7) => ({id, startedAt: start, endsAt: start + hours * 3600000, domains: ['study.example'], timeZone: 'UTC', breakLimit: 0});
 
+test('scheduled start retains schedules and running ticks have no DB cost before one end settlement', async () => {
+  const f=fixture(),realNow=Date.now,path='users/student/studyLock/current';
+  const schedule={id:'morning',name:'Morning detox',weekdays:[1],startMinute:600,endMinute:1020,timeZone:'UTC',domains:[],appLimit:0,enabled:true,createdAt:0};
+  f.docs.set(path,{version:1,revision:'scheduled',session:null,focusSchedules:[schedule]});
+  try{
+    Date.now=()=>start;
+    const active=await f.controller.activateDueFocusSchedule(f.db,'student');
+    assert.equal(active.breakLimit,0);assert.equal(active.endsAt,start+7*3600000);
+    assert.deepEqual(f.docs.get(path).focusSchedules,[schedule]);
+    const afterStart={...f.counters};
+    for(let minute=0;minute<420;minute++)await f.controller.settleStudyFocus(f.db,'student',active,start+minute*60000);
+    assert.deepEqual(f.counters,afterStart);
+    await f.controller.settleStudyFocus(f.db,'student',active,active.endsAt);
+    assert.equal(f.docs.get('users/student/studyFocusDays/2026-10-19').totalMilliseconds,7*3600000);
+    const afterEnd={...f.counters};
+    for(let repeat=0;repeat<100;repeat++)await f.controller.settleStudyFocus(f.db,'student',active,active.endsAt+repeat*60000);
+    assert.deepEqual(f.counters,afterEnd);
+  }finally{Date.now=realNow;}
+});
+
 test('7 hours of web/app/Windows timer ticks cause zero focus DB operations; end commits once', async () => {
   const f = fixture(), s = session();
   for (let minute = 0; minute < 420; minute++) {

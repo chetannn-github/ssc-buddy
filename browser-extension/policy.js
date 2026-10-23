@@ -1,5 +1,6 @@
 import { effectiveStudySession, maxStudyBreaks, onStudyBreak } from "../shared/study-breaks.ts";
 import { studyTimeZone } from "../shared/study-focus.ts";
+import { focusOccurrences } from "../shared/focus-schedules.ts";
 import { MAX_STUDY_WEBSITES, splitSelection, websiteDomain } from '../shared/study-selection.ts';
 export const RULE_IDS = [1, 2, 3];
 export function validSession(session, time = Date.now()) {
@@ -34,6 +35,7 @@ export function startControl(control, minutes, time = Date.now()) {
   control = { ...control, session: control.session ? effectiveStudySession(control.session, time) : null };
   if (!Number.isInteger(minutes) || minutes < 1 || minutes > 720) throw Error('Choose 1 minute to 12 hours.');
   if (control.session && (control.session.paused || control.session.endsAt > time)) throw Error('Your session is already running.');
+  if((control.focusSchedules??[]).some(schedule=>focusOccurrences(schedule,time).some(window=>window.startedAt<time+minutes*60000&&window.endsAt>time)))throw Error('This session overlaps a focus schedule. Choose a shorter duration.');
   const { domains } = splitSelection((control.allowedDomains ?? []).slice(0, MAX_STUDY_WEBSITES));
   if (!domains.length) throw Error('Add a website first.');
   return { ...control, version: 1, revision: crypto.randomUUID(), source: 'extension', session: { id: crypto.randomUUID(), startedAt: time, endsAt: time + minutes * 60000, domains, timeZone: studyTimeZone(), breakLimit: maxStudyBreaks(minutes), breaksTaken: 0 } };

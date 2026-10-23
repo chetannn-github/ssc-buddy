@@ -59,6 +59,7 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
   private val essentials = mutableSetOf<String>()
   private val ticker = object : Runnable {
     override fun run() {
+      FocusSchedules.tick(this@BuddyFocusService)
       finishTimedBreak(this@BuddyFocusService)
       val state = "${FocusProtection.active(this@BuddyFocusService)}:${preferences.getLong("endsAt", 0)}:${preferences.getBoolean("paused", false)}:${FocusProtection.enabled(this@BuddyFocusService)}"
       if (state != protectionState) {
@@ -74,6 +75,8 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
   override fun onServiceConnected() {
     preferences = prefs(this)
     connected = true
+    FocusSchedules.tick(this)
+    FocusSchedules.arm(this)
     preferences.edit().remove("overlayError").apply()
     preferences.registerOnSharedPreferenceChangeListener(this)
     essentials.addAll(setOf(packageName, "android", "com.android.systemui", "com.android.settings", "com.android.permissioncontroller", "com.google.android.permissioncontroller", "com.android.phone", "com.android.server.telecom", "com.android.emergency", "com.google.android.dialer", "com.android.dialer", "com.samsung.android.dialer", "com.android.contacts", "com.google.android.contacts", "com.samsung.android.app.contacts"))

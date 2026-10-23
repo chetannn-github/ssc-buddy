@@ -13,6 +13,31 @@ const built = await build({configFile:false,logLevel:'silent',define:{__FIREBASE
 const output = Array.isArray(built)?built[0]:built;
 const { createCloud } = await import('data:text/javascript;base64,'+Buffer.from(output.output.find(item=>item.type==='chunk').code).toString('base64'));
 
+test('scheduled REST activation uses guarded writes, preserves schedules and is idempotent', async () => {
+  const realFetch=globalThis.fetch,realNow=Date.now;
+  const start=Date.parse('2026-10-19T16:30:00Z');Date.now=()=>start+60000;
+  const schedule={id:'sleep',name:'Sleep',weekdays:[1],startMinute:1320,endMinute:360,timeZone:'Asia/Kolkata',domains:['study.example'],appLimit:0,enabled:true,createdAt:0};
+  let control={version:1,revision:'saved',session:null,focusSchedules:[schedule],allowedDomains:['study.example']},writes=0,attempts=0,version='one';
+  globalThis.__focusCloud={auth:{currentUser:{uid:'student',getIdToken:async()=>'token'}}};
+  globalThis.fetch=async(raw,options)=>{
+    const url=new URL(raw);assert.ok(url.pathname.endsWith('/users/student/studyLock/current'));
+    if(!options.method)return {status:200,ok:true,json:async()=>({fields:encode(control).mapValue.fields,updateTime:version})};
+    assert.equal(url.searchParams.get('currentDocument.updateTime'),version);
+    if(attempts++===0){version='concurrent-update';return {status:412,ok:false,json:async()=>({})};}
+    control=decodeDocument(JSON.parse(options.body));writes++;
+    return {status:200,ok:true,json:async()=>({})};
+  };
+  try{
+    const cloud=createCloud();await cloud.ready;
+    const first=await cloud.read();
+    assert.equal(first.session.id,`schedule-sleep-${start}`);
+    assert.equal(first.session.startedAt,start);assert.equal(first.session.endsAt,Date.parse('2026-10-20T00:30:00Z'));
+    assert.equal(first.session.breakLimit,0);assert.deepEqual(first.focusSchedules,[schedule]);
+    assert.deepEqual(first.allowedDomains,['study.example']);assert.equal(writes,1);assert.equal(attempts,2);
+    await cloud.read();assert.equal(writes,1,'already active schedule is not rewritten');
+  }finally{globalThis.fetch=realFetch;Date.now=realNow;delete globalThis.__focusCloud;}
+});
+
 test('extension SDK watch ignores cached state, delivers verified server packets, reports offline and unsubscribes', async () => {
   let listener, stopped=false;
   globalThis.__focusCloud={auth:{currentUser:{uid:'student'}},listen:(path,options,next)=>{assert.equal(path,'users/student/studyLock/current');assert.equal(options.includeMetadataChanges,true);listener=next;return()=>{stopped=true;};}};

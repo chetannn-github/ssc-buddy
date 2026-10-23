@@ -37,6 +37,7 @@ import { WEB_CLOUD_SYNC_ENABLED } from "@/lib/web-cloud-sync";
 import { prepareWebAccountCache } from "@/lib/account-cache";
 import { loadActiveTest } from "@/lib/active-test";
 import type { User } from "firebase/auth";
+import { FocusScheduleRunner } from "@/components/FocusScheduleRunner";
 
 const DEBUG_FREEZE = import.meta.env.DEV;
 const debugFreeze = (label: string, details?: Record<string, unknown>) => {
@@ -488,6 +489,7 @@ function RootComponent() {
 
   return (
     <AuthUserContext.Provider value={syncUser}>
+      <FocusScheduleRunner uid={syncUser?.uid} />
       <QueryClientProvider client={queryClient}>
         {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
         {authResolved && uiSettingsReady && <Outlet />}

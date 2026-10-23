@@ -16,6 +16,7 @@ import { AnimatedTimeChips } from "./AnimatedTimeChips";
 import { deviceFocusStatus, openDeviceFocusSettings, supportsDeviceFocus, syncDeviceFocusState } from "../lib/native-focus-lock";
 import { clockValueFromPoint } from "../domain/clock-hand";
 import { MAX_STUDY_WEBSITES } from "../../../shared/study-selection";
+import { FocusSchedules } from "./FocusSchedules";
 
 // Use the mobile app's SDK instance and native UUID source with the shared contract.
 export const controller = createStudyController({ collection, doc, onSnapshot, runTransaction, serverTimestamp }, () => Crypto.randomUUID());
@@ -150,6 +151,7 @@ export function StudyLock({ uid, taskButton = false, openRequest = 0, onRequestO
               })}>{busy ? <ActivityIndicator color="#111" /> : <Text style={s.primaryText}>Start Focus Lock</Text>}</Pressable>
             </>}
             {!!error && <Text accessibilityRole="alert" style={s.error}>{error}</Text>}
+            <FocusSchedules items={control?.focusSchedules??[]} now={now} saveSchedule={(draft,id)=>controller.saveFocusSchedule(getFirebaseFirestore(),uid,draft,id)} renderClock={(value,onSave,onCancel,title)=><StudyClock minutes={value} accent={accent} onSave={onSave} onCancel={onCancel} timeOfDay title={title} />} />
           </>}
         </ScrollView>
       </KeyboardAvoidingView>
@@ -157,15 +159,16 @@ export function StudyLock({ uid, taskButton = false, openRequest = 0, onRequestO
   </>;
 }
 
-function StudyClock({ minutes, accent, onCancel, onSave }: { minutes: number; accent: string; onCancel: () => void; onSave: (value: number) => void }) {
+function StudyClock({ minutes, accent, onCancel, onSave, timeOfDay=false, title="Focus time" }: { minutes: number; accent: string; onCancel: () => void; onSave: (value: number) => void; timeOfDay?:boolean; title?:string }) {
   const [hour, setHour] = useState(Math.floor(minutes / 60)), [minute, setMinute] = useState(minutes % 60);
   const [part, setPart] = useState<"hour" | "minute">(minutes < 60 ? "minute" : "hour"), [keyboard, setKeyboard] = useState(false);
   const selected = part === "hour" ? hour : minute, angle = selected * (part === "hour" ? 30 : 6) * Math.PI / 180;
-  const total = hour * 60 + minute, valid = total >= 1 && total <= 720;
-  const choose = (value: number) => { if (part === "hour") setHour(value); else setMinute(value); };
+  const total = hour * 60 + minute, valid = timeOfDay ? total>=0&&total<1440 : total >= 1 && total <= 720;
+  const choose = (value: number) => { if (part === "hour") setHour(timeOfDay?value%12+(hour>=12?12:0):value); else setMinute(value); };
   return <>
-    <Text accessibilityRole="header" style={s.title}>Focus time</Text>
-    <View style={s.digits}>{(["hour", "minute"] as const).map((field, index) => <View key={field} style={s.digitGroup}>{index === 1 && <Text style={s.colon}>:</Text>}<View>{keyboard ? <TextInput accessibilityLabel={field === "hour" ? "Hours" : "Minutes"} keyboardType="number-pad" value={String(field === "hour" ? hour : minute)} onFocus={() => setPart(field)} onChangeText={value => { const next = Math.max(0, Math.min(field === "hour" ? 12 : 59, Number(value.replace(/\D/g, "")) || 0)); if (field === "hour") setHour(next); else setMinute(next); }} style={[s.digit, { color: "#fff" }]} /> : <Pressable accessibilityRole="button" accessibilityLabel={field === "hour" ? "Select hours" : "Select minutes"} onPress={() => setPart(field)} style={[s.digit, part === field && { backgroundColor: accent }]}><Text style={[s.digitText, part === field && { color: accentInk(accent) }]}>{String(field === "hour" ? hour : minute).padStart(2, "0")}</Text></Pressable>}<Text style={s.digitLabel}>{field === "hour" ? "Hours" : "Minutes"}</Text></View></View>)}</View>
+    <Text accessibilityRole="header" style={s.title}>{title}</Text>
+    {timeOfDay&&<View style={{flexDirection:"row",gap:8,justifyContent:"center",marginTop:12}}>{[0,12].map(value=><Pressable key={value} onPress={()=>setHour(hour%12+value)} style={{paddingHorizontal:18,paddingVertical:10,borderRadius:20,backgroundColor:(hour>=12?12:0)===value?"#f9fcf5":"#252525"}}><Text style={{color:(hour>=12?12:0)===value?"#111":"#eee"}}>{value?"PM":"AM"}</Text></Pressable>)}</View>}
+    <View style={s.digits}>{(["hour", "minute"] as const).map((field, index) => <View key={field} style={s.digitGroup}>{index === 1 && <Text style={s.colon}>:</Text>}<View>{keyboard ? <TextInput accessibilityLabel={field === "hour" ? "Hours" : "Minutes"} keyboardType="number-pad" value={String(field === "hour" ? hour : minute)} onFocus={() => setPart(field)} onChangeText={value => { const next = Math.max(0, Math.min(field === "hour" ? (timeOfDay ? 23 : 12) : 59, Number(value.replace(/\D/g, "")) || 0)); if (field === "hour") setHour(next); else setMinute(next); }} style={[s.digit, { color: "#fff" }]} /> : <Pressable accessibilityRole="button" accessibilityLabel={field === "hour" ? "Select hours" : "Select minutes"} onPress={() => setPart(field)} style={[s.digit, part === field && { backgroundColor: accent }]}><Text style={[s.digitText, part === field && { color: accentInk(accent) }]}>{String(field === "hour" ? hour : minute).padStart(2, "0")}</Text></Pressable>}<Text style={s.digitLabel}>{field === "hour" ? "Hours" : "Minutes"}</Text></View></View>)}</View>
     {!keyboard && <View style={s.clock}>
       <Svg pointerEvents="none" width={220} height={220} style={StyleSheet.absoluteFill}><Line x1={110} y1={110} x2={110 + Math.sin(angle) * 82} y2={110 - Math.cos(angle) * 82} stroke={accent} strokeWidth={2} /><Circle cx={110} cy={110} r={4} fill={accent} /><Circle cx={110 + Math.sin(angle) * 82} cy={110 - Math.cos(angle) * 82} r={17} fill={accent} /></Svg>
       <View style={StyleSheet.absoluteFill} onStartShouldSetResponder={() => true} onMoveShouldSetResponder={() => true} onResponderGrant={event => { const value = clockValueFromPoint(event.nativeEvent.locationX, event.nativeEvent.locationY, part); if (value !== null) choose(part === "hour" ? value % 12 : value); }} onResponderMove={event => { const value = clockValueFromPoint(event.nativeEvent.locationX, event.nativeEvent.locationY, part); if (value !== null) choose(part === "hour" ? value % 12 : value); }} onResponderRelease={() => { if (part === "hour") setPart("minute"); }} />

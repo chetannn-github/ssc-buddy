@@ -2,6 +2,14 @@
 
 Branch: `codex/focus-db-load` (based on `47af925`). No merge into main or the Usage Access experiment.
 
+## Scheduled Focus integration
+
+Recurring schedules from main are now included on this branch. Their setup, one-hour edit freeze, Android local alarms, overnight/weekday handling, fixed end times and cached extension enforcement are retained. Running scheduled sessions use the same event-based settlement policy as manual sessions.
+
+Additional regressions verify that a seven-hour scheduled session produces zero running-tick DB operations in the shared controller, and an eight-hour extension schedule performs one activation control read, then zero polling reads, running credit calls or heartbeat acknowledgements. The control activation remains a conditional write and retries concurrent-update conflicts. Listener/REST delivery acknowledgement is serialized to avoid duplicate writes; failed activation has a 30-second retry backoff without weakening local blocking.
+
+Integration checks: 77 combined regression tests plus nine schedule domain/controller tests and four real-browser React checks pass. Web/app TypeScript, web/widget/extension builds and Android Metro export pass. Physical-device APK behavior still requires testing. See [schedule behavior and limits](focus-schedules.md).
+
 ## Before / after
 
 | Surface | Before | After |

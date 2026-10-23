@@ -10,6 +10,7 @@ import { AnimatedChoices } from "./AnimatedChoices";
 import { StudyDurationPicker } from "./StudyDurationPicker";
 import { reconcileStudySession, publishStudyFocusDay } from "./study-lock";
 import { MAX_STUDY_WEBSITES } from "./study-selection";
+import { FocusScheduleManager } from "./FocusScheduleManager";
 import { Clock3, Globe2, MonitorUp, Monitor, Pause, Play, Plus, Minus, LockKeyhole, X } from "lucide-react";
 type Session = StudySession;
 type Status = { session: Session | null; connected: number; protected: number };
@@ -134,6 +135,7 @@ export function StudyLockControl({ uid, desktop = false, profile = false, getDat
           })}>{busy ? "Please wait…" : "Start Focus Lock"}</button>
         </>}
         {error && <p className="browser-study-error" role="alert">{error}</p>}
+        <FocusScheduleManager uid={uid} getDatabase={getDatabase} domains={websites} />
         </>}
         </div>
       </section>
