@@ -1,6 +1,7 @@
 import { DestructiveDialog } from "../components/DestructiveDialog";
 import { createThemedStyles } from "../theme";
 import { DropdownChevron } from "../components/DropdownChevron";
+import { HISTORY_TIME_RANGES, matchesHistoryTimeRange, type HistoryTimeRange } from "../domain/practice-history-range";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ActivityIndicator, Animated, BackHandler, Easing, Modal, Pressable, ScrollView as NativeScrollView, StyleSheet, Text, View } from "react-native";
@@ -25,8 +26,8 @@ export function ProgressScreen({ user, onBack }: { user: User | null; onBack?: (
   const [tests, setTests] = useState<MockTestLog[]>([]);
   const [trackerSubjects, setTrackerSubjects] = useState<Array<{ id: string; name: string }>>([]);
   const [category, setCategory] = useState<Category>("Sectional");
-  const [subject, setSubject] = useState("all");
-  const [menu, setMenu] = useState<"category" | "subject" | null>(null);
+  const [timeRange, setTimeRange] = useState<HistoryTimeRange>("all");
+  const [menu, setMenu] = useState<"category" | "range" | null>(null);
   const [showAll, setShowAll] = useState(false);
   const [loggingMockTest, setLoggingMockTest] = useState(false);
   const [progressLoaded, setProgressLoaded] = useState(!user);
@@ -43,13 +44,14 @@ export function ProgressScreen({ user, onBack }: { user: User | null; onBack?: (
     ...test,
     subject: trackerSubjects.find((item) => item.id === test.subject)?.name ?? (test.subject || "General"),
   })), [tests, trackerSubjects]);
-  const subjects = [...new Set(displayTests.filter((test) => test.type === "Sectional").map((test) => test.subject))];
-  const filtered = displayTests.filter((test) => test.type === category && (category !== "Sectional" || subject === "all" || test.subject === subject)).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const rangeLabel = HISTORY_TIME_RANGES.find(item => item.value === timeRange)?.label ?? "All time";
+  const rangeTests = displayTests.filter(test => matchesHistoryTimeRange(test, timeRange));
+  const filtered = rangeTests.filter(test => test.type === category).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   const summary = useMemo(() => {
     const scores = filtered.map((test) => test.score), accuracy = filtered.map((test) => test.accuracy);
     return { high: scores.length ? Math.max(...scores) : 0, low: scores.length ? Math.min(...scores) : 0, average: scores.length ? (scores.reduce((sum, value) => sum + value, 0) / scores.length).toFixed(1) : "0", accuracy: accuracy.length ? (accuracy.reduce((sum, value) => sum + value, 0) / accuracy.length).toFixed(1) : "0" };
   }, [filtered]);
-  const choose = (next: Category) => { setCategory(next); setSubject("all"); setMenu(null); };
+  const choose = (next: Category) => { setCategory(next); setMenu(null); };
   const removeTest = async (id: string) => { if (user) await deleteTrackerTest(user, id); };
   const saveMockTest = (entry: MockTestLog) => {
     if (!user) return;
@@ -58,14 +60,14 @@ export function ProgressScreen({ user, onBack }: { user: User | null; onBack?: (
   if (!progressLoaded) return <View style={s.page}><View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}><ActivityIndicator size="small" color={colors.accent} /></View></View>;
   return <View style={s.page}>
     {menu && <Pressable accessibilityLabel="Close filters" style={s.dismissLayer} onPress={() => setMenu(null)} />}
-    <View style={s.header}><Pressable accessibilityLabel="Close filters" style={s.headerDismiss} onPress={() => setMenu(null)} /><Text style={s.eyebrow}>MOCK TEST ANALYSIS</Text><View style={s.titleRow}><View style={{ zIndex: 2, flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 8 }}>{onBack && <Pressable accessibilityRole="button" accessibilityLabel="Back to Mock Test" onPress={onBack} hitSlop={8} style={{ padding: 4 }}><MaterialCommunityIcons name="arrow-left" size={23} color={colors.text} /></Pressable>}<Text style={s.title}>Analysis</Text></View><Pressable onPress={() => setLoggingMockTest(true)} style={s.logButton}><MaterialCommunityIcons name="file-edit-outline" size={15} color={colors.text} /><Text style={s.logButtonText}>Log mock test</Text></Pressable></View><View style={s.filters}>
-      <Filter label={category} selectedValue={category} open={menu === "category"} onPress={() => setMenu(menu === "category" ? null : "category")}>{categories.map((item) => <Pressable key={item} onPress={() => choose(item)} style={s.menuItem}><Text style={s.menuText}>{item}</Text></Pressable>)}</Filter>
-      <Filter label={category === "Sectional" ? (subject === "all" ? "All subjects" : subject) : "All subjects"} selectedValue={category === "Sectional" ? (subject === "all" ? "All subjects" : subject) : "All subjects"} disabled={category !== "Sectional"} open={menu === "subject"} onPress={() => setMenu(menu === "subject" ? null : "subject")}>{["all", ...subjects].map((item) => <Pressable key={item} onPress={() => { setSubject(item); setMenu(null); }} style={s.menuItem}><Text style={s.menuText}>{item === "all" ? "All subjects" : item}</Text></Pressable>)}</Filter>
+    <View style={s.header}><Pressable accessibilityLabel="Close filters" style={s.headerDismiss} onPress={() => setMenu(null)} /><Text style={s.eyebrow}>MOCK TEST ANALYSIS</Text><View style={s.titleRow}><View style={{ zIndex: 2, flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 8 }}><Text style={s.title}>Analysis</Text></View><Pressable onPress={() => setLoggingMockTest(true)} style={s.logButton}><MaterialCommunityIcons name="file-edit-outline" size={15} color={colors.text} /><Text style={s.logButtonText}>Log mock test</Text></Pressable></View><View style={s.filters}>
+      <Filter label={rangeLabel} selectedValue={rangeLabel} open={menu === "range"} onPress={() => setMenu(menu === "range" ? null : "range")}>{HISTORY_TIME_RANGES.map(item => <Pressable accessibilityRole="button" key={item.value} onPress={() => { setTimeRange(item.value); setMenu(null); }} style={s.menuItem}><Text style={s.menuText}>{item.label}</Text></Pressable>)}</Filter>
+      <Filter label={category} selectedValue={category} open={menu === "category"} onPress={() => setMenu(menu === "category" ? null : "category")}>{categories.map((item) => <Pressable accessibilityRole="button" key={item} onPress={() => choose(item)} style={s.menuItem}><Text style={s.menuText}>{item}</Text></Pressable>)}</Filter>
     </View></View>
     <ScrollView contentContainerStyle={s.content} onScrollBeginDrag={() => setMenu(null)}>
-      {filtered.length ? <><View style={s.stats}><Metric label="Tests" value={String(filtered.length)} /><Metric label="Highest" value={String(summary.high)} suffix="marks" /><Metric label="Lowest" value={String(summary.low)} suffix="marks" /><Metric label="Average" value={summary.average} suffix="marks" /><Metric label="Avg. accuracy" value={summary.accuracy} suffix="%" /></View><Chart title="Marks trend" tests={filtered} metric="marks" color={colors.accent} category={category} /><Chart title="Accuracy trend" tests={filtered} metric="accuracy" color="#34d399" category={category} /><View style={s.history}><View style={s.historyHeader}><View><Text style={s.historyTitle}>Recent tests</Text><Text style={s.historyCount}>Latest {Math.min(5, filtered.length)} of {filtered.length}</Text></View><Pressable onPress={() => setShowAll(true)} style={s.allButton}><Text style={s.allButtonText}>All tests</Text><MaterialCommunityIcons name="arrow-right" size={15} color="#a5b4fc" /></Pressable></View>{[...filtered].reverse().slice(0, 5).map((test) => <TestRow key={test.id} test={test} category={category} />)}</View></> : <View style={s.empty}><MaterialCommunityIcons name="chart-line-variant" size={32} color={colors.subdued} /><Text style={s.emptyTitle}>No {category.toLowerCase()} tests yet</Text><Text style={s.emptyCopy}>Use Log mock test above to add your first result.</Text></View>}
+      {filtered.length ? <><View style={s.stats}><Metric label="Tests" value={String(filtered.length)} /><Metric label="Highest" value={String(summary.high)} suffix="marks" /><Metric label="Lowest" value={String(summary.low)} suffix="marks" /><Metric label="Average" value={summary.average} suffix="marks" /><Metric label="Avg. accuracy" value={summary.accuracy} suffix="%" /></View><Chart title="Marks trend" tests={filtered} metric="marks" color={colors.accent} category={category} /><Chart title="Accuracy trend" tests={filtered} metric="accuracy" color="#34d399" category={category} /><View style={s.history}><View style={s.historyHeader}><View><Text style={s.historyTitle}>Recent tests</Text><Text style={s.historyCount}>Latest {Math.min(5, filtered.length)} of {filtered.length}</Text></View><Pressable onPress={() => setShowAll(true)} style={s.allButton}><Text style={s.allButtonText}>All tests</Text><MaterialCommunityIcons name="arrow-right" size={15} color="#a5b4fc" /></Pressable></View>{[...filtered].reverse().slice(0, 5).map((test) => <TestRow key={test.id} test={test} category={category} />)}</View></> : <View style={s.empty}><MaterialCommunityIcons name="chart-line-variant" size={32} color={colors.subdued} /><Text style={s.emptyTitle}>{timeRange === "all" ? `No ${category.toLowerCase()} tests yet` : "No tests in this range"}</Text><Text style={s.emptyCopy}>{timeRange === "all" ? "Use Log mock test above to add your first result." : "Try another time range."}</Text></View>}
     </ScrollView>
-    <AllTestsModal visible={showAll} tests={displayTests} onClose={() => setShowAll(false)} onDelete={removeTest} />
+    <AllTestsModal visible={showAll} tests={rangeTests} onClose={() => setShowAll(false)} onDelete={removeTest} />
     <MockTestLogDialog visible={loggingMockTest} subjects={trackerSubjects.map((item) => item.name)} onClose={() => setLoggingMockTest(false)} onSave={saveMockTest} />
   </View>;
 }
@@ -89,7 +91,7 @@ function Filter({ label, selectedValue, open, disabled, onPress, children }: { l
     const selected = child.props.children?.props?.children === selectedValue;
     return { ...child, props: { ...child.props, style: [s.menuItem, selected && s.menuItemSelected], children: <><Text style={[s.menuText, selected && s.menuTextSelected]}>{child.props.children?.props?.children}</Text>{selected && <MaterialCommunityIcons name="check" size={16} color="#171717" />}</> } };
   });
-  return <View style={s.filterWrap}><Pressable disabled={disabled} onPress={onPress} style={[s.filter, disabled && s.disabled]}><Text style={s.filterText} numberOfLines={1}>{label}</Text><DropdownChevron open={open} size={16} color={colors.muted} /></Pressable>{mounted && <Animated.View style={[s.menu, { opacity: progress, transform: [{ translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [-7, 0] }) }, { scale: progress.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) }] }]}>{options}</Animated.View>}</View>;
+  return <View style={s.filterWrap}><Pressable accessibilityRole="button" accessibilityState={{ expanded: open, disabled: !!disabled }} disabled={disabled} onPress={onPress} style={[s.filter, disabled && s.disabled]}><Text style={s.filterText} numberOfLines={1}>{label}</Text><DropdownChevron open={open} size={16} color={colors.muted} /></Pressable>{mounted && <Animated.View style={[s.menu, { opacity: progress, transform: [{ translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [-7, 0] }) }, { scale: progress.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) }] }]}>{options}</Animated.View>}</View>;
 }
 function Metric({ label, value, suffix }: { label: string; value: string; suffix?: string }) { return <View style={s.metric}><Text style={s.metricLabel}>{label}</Text><Text style={s.metricValue}>{value}<Text style={s.metricSuffix}>{suffix ? ` ${suffix}` : ""}</Text></Text></View>; }
 function TestRow({ test, category }: { test: MockTestLog; category: Category }) { return <View style={s.testRow}><View style={{ flex: 1 }}><Text style={s.testDate}>{new Date(test.date).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}</Text><Text style={s.testSubject}>{category === "Sectional" ? test.subject : category}</Text></View><View style={s.testResult}><Text style={s.testMarks}>{test.score}/{test.total}</Text><Text style={s.testAccuracy}>{test.accuracy}%</Text></View></View>; }
