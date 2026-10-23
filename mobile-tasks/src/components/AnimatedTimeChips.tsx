@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AccessibilityInfo, Animated, Easing, Pressable, StyleSheet, View, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
 
-export function AnimatedTimeChips({ options, labels, disabledOptions = [], value, onChange, disabled = false, suffix = "", color, ink, muted = "#c6c6c6", background = "#202020", radius = 20, gap = 8, height = 40, borderColor, textStyle, style }: {
+export function AnimatedTimeChips({ options, labels, disabledOptions = [], value, onChange, disabled = false, suffix = "", color, ink, muted = "#c6c6c6", background = "#202020", radius = 20, gap = 8, height = 40, borderColor, textStyle, style, vertical = false }: {
   options: readonly number[];
   labels?: readonly string[];
   disabledOptions?: readonly number[];
@@ -19,6 +19,7 @@ export function AnimatedTimeChips({ options, labels, disabledOptions = [], value
   borderColor?: string;
   textStyle?: StyleProp<TextStyle>;
   style?: StyleProp<ViewStyle>;
+  vertical?: boolean;
 }) {
   const index = options.indexOf(value);
   const position = useRef(new Animated.Value(Math.max(0, index))).current;
@@ -46,11 +47,11 @@ export function AnimatedTimeChips({ options, labels, disabledOptions = [], value
     return () => animation.stop();
   }, [index, reducedMotion, position, visibility]);
   const chipWidth = Math.max(0, (width - gap * (options.length - 1)) / options.length);
-  return <View onLayout={event => setWidth(event.nativeEvent.layout.width)} style={[styles.row, { gap, minHeight: height }, style]}>
-    <View pointerEvents="none" accessible={false} style={[StyleSheet.absoluteFill, styles.row, { gap }]}>
+  return <View onLayout={event => setWidth(event.nativeEvent.layout.width)} style={[styles.row, { gap, minHeight: vertical ? height * options.length + gap * (options.length - 1) : height, flexDirection: vertical ? "column" : "row" }, style]}>
+    <View pointerEvents="none" accessible={false} style={[StyleSheet.absoluteFill, styles.row, { gap, flexDirection: vertical ? "column" : "row" }]}>
       {options.map(option => <View key={option} style={{ flex: 1, borderRadius: radius, backgroundColor: background, borderWidth: borderColor ? 1 : 0, borderColor, opacity: disabled || disabledOptions.includes(option) ? 0.45 : 1 }} />)}
     </View>
-    {width > 0 && <Animated.View pointerEvents="none" accessible={false} style={[StyleSheet.absoluteFill, { right: undefined, width: chipWidth, borderRadius: radius, backgroundColor: color, opacity: visibility, transform: [{ translateX: Animated.multiply(position, chipWidth + gap) }] }]} />}
+    {width > 0 && <Animated.View pointerEvents="none" accessible={false} style={[StyleSheet.absoluteFill, vertical ? { bottom: undefined, height, transform: [{ translateY: Animated.multiply(position, height + gap) }] } : { right: undefined, width: chipWidth, transform: [{ translateX: Animated.multiply(position, chipWidth + gap) }] }, { borderRadius: radius, backgroundColor: color, opacity: visibility }]} />}
     {options.map((option, optionIndex) => {
       const selected = Animated.multiply(visibility, position.interpolate({ inputRange: [optionIndex - 1, optionIndex, optionIndex + 1], outputRange: [0, 1, 0], extrapolate: "clamp" }));
       const unavailable = disabled || disabledOptions.includes(option);

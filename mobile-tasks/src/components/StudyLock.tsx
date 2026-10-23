@@ -26,6 +26,9 @@ const remaining = (end: number, now: number) => {
 export function StudyLock({ uid, taskButton = false, openRequest = 0, onRequestOpened }: { uid: string; taskButton?: boolean; openRequest?: number; onRequestOpened?: () => void }) {
   const accent = useAppAccent();
   const [open, setOpen] = useState(false), [picking, setPicking] = useState(false);
+  const [schedulesOpen, setSchedulesOpen] = useState(false);
+  const panelMotion = useRef(new Animated.Value(1)).current;
+  useEffect(() => { if (!open) setSchedulesOpen(false); }, [open]);
   useEffect(() => { if (openRequest) { setOpen(true); onRequestOpened?.(); } }, [openRequest, onRequestOpened]);
   const [control, setControl] = useState<StudyControl | null>(null);
   const [now, setNow] = useState(Date.now()), [minutes, setMinutes] = useState(25);
@@ -40,6 +43,13 @@ export function StudyLock({ uid, taskButton = false, openRequest = 0, onRequestO
     const listener = AccessibilityInfo.addEventListener("reduceMotionChanged", setReducedMotion);
     return () => { active = false; listener.remove(); };
   }, []);
+  useEffect(() => {
+    panelMotion.setValue(reducedMotion ? 1 : 0);
+    if (reducedMotion) return;
+    const animation = Animated.timing(panelMotion, { toValue: 1, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: true });
+    animation.start();
+    return () => animation.stop();
+  }, [schedulesOpen, reducedMotion, panelMotion]);
   const appLimitSlide = useRef(new Animated.Value(2 * 46)).current;
   useEffect(() => {
     if (reducedMotion) {
@@ -85,7 +95,7 @@ export function StudyLock({ uid, taskButton = false, openRequest = 0, onRequestO
     try { await action(); } catch (e) { const message = e instanceof Error ? e.message : ""; setError(/firebase|googleapis/i.test(message) || !message ? "Could not update your focus session. Please try again." : message); }
     finally { setBusy(false); }
   };
-  const close = () => { if (picking) setPicking(false); else setOpen(false); };
+  const close = () => { if (picking) setPicking(false); else if (schedulesOpen) setSchedulesOpen(false); else setOpen(false); };
   const icon = (name: React.ComponentProps<typeof MaterialCommunityIcons>["name"], size = 17, tint = "#999") => <MaterialCommunityIcons name={name} size={size} color={tint} />;
   return <>
     {taskButton ? <Pressable accessibilityRole="button" accessibilityLabel={session ? "Open focus timer" : "Start Focus"} hitSlop={4} style={s.taskStart} onPress={() => setOpen(true)}>
@@ -101,8 +111,12 @@ export function StudyLock({ uid, taskButton = false, openRequest = 0, onRequestO
       <KeyboardAvoidingView style={s.overlay} behavior={Platform.OS === "ios" ? "padding" : "height"}>
         <Pressable style={StyleSheet.absoluteFill} accessibilityLabel="Close Focus Lock" onPress={close} />
         <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} style={s.dialog} contentContainerStyle={s.dialogContent}>
-          {picking && !session ? <StudyClock minutes={minutes} accent={accent} onCancel={() => setPicking(false)} onSave={value => { setMinutes(value); setPicking(false); }} /> : <>
-            <View style={s.heading}><Text accessibilityRole="header" style={s.title}>Focus Lock</Text><Pressable accessibilityRole="button" accessibilityLabel="Close Focus Lock dialog" hitSlop={10} onPress={close}>{icon("close", 19)}</Pressable></View>
+          <Animated.View style={{ opacity: panelMotion, transform: [{ translateY: panelMotion.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }] }}>
+          {schedulesOpen ? <>
+            <View style={[s.heading,{justifyContent:"flex-start"}]}><Pressable accessibilityRole="button" accessibilityLabel="Back to Focus Lock" hitSlop={10} onPress={()=>setSchedulesOpen(false)}>{icon("arrow-left", 21)}</Pressable><Text accessibilityRole="header" style={s.title}>Schedules</Text></View>
+            <FocusSchedules items={control?.focusSchedules??[]} now={now} saveSchedule={(draft,id)=>controller.saveFocusSchedule(getFirebaseFirestore(),uid,draft,id)} renderClock={(value,onSave,onCancel,title)=><StudyClock minutes={value} accent={accent} onSave={onSave} onCancel={onCancel} timeOfDay title={title} />} />
+          </> : picking && !session ? <StudyClock minutes={minutes} accent={accent} onCancel={() => setPicking(false)} onSave={value => { setMinutes(value); setPicking(false); }} /> : <>
+            <View style={s.heading}><Text accessibilityRole="header" style={s.title}>Focus Lock</Text><Pressable accessibilityRole="button" accessibilityLabel="Focus schedules" hitSlop={10} onPress={()=>setSchedulesOpen(true)}>{icon("calendar-clock-outline", 21)}</Pressable></View>
             {!ready && !error && <ActivityIndicator color={accent} />}
             <DeviceFocusSetup />
             {session ? <>
@@ -151,8 +165,8 @@ export function StudyLock({ uid, taskButton = false, openRequest = 0, onRequestO
               })}>{busy ? <ActivityIndicator color="#111" /> : <Text style={s.primaryText}>Start Focus Lock</Text>}</Pressable>
             </>}
             {!!error && <Text accessibilityRole="alert" style={s.error}>{error}</Text>}
-            <FocusSchedules items={control?.focusSchedules??[]} now={now} saveSchedule={(draft,id)=>controller.saveFocusSchedule(getFirebaseFirestore(),uid,draft,id)} renderClock={(value,onSave,onCancel,title)=><StudyClock minutes={value} accent={accent} onSave={onSave} onCancel={onCancel} timeOfDay title={title} />} />
           </>}
+          </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
     </Modal>
@@ -162,17 +176,28 @@ export function StudyLock({ uid, taskButton = false, openRequest = 0, onRequestO
 function StudyClock({ minutes, accent, onCancel, onSave, timeOfDay=false, title="Focus time" }: { minutes: number; accent: string; onCancel: () => void; onSave: (value: number) => void; timeOfDay?:boolean; title?:string }) {
   const [hour, setHour] = useState(Math.floor(minutes / 60)), [minute, setMinute] = useState(minutes % 60);
   const [part, setPart] = useState<"hour" | "minute">(minutes < 60 ? "minute" : "hour"), [keyboard, setKeyboard] = useState(false);
-  const selected = part === "hour" ? hour : minute, angle = selected * (part === "hour" ? 30 : 6) * Math.PI / 180;
+  const selected = part === "hour" ? (timeOfDay ? hour % 12 : hour) : minute, angle = selected * (part === "hour" ? 30 : 6) * Math.PI / 180;
+  const displayHour = timeOfDay ? hour % 12 || 12 : hour;
   const total = hour * 60 + minute, valid = timeOfDay ? total>=0&&total<1440 : total >= 1 && total <= 720;
   const choose = (value: number) => { if (part === "hour") setHour(timeOfDay?value%12+(hour>=12?12:0):value); else setMinute(value); };
   return <>
     <Text accessibilityRole="header" style={s.title}>{title}</Text>
-    {timeOfDay&&<View style={{flexDirection:"row",gap:8,justifyContent:"center",marginTop:12}}>{[0,12].map(value=><Pressable key={value} onPress={()=>setHour(hour%12+value)} style={{paddingHorizontal:18,paddingVertical:10,borderRadius:20,backgroundColor:(hour>=12?12:0)===value?"#f9fcf5":"#252525"}}><Text style={{color:(hour>=12?12:0)===value?"#111":"#eee"}}>{value?"PM":"AM"}</Text></Pressable>)}</View>}
-    <View style={s.digits}>{(["hour", "minute"] as const).map((field, index) => <View key={field} style={s.digitGroup}>{index === 1 && <Text style={s.colon}>:</Text>}<View>{keyboard ? <TextInput accessibilityLabel={field === "hour" ? "Hours" : "Minutes"} keyboardType="number-pad" value={String(field === "hour" ? hour : minute)} onFocus={() => setPart(field)} onChangeText={value => { const next = Math.max(0, Math.min(field === "hour" ? (timeOfDay ? 23 : 12) : 59, Number(value.replace(/\D/g, "")) || 0)); if (field === "hour") setHour(next); else setMinute(next); }} style={[s.digit, { color: "#fff" }]} /> : <Pressable accessibilityRole="button" accessibilityLabel={field === "hour" ? "Select hours" : "Select minutes"} onPress={() => setPart(field)} style={[s.digit, part === field && { backgroundColor: accent }]}><Text style={[s.digitText, part === field && { color: accentInk(accent) }]}>{String(field === "hour" ? hour : minute).padStart(2, "0")}</Text></Pressable>}<Text style={s.digitLabel}>{field === "hour" ? "Hours" : "Minutes"}</Text></View></View>)}</View>
+    <View style={[s.digits,timeOfDay&&{gap:7}]}>
+      {(["hour", "minute"] as const).map((field, index) => <View key={field} style={[s.digitGroup,timeOfDay&&{gap:7}]}>
+        {index === 1 && <Text style={s.colon}>:</Text>}
+        <View>{keyboard ? <TextInput accessibilityLabel={field === "hour" ? "Hours" : "Minutes"} keyboardType="number-pad" value={String(field === "hour" ? displayHour : minute)} onFocus={() => setPart(field)} onChangeText={value => {
+          const next=Math.max(0,Math.min(field==="hour"?12:59,Number(value.replace(/\D/g,""))||0));
+          if(field==="hour")setHour(timeOfDay?next%12+(hour>=12?12:0):next);else setMinute(next);
+        }} style={[s.digit,timeOfDay&&{width:64},{color:"#fff"}]} /> : <Pressable accessibilityRole="button" accessibilityLabel={field === "hour" ? "Select hours" : "Select minutes"} onPress={()=>setPart(field)} style={[s.digit,timeOfDay&&{width:64},part===field&&{backgroundColor:accent}]}><Text style={[s.digitText,part===field&&{color:accentInk(accent)}]}>{String(field==="hour"?displayHour:minute).padStart(2,"0")}</Text></Pressable>}
+          <Text style={s.digitLabel}>{field==="hour"?"Hours":"Minutes"}</Text>
+        </View>
+      </View>)}
+      {timeOfDay&&<AnimatedTimeChips vertical options={[0,12]} labels={["AM","PM"]} value={hour>=12?12:0} onChange={value=>setHour(hour%12+value)} color="#f9fcf5" ink="#111" height={33} radius={0} gap={0} style={{width:48,height:66,alignSelf:"flex-start",borderRadius:12,overflow:"hidden",backgroundColor:"#202020"}} />}
+    </View>
     {!keyboard && <View style={s.clock}>
       <Svg pointerEvents="none" width={220} height={220} style={StyleSheet.absoluteFill}><Line x1={110} y1={110} x2={110 + Math.sin(angle) * 82} y2={110 - Math.cos(angle) * 82} stroke={accent} strokeWidth={2} /><Circle cx={110} cy={110} r={4} fill={accent} /><Circle cx={110 + Math.sin(angle) * 82} cy={110 - Math.cos(angle) * 82} r={17} fill={accent} /></Svg>
       <View style={StyleSheet.absoluteFill} onStartShouldSetResponder={() => true} onMoveShouldSetResponder={() => true} onResponderGrant={event => { const value = clockValueFromPoint(event.nativeEvent.locationX, event.nativeEvent.locationY, part); if (value !== null) choose(part === "hour" ? value % 12 : value); }} onResponderMove={event => { const value = clockValueFromPoint(event.nativeEvent.locationX, event.nativeEvent.locationY, part); if (value !== null) choose(part === "hour" ? value % 12 : value); }} onResponderRelease={() => { if (part === "hour") setPart("minute"); }} />
-      {Array.from({ length: 12 }, (_, index) => { const value = part === "hour" ? index : index * 5; return <Pressable key={value} accessibilityRole="button" accessibilityLabel={`${value} ${part === "hour" ? "hours" : "minutes"}`} style={[s.clockNumber, { left: 110 + Math.sin(index * Math.PI / 6) * 82 - 17, top: 110 - Math.cos(index * Math.PI / 6) * 82 - 17 }]} onPress={() => { choose(value); if (part === "hour") setPart("minute"); }}><Text style={{ fontSize: 15, color: selected === value ? accentInk(accent) : "#eee" }}>{value}</Text></Pressable>; })}
+      {Array.from({ length: 12 }, (_, index) => { const value = part === "hour" ? index : index * 5, label=timeOfDay&&part==="hour"&&value===0?12:value; return <Pressable key={value} accessibilityRole="button" accessibilityLabel={`${label} ${part === "hour" ? "hours" : "minutes"}`} style={[s.clockNumber, { left: 110 + Math.sin(index * Math.PI / 6) * 82 - 17, top: 110 - Math.cos(index * Math.PI / 6) * 82 - 17 }]} onPress={() => { choose(value); if (part === "hour") setPart("minute"); }}><Text style={{ fontSize: 15, color: selected === value ? accentInk(accent) : "#eee" }}>{label}</Text></Pressable>; })}
     </View>}
     {!valid && <Text style={s.error}>Choose 1 minute to 12 hours.</Text>}
     <View style={s.clockActions}><Pressable accessibilityRole="button" accessibilityLabel={keyboard ? "Use clock" : "Use keyboard"} onPress={() => setKeyboard(!keyboard)}><MaterialCommunityIcons name={keyboard ? "clock-outline" : "keyboard-outline"} size={21} color="#aaa" /></Pressable><View style={{ flex: 1 }} /><Pressable accessibilityRole="button" onPress={onCancel}><Text style={[s.clockAction, { color: accent }]}>Cancel</Text></Pressable><Pressable accessibilityRole="button" disabled={!valid} onPress={() => onSave(total)}><Text style={[s.clockAction, { color: accent, opacity: valid ? 1 : 0.4 }]}>Save</Text></Pressable></View>

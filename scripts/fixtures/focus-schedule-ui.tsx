@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { FocusScheduleManager } from "../../shared/FocusScheduleManager";
 import { useFocusScheduleRunner } from "../../shared/use-focus-schedule-runner";
 import * as reader from "../../shared/study-lock";
+import { StudyLockControl } from "../../shared/StudyLockControl";
 
 export async function run() {
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT=true;
@@ -34,6 +35,24 @@ export async function run() {
     await act(async()=>root.render(<View/>));
     if(transactions)throw Error("scheduler polled DB before a due start");
     await act(async()=>button("Edit").click());
+    if(container.textContent?.includes("Asia/Kolkata")||container.textContent?.includes("No breaks"))throw Error("extra setup descriptions remain visible");
+    const presetGroup=container.querySelector('[aria-label="Schedule preset"]')!;
+    const appsGroup=container.querySelector('[aria-label="Extra allowed apps"]')!;
+    await act(async()=>[...presetGroup.querySelectorAll('button')].find(item=>item.textContent==='Morning detox')!.click());
+    if(presetGroup.querySelector('[aria-pressed="true"]')?.textContent!=="Morning detox")throw Error("preset switch selection failed");
+    await act(async()=>[...presetGroup.querySelectorAll('button')].find(item=>item.textContent==='Sleep')!.click());
+    await act(async()=>appsGroup.querySelectorAll('button')[2]!.click());
+    if(appsGroup.querySelector('[aria-pressed="true"]')?.textContent!=="2")throw Error("allowed apps switch failed");
+    const weekday=container.querySelector<HTMLButtonElement>('.focus-schedule-days button')!;
+    const before=weekday.getAttribute('aria-pressed');
+    await act(async()=>weekday.click());
+    if(weekday.getAttribute('aria-pressed')===before||getComputedStyle(weekday).transitionDuration==='0s')throw Error("weekday tap animation missing");
+    await act(async()=>weekday.click());
+    const friday=[...container.querySelectorAll<HTMLButtonElement>('.focus-schedule-days button')].find(item=>item.textContent==='Fri')!;
+    await act(async()=>friday.click());await act(async()=>friday.click());
+    const fridayText=document.createRange();fridayText.selectNodeContents(friday);
+    if(fridayText.getClientRects().length!==1||getComputedStyle(friday).whiteSpace!=='nowrap')throw Error("Friday label wraps when selected");
+    if(transactions)throw Error("selection-only changes wrote to DB");
     if(button("Save schedule").disabled)throw Error("schedule froze before 9 PM");
     await tick(Date.parse("2026-10-19T15:30:00Z"));
     if(!button("Save schedule").disabled||!button("Delete").disabled)throw Error("open editor did not freeze at 9 PM");
@@ -47,7 +66,18 @@ export async function run() {
     await act(async()=>button("Cancel").click());
     await act(async()=>root.unmount());
     if(timers.size||listeners.some(item=>item.active))throw Error("scheduler leaked a timer/listener");
-    return "real schedule UI, editor locks at 9 PM, scheduled start at 10 PM, fixed 6 AM end, no steady polling, cleanup";
+    const panelRoot=createRoot(container);
+    await act(async()=>panelRoot.render(<StudyLockControl uid="student" source="web" getDatabase={getDb}/>));
+    await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Focus Lock"]')!.click());
+    if(document.querySelector('[aria-label="Focus schedules"]')===null||document.querySelector('[aria-label="Focus schedules"]')?.closest('.browser-study-heading')===null)throw Error("schedule icon missing from header");
+    if(document.querySelector('.focus-schedules'))throw Error("schedules are still inline in focus setup");
+    await act(async()=>document.querySelector<HTMLButtonElement>('[aria-label="Focus schedules"]')!.click());
+    if(!document.querySelector('.focus-schedules'))throw Error("schedule icon did not open schedules");
+    await act(async()=>document.querySelector<HTMLButtonElement>('[aria-label="Back to Focus Lock"]')!.click());
+    if(document.querySelector('.focus-schedules'))throw Error("schedule back navigation failed");
+    await act(async()=>panelRoot.unmount());
+    if(timers.size||listeners.some(item=>item.active))throw Error("focus dialog leaked timers or listeners");
+    return "header schedule icon/back, animated preset/apps/weekdays, clean setup, editor freeze, auto-start/end, no selection DB writes, cleanup";
   }finally{
     Date.now=originals.now;window.setInterval=originals.interval;window.setTimeout=originals.timeout;window.clearInterval=originals.clearInterval;window.clearTimeout=originals.clearTimeout;
     container.remove();delete (globalThis as any).__scheduleSdk;

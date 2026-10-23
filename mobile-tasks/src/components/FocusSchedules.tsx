@@ -1,16 +1,26 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { ActivityIndicator, Alert, AppState, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { useRef } from "react";
+import { AccessibilityInfo, Animated, Easing, ActivityIndicator, Alert, AppState, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { focusScheduleFrozen, nextFocusOccurrence, SCHEDULE_PRESETS, scheduleTime, WEEKDAY_LABELS, type FocusSchedule } from "../../../shared/focus-schedules";
 import { studyTimeZone } from "../../../shared/study-focus";
 import { deviceFocusStatus, openDeviceFocusSettings, openScheduleAlarmSettings, supportsDeviceSchedules } from "../lib/native-focus-lock";
 import * as Crypto from "expo-crypto";
 import { DestructiveDialog } from "./DestructiveDialog";
+import { AnimatedTimeChips } from "./AnimatedTimeChips";
 
 export function FocusSchedules({items,now,renderClock,saveSchedule}:{items:FocusSchedule[];now:number;renderClock:(minutes:number,onSave:(value:number)=>void,onCancel:()=>void,title:string)=>ReactNode;saveSchedule:(draft:FocusSchedule|null,id:string)=>Promise<void>}) {
   const [draft,setDraft]=useState<FocusSchedule|null>(null),[picking,setPicking]=useState<"startMinute"|"endMinute"|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState("");
   const [deleting,setDeleting]=useState(false);
   const [alarmAccess,setAlarmAccess]=useState<boolean|null>(null);
+  const [preset,setPreset]=useState(0);
+  const [reducedMotion,setReducedMotion]=useState(false);
+  useEffect(()=>{
+    let active=true;
+    void AccessibilityInfo.isReduceMotionEnabled().then(value=>{if(active)setReducedMotion(value);}).catch(()=>{});
+    const listener=AccessibilityInfo.addEventListener("reduceMotionChanged",setReducedMotion);
+    return()=>{active=false;listener.remove();};
+  },[]);
   useEffect(()=>{
     if(Platform.OS!=="android"||!supportsDeviceSchedules)return;
     let active=true;
@@ -32,25 +42,38 @@ export function FocusSchedules({items,now,renderClock,saveSchedule}:{items:Focus
     }catch(e){setError(e instanceof Error?e.message:"Could not save schedule.");}finally{setBusy(false);}
   };
   if(draft&&picking)return <View style={s.root}>{renderClock(draft[picking],value=>{setDraft({...draft,[picking]:value});setPicking(null);},()=>setPicking(null),picking==="startMinute"?"Start time":"End time")}</View>;
-  return <View style={s.root}>
-    <View style={s.row}><Text style={s.heading}>Schedules</Text><Pressable accessibilityRole="button" accessibilityLabel="Add focus schedule" disabled={busy} hitSlop={8} onPress={()=>{setError("");setDraft(fresh());}}><MaterialCommunityIcons name="plus" size={22} color="#eee" /></Pressable></View>
+  return <View style={[s.root,{borderTopWidth:0,paddingTop:0}]}>
+    <Pressable accessibilityRole="button" accessibilityLabel="Add focus schedule" disabled={busy} style={[s.chip,s.row,{alignSelf:"flex-start"}]} onPress={()=>{setError("");setPreset(0);setDraft(fresh());}}><MaterialCommunityIcons name="plus" size={17} color="#eee"/><Text style={s.chipText}>Add schedule</Text></Pressable>
     {Platform.OS==="android"&&items.length>0&&alarmAccess===false&&<Pressable style={s.item} onPress={()=>void openScheduleAlarmSettings().catch(()=>setError("Could not open alarm settings."))}><MaterialCommunityIcons name="alarm-check" size={20} color="#eee"/><Text style={[s.title,{flex:1}]}>Allow scheduled starts</Text><Text style={s.small}>Enable</Text></Pressable>}
-    {items.map(item=>{const locked=focusScheduleFrozen(item,now),next=nextFocusOccurrence(item,now);return <Pressable key={item.id} disabled={locked||busy} onPress={()=>{setError("");setDraft({...item});}} style={s.item}>
+    {items.map(item=>{const locked=focusScheduleFrozen(item,now),next=nextFocusOccurrence(item,now);return <Pressable key={item.id} disabled={locked||busy} onPress={()=>{setError("");const index=SCHEDULE_PRESETS.findIndex(p=>p.name===item.name);setPreset(index<0?2:index);setDraft({...item});}} style={s.item}>
       <MaterialCommunityIcons name={item.name==="Sleep"?"weather-night":"calendar-clock"} size={22} color="#aaa" />
       <View style={{flex:1,gap:3}}><Text style={s.title}>{item.name}</Text><Text style={s.small}>{scheduleTime(item.startMinute)}–{scheduleTime(item.endMinute)}{item.endMinute<=item.startMinute?" · next day":""}</Text><Text style={s.small}>{item.weekdays.map(day=>WEEKDAY_LABELS[day]).join(" · ")}</Text>{locked&&<Text style={s.small}>Locked until {next?new Date(next.endsAt).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}):"session ends"}</Text>}</View>
       <MaterialCommunityIcons name={locked?"lock-outline":"pencil-outline"} size={18} color="#999" />
     </Pressable>;})}
     {draft&&<View style={s.form}>
-      <View style={s.wrap}>{SCHEDULE_PRESETS.map(preset=><Pressable key={preset.name} disabled={busy||frozen} style={s.chip} onPress={()=>setDraft({...draft,...preset})}><Text style={s.chipText}>{preset.name}</Text></Pressable>)}</View>
+      <AnimatedTimeChips options={[0,1,2]} labels={SCHEDULE_PRESETS.map(p=>p.name)} value={preset} onChange={value=>{setPreset(value);setDraft({...draft,...SCHEDULE_PRESETS[value]!});}} disabled={busy||frozen} color="#f9fcf5" ink="#111" height={36} gap={5} textStyle={{fontSize:11}} />
       <TextInput accessibilityLabel="Schedule name" maxLength={40} editable={!busy&&!frozen} style={s.input} value={draft.name} onChangeText={name=>setDraft({...draft,name})} placeholder="Schedule name" placeholderTextColor="#888" />
       <View style={s.row}>{(["startMinute","endMinute"] as const).map(field=><Pressable key={field} disabled={busy||frozen} accessibilityRole="button" accessibilityLabel={field==="startMinute"?"Schedule start":"Schedule end"} style={s.time} onPress={()=>setPicking(field)}><Text style={s.small}>{field==="startMinute"?"Start":"End"}</Text><Text style={s.title}>{scheduleTime(draft[field])}</Text></Pressable>)}</View>
-      <View style={s.wrap}>{WEEKDAY_LABELS.map((day,index)=><Pressable key={day} disabled={busy||frozen} accessibilityRole="button" accessibilityState={{selected:draft.weekdays.includes(index)}} style={[s.chip,draft.weekdays.includes(index)&&s.selected]} onPress={()=>setDraft({...draft,weekdays:draft.weekdays.includes(index)?draft.weekdays.filter(value=>value!==index):[...draft.weekdays,index]})}><Text style={[s.chipText,draft.weekdays.includes(index)&&s.ink]}>{day}</Text></Pressable>)}</View>
-      <View style={s.row}><Text style={s.small}>Extra allowed apps</Text><View style={s.wrap}>{[0,1,2].map(value=><Pressable key={value} disabled={busy||frozen} style={[s.chip,draft.appLimit===value&&s.selected]} onPress={()=>setDraft({...draft,appLimit:value})}><Text style={[s.chipText,draft.appLimit===value&&s.ink]}>{value}</Text></Pressable>)}</View></View>
-      <Text style={s.small}>{draft.timeZone} · No breaks</Text><Text style={s.small}>Edits lock 1 hour before start</Text>
+      <View style={s.wrap}>{WEEKDAY_LABELS.map((day,index)=><WeekdayChip key={day} label={day} selected={draft.weekdays.includes(index)} disabled={busy||frozen} reducedMotion={reducedMotion} onPress={()=>setDraft({...draft,weekdays:draft.weekdays.includes(index)?draft.weekdays.filter(value=>value!==index):[...draft.weekdays,index]})}/>)}</View>
+      <View style={s.row}><Text style={s.title}>Allowed apps</Text><AnimatedTimeChips options={[0,1,2]} labels={["0","1","2"]} value={draft.appLimit} onChange={value=>setDraft({...draft,appLimit:value})} disabled={busy||frozen} color="#f9fcf5" ink="#111" height={34} gap={4} style={{width:132}} /></View>
       <View style={s.row}><Pressable disabled={busy} style={s.chip} onPress={()=>setDraft(null)}><Text style={s.chipText}>Cancel</Text></Pressable>{existing&&<Pressable disabled={busy||frozen} style={s.chip} onPress={()=>setDeleting(true)}><Text style={{color:"#ff647e",fontSize:12}}>Delete</Text></Pressable>}<Pressable disabled={busy||frozen} style={[s.chip,s.selected,{flex:1,alignItems:"center",opacity:frozen?.4:1}]} onPress={()=>void save(draft,draft.id)}>{busy?<ActivityIndicator color="#111"/>:<Text style={[s.chipText,s.ink]}>Save schedule</Text>}</Pressable></View>
     </View>}
     {!!error&&<Text accessibilityRole="alert" style={{color:"#ff8a95",fontSize:11,marginTop:8}}>{error}</Text>}
     <DestructiveDialog visible={deleting&&!!draft&&!frozen} title="Delete this schedule?" confirmLabel="Yes, delete" busy={busy} onCancel={()=>setDeleting(false)} onConfirm={async()=>{if(draft&&!frozen)await save(null,draft.id);setDeleting(false);}} />
   </View>;
+}
+function WeekdayChip({label,selected,disabled,reducedMotion,onPress}:{label:string;selected:boolean;disabled:boolean;reducedMotion:boolean;onPress:()=>void}) {
+  const progress=useRef(new Animated.Value(selected?1:0)).current;
+  useEffect(()=>{
+    if(reducedMotion){progress.setValue(selected?1:0);return;}
+    const animation=Animated.timing(progress,{toValue:selected?1:0,duration:190,easing:Easing.inOut(Easing.cubic),useNativeDriver:true});
+    animation.start();return()=>animation.stop();
+  },[selected,reducedMotion,progress]);
+  return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{selected,disabled}} disabled={disabled} onPress={onPress}>
+    <Animated.View style={[s.chip,{width:36,height:34,paddingHorizontal:0,paddingVertical:0,alignItems:"center",justifyContent:"center",opacity:disabled?.4:1,transform:[{scale:progress.interpolate({inputRange:[0,1],outputRange:[1,1.04]})}]}]}>
+      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill,{borderRadius:18,backgroundColor:"#f9fcf5",opacity:progress}]}/>
+      <View style={{width:26,height:16}}><Animated.Text numberOfLines={1} allowFontScaling={false} style={[s.chipText,{lineHeight:16,includeFontPadding:false,textAlign:"center",opacity:progress.interpolate({inputRange:[0,1],outputRange:[1,0]})}]}>{label}</Animated.Text><Animated.Text numberOfLines={1} allowFontScaling={false} style={[s.chipText,s.ink,{position:"absolute",top:0,left:0,right:0,lineHeight:16,includeFontPadding:false,textAlign:"center",opacity:progress}]}>{label}</Animated.Text></View>
+    </Animated.View>
+  </Pressable>;
 }
 const s=StyleSheet.create({root:{marginTop:16,borderTopWidth:1,borderTopColor:"#ffffff16",paddingTop:14},row:{flexDirection:"row",alignItems:"center",justifyContent:"space-between",gap:8},heading:{color:"#eee",fontSize:14,fontWeight:"700"},item:{flexDirection:"row",alignItems:"center",gap:10,padding:12,marginTop:8,backgroundColor:"#1c1c1c",borderRadius:14},title:{color:"#eee",fontSize:13,fontWeight:"600"},small:{color:"#999",fontSize:10},form:{gap:10,marginTop:12},wrap:{flexDirection:"row",gap:5,flexWrap:"wrap"},chip:{backgroundColor:"#262626",paddingHorizontal:10,paddingVertical:9,borderRadius:18},chipText:{color:"#eee",fontSize:11,fontWeight:"600"},selected:{backgroundColor:"#f9fcf5"},ink:{color:"#111"},input:{backgroundColor:"#252525",color:"#eee",padding:12,borderRadius:12,fontSize:13},time:{flex:1,backgroundColor:"#252525",padding:12,borderRadius:12,gap:5}});
