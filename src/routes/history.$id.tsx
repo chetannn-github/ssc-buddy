@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, RefreshCw, RotateCcw } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { ResultScreen } from "@/components/exam/ResultScreen";
+import { SolutionScreen } from "@/components/exam/SolutionScreen";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
@@ -36,6 +37,7 @@ function ResultDetail() {
   const { id } = Route.useParams();
   const [record, setRecord] = useState<TestRecord | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [solutionId, setSolutionId] = useState<string | null>(null);
   const [attempts, setAttempts] = useState<TestRecord[]>([]);
   const [reevaluating, setReevaluating] = useState(false);
   const reevaluationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -180,7 +182,11 @@ function ResultDetail() {
         )}
 
         {record ? (
-          <ResultScreen key={record.id} record={record} attempts={attempts} />
+          solutionId === record.id ? (
+            <SolutionScreen key={record.id} record={record} onExit={() => setSolutionId(null)} />
+          ) : (
+            <ResultScreen key={record.id} record={record} attempts={attempts} onViewSolution={() => setSolutionId(record.id)} />
+          )
         ) : loaded ? (
           <div className="card-surface p-10 text-center">
             <p className="text-sm text-muted-foreground">This test result was not found.</p>

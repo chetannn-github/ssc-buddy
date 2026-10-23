@@ -8,6 +8,7 @@ type Props = {
   record: TestRecord;
   onRestart?: () => void;
   attempts?: TestRecord[];
+  onViewSolution?: () => void;
 };
 
 type AnswerFilter = "all" | "correct" | "incorrect" | "unattempted";
@@ -90,7 +91,7 @@ function AttemptMarksChart({ attempts, activeId }: { attempts: TestRecord[]; act
   );
 }
 
-export function ResultScreen({ record, onRestart, attempts = [] }: Props) {
+export function ResultScreen({ record, onRestart, attempts = [], onViewSolution }: Props) {
   const [answerFilter, setAnswerFilter] = useState<AnswerFilter>("all");
   const total = record.answers.length;
   const verdicts = useMemo<Verdict[]>(
@@ -137,7 +138,7 @@ export function ResultScreen({ record, onRestart, attempts = [] }: Props) {
     );
 
   return (
-    <div className="grid items-start gap-3 lg:grid-cols-[300px_minmax(0,1fr)]">
+    <div className={cn("grid items-start gap-3", !onViewSolution && "lg:grid-cols-[300px_minmax(0,1fr)]")}>
       <div className="card-surface flex items-center gap-4 p-3 sm:p-4 lg:sticky lg:top-4 lg:flex-col lg:items-start">
         <DonutChart
           size={80}
@@ -206,10 +207,11 @@ export function ResultScreen({ record, onRestart, attempts = [] }: Props) {
             </span>
           </div>
           {attempts.length > 1 && <AttemptMarksChart attempts={attempts} activeId={record.id} />}
+          {onViewSolution && <Button className="mt-4" size="sm" onClick={onViewSolution}>View solution</Button>}
         </div>
       </div>
 
-      <div className="card-surface p-3 sm:p-4">
+      {!onViewSolution && <div className="card-surface p-3 sm:p-4">
         <div className="mb-2 flex items-center justify-between">
           <h2 className="text-xs font-medium text-muted-foreground">Answers</h2>
           <span className="text-[10px] text-muted-foreground">
@@ -272,7 +274,7 @@ export function ResultScreen({ record, onRestart, attempts = [] }: Props) {
             Start a new test
           </Button>
         )}
-      </div>
+      </div>}
     </div>
   );
 }
