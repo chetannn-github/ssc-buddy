@@ -1522,11 +1522,10 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
             <DialogDescription className="sr-only">Medals earned from completed leaderboard weeks.</DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-3 gap-2">
-            {(["gold", "silver", "bronze"] as const).map((medal, index) => <div key={medal} className="flex flex-col items-center gap-2 py-4">
+            {(["gold", "silver", "bronze"] as const).map((medal) => <div key={medal} className="flex flex-col items-center gap-2 py-4">
               <img src={`/${medal}-medal.png`} alt="" className="h-14 w-12 object-contain" />
               <span className="text-2xl font-bold tabular-nums">{medalCounts[medal]}</span>
               <span className="text-xs capitalize text-zinc-200">{medal}</span>
-              <span className="text-[10px] text-zinc-400">{["1st", "2nd", "3rd"][index]} place</span>
             </div>)}
           </div>
           <p className="text-center text-xs text-zinc-400">Earned from completed leaderboard weeks.</p>
