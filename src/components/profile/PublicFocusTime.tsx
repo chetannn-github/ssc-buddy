@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Clock3 } from "lucide-react";
 import { getFirebaseFirestore } from "@/lib/firebase-sync";
-import { watchPublicStudyFocus } from "../../../shared/study-lock";
+import { watchPublicStudyFocus } from "@/lib/web-focus-reader";
 import { focusDayKey, formatFocusTime } from "../../../shared/study-focus";
 
 export function PublicFocusTime({ uid, username }: { uid: string; username: string }) {

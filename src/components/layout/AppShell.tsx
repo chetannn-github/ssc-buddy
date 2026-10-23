@@ -41,11 +41,11 @@ import { trackerActiveDates } from "@/lib/tracker";
 import { loadTrackerData, saveTrackerData } from "@/lib/tracker-store";
 import { loadDailyTasks } from "@/lib/daily-tasks";
 import { getXpSummary } from "@/lib/xp";
-import { watchStudyFocusDays } from "../../../shared/study-lock";
+import { watchStudyFocusDays } from "@/lib/web-focus-reader";
 import { focusRewardTotal } from "../../../shared/focus-rewards";
 import { getFirebaseFirestore } from "@/lib/firebase-sync";
 import { loadPracticeProfile, savePracticeProfile, type PracticeProfile } from "@/lib/profile";
-import { checkUsernameAvailability, normalizeUsername, readCloudProfile, saveProfileWithUsername, savePublicProfileActivity, usernameValidationMessage, watchCloudProfile } from "@/lib/firebase-sync";
+import { checkUsernameAvailability, normalizeUsername, readCloudProfile, saveProfileWithUsername, savePublicProfileActivity, usernameValidationMessage } from "@/lib/firebase-sync";
 import type { User } from "firebase/auth";
 import { useAuthUser } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
@@ -1283,14 +1283,14 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
     if (!authUser) { setProfileHydrated(true); return; }
     setProfileHydrated(false);
     const applyCloudProfile = (raw: Record<string, unknown> | null) => {
+      if (!active) return;
       const next = cloudPracticeProfile(raw);
       if (next) savePracticeProfile(next);
       if (active && next) setProfile(next);
       if (active) setProfileHydrated(true);
     };
     void readCloudProfile(authUser).then(applyCloudProfile).catch(() => { if (active) setProfileHydrated(true); });
-    const unsubscribe = watchCloudProfile(authUser, applyCloudProfile);
-    return () => { active = false; unsubscribe(); };
+    return () => { active = false; };
   }, [authUser?.uid]);
 
   useEffect(() => {

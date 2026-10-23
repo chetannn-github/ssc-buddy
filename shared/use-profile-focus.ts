@@ -1,4 +1,5 @@
 import { effectiveStudySession } from "./study-breaks";
+import { publishChangedFocusDay } from "./focus-publication";
 import { useEffect, useState } from "react";
 import type { Firestore } from "firebase/firestore";
 import type { createStudyController, StudySession } from "./study-controller";
@@ -8,10 +9,15 @@ import { focusPoints, focusRewardTotal } from "./focus-rewards";
 type FocusReader = Pick<ReturnType<typeof createStudyController>, "watchStudyFocusDays" | "watchStudyControl" | "watchPublicStudyFocus" | "publishStudyFocusDay">;
 
 export function useProfileFocusData(getDatabase: () => Firestore, reader: FocusReader, uid: string | undefined, username: string | undefined, readOnly: boolean, includesDay: (date: string) => boolean) {
-  const [days, setDays] = useState<Record<string, FocusDay> | null>(null);
-  const [session, setSession] = useState<StudySession | null>(null);
+  const [focusDays, setFocusDays] = useState<{ uid: string; readOnly: boolean; days: Record<string, FocusDay> } | null>(null);
+  const days = focusDays && focusDays.uid === uid && focusDays.readOnly === readOnly ? focusDays.days : null;
+  const [focusSession, setFocusSession] = useState<{ uid: string; session: StudySession | null } | null>(null);
+  const session = !readOnly && focusSession?.uid === uid ? focusSession?.session ?? null : null;
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
+    let active = true;
+    const setDays = (value: Record<string, FocusDay> | null) => { if (active) setFocusDays(value && uid ? { uid, readOnly, days: value } : null); };
+    const setSession = (value: StudySession | null) => { if (active) setFocusSession(uid ? { uid, session: value } : null); };
     setDays(null);
     setSession(null);
     if (!uid) return;
@@ -29,7 +35,7 @@ export function useProfileFocusData(getDatabase: () => Firestore, reader: FocusR
       }
     } catch { failed(); }
     const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => { stops.forEach(stop => stop()); clearInterval(timer); };
+    return () => { active = false; stops.forEach(stop => stop()); clearInterval(timer); };
   }, [getDatabase, reader, uid, username, readOnly]);
   useEffect(() => {
     if (!uid || readOnly || !days) return;
@@ -37,7 +43,7 @@ export function useProfileFocusData(getDatabase: () => Firestore, reader: FocusR
     void (async () => {
       for (const [date, day] of Object.entries(days)) {
         if (disposed) break;
-        if (day.totalMilliseconds > 0) await reader.publishStudyFocusDay(getDatabase(), uid, date).catch(() => {});
+        await publishChangedFocusDay(getDatabase(), uid, date, day.totalMilliseconds, reader.publishStudyFocusDay).catch(() => {});
       }
     })();
     return () => { disposed = true; };

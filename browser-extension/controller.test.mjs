@@ -24,7 +24,12 @@ test('public focus shares only daily totals and preserves profile data across cr
   const controller = createStudyController(api);
   const session = { id: 'focus', startedAt: Date.parse('2026-10-21T10:00:00Z'), endsAt: Date.parse('2026-10-21T10:03:00Z'), timeZone: 'UTC', domains: ['private.example'] };
   await controller.recordStudyFocus({}, 'student', session, session.endsAt);
+  const firstSaveWrites = writes.length;
   await controller.recordStudyFocus({}, 'student', session, session.endsAt);
+  assert.equal(writes.length, firstSaveWrites, 'same checkpoint must not write private totals, public profile or leaderboard');
+  const anotherClient = createStudyController(api);
+  await anotherClient.recordStudyFocus({}, 'student', session, session.endsAt);
+  assert.equal(writes.length, firstSaveWrites, 'deduplication uses saved data rather than per-client memory');
   const profile = documents.get('publicProfiles/student');
   assert.equal(profile.name, 'Student');
   assert.deepEqual(profile.focusDays, { '2026-10-20': 60000, '2026-10-21': 180000 });
@@ -50,6 +55,66 @@ test('public focus shares only daily totals and preserves profile data across cr
   const count = writes.length;
   await controller.publishStudyFocusDay({}, 'student', '2026-10-21', 'UTC');
   assert.equal(writes.length, count, 'unchanged totals do not repeatedly write rewards');
+});
+
+test('focus checkpoints write each changed document once and repair only stale projections', async () => {
+  const documents = new Map(), writes = [];
+  const uid = 'student', privateProfile = 'users/student/profile/current', publicProfile = 'publicProfiles/student';
+  documents.set(privateProfile, { username: uid });
+  documents.set(publicProfile, { uid, name: 'Student', dashboard: { retained: true } });
+  const api = {
+    doc: (_db, ...parts) => parts.join('/'), collection: () => '', onSnapshot: () => () => {}, serverTimestamp: () => null,
+    runTransaction: async (_db, work) => {
+      let wrote = false;
+      return work({
+        get: async ref => { assert.equal(wrote, false, 'all reads precede transaction writes'); return { data: () => documents.get(ref) }; },
+        set: (ref, value, options) => {
+          wrote = true; writes.push(ref);
+          documents.set(ref, options?.merge ? { ...documents.get(ref), ...value, focusDays: { ...documents.get(ref)?.focusDays, ...value.focusDays } } : value);
+        },
+      });
+    },
+  };
+  const controller = createStudyController(api);
+  // Two calendar days in one week should produce one leaderboard write.
+  const startedAt = Date.parse('2026-10-21T23:50:00Z');
+  const session = { id: 'midnight', startedAt, endsAt: startedAt + 60 * 60000, timeZone: 'UTC' };
+  const leaderboard = 'leaderboards/2026-10-19/entries/student';
+  documents.set(leaderboard, { points: 20, xp: 100, completed: 2 });
+  await controller.recordStudyFocus({}, uid, session, session.endsAt);
+  assert.equal(writes.filter(ref => ref === leaderboard).length, 1);
+  assert.equal(writes.length, 4, 'two private days, one profile, one leaderboard');
+  for (let i = 0; i < 20; i++) await controller.recordStudyFocus({}, uid, session, session.endsAt + i * 60000);
+  assert.equal(writes.length, 4, 'retries of finished sessions perform zero writes');
+  assert.deepEqual(documents.get(publicProfile).dashboard, { retained: true });
+  assert.equal(documents.get(leaderboard).points, 20);
+  assert.equal(documents.get(leaderboard).xp, 100);
+  const previous = structuredClone(documents.get(leaderboard));
+  documents.set(leaderboard, { ...previous, focusDays: {}, focusXp: 0 });
+  await controller.recordStudyFocus({}, uid, session, session.endsAt);
+  assert.equal(writes.length, 5);
+  assert.equal(writes.at(-1), leaderboard, 'only stale leaderboard needs repair');
+  assert.deepEqual(documents.get(leaderboard), previous);
+  documents.set(publicProfile, { ...documents.get(publicProfile), focusTimeZone: 'Asia/Kolkata' });
+  await controller.recordStudyFocus({}, uid, session, session.endsAt);
+  assert.equal(writes.length, 6);
+  assert.equal(writes.at(-1), publicProfile, 'timezone change does not rewrite focus totals elsewhere');
+});
+
+test('history publication reports skipped setup separately from confirmed unchanged data', async () => {
+  const documents = new Map(), ref = 'users/student/profile/current';
+  const api = { doc: (_db, ...parts) => parts.join('/'), collection: () => '', onSnapshot: () => () => {}, serverTimestamp: () => null,
+    runTransaction: async (_db, work) => work({ get: async ref => ({ data: () => documents.get(ref) }), set: (ref, value, options) => documents.set(ref, options?.merge ? { ...documents.get(ref), ...value } : value) }) };
+  const controller = createStudyController(api);
+  assert.equal(await controller.publishStudyFocusDay({}, 'student', '2026-10-23', 'UTC'), false);
+  documents.set(ref, { username: 'student' });
+  assert.equal(await controller.publishStudyFocusDay({}, 'student', '2026-10-23', 'UTC'), false);
+  documents.set('publicProfiles/student', { uid: 'someone-else' });
+  assert.equal(await controller.publishStudyFocusDay({}, 'student', '2026-10-23', 'UTC'), false);
+  documents.set('publicProfiles/student', { uid: 'student' });
+  documents.set('users/student/studyFocusDays/2026-10-23', { totalMilliseconds: 60000 });
+  assert.equal(await controller.publishStudyFocusDay({}, 'student', '2026-10-23', 'UTC'), true);
+  assert.equal(await controller.publishStudyFocusDay({}, 'student', '2026-10-23', 'UTC'), true);
 });
 test('offline overlay break replay preserves restrictions, remaining time and retry-safe focus credits', async () => {
   const documents = new Map();

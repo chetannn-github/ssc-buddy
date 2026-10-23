@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { watchLeaderboard } from "@/lib/leaderboard";
+import { loadLeaderboard } from "@/lib/leaderboard";
 import { completedLeaderboardWeeks, countWeeklyMedals, leaderboardWeek, shiftLeaderboardWeek, weeklyAward, type WeeklyAward } from "../../mobile-tasks/src/domain/weekly-results";
 export { leaderboardWeekLabel, shiftLeaderboardWeek, validLeaderboardWeek, weeklyAwardSeenKey } from "../../mobile-tasks/src/domain/weekly-results";
 
@@ -21,7 +21,7 @@ export function usePreviousWeeklyAward(uid?: string) {
   useEffect(() => {
     setResult({ uid: uid ?? "", award: null });
     if (!uid) return;
-    return watchLeaderboard(week, (entries) => setResult({ uid, award: weeklyAward(entries, uid, week) }));
+    return loadLeaderboard(week, (entries) => setResult({ uid, award: weeklyAward(entries, uid, week) }));
   }, [uid, week]);
   return result.uid === uid && result.award?.week === week ? result.award : null;
 }
@@ -35,7 +35,7 @@ export function useWeeklyMedalCounts(uid: string | undefined, dates: string[]) {
     setResult({ scope, awards: {} });
     if (!uid) return;
     let active = true;
-    const stops = completedLeaderboardWeeks([first], current).map((week) => watchLeaderboard(week, (entries) => {
+    const stops = completedLeaderboardWeeks([first], current).map((week) => loadLeaderboard(week, (entries) => {
       if (active) setResult((previous) => ({ scope, awards: { ...previous.awards, [week]: weeklyAward(entries, uid, week) } }));
     }));
     return () => { active = false; stops.forEach((stop) => stop()); };

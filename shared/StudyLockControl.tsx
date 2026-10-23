@@ -1,6 +1,7 @@
 import { effectiveStudySession, maxStudyBreaks, onStudyBreak, studyBreakState, studyTimerMilliseconds } from "./study-breaks";
 import "./study-breaks.css";
 import { STUDY_DEVICE_STALE_MS } from "./study-presence";
+import { publishChangedFocusDay } from "./focus-publication";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Firestore } from "firebase/firestore";
@@ -39,7 +40,7 @@ export function StudyLockControl({ uid, desktop = false, profile = false, getDat
     void recordStudyFocus(getDatabase(), uid, focusSession).then(() => { if (ended) lastFinalCredit.current = focusSession.id; }).catch(() => { /* Retry the next checkpoint, including after reconnect. */ });
   }, [uid, focusSession?.id, checkpoint, ended, getDatabase]);
   const todayFocus = todayFocusMilliseconds(focusData, focusSession, now);
-  useEffect(() => { void publishStudyFocusDay(getDatabase(), uid, date, focusSession?.timeZone).catch(() => {}); }, [uid, date, focusData.totalMilliseconds, checkpoint, getDatabase]);
+  useEffect(() => { void publishChangedFocusDay(getDatabase(), uid, date, focusData.totalMilliseconds, publishStudyFocusDay, focusSession?.timeZone).catch(() => {}); }, [uid, date, focusData.totalMilliseconds, checkpoint, getDatabase, focusSession?.timeZone]);
   const resizeSequence = useRef(Promise.resolve());
   useEffect(() => {
     if (!desktop || !onResize) return;
@@ -58,10 +59,12 @@ export function StudyLockControl({ uid, desktop = false, profile = false, getDat
     };
     const failed = (e: Error) => setError(/firebase/i.test(e.message) ? "Could not load your focus session. Please try again." : e.message);
     const stopControl = watchStudyControl(db, uid, value => { control = value; setFocusSession(value?.session ?? null); if (Array.isArray(value?.allowedDomains)) setDomains(value.allowedDomains.slice(0, MAX_STUDY_WEBSITES).join("\n")); refresh(); }, failed);
-    const stopDevices = watchStudyDevices(db, uid, value => { devices = value; refresh(); }, failed);
+    // The web UI does not show connection counts. Keep only its control stream
+    // live so remote break/start changes still reach the timer immediately.
+    const stopDevices = source === "web" ? () => {} : watchStudyDevices(db, uid, value => { devices = value; refresh(); }, failed);
     const timer = setInterval(refresh, 1000);
     return () => { stopControl(); stopDevices(); clearInterval(timer); };
-  }, [uid, getDatabase]);
+  }, [uid, getDatabase, source]);
   useEffect(() => {
     if (!open) return;
     dialog.current?.querySelector<HTMLButtonElement>("button")?.focus();

@@ -15,6 +15,7 @@ function userError(error) {
 export function startWorker(cloud) {
   let lastSync = 0, error = '', chain = Promise.resolve(), syncing;
   let stopControl, watchingUid, latestPacket;
+  let watchUpdates = Promise.resolve();
   const serialize = work => { const next = chain.then(work); chain = next.catch(() => {}); return next; };
   const get = async () => await chrome.storage.local.get(['study', 'deviceId']);
   async function apply(session, revision, uid) {
@@ -173,11 +174,12 @@ export function startWorker(cloud) {
     stopControl = cloud.watchControl(packet => {
       if (cloud.user()?.uid !== uid) return;
       latestPacket = packet;
-      // Do not lose a remote break/start arriving during a previous request.
-      void (async () => {
+      // Preserve every transition: dropping an intermediate pause could credit
+      // its break as focus when the following resume arrives during a slow save.
+      watchUpdates = watchUpdates.catch(() => {}).then(async () => {
         if (syncing) await syncing;
-        if (cloud.user()?.uid === uid && latestPacket === packet) await sync(packet);
-      })();
+        if (cloud.user()?.uid === uid) await sync(packet);
+      });
     }, e => {
       error = userError(e);
       stopControl?.(); stopControl = undefined;
@@ -186,6 +188,7 @@ export function startWorker(cloud) {
   chrome.alarms.onAlarm.addListener(() => {
     return serialize(expire).then(async () => {
       watchAccount();
+      await watchUpdates;
       if (latestPacket) await sync(latestPacket);
       else if (!cloud.watchControl) await sync();
     }).catch(e => { error = userError(e); });

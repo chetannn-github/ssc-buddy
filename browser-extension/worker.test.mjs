@@ -91,6 +91,48 @@ test('Firebase Firestore REST values preserve the shared session contract', () =
   assert.equal(decodeDocument({fields:{lastSeenAt:{timestampValue:'2026-10-22T00:00:00Z'}}}).lastSeenAt,Date.parse('2026-10-22T00:00:00Z'));
 });
 
+test('slow stats save cannot drop a rapid remote break/resume transition', async () => {
+  const realNow = Date.now;
+  const start = realNow() - 50 * 60000;
+  Date.now = () => start + 50 * 60000;
+  const running = { id: 'slow-session', startedAt: start, endsAt: start + 120 * 60000, domains: ['study.example'], breakLimit: 3, breaksTaken: 0 };
+  // Compatibility with a pause packet from a previously installed client.
+  const paused = { ...running, paused: true, pausedAt: start + 30 * 60000, remainingMs: 90 * 60000 };
+  const resumed = { id: 'slow-session:focus-1', lockId: 'slow-session', startedAt: start + 40 * 60000, endsAt: start + 130 * 60000, domains: running.domains, breakLimit: 3, breaksTaken: 1 };
+  const data = {}, saved = [], acks = [];
+  let push, release, alarm;
+  const cloud = {
+    ready: Promise.resolve(), user: () => ({ uid: 'student' }), subscribe: () => {},
+    watchControl: callback => { push = callback; queueMicrotask(() => callback({ version: 1, revision: 'start', session: running })); return () => {}; },
+    acknowledge: async (_id, sessionId) => acks.push(sessionId),
+    recordFocus: async session => {
+      saved.push(structuredClone(session));
+      if (saved.length === 1) await new Promise(resolve => { release = resolve; });
+    },
+  };
+  globalThis.chrome = {
+    runtime: { getURL: p => `chrome-extension://test/${p}`, onMessage: { addListener: () => {} } },
+    storage: { local: { get: async () => structuredClone(data), set: async value => Object.assign(data, structuredClone(value)), setAccessLevel: async () => {} } },
+    declarativeNetRequest: { getSessionRules: async () => [], updateSessionRules: async () => {}, updateDynamicRules: async () => {} },
+    alarms: { clear: async () => {}, create: async () => {}, onAlarm: { addListener: callback => alarm = callback } },
+    action: { setBadgeText: async () => {}, setBadgeBackgroundColor: async () => {} },
+    tabs: { query: async () => [] },
+  };
+  try {
+    startWorker(cloud);
+    await wait(() => !!release);
+    push({ version: 1, revision: 'break', session: paused });
+    push({ version: 1, revision: 'resume', session: resumed });
+    release();
+    await wait(() => data.study.session.id === resumed.id);
+    await alarm({ name: 'study-watch' });
+    assert.equal(saved.some(session => session.paused && session.pausedAt === paused.pausedAt), true, 'paused segment must be saved before the resume');
+    assert.equal(acks.length, 3, 'start, break and resume each acknowledged in order');
+    assert.equal(saved.filter(session => session.id === running.id).every((session, index) => index === 0 || session.paused), true, 'old running segment is never queued across the skipped break');
+    assert.equal(data.pendingFocus.length, 0, 'finalized paused credit drained successfully');
+  } finally { release?.(); Date.now = realNow; delete globalThis.chrome; }
+});
+
 test('offline break expiry reinstalls rules and covers a disallowed website already open', async () => {
   const realNow = Date.now, realInterval = globalThis.setInterval;
   const start = realNow() - 35 * 60000;

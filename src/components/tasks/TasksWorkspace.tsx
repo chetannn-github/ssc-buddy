@@ -1,4 +1,5 @@
 import { workspaceDates, workspaceSummary } from "@/lib/daily-workspace";
+import { webFocusReader } from "@/lib/web-focus-reader";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   Check,
@@ -291,7 +292,7 @@ export function TasksWorkspace({
               </>
             )}
           </div>
-          {!isHabits && <FocusRewardRow uid={user?.uid} date={selected} getDatabase={getFirebaseFirestore} />}
+          {!isHabits && <FocusRewardRow uid={user?.uid} date={selected} getDatabase={getFirebaseFirestore} focusReader={webFocusReader} />}
           {!isHabits && (
             <>
               {error && (

@@ -1,5 +1,6 @@
 import type { User } from "firebase/auth";
-import { collection, doc, getDoc, onSnapshot, runTransaction, serverTimestamp, setDoc, type Unsubscribe } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, runTransaction, serverTimestamp, setDoc, type Unsubscribe } from "firebase/firestore";
+import { observeOnce } from "../../shared/read-once";
 import { getFirebaseFirestore } from "@/lib/firebase-sync";
 import type { DailyTask } from "@/lib/daily-tasks";
 import type { PracticeProfile } from "@/lib/profile";
@@ -43,6 +44,10 @@ export async function publishLeaderboardEntry(user: User, profile: PracticeProfi
     .map((task) => ({ name: task.name, subject: task.subject, type: task.type, minutesSpent: task.minutesSpent, completed: task.completed, date: task.date, points: taskPoints.get(task.id) ?? 0 }));
   await setDoc(doc(getFirebaseFirestore(), "leaderboards", week, "entries", user.uid), { uid: user.uid, username: profile.username, name: profile.name, ...(profile.avatar ? { avatar: profile.avatar } : {}), week, xp, level, ...score, leaderboardTasks, updatedAt: serverTimestamp() }, { merge: true });
 }
-export function watchLeaderboard(week: string, callback: (entries: LeaderboardEntry[]) => void): Unsubscribe {
-  return onSnapshot(collection(getFirebaseFirestore(), "leaderboards", week, "entries"), (snapshot) => callback(resolveWeeklyResults(snapshot.docs.map((item) => ({ ...item.data(), uid: item.id }) as LeaderboardEntry), week)), () => callback([]));
+export function loadLeaderboard(week: string, callback: (entries: LeaderboardEntry[]) => void): Unsubscribe {
+  const db = getFirebaseFirestore();
+  return observeOnce(db, JSON.stringify(["leaderboard", week]), async () => {
+    const snapshot = await getDocs(collection(db, "leaderboards", week, "entries"));
+    return resolveWeeklyResults(snapshot.docs.map(item => ({ ...item.data(), uid: item.id }) as LeaderboardEntry), week);
+  }, callback, () => callback([]));
 }

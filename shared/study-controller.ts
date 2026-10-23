@@ -38,16 +38,19 @@ function watchStudyFocusDays(db: Firestore, uid: string, callback: (value: Recor
   }, error);
 }
 function sessionIsActive(session: StudySession | null | undefined, time = Date.now()) { if (!session) return false; const current = effectiveStudySession(session, time); return current.paused === true || current.endsAt > time; }
+function focusPatchChanged(current: Record<string, any> | undefined, patch: ReturnType<typeof focusLeaderboardPatch>) {
+  return current?.["focusXp"] !== patch.focusXp || Object.entries(patch.focusDays).some(([date, total]) => current?.["focusDays"]?.[date] !== total);
+}
 async function publishStudyFocusDay(db: Firestore, uid: string, date: string, timeZone = studyTimeZone()) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
-  await runTransaction(db, async transaction => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+  return runTransaction(db, async transaction => {
     const day = (await transaction.get(doc(db, ...studyFocusPath(uid, date)))).data();
     const profile = (await transaction.get(doc(db, "users", uid, "profile", "current"))).data();
     const username = typeof profile?.["username"] === "string" ? profile["username"].trim().toLowerCase() : "";
-    if (!/^[a-z0-9._]{3,24}$/.test(username)) return;
+    if (!/^[a-z0-9._]{3,24}$/.test(username)) return false;
     const reference = doc(db, "publicProfiles", username);
     const published = (await transaction.get(reference)).data();
-    if (published?.["uid"] !== uid) return;
+    if (published?.["uid"] !== uid) return false;
     const total = Math.max(0, Number(day?.["totalMilliseconds"]) || 0);
     const leaderboardReference = doc(db, "leaderboards", focusWeek(date), "entries", uid);
     const leaderboard = (await transaction.get(leaderboardReference)).data();
@@ -55,8 +58,9 @@ async function publishStudyFocusDay(db: Firestore, uid: string, date: string, ti
     const patch = focusLeaderboardPatch(uid, profile!, date, days);
     if (published["focusDays"]?.[date] !== total || published["focusTimeZone"] !== timeZone)
       transaction.set(reference, { focusDays: { [date]: total }, focusTimeZone: timeZone, updatedAt: serverTimestamp() }, { merge: true });
-    if (leaderboard?.["focusXp"] !== patch.focusXp || Object.entries(patch.focusDays).some(([day, value]) => leaderboard?.["focusDays"]?.[day] !== value))
+    if (focusPatchChanged(leaderboard, patch))
       transaction.set(leaderboardReference, { ...patch, updatedAt: serverTimestamp() }, { merge: true });
+    return true;
   });
 }
 async function prepareFocusCredits(transaction: Transaction, db: Firestore, uid: string, session: FocusSession | null | undefined, time: number) {
@@ -71,15 +75,29 @@ async function prepareFocusCredits(transaction: Transaction, db: Firestore, uid:
   const username = typeof profile?.["username"] === "string" ? profile["username"].trim().toLowerCase() : "";
   const publicReference = /^[a-z0-9._]{3,24}$/.test(username) ? doc(db, "publicProfiles", username) : null;
   const publicData = publicReference ? (await transaction.get(publicReference)).data() : null;
+  // Read and compare the derived documents before any transaction writes.
+  // Separate clients may checkpoint the same minute, or retry an ended session.
+  const days = { ...publicData?.["focusDays"], ...Object.fromEntries(credits.map(({ date, next }) => [date, next.totalMilliseconds])) };
+  const publications = publicData?.["uid"] === uid ? await Promise.all(
+    [...new Set(credits.map(({ date }) => focusWeek(date)))].map(async week => {
+      const reference = doc(db, "leaderboards", week, "entries", uid);
+      const current = (await transaction.get(reference)).data();
+      const patch = focusLeaderboardPatch(uid, profile!, week, days);
+      return { reference, current, patch };
+    }),
+  ) : [];
+  const timeZone = session?.timeZone || studyTimeZone();
+  const publicChanged = credits.some(({ date, next }) => publicData?.["focusDays"]?.[date] !== next.totalMilliseconds) || publicData?.["focusTimeZone"] !== timeZone;
   return () => { for (const { reference, value, next, date } of credits) {
     if (next.totalMilliseconds !== value?.totalMilliseconds) transaction.set(reference, { version: 1, date, ...next, updatedAt: serverTimestamp() });
   }
     if (publicReference && publicData?.["uid"] === uid) {
-      const days = { ...publicData["focusDays"], ...Object.fromEntries(credits.map(({ date, next }) => [date, next.totalMilliseconds])) };
-      for (const { date } of credits) transaction.set(doc(db, "leaderboards", focusWeek(date), "entries", uid), { ...focusLeaderboardPatch(uid, profile!, date, days), updatedAt: serverTimestamp() }, { merge: true });
-      transaction.set(publicReference, {
+      for (const { reference, current, patch } of publications) {
+        if (focusPatchChanged(current, patch)) transaction.set(reference, { ...patch, updatedAt: serverTimestamp() }, { merge: true });
+      }
+      if (credits.length && publicChanged) transaction.set(publicReference, {
       focusDays: Object.fromEntries(credits.map(({ date, next }) => [date, next.totalMilliseconds])),
-      focusTimeZone: session?.timeZone || studyTimeZone(), updatedAt: serverTimestamp(),
+      focusTimeZone: timeZone, updatedAt: serverTimestamp(),
     }, { merge: true });
     }
   };
