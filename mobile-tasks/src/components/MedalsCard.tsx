@@ -16,7 +16,7 @@ export function MedalsCard({ visible, counts, onClose }: {
       <Pressable accessibilityViewIsModal onPress={() => {}} style={{ width: "100%", maxWidth: 360, borderRadius: 24, backgroundColor: "#181818", padding: 24, gap: 20 }}>
         <Text accessibilityRole="header" style={{ color: "#fafafa", fontSize: 22, fontWeight: "700", textAlign: "center" }}>Weekly medals</Text>
         <View style={{ flexDirection: "row", gap: 8 }}>
-          {medals.map(medal => <View key={medal.key} accessibilityLabel={`${medal.label}: ${counts[medal.key]}, ${medal.rank}`} style={{ flex: 1, alignItems: "center", gap: 8, borderRadius: 16, backgroundColor: "#222", paddingVertical: 16 }}>
+          {medals.map(medal => <View key={medal.key} accessibilityLabel={`${medal.label}: ${counts[medal.key]}, ${medal.rank}`} style={{ flex: 1, alignItems: "center", gap: 8, paddingVertical: 16 }}>
             <Image source={medal.image} style={{ width: 48, height: 56, resizeMode: "contain" }} />
             <Text style={{ color: "#fafafa", fontSize: 24, fontWeight: "700" }}>{counts[medal.key]}</Text>
             <Text style={{ color: "#e4e4e7", fontSize: 12 }}>{medal.label}</Text>
