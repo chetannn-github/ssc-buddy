@@ -18,6 +18,7 @@ import { clockValueFromPoint } from "../domain/clock-hand";
 import { MAX_STUDY_WEBSITES } from "../../../shared/study-selection";
 import { FocusSchedules } from "./FocusSchedules";
 import { ClockFaceMotion } from "./ClockFaceMotion";
+import { ClockDigitHighlight } from "./ClockDigitHighlight";
 
 // Use the mobile app's SDK instance and native UUID source with the shared contract.
 export const controller = createStudyController({ collection, doc, onSnapshot, runTransaction, serverTimestamp }, () => Crypto.randomUUID());
@@ -183,15 +184,18 @@ function StudyClock({ minutes, accent, onCancel, onSave, timeOfDay=false, title=
   return <>
     <Text accessibilityRole="header" style={s.title}>{title}</Text>
     <View style={[s.digits,timeOfDay&&{gap:7}]}>
-      {(["hour", "minute"] as const).map((field, index) => <View key={field} style={[s.digitGroup,timeOfDay&&{gap:7}]}>
-        {index === 1 && <Text style={s.colon}>:</Text>}
+      <View style={{flexDirection:"row",gap:9,width:(timeOfDay?64:82)*2+30}}>
+      <ClockDigitHighlight part={part} color={accent}/>
+      {(["hour", "minute"] as const).map((field, index) => <View key={field} style={s.digitGroup}>
+        {index === 1 && <Text style={[s.colon,{width:12,textAlign:"center"}]}>:</Text>}
         <View>{keyboard ? <TextInput accessibilityLabel={field === "hour" ? "Hours" : "Minutes"} keyboardType="number-pad" value={String(field === "hour" ? displayHour : minute)} onFocus={() => setPart(field)} onChangeText={value => {
           const next=Math.max(0,Math.min(field==="hour"?12:59,Number(value.replace(/\D/g,""))||0));
           if(field==="hour")setHour(timeOfDay?next%12+(hour>=12?12:0):next);else setMinute(next);
-        }} style={[s.digit,timeOfDay&&{width:64},{color:"#fff"}]} /> : <Pressable accessibilityRole="button" accessibilityLabel={field === "hour" ? "Select hours" : "Select minutes"} onPress={()=>setPart(field)} style={[s.digit,timeOfDay&&{width:64},part===field&&{backgroundColor:accent}]}><Text style={[s.digitText,part===field&&{color:accentInk(accent)}]}>{String(field==="hour"?displayHour:minute).padStart(2,"0")}</Text></Pressable>}
+        }} style={[s.digit,timeOfDay&&{width:64},{color:part===field?accentInk(accent):"#fff",backgroundColor:"transparent"}]} /> : <Pressable accessibilityRole="button" accessibilityLabel={field === "hour" ? "Select hours" : "Select minutes"} onPress={()=>setPart(field)} style={[s.digit,timeOfDay&&{width:64},{backgroundColor:"transparent"}]}><Text style={[s.digitText,part===field&&{color:accentInk(accent)}]}>{String(field==="hour"?displayHour:minute).padStart(2,"0")}</Text></Pressable>}
           <Text style={s.digitLabel}>{field==="hour"?"Hours":"Minutes"}</Text>
         </View>
       </View>)}
+      </View>
       {timeOfDay&&<AnimatedTimeChips vertical options={[0,12]} labels={["AM","PM"]} value={hour>=12?12:0} onChange={value=>setHour(hour%12+value)} color="#f9fcf5" ink="#111" height={33} radius={0} gap={0} style={{width:48,height:66,alignSelf:"flex-start",borderRadius:12,overflow:"hidden",backgroundColor:"#202020"}} />}
     </View>
     {!keyboard && <ClockFaceMotion mode={part} style={s.clock}>

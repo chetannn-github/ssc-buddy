@@ -1,6 +1,8 @@
 import { useState, type PointerEvent } from "react";
 import { Clock3, Keyboard } from "lucide-react";
 import { ClockFaceMotion } from "./ClockFaceMotion";
+import { useRef } from "react";
+import { SlidingHighlight } from "./SlidingHighlight";
 import { clockValueFromPoint } from "../mobile-tasks/src/domain/clock-hand";
 
 export function StudyDurationPicker({ minutes, onCancel, onConfirm }: { minutes: number; onCancel: () => void; onConfirm: (minutes: number) => void }) {
@@ -16,11 +18,12 @@ export function StudyDurationPicker({ minutes, onCancel, onConfirm }: { minutes:
     if (value !== null) choose(part === "hour" ? value % 12 : value);
   };
   const total = hour * 60 + minute;
+  const digits=useRef<HTMLDivElement>(null);
   const digitTransition={transition:typeof matchMedia!=="undefined"&&matchMedia("(prefers-reduced-motion: reduce)").matches?"none":"background-color 240ms cubic-bezier(.2,.7,.2,1), color 240ms ease"};
   return <div className="study-duration-picker">
     <h2 id="browser-study-title">Focus time</h2>
-    <div className="study-duration-digits">{(["hour", "minute"] as const).map((field, index) => <div key={field}>
-      {index === 1 && <b>:</b>}<div>{keyboard ? <input style={digitTransition} aria-label={field === "hour" ? "Hours" : "Minutes"} type="number" min={0} max={field === "hour" ? 12 : 59} value={field === "hour" ? hour : minute} onFocus={() => setPart(field)} onChange={event => { const value = Math.max(0, Math.min(field === "hour" ? 12 : 59, Number(event.target.value) || 0)); if (field === "hour") setHour(value); else setMinute(value); }} /> : <button style={digitTransition} aria-label={field === "hour" ? "Select hours" : "Select minutes"} aria-pressed={part === field} onClick={() => setPart(field)}>{String(field === "hour" ? hour : minute).padStart(2, "0")}</button>}<small>{field === "hour" ? "Hours" : "Minutes"}</small></div>
+    <div ref={digits} className="study-duration-digits" style={{position:"relative",isolation:"isolate"}}><SlidingHighlight container={digits} active={part+(keyboard?"-keyboard":"")} />{(["hour", "minute"] as const).map((field, index) => <div key={field}>
+      {index === 1 && <b>:</b>}<div style={{position:"relative"}}><span aria-hidden="true" style={{position:"absolute",left:0,right:0,top:0,height:56,borderRadius:12,background:"#2b2b2b",zIndex:-2}}/>{keyboard ? <input data-slide-key={field+'-keyboard'} style={{...digitTransition,background:"transparent"}} aria-label={field === "hour" ? "Hours" : "Minutes"} type="number" min={0} max={field === "hour" ? 12 : 59} value={field === "hour" ? hour : minute} onFocus={() => setPart(field)} onChange={event => { const value = Math.max(0, Math.min(field === "hour" ? 12 : 59, Number(event.target.value) || 0)); if (field === "hour") setHour(value); else setMinute(value); }} /> : <button data-slide-key={field} style={{...digitTransition,background:"transparent"}} aria-label={field === "hour" ? "Select hours" : "Select minutes"} aria-pressed={part === field} onClick={() => setPart(field)}>{String(field === "hour" ? hour : minute).padStart(2, "0")}</button>}<small>{field === "hour" ? "Hours" : "Minutes"}</small></div>
     </div>)}</div>
     {!keyboard && <div className="study-duration-clock" onPointerDown={event => { if (event.button !== 0) return; event.currentTarget.setPointerCapture(event.pointerId); point(event); }} onPointerMove={event => { if (event.currentTarget.hasPointerCapture(event.pointerId)) point(event); }} onPointerUp={event => { if (event.currentTarget.hasPointerCapture(event.pointerId)) { event.currentTarget.releasePointerCapture(event.pointerId); if (part === "hour") setPart("minute"); } }}>
       <ClockFaceMotion mode={part}>

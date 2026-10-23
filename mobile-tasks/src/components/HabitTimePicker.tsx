@@ -5,6 +5,7 @@ import { Modal, Pressable, Text, TextInput, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import Svg, { Line, Circle } from "react-native-svg";
 import { ClockFaceMotion } from "./ClockFaceMotion";
+import { ClockDigitHighlight } from "./ClockDigitHighlight";
 export function HabitTimePicker({
   value,
   tint,
@@ -109,12 +110,13 @@ export function HabitTimePicker({
           >
             <Text style={{ color: "white", fontSize: 17 }}>Select time</Text>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <View style={{flex:1,flexDirection:"row",gap:28}}>
+              <ClockDigitHighlight part={part} color={tint} gap={28}/>
               {(["hour", "minute"] as const).map((field, index) => (
                 <View
                   key={field}
                   style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 8 }}
                 >
-                  {index === 1 && <Text style={{ color: "white", fontSize: 36 }}>:</Text>}
                   {keyboard ? (
                     <TextInput
                       accessibilityLabel={field === "hour" ? "Hour" : "Minute"}
@@ -128,9 +130,10 @@ export function HabitTimePicker({
                         textAlign: "center",
                         fontSize: 38,
                         color: part === field ? "#000" : "white",
-                        backgroundColor: part === field ? tint : "#101010",
+                        backgroundColor: "transparent",
                         borderRadius: 10,
                         paddingVertical: 8,
+                        height:66,
                       }}
                     />
                   ) : (
@@ -141,7 +144,9 @@ export function HabitTimePicker({
                         flex: 1,
                         paddingVertical: 8,
                         borderRadius: 10,
-                        backgroundColor: part === field ? tint : "#101010",
+                        backgroundColor: "transparent",
+                        height:66,
+                        justifyContent:"center",
                       }}
                     >
                       <Text
@@ -157,6 +162,8 @@ export function HabitTimePicker({
                   )}
                 </View>
               ))}
+              <Text pointerEvents="none" style={{position:"absolute",left:"50%",marginLeft:-6,width:12,top:0,lineHeight:66,color:"white",fontSize:36,textAlign:"center"}}>:</Text>
+              </View>
               <View
                 style={{
                   borderRadius: 10,
