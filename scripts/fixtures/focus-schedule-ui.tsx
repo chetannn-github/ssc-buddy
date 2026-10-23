@@ -25,7 +25,7 @@ export async function run() {
   const container=document.createElement("div");container.style.cssText="width:360px;padding:20px;background:#121212;box-sizing:border-box;color:#eee;font-family:Arial";document.body.append(container);
   const root=createRoot(container);
   function View(){useFocusScheduleRunner("student",getDb,reader);return <FocusScheduleManager uid="student" getDatabase={getDb} domains={[]}/>;}
-  const button=(text:string)=>[...container.querySelectorAll("button")].find(item=>item.textContent===text)!;
+  const button=(text:string)=>text==="Edit"?container.querySelector<HTMLButtonElement>('[aria-label="Edit Sleep"]')!:[...container.querySelectorAll("button")].find(item=>item.textContent===text)!;
   const tick=async(time:number)=>act(async()=>{
     now=time;
     const due=[...timers].filter(([,timer])=>timer.at<=now);
@@ -34,13 +34,19 @@ export async function run() {
   try{
     await act(async()=>root.render(<View/>));
     if(transactions)throw Error("scheduler polled DB before a due start");
+    if(container.querySelector<HTMLInputElement>('[aria-label="Schedule name"]')?.value!=="Sleep")throw Error("existing schedule editor did not open immediately");
+    const previewCards=[...container.querySelectorAll<HTMLButtonElement>('[data-schedule-preview]')];
+    if(previewCards.length!==5)throw Error("expected five temporary preview schedules");
+    const savedRow=container.querySelector<HTMLElement>('[aria-label="Saved schedules"]')!,addButton=container.querySelector<HTMLElement>('[aria-label="Add focus schedule"]')!;
+    if(savedRow.getBoundingClientRect().top<addButton.getBoundingClientRect().bottom)throw Error("saved schedules should be in the next row");
+    if(savedRow.textContent?.includes('Preview')||savedRow.textContent?.includes(':')||savedRow.querySelectorAll('svg').length!==6)throw Error("saved chips should only show names and icons");
+    await act(async()=>previewCards[2]!.click());
+    await act(async()=>button("Save schedule").click());
+    if(transactions)throw Error("saving a preview touched the database");
     await act(async()=>button("Edit").click());
     if(container.textContent?.includes("Asia/Kolkata")||container.textContent?.includes("No breaks"))throw Error("extra setup descriptions remain visible");
-    const presetGroup=container.querySelector('[aria-label="Schedule preset"]')!;
+    if(container.querySelector('[aria-label="Schedule preset"]'))throw Error("preset categories should be removed");
     const appsGroup=container.querySelector('[aria-label="Extra allowed apps"]')!;
-    await act(async()=>[...presetGroup.querySelectorAll('button')].find(item=>item.textContent==='Morning detox')!.click());
-    if(presetGroup.querySelector('[aria-pressed="true"]')?.textContent!=="Morning detox")throw Error("preset switch selection failed");
-    await act(async()=>[...presetGroup.querySelectorAll('button')].find(item=>item.textContent==='Sleep')!.click());
     await act(async()=>appsGroup.querySelectorAll('button')[2]!.click());
     if(appsGroup.querySelector('[aria-pressed="true"]')?.textContent!=="2")throw Error("allowed apps switch failed");
     const weekday=container.querySelector<HTMLButtonElement>('.focus-schedule-days button')!;
@@ -66,6 +72,7 @@ export async function run() {
     await act(async()=>button("Cancel").click());
     await act(async()=>root.unmount());
     if(timers.size||listeners.some(item=>item.active))throw Error("scheduler leaked a timer/listener");
+    docs.set(path,{version:1,revision:'empty',session:null,focusSchedules:[]});
     const panelRoot=createRoot(container);
     await act(async()=>panelRoot.render(<StudyLockControl uid="student" source="web" getDatabase={getDb}/>));
     await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Focus Lock"]')!.click());
@@ -73,11 +80,12 @@ export async function run() {
     if(document.querySelector('.focus-schedules'))throw Error("schedules are still inline in focus setup");
     await act(async()=>document.querySelector<HTMLButtonElement>('[aria-label="Focus schedules"]')!.click());
     if(!document.querySelector('.focus-schedules'))throw Error("schedule icon did not open schedules");
+    if(document.querySelector<HTMLInputElement>('[aria-label="Schedule name"]')?.value!=="Sleep")throw Error("empty account did not open a new schedule directly");
     await act(async()=>document.querySelector<HTMLButtonElement>('[aria-label="Back to Focus Lock"]')!.click());
     if(document.querySelector('.focus-schedules'))throw Error("schedule back navigation failed");
     await act(async()=>panelRoot.unmount());
     if(timers.size||listeners.some(item=>item.active))throw Error("focus dialog leaked timers or listeners");
-    return "header schedule icon/back, animated preset/apps/weekdays, clean setup, editor freeze, auto-start/end, no selection DB writes, cleanup";
+    return "direct new/existing editor, five local previews, preview saves without DB writes, animated selections, freeze, auto-start/end, cleanup";
   }finally{
     Date.now=originals.now;window.setInterval=originals.interval;window.setTimeout=originals.timeout;window.clearInterval=originals.clearInterval;window.clearTimeout=originals.clearTimeout;
     container.remove();delete (globalThis as any).__scheduleSdk;

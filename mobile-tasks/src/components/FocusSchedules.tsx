@@ -1,19 +1,21 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useRef } from "react";
-import { AccessibilityInfo, Animated, Easing, ActivityIndicator, Alert, AppState, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { AccessibilityInfo, Animated, Easing, ActivityIndicator, Alert, AppState, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { focusScheduleFrozen, nextFocusOccurrence, SCHEDULE_PRESETS, scheduleTime, WEEKDAY_LABELS, type FocusSchedule } from "../../../shared/focus-schedules";
+import { focusScheduleFrozen, SCHEDULE_PRESETS, scheduleTime, WEEKDAY_LABELS, type FocusSchedule } from "../../../shared/focus-schedules";
 import { studyTimeZone } from "../../../shared/study-focus";
 import { deviceFocusStatus, openDeviceFocusSettings, openScheduleAlarmSettings, supportsDeviceSchedules } from "../lib/native-focus-lock";
 import * as Crypto from "expo-crypto";
 import { DestructiveDialog } from "./DestructiveDialog";
 import { AnimatedTimeChips } from "./AnimatedTimeChips";
+import { focusSchedulePreviews, isFocusSchedulePreview, focusScheduleIconIndex } from "../../../shared/focus-schedule-preview";
 
-export function FocusSchedules({items,now,renderClock,saveSchedule}:{items:FocusSchedule[];now:number;renderClock:(minutes:number,onSave:(value:number)=>void,onCancel:()=>void,title:string)=>ReactNode;saveSchedule:(draft:FocusSchedule|null,id:string)=>Promise<void>}) {
-  const [draft,setDraft]=useState<FocusSchedule|null>(null),[picking,setPicking]=useState<"startMinute"|"endMinute"|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState("");
+export function FocusSchedules({items,now,renderClock,saveSchedule,onBack}:{items:FocusSchedule[];now:number;renderClock:(minutes:number,onSave:(value:number)=>void,onCancel:()=>void,title:string)=>ReactNode;saveSchedule:(draft:FocusSchedule|null,id:string)=>Promise<void>;onBack?:()=>void}) {
+  const fresh=()=>({...SCHEDULE_PRESETS[0]!,id:Crypto.randomUUID(),weekdays:[0,1,2,3,4,5,6],domains:[],appLimit:0,timeZone:studyTimeZone(),enabled:true,createdAt:Date.now()});
+  const [draft,setDraft]=useState<FocusSchedule|null>(()=>({...items[0]??fresh()})),[picking,setPicking]=useState<"startMinute"|"endMinute"|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState("");
+  const [previews,setPreviews]=useState(focusSchedulePreviews);
   const [deleting,setDeleting]=useState(false);
   const [alarmAccess,setAlarmAccess]=useState<boolean|null>(null);
-  const [preset,setPreset]=useState(0);
   const [reducedMotion,setReducedMotion]=useState(false);
   useEffect(()=>{
     let active=true;
@@ -28,10 +30,10 @@ export function FocusSchedules({items,now,renderClock,saveSchedule}:{items:Focus
     refresh();const listener=AppState.addEventListener("change",state=>{if(state==="active")refresh();});
     return()=>{active=false;listener.remove();};
   },[items.length]);
-  const fresh=()=>({...SCHEDULE_PRESETS[0]!,id:Crypto.randomUUID(),weekdays:[0,1,2,3,4,5,6],domains:[],appLimit:0,timeZone:studyTimeZone(),enabled:true,createdAt:Date.now()});
-  const existing=items.find(item=>item.id===draft?.id),frozen=!!existing&&focusScheduleFrozen(existing,now);
+  const existing=[...items,...previews].find(item=>item.id===draft?.id),frozen=!!existing&&focusScheduleFrozen(existing,now);
   const save=async(value:FocusSchedule|null,id:string)=>{
     setBusy(true);setError("");try{
+      if(isFocusSchedulePreview(id)){setPreviews(previous=>previous.flatMap(item=>item.id===id?(value?[{...value,enabled:false}]:[]):[item]));setDraft(null);return;}
       if(value&&Platform.OS==="android"){
         if(!supportsDeviceSchedules)throw Error("Install the updated app to use schedules.");
         const status=await deviceFocusStatus();
@@ -42,16 +44,19 @@ export function FocusSchedules({items,now,renderClock,saveSchedule}:{items:Focus
     }catch(e){setError(e instanceof Error?e.message:"Could not save schedule.");}finally{setBusy(false);}
   };
   if(draft&&picking)return <View style={s.root}>{renderClock(draft[picking],value=>{setDraft({...draft,[picking]:value});setPicking(null);},()=>setPicking(null),picking==="startMinute"?"Start time":"End time")}</View>;
-  return <View style={[s.root,{borderTopWidth:0,paddingTop:0}]}>
-    <Pressable accessibilityRole="button" accessibilityLabel="Add focus schedule" disabled={busy} style={[s.chip,s.row,{alignSelf:"flex-start"}]} onPress={()=>{setError("");setPreset(0);setDraft(fresh());}}><MaterialCommunityIcons name="plus" size={17} color="#eee"/><Text style={s.chipText}>Add schedule</Text></Pressable>
+  return <View style={[s.root,{borderTopWidth:0,paddingTop:0,marginTop:0}]}>
+    <View style={[s.row,{gap:7}]}>
+      {onBack&&<Pressable accessibilityRole="button" accessibilityLabel="Back to Focus Lock" hitSlop={8} onPress={onBack}><MaterialCommunityIcons name="arrow-left" size={21} color="#eee"/></Pressable>}
+      <Text style={[s.title,{fontSize:15,flex:1}]}>Add schedule</Text>
+      <Pressable accessibilityRole="button" accessibilityLabel="Add focus schedule" disabled={busy} hitSlop={8} onPress={()=>{setError("");setDraft(fresh());}}><MaterialCommunityIcons name="plus" size={23} color="#eee"/></Pressable>
+    </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} nestedScrollEnabled style={{marginTop:8}} contentContainerStyle={{gap:6,paddingVertical:3}}>
+        {[...items,...previews].map(item=>{const selected=draft?.id===item.id,icons=["weather-night","weather-sunset-up","book-open-variant","coffee-outline","leaf"] as const;return <Pressable key={item.id} accessibilityRole="button" accessibilityLabel={`Edit ${item.name}`} accessibilityState={{selected}} disabled={busy} onPress={()=>{setError("");setDraft({...item});}} style={[s.chip,{paddingVertical:9,flexDirection:"row",alignItems:"center",gap:5},selected&&s.selected]}>
+          <MaterialCommunityIcons name={icons[focusScheduleIconIndex(item.id)]!} size={14} color={selected?"#111":"#bbb"}/><Text numberOfLines={1} style={[s.chipText,selected&&s.ink]}>{item.name}</Text>
+        </Pressable>;})}
+      </ScrollView>
     {Platform.OS==="android"&&items.length>0&&alarmAccess===false&&<Pressable style={s.item} onPress={()=>void openScheduleAlarmSettings().catch(()=>setError("Could not open alarm settings."))}><MaterialCommunityIcons name="alarm-check" size={20} color="#eee"/><Text style={[s.title,{flex:1}]}>Allow scheduled starts</Text><Text style={s.small}>Enable</Text></Pressable>}
-    {items.map(item=>{const locked=focusScheduleFrozen(item,now),next=nextFocusOccurrence(item,now);return <Pressable key={item.id} disabled={locked||busy} onPress={()=>{setError("");const index=SCHEDULE_PRESETS.findIndex(p=>p.name===item.name);setPreset(index<0?2:index);setDraft({...item});}} style={s.item}>
-      <MaterialCommunityIcons name={item.name==="Sleep"?"weather-night":"calendar-clock"} size={22} color="#aaa" />
-      <View style={{flex:1,gap:3}}><Text style={s.title}>{item.name}</Text><Text style={s.small}>{scheduleTime(item.startMinute)}–{scheduleTime(item.endMinute)}{item.endMinute<=item.startMinute?" · next day":""}</Text><Text style={s.small}>{item.weekdays.map(day=>WEEKDAY_LABELS[day]).join(" · ")}</Text>{locked&&<Text style={s.small}>Locked until {next?new Date(next.endsAt).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}):"session ends"}</Text>}</View>
-      <MaterialCommunityIcons name={locked?"lock-outline":"pencil-outline"} size={18} color="#999" />
-    </Pressable>;})}
     {draft&&<View style={s.form}>
-      <AnimatedTimeChips options={[0,1,2]} labels={SCHEDULE_PRESETS.map(p=>p.name)} value={preset} onChange={value=>{setPreset(value);setDraft({...draft,...SCHEDULE_PRESETS[value]!});}} disabled={busy||frozen} color="#f9fcf5" ink="#111" height={36} gap={5} textStyle={{fontSize:11}} />
       <TextInput accessibilityLabel="Schedule name" maxLength={40} editable={!busy&&!frozen} style={s.input} value={draft.name} onChangeText={name=>setDraft({...draft,name})} placeholder="Schedule name" placeholderTextColor="#888" />
       <View style={s.row}>{(["startMinute","endMinute"] as const).map(field=><Pressable key={field} disabled={busy||frozen} accessibilityRole="button" accessibilityLabel={field==="startMinute"?"Schedule start":"Schedule end"} style={s.time} onPress={()=>setPicking(field)}><Text style={s.small}>{field==="startMinute"?"Start":"End"}</Text><Text style={s.title}>{scheduleTime(draft[field])}</Text></Pressable>)}</View>
       <View style={s.wrap}>{WEEKDAY_LABELS.map((day,index)=><WeekdayChip key={day} label={day} selected={draft.weekdays.includes(index)} disabled={busy||frozen} reducedMotion={reducedMotion} onPress={()=>setDraft({...draft,weekdays:draft.weekdays.includes(index)?draft.weekdays.filter(value=>value!==index):[...draft.weekdays,index]})}/>)}</View>

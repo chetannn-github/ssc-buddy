@@ -11,7 +11,7 @@ import { StudyDurationPicker } from "./StudyDurationPicker";
 import { reconcileStudySession, publishStudyFocusDay } from "./study-lock";
 import { MAX_STUDY_WEBSITES } from "./study-selection";
 import { FocusScheduleManager } from "./FocusScheduleManager";
-import { ArrowLeft, CalendarClock, Clock3, Globe2, MonitorUp, Monitor, Pause, Play, Plus, Minus, LockKeyhole, X } from "lucide-react";
+import { CalendarClock, Clock3, Globe2, MonitorUp, Monitor, Pause, Play, Plus, Minus, LockKeyhole, X } from "lucide-react";
 type Session = StudySession;
 type Status = { session: Session | null; connected: number; protected: number };
 const remaining = (session: Session | number) => {
@@ -113,7 +113,7 @@ export function StudyLockControl({ uid, desktop = false, profile = false, getDat
       <section ref={dialog} className={`browser-study-dialog ${desktop ? "study-desktop-dialog" : ""} ${source === "web" ? "web-focus-lock" : ""} ${session && !pickingTime && !schedulesOpen ? "is-running" : ""} ${session && lockedImage && !schedulesOpen ? "focus-lock-visual" : ""}`} role="dialog" aria-modal="true" aria-labelledby="browser-study-title">
         {session && lockedImage && !schedulesOpen && <div className="focus-lock-image"><img src={lockedImage} alt="Focus motivation" /></div>}
         <div className="focus-lock-dialog-content">
-        {schedulesOpen ? <div className="focus-schedule-panel" key="schedules"><div className="browser-study-heading"><button type="button" aria-label="Back to Focus Lock" onClick={() => setSchedulesOpen(false)}><ArrowLeft size={19}/></button><h2 id="browser-study-title">Schedules</h2></div><FocusScheduleManager uid={uid} getDatabase={getDatabase} domains={websites} /></div> : pickingTime && !session ? <StudyDurationPicker minutes={Number(minutes)} onCancel={() => setPickingTime(false)} onConfirm={value => { setMinutes(String(value)); setPickingTime(false); }} /> : <div className="focus-schedule-panel" key="focus">
+        {schedulesOpen ? <div className="focus-schedule-panel" key="schedules"><FocusScheduleManager uid={uid} getDatabase={getDatabase} domains={websites} onBack={()=>setSchedulesOpen(false)} /></div> : pickingTime && !session ? <StudyDurationPicker minutes={Number(minutes)} onCancel={() => setPickingTime(false)} onConfirm={value => { setMinutes(String(value)); setPickingTime(false); }} /> : <div className="focus-schedule-panel" key="focus">
         <div className="browser-study-heading"><h2 id="browser-study-title">Focus Lock</h2>{onPin && <button aria-label="Add Focus Lock desktop widget" title="Add desktop widget" disabled={busy} onClick={() => void run(() => onPin())}><MonitorUp size={17} /></button>}<button type="button" aria-label="Focus schedules" title="Schedules" onClick={() => setSchedulesOpen(true)}><CalendarClock size={19} /></button></div>
         {source !== "windows" && source !== "web" && <div className={`browser-study-connection ${status?.connected ? "connected" : ""}`} role="status"><Monitor size={12} /><i /><span>{status?.connected ? `${status.connected} connected` : "No browser connected"}</span></div>}
         {source !== "windows" && source !== "web" && (!desktop || !session) && <div className="study-focus-today"><span>Today's focus</span><strong>{formatFocusTime(todayFocus)}</strong></div>}
