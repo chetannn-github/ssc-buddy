@@ -5,11 +5,13 @@ import { decodeDocument, encode } from './firestore-codec.js';
 import { creditFocusDay, focusSlices } from '../shared/study-focus.ts';
 import { editWebsites, startControl } from './policy.js';
 import { focusLeaderboardPatch, focusWeek } from '../shared/focus-rewards.ts';
+import { getFirestore, doc, onSnapshot } from 'firebase/firestore';
 export function createCloud() {
   const config = __FIREBASE_CONFIG__;
   if (!config.apiKey || !config.projectId || !config.appId) throw Error('The extension is not configured. Please install the latest version.');
   const app = initializeApp(config);
   const auth = initializeAuth(app, { persistence: indexedDBLocalPersistence });
+  const db = getFirestore(app);
   const ready = new Promise(resolve => { const stop = onAuthStateChanged(auth, () => { stop(); resolve(); }); });
   const root = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(config.projectId)}/databases/(default)/documents`;
   async function request(relative, options = {}, expectedUid, publicUsername, leaderboardWeek) {
@@ -52,6 +54,9 @@ export function createCloud() {
       const patch = focusLeaderboardPatch(uid, profile, date, days);
       patch.focusDays = { ...previous.focusDays, ...Object.fromEntries(Object.entries(patch.focusDays).map(([day, value]) => [day, Math.max(previous.focusDays?.[day] ?? 0, value)])) };
       patch.focusXp = Math.max(previous.focusXp ?? 0, patch.focusXp);
+      if (document && Object.entries(patch).every(([key, value]) => key === 'focusDays'
+        ? Object.entries(value).every(([date, total]) => previous.focusDays?.[date] === total)
+        : previous[key] === value)) return;
       const condition = document ? 'currentDocument.updateTime=' + encodeURIComponent(document.updateTime) : 'currentDocument.exists=false';
       const mask = Object.keys(patch).map(key => 'updateMask.fieldPaths=' + encodeURIComponent(key)).join('&');
       try { await request('?' + mask + '&' + condition, { method: 'PATCH', body: JSON.stringify({ fields: encode(patch).mapValue.fields }) }, uid, undefined, week); return; }
@@ -59,10 +64,10 @@ export function createCloud() {
     }
     throw Error('Could not update focus points. Please try again.');
   }
-  async function recordFocus(session, time = Date.now()) {
+  async function recordFocus(session, time = Date.now(), expectedUid) {
     session = effectiveStudySession(session, time);
     const uid = auth.currentUser?.uid;
-    if (!uid) throw Error("Sign in to your SSC Buddy account.");
+    if (!uid || (expectedUid && expectedUid !== uid)) throw Error("Sign in to your SSC Buddy account.");
     for (const slice of focusSlices(session, time, true)) {
       let saved = false;
       for (let attempt = 0; attempt < 4; attempt++) {
@@ -100,6 +105,13 @@ export function createCloud() {
     recordFocus,
     user: () => auth.currentUser ? { uid: auth.currentUser.uid, email: auth.currentUser.email } : null,
     subscribe: callback => onAuthStateChanged(auth, callback),
+    watch(uid, next, failed, connection = () => {}) {
+      return onSnapshot(doc(db, 'users', uid, 'studyLock', 'current'), { includeMetadataChanges: true }, snapshot => {
+        connection(!snapshot.metadata.fromCache);
+        // Cached startup data cannot release/replace a locally enforced lock.
+        if (!snapshot.metadata.fromCache && auth.currentUser?.uid === uid) next(snapshot.exists() ? snapshot.data() : { version: 1, revision: 'empty', session: null });
+      }, failed);
+    },
     login: (email, password) => signInWithEmailAndPassword(auth, email, password),
     logout: () => signOut(auth),
     async read() { const document = await request('studyLock/current'); return document ? decodeDocument(document) : { version: 1, revision: 'empty', session: null }; },
@@ -116,10 +128,10 @@ export function createCloud() {
       }
       throw Error('Your session changed on another device. Try again.');
     },
-    async acknowledge(deviceId, sessionId, error = '') {
+    async acknowledge(deviceId, sessionId, error = '', expectedUid) {
       const value = { label: /Edg\//.test(navigator.userAgent) ? 'Edge' : 'Chrome', extensionId: chrome.runtime.id, sessionId, error, version: 1 };
       const fields = encode(value).mapValue.fields; fields.lastSeenAt = { timestampValue: new Date().toISOString() };
-      await request(`studyLockDevices/${encodeURIComponent(deviceId)}`, { method: 'PATCH', body: JSON.stringify({ fields }) });
+      await request(`studyLockDevices/${encodeURIComponent(deviceId)}`, { method: 'PATCH', body: JSON.stringify({ fields }) }, expectedUid);
     }
   };
 }

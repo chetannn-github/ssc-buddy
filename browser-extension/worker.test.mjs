@@ -88,3 +88,87 @@ test('cloud-driven rules acknowledge after enforcement and survive Firebase outa
     data.study.session.endsAt=Date.now()-1;onAlarm({name:'study-end'});await wait(()=>rules.length===0);assert.equal(data.study.session,null);
   } finally {for(const timer of timers)clearInterval(timer);globalThis.setInterval=realInterval;delete globalThis.chrome;}
 });
+
+test('7-hour listener-driven session has no polling reads, heartbeat writes or running credit writes; survives worker restart', async () => {
+  const realNow = Date.now, realInterval = globalThis.setInterval;
+  let now = Date.parse('2026-10-19T10:00:00Z'), interval, nextPacket, failedWatch, onMessage;
+  const data = {}, rules = [], counters = {reads:0, acks:0, credits:0, watches:0};
+  const packet = {version:1, revision:'long-session', session:{id:'long', startedAt:now, endsAt:now+7*3600000, domains:['study.example'], timeZone:'UTC'}};
+  const flush = async () => { for (let i=0;i<12;i++) await new Promise(resolve => setImmediate(resolve)); };
+  Date.now = () => now;
+  globalThis.setInterval = callback => { interval = callback; return 1; };
+  globalThis.chrome = {
+    runtime:{id:'test',getURL:p=>`chrome-extension://test/${p}`,onMessage:{addListener:fn=>{onMessage=fn;}}},
+    storage:{local:{get:async()=>structuredClone(data),set:async value=>Object.assign(data,structuredClone(value)),setAccessLevel:async()=>{}}},
+    declarativeNetRequest:{getSessionRules:async()=>[],updateSessionRules:async()=>{},updateDynamicRules:async value=>rules.splice(0,rules.length,...value.addRules)},
+    alarms:{clear:async()=>{},create:async()=>{},onAlarm:{addListener:()=>{}}},
+    action:{setBadgeText:async()=>{},setBadgeBackgroundColor:async()=>{}},
+    tabs:{query:async()=>[],update:async()=>{}},
+  };
+  const cloud = {
+    ready:Promise.resolve(),user:()=>({uid:'student'}),subscribe:()=>()=>{},
+    watch:(_uid,next,failed)=>{counters.watches++;nextPacket=next;failedWatch=failed;queueMicrotask(()=>next(structuredClone(packet)));return()=>{};},
+    read:async()=>{counters.reads++;return structuredClone(packet);},
+    acknowledge:async()=>{counters.acks++;},recordFocus:async()=>{counters.credits++;},
+  };
+  try {
+    startWorker(cloud); await flush();
+    assert.equal(counters.watches,1); assert.equal(counters.acks,1);
+    assert.equal(rules.length,2);
+    for(let tick=1;tick<2520;tick++){now=packet.session.startedAt+tick*10000;interval();await flush();}
+    assert.deepEqual(counters,{reads:0,acks:1,credits:0,watches:1});
+    assert.deepEqual(data.websiteDraft.domains,['study.example'],'local maintenance never clears the saved website draft');
+    now=packet.session.endsAt;interval();await flush();
+    assert.equal(rules.length,0);assert.equal(data.study.session,null);
+    assert.equal(counters.credits,1);assert.equal(counters.acks,2);
+    startWorker(cloud);await flush();
+    assert.equal(counters.credits,1,'persisted receipt prevents final publication again after worker cold start');
+    assert.equal(counters.reads,0);
+    // A listener error is retried, rather than permanently losing remote updates.
+    failedWatch(Error('offline'));interval();await flush();
+    assert.equal(counters.watches,2,'failed listener waits before retrying');
+    now+=30000;interval();await flush();
+    assert.equal(counters.watches,3);
+    // Explicit refresh remains a server read on demand.
+    await new Promise(resolve=>onMessage({type:'sync'},{id:'test',url:chrome.runtime.getURL('popup.html')},resolve));
+    assert.equal(counters.reads,1);
+  } finally {Date.now=realNow;globalThis.setInterval=realInterval;delete globalThis.chrome;}
+});
+
+test('listener start/break events unlock immediately and local alarm resumes offline without a cloud read', async () => {
+  const realNow=Date.now,realInterval=globalThis.setInterval;
+  let now=Date.parse('2026-10-19T10:00:00Z'),nextPacket,onAlarm,interval;
+  const initial={id:'break-flow',startedAt:now,endsAt:now+120*60000,domains:['study.example'],timeZone:'UTC',breakLimit:1,breaksTaken:0};
+  let packet={version:1,revision:'start',session:initial};
+  const data={},rules=[],credits=[],acks=[];
+  const flush=async()=>{for(let i=0;i<12;i++)await new Promise(resolve=>setImmediate(resolve));};
+  Date.now=()=>now;globalThis.setInterval=fn=>{interval=fn;return 1;};
+  globalThis.chrome={
+    runtime:{id:'test',getURL:p=>`chrome-extension://test/${p}`,onMessage:{addListener:()=>{}}},
+    storage:{local:{get:async()=>structuredClone(data),set:async value=>Object.assign(data,structuredClone(value)),setAccessLevel:async()=>{}}},
+    declarativeNetRequest:{getSessionRules:async()=>[],updateSessionRules:async()=>{},updateDynamicRules:async value=>rules.splice(0,rules.length,...value.addRules)},
+    alarms:{clear:async()=>{},create:async()=>{},onAlarm:{addListener:fn=>{onAlarm=fn;}}},
+    action:{setBadgeText:async()=>{},setBadgeBackgroundColor:async()=>{}},tabs:{query:async()=>[],update:async()=>{}},
+  };
+  const cloud={ready:Promise.resolve(),user:()=>({uid:'student'}),subscribe:()=>()=>{},
+    watch:(_uid,next)=>{nextPacket=next;queueMicrotask(()=>next(structuredClone(packet)));return()=>{};},
+    read:async()=>{throw Error('unexpected polling read');},
+    acknowledge:async(_id,id)=>{acks.push(id);},recordFocus:async s=>{credits.push(s);},
+  };
+  try {
+    startWorker(cloud);await flush();assert.equal(rules.length,2);
+    now+=30*60000;packet={...packet,revision:'break',session:beginStudyBreak(initial,now)};
+    nextPacket(structuredClone(packet));await flush();assert.equal(rules.length,0);assert.equal(credits.length,1);
+    for(let i=0;i<5;i++){now+=60000;interval();await flush();}
+    assert.equal(credits.length,1,'break duration causes no repeated credit or heartbeat');
+    now=packet.session.breakUntil;onAlarm({name:'study-end'});await flush();
+    assert.equal(rules.length,2,'offline break expires with local rules reinstalled');
+    assert.equal(data.study.session.startedAt,packet.session.breakUntil);
+    assert.equal(data.study.session.endsAt,initial.endsAt+600000);
+    now=data.study.session.endsAt;onAlarm({name:'study-end'});await flush();
+    assert.equal(rules.length,0);assert.equal(credits.length,2);
+    assert.equal(credits[0].pausedAt-credits[0].startedAt,30*60000);
+    assert.equal(credits[1].endsAt-credits[1].startedAt,90*60000);
+    assert.equal(acks.length,4,'one acknowledgement for start, break, local resume and expiry');
+  } finally {Date.now=realNow;globalThis.setInterval=realInterval;delete globalThis.chrome;}
+});

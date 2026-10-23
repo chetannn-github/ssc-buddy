@@ -1,4 +1,6 @@
 import { onStudyBreak } from "../shared/study-breaks.ts";
+import { effectiveStudySession } from "../shared/study-breaks.ts";
+import { focusSettlementDue } from '../shared/focus-sync-policy.ts';
 import { validSession, rulesFor, allowed, normalizeWebsite, RULE_IDS } from './policy.js';
 function blockedTarget(value) { try { const hash = new URL(value).hash; const raw = hash.startsWith('#site=') ? hash.slice(6) : hash.startsWith('#youtube=') ? hash.slice(9) : ''; const url = new URL(/^https?:\/\//.test(raw) ? raw : decodeURIComponent(raw)); return ['http:', 'https:'].includes(url.protocol) ? url.href : null; } catch { return null; } }
 import { MAX_STUDY_WEBSITES, isSocialHost, websiteDomain } from '../shared/study-selection.ts';
@@ -13,6 +15,8 @@ function userError(error) {
 }
 export function startWorker(cloud) {
   let lastSync = 0, error = '', chain = Promise.resolve(), syncing;
+  let watchUid = null, stopWatch, watchFailed = false, watchOnline = false;
+  let watchRetryAt = 0, watchRetryDelay = 30000;
   const serialize = work => { const next = chain.then(work); chain = next.catch(() => {}); return next; };
   const get = async () => await chrome.storage.local.get(['study', 'deviceId']);
   async function apply(session, revision, uid) {
@@ -73,20 +77,37 @@ export function startWorker(cloud) {
       const user = cloud.user(); if (!user) return;
       const packet = await cloud.read();
       if (cloud.user()?.uid !== user.uid) return;
-      const session = await serialize(() => receive(packet, user.uid));
+      await accept(packet, user.uid);
+    })().catch(e => { error = userError(e); }).finally(() => { syncing = undefined; });
+    return syncing;
+  }
+  async function accept(packet, uid) {
+      if (cloud.user()?.uid !== uid) return;
+      const session = await serialize(() => receive(packet, uid));
+      if (cloud.user()?.uid !== uid) return;
+      lastSync = Date.now(); error = '';
+      await afterAccept(packet, session, uid);
+  }
+  async function afterAccept(packet, session, uid) {
+      if (cloud.user()?.uid !== uid) return;
       let { deviceId } = await get();
       if (!deviceId) { deviceId = crypto.randomUUID(); await chrome.storage.local.set({ deviceId }); }
-      await cloud.acknowledge(deviceId, session?.id ?? null);
-      lastSync = Date.now(); error = '';
+      const { focusPresence } = await chrome.storage.local.get('focusPresence');
+      const presenceKey = `${uid}:${packet.revision}:${session?.id ?? ''}`;
+      if (focusPresence?.key !== presenceKey) {
+        await cloud.acknowledge(deviceId, session?.id ?? null, '', uid);
+        await chrome.storage.local.set({ focusPresence: { key: presenceKey, at: Date.now() } });
+      }
       // Enforcement/acknowledgement always complete first. Stats retries never
       // hold a browser locked beyond its deadline, including while offline.
       if (cloud.recordFocus) {
         try {
-          if (packet.session) await cloud.recordFocus(packet.session);
+          if (packet.session) await settle(packet.session, uid);
           const { pendingFocus = [] } = await chrome.storage.local.get('pendingFocus');
-          for (const entry of pendingFocus.filter(entry => entry.uid === user.uid)) {
-            if (cloud.user()?.uid !== user.uid) break;
-            await cloud.recordFocus(entry.session);
+          for (const entry of pendingFocus.filter(entry => entry.uid === uid)) {
+            if (cloud.user()?.uid !== uid) break;
+            if (!focusSettlementDue(entry.session)) continue;
+            await settle(entry.session, uid);
             await serialize(async () => {
               const { pendingFocus: latest = [] } = await chrome.storage.local.get('pendingFocus');
               await chrome.storage.local.set({ pendingFocus: latest.filter(item => item.uid !== entry.uid || item.session.id !== entry.session.id) });
@@ -94,8 +115,43 @@ export function startWorker(cloud) {
           }
         } catch { /* Cached sessions and pending credits retry on the next sync. */ }
       }
-    })().catch(e => { error = userError(e); }).finally(() => { syncing = undefined; });
-    return syncing;
+  }
+  async function settle(raw, uid) {
+    if (!focusSettlementDue(raw) || cloud.user()?.uid !== uid) return;
+    const session = effectiveStudySession(raw);
+    const key = `${uid}:${session.id}:${session.paused ? session.pausedAt : session.endsAt}`;
+    const { focusReceipts = [] } = await chrome.storage.local.get('focusReceipts');
+    if (focusReceipts.includes(key)) return;
+    await cloud.recordFocus(session, Date.now(), uid);
+    if (cloud.user()?.uid !== uid) return;
+    const { focusReceipts: latest = [] } = await chrome.storage.local.get('focusReceipts');
+    await chrome.storage.local.set({ focusReceipts: [...new Set([...latest, key])].slice(-200) });
+  }
+  async function backgroundSync() {
+    await cloud.ready;
+    const uid = cloud.user()?.uid ?? null;
+    if (watchUid !== uid) { watchRetryAt = 0; watchRetryDelay = 30000; }
+    if (watchUid !== uid || (watchFailed && Date.now() >= watchRetryAt)) {
+      stopWatch?.(); stopWatch = undefined; watchUid = uid; watchFailed = false; watchOnline = false;
+      if (uid && cloud.watch) stopWatch = cloud.watch(uid, packet => {
+        watchOnline = true;
+        watchRetryAt = 0; watchRetryDelay = 30000;
+        void accept(packet, uid).catch(e => { error = userError(e); });
+      }, e => {
+        watchFailed = true; watchOnline = false; error = userError(e);
+        watchRetryAt = Date.now() + watchRetryDelay; watchRetryDelay = Math.min(300000, watchRetryDelay * 2);
+      }, online => { if (watchUid === uid) watchOnline = online; });
+    }
+    // Old adapters use REST; actual listener errors back off rather than starting
+    // a ten-second GET loop. Explicit user refresh still reads on demand.
+    if (!cloud.watch) return sync();
+    if (!uid) return;
+    const { study } = await get();
+    if (study?.uid === uid) {
+      // No control GET here: only local expiry, due final credit and one device
+      // acknowledgement per state change. No presence heartbeat writes.
+      await afterAccept({ revision: study.revision, session: study.session }, validSession(study.session), uid);
+    }
   }
   async function currentWebsite() {
     const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
@@ -152,16 +208,17 @@ export function startWorker(cloud) {
       const target = blockedTarget(sender.url), host = target ? new URL(target).hostname : '';
       const currentSite = sender.url.startsWith(chrome.runtime.getURL('popup.html')) ? await currentWebsite() : null;
       if (currentSite) { currentSite.canAdd = !!cloud.user() && currentSite.canAdd && domains.length < MAX_STUDY_WEBSITES && !domains.includes(currentSite.domain); delete currentSite.url; delete currentSite.tabId; }
-      return { session: current, domains, currentSite, blockedSite: host ? { domain: host, canAdd: !!current && domains.length < MAX_STUDY_WEBSITES && !isSocialHost(host) } : null, user, connected: Date.now() - lastSync < 65000, error };
+      return { session: current, domains, currentSite, blockedSite: host ? { domain: host, canAdd: !!current && domains.length < MAX_STUDY_WEBSITES && !isSocialHost(host) } : null, user, connected: cloud.watch ? watchOnline && !watchFailed : Date.now() - lastSync < 65000, error };
     })().then(result => reply({ ok: true, ...result }), e => reply({ ok: false, error: userError(e) }));
     return true;
   });
-  chrome.alarms.onAlarm.addListener(() => { void serialize(expire).then(sync).catch(e => { error = userError(e); }); });
+  chrome.alarms.onAlarm.addListener(() => { void serialize(expire).then(backgroundSync).catch(e => { error = userError(e); }); });
   void serialize(async () => {
     await chrome.storage.local.setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' });
     const { study } = await get();
     await apply(validSession(study?.session ?? null), study?.revision ?? 'empty', study?.uid ?? null);
     await chrome.alarms.create('study-watch', { periodInMinutes: 0.5 });
-  }).then(() => { cloud.subscribe(() => { void sync(); }); void sync(); }).catch(e => { error = String(e); });
-  setInterval(() => { void serialize(expire).then(sync); }, 10000);
+  }).then(() => { cloud.subscribe(() => { void backgroundSync(); }); void backgroundSync(); }).catch(e => { error = String(e); });
+  // Local enforcement remains timely even when offline. No periodic cloud GET.
+  setInterval(() => { void serialize(expire).then(backgroundSync).catch(e => { error = userError(e); }); }, 10000);
 }
