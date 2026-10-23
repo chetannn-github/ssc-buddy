@@ -1485,8 +1485,7 @@ function History({
           <Text style={s.back}>New session</Text>
         </Pressable>
       </View>
-      <ScrollView contentContainerStyle={s.content}>
-        <View style={s.historyFilters}>
+        <View style={[s.historyFilters, s.fixedFilters]}>
           <HistoryFilter
             label={subject}
             open={filterMenu === "subject"}
@@ -1504,6 +1503,7 @@ function History({
             onSelect={(next) => { setChapter(next); setFilterMenu(null); }}
           />
         </View>
+      <ScrollView style={s.filteredList} contentContainerStyle={s.content}>
         {visibleGroups.length ? (
           visibleGroups.map((group) => {
             const record = group.attempts[group.attempts.length - 1];
@@ -2241,8 +2241,7 @@ function QuestionBank({
           <Text style={s.back}>Back</Text>
         </Pressable>
       </View>
-      <ScrollView contentContainerStyle={s.content} onScrollBeginDrag={closeFilters} keyboardShouldPersistTaps="handled">
-        <View style={s.bankFilters} onTouchStart={(event) => event.stopPropagation()}>
+        <View style={[s.bankFilters, s.fixedFilters]} onTouchStart={(event) => event.stopPropagation()}>
           <BankDropdown
             title="Subject"
             label={
@@ -2284,6 +2283,7 @@ function QuestionBank({
             }}
           />
         </View>
+      <ScrollView style={s.filteredList} contentContainerStyle={s.content} onScrollBeginDrag={closeFilters} keyboardShouldPersistTaps="handled">
         {entries.length ? (
           entries.map(({ subject, chapter, exercise }) => (
             <Pressable
@@ -2404,6 +2404,8 @@ const s = StyleSheet.create({
   title: { color: colors.text, fontFamily: "Manrope_800ExtraBold", fontSize: 24, marginTop: 4 },
   headerCopy: { color: colors.muted, fontFamily: "Manrope_500Medium", fontSize: 11, marginTop: 3 },
   content: { paddingHorizontal: 14, paddingTop: 2, gap: 5, paddingBottom: 66 },
+  fixedFilters: { flexShrink: 0, marginHorizontal: 14, paddingTop: 2, paddingBottom: 5 },
+  filteredList: { flex: 1, zIndex: 0 },
   linkButton: { width: 38, height: 38, alignItems: "center", justifyContent: "center", borderRadius: 11, backgroundColor: "#252525", borderWidth: 1, borderColor: "#353535" },
   label: {
     color: colors.subdued,
