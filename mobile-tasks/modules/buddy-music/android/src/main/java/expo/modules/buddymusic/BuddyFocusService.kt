@@ -59,6 +59,7 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
   private val essentials = mutableSetOf<String>()
   private val ticker = object : Runnable {
     override fun run() {
+      finishTimedBreak(this@BuddyFocusService)
       val state = "${FocusProtection.active(this@BuddyFocusService)}:${preferences.getLong("endsAt", 0)}:${preferences.getBoolean("paused", false)}:${FocusProtection.enabled(this@BuddyFocusService)}"
       if (state != protectionState) {
         protectionState = state
@@ -66,6 +67,7 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
       }
       enforce()
       updateTimer()
+      updateBreakButton()
       rotateMotivation()
       handler.postDelayed(this, if (overlay == null) 1000 else 250)
     }
@@ -111,7 +113,7 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
   override fun onSharedPreferenceChanged(shared: SharedPreferences?, key: String?) {
     // Break journals, image-cache and admin metadata do not change the visible screen.
     // Batch one preference transaction and preserve the overlay window on pause/resume.
-    if (key !in setOf("session", "allowed", "accent", "paused", "endsAt", "remainingMs", "appLimit")) return
+    if (key !in setOf("session", "allowed", "accent", "paused", "endsAt", "remainingMs", "appLimit", "breakUntil", "breakLimit", "breaksTaken", "phaseStartedAt")) return
     if (key in setOf("session", "allowed", "accent", "appLimit")) rebuildOverlay = true
     handler.removeCallbacks(refreshOverlay)
     handler.post(refreshOverlay)
@@ -124,7 +126,7 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
   private fun shouldBlockForeground() = FocusAppPolicy.blocks(foreground, System.currentTimeMillis(), restrictionDeadline(), essentials, preferences.getStringSet("allowed", emptySet()).orEmpty(), isRinging())
   private fun allowedAppLimit() = FocusAppPolicy.appLimit(preferences.getInt("appLimit", 2))
   private fun isRinging() = runCatching { (getSystemService(AUDIO_SERVICE) as AudioManager).mode == AudioManager.MODE_RINGTONE }.getOrDefault(false)
-  private fun restrictionDeadline(): Long = if (preferences.getBoolean("paused", false) && !preferences.getString("session", "").isNullOrEmpty()) Long.MAX_VALUE else preferences.getLong("endsAt", 0)
+  private fun restrictionDeadline(): Long = if (preferences.getLong("breakUntil", 0) > System.currentTimeMillis() && preferences.getBoolean("paused", false)) 0 else if (preferences.getBoolean("paused", false) && !preferences.getString("session", "").isNullOrEmpty()) Long.MAX_VALUE else preferences.getLong("endsAt", 0)
   private fun text(value: String, size: Float, tint: Int = Color.WHITE) = TextView(this).apply {
     text = value; textSize = size; setTextColor(tint); gravity = Gravity.CENTER
     setPadding(dp(10), dp(8), dp(10), dp(8))
@@ -341,14 +343,18 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
       setOnClickListener {
         val now = System.currentTimeMillis()
         if (!FocusProtection.active(this@BuddyFocusService)) return@setOnClickListener
-        val paused = !preferences.getBoolean("paused", false)
+        val wasPaused = preferences.getBoolean("paused", false)
+        val limit = preferences.getInt("breakLimit", -1)
+        if (limit >= 0 && (wasPaused || !FocusBreakPolicy.canBreak(now, preferences.getLong("phaseStartedAt", now), preferences.getLong("endsAt", 0), limit, preferences.getInt("breaksTaken", 0)))) return@setOnClickListener
+        val paused = !wasPaused
         val remaining = if (paused) preferences.getLong("endsAt", 0) - now else preferences.getLong("remainingMs", 0)
         if (remaining <= 0) return@setOnClickListener
         val actions = JSONArray(preferences.getString("breakActions", "[]"))
         actions.put(JSONObject().put("id", UUID.randomUUID().toString()).put("lockId", preferences.getString("session", "")).put("at", now).put("paused", paused))
         val edit = preferences.edit().putBoolean("paused", paused).putLong("remainingMs", remaining).putString("breakActions", actions.toString())
-        if (!paused) edit.putLong("endsAt", now + remaining)
-        if (edit.commit()) FocusProtection.reconcile(this@BuddyFocusService)
+        if (limit >= 0) edit.putLong("breakUntil", now + FocusBreakPolicy.DURATION_MS).putInt("breaksTaken", preferences.getInt("breaksTaken", 0) + 1)
+        if (!paused) edit.putLong("endsAt", now + remaining).putLong("phaseStartedAt", now)
+        if (edit.commit()) { FocusProtection.reconcile(this@BuddyFocusService); enforce() }
       }
     })
     val allowed = preferences.getStringSet("allowed", emptySet()).orEmpty()
@@ -429,7 +435,15 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
     renderedTime = value
   }
   private fun updateBreakButton() {
-    breakButton?.text = if (preferences.getBoolean("paused", false)) "Resume focus" else "Take a break"
+    val button = breakButton ?: return
+    val limit = preferences.getInt("breakLimit", -1)
+    if (limit < 0) { button.text = if (preferences.getBoolean("paused", false)) "Resume focus" else "Take a break"; button.isEnabled = true; return }
+    val now = System.currentTimeMillis()
+    val left = (limit - preferences.getInt("breaksTaken", 0)).coerceAtLeast(0)
+    val wait = (FocusBreakPolicy.MIN_FOCUS_MS - (now - preferences.getLong("phaseStartedAt", now))).coerceAtLeast(0)
+    button.isEnabled = FocusBreakPolicy.canBreak(now, preferences.getLong("phaseStartedAt", now), preferences.getLong("endsAt", 0), limit, preferences.getInt("breaksTaken", 0)) && !preferences.getBoolean("paused", false)
+    button.text = if (left == 0) "No breaks remaining" else if (wait > 0) "Break in " + ((wait + 59999) / 60000) + " min" else "Take a break · 10 min"
+    button.alpha = if (button.isEnabled) 1f else 0.45f
   }
   private fun hide() {
     appPicker?.animate()?.cancel(); appPicker = null; pickerClosing = false
@@ -449,12 +463,21 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
       private set
     @Volatile var lastEventAt = 0L
       private set
+    fun finishTimedBreak(context: Context, now: Long = System.currentTimeMillis()) {
+      val p = prefs(context)
+      val until = p.getLong("breakUntil", 0)
+      if (!p.getBoolean("paused", false) || until <= 0 || now < until) return
+      val actions = JSONArray(p.getString("breakActions", "[]"))
+      actions.put(JSONObject().put("id", UUID.randomUUID().toString()).put("lockId", p.getString("session", "")).put("at", until).put("paused", false))
+      p.edit().putBoolean("paused", false).putLong("endsAt", until + p.getLong("remainingMs", 0))
+        .putLong("phaseStartedAt", until).remove("breakUntil").putString("breakActions", actions.toString()).commit()
+    }
     fun prefs(context: Context) = context.getSharedPreferences("buddy-focus-lock", Context.MODE_PRIVATE)
     fun enabled(context: Context): Boolean {
       val expected = ComponentName(context, BuddyFocusService::class.java)
       return Settings.Secure.getString(context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty().split(':').any { ComponentName.unflattenFromString(it) == expected }
     }
-    fun sync(context: Context, id: String, endsAt: Double, accent: String, paused: Boolean = false, remainingMs: Double = 0.0, image: String = "", appLimit: Int = 2) {
+    fun sync(context: Context, id: String, endsAt: Double, accent: String, paused: Boolean = false, remainingMs: Double = 0.0, image: String = "", appLimit: Int = 2, breakState: String = "") {
       val p = prefs(context)
       // Local overlay breaks must reach the shared timer before cloud snapshots can replace them.
       if (JSONArray(p.getString("breakActions", "[]")).length() > 0) return
@@ -462,6 +485,11 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
       if (FocusProtection.active(context) && id != p.getString("session", "")) return
       val editor = p.edit().putString("session", id).putLong("endsAt", endsAt.toLong()).putString("accent", accent)
       if (p.getString("session", "") != id || !p.contains("appLimit")) editor.putInt("appLimit", FocusAppPolicy.appLimit(appLimit))
+      if (breakState.isNotEmpty()) {
+        val state = JSONObject(breakState)
+        editor.putInt("breakLimit", state.optInt("breakLimit", -1)).putInt("breaksTaken", state.optInt("breaksTaken", 0))
+          .putLong("breakUntil", state.optLong("breakUntil", 0)).putLong("phaseStartedAt", state.optLong("startedAt", System.currentTimeMillis()))
+      } else if (p.getString("session", "") != id) editor.remove("breakLimit").remove("breaksTaken").remove("breakUntil").remove("phaseStartedAt")
       editor.putBoolean("paused", paused).putLong("remainingMs", remainingMs.toLong())
       if (image.isNotEmpty() || id.isEmpty()) editor.putString("image", image)
       editor.putStringSet("allowed", FocusAppPolicy.forSession(p.getString("session", "").orEmpty(), id, p.getStringSet("allowed", emptySet()).orEmpty()))

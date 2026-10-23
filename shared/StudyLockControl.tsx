@@ -1,23 +1,27 @@
+import { effectiveStudySession, maxStudyBreaks, onStudyBreak, studyBreakState, studyTimerMilliseconds } from "./study-breaks";
+import "./study-breaks.css";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Firestore } from "firebase/firestore";
 import { watchStudyControl, watchStudyDevices, watchStudyFocusDay, recordStudyFocus, type StudySession, startStudySession, type StudyControl, type StudyDevice, normalizeStudyDomain, saveStudyWebsites, pauseStudySession, resumeStudySession } from "./study-lock";
-import { emptyFocusDay, focusDayKey, todayFocusMilliseconds, formatFocusMinutes, formatFocusTime, type FocusDay } from "./study-focus";
+import { emptyFocusDay, focusDayKey, todayFocusMilliseconds, formatFocusCountdown, formatFocusMinutes, formatFocusTime, type FocusDay } from "./study-focus";
 import { SlotTime } from "./SlotTime";
 import { AnimatedChoices } from "./AnimatedChoices";
 import { StudyDurationPicker } from "./StudyDurationPicker";
-import { publishStudyFocusDay } from "./study-lock";
+import { reconcileStudySession, publishStudyFocusDay } from "./study-lock";
 import { MAX_STUDY_WEBSITES } from "./study-selection";
 import { Clock3, Globe2, MonitorUp, Monitor, Pause, Play, Plus, LockKeyhole, X } from "lucide-react";
-type Session = { endsAt: number; domains: string[]; paused?: boolean; remainingMs?: number };
+type Session = StudySession;
 type Status = { session: Session | null; connected: number; protected: number };
 const remaining = (session: Session | number) => {
-  const seconds = Math.max(0, Math.ceil((typeof session === "number" ? session - Date.now() : session.paused ? Number(session.remainingMs) || 0 : session.endsAt - Date.now()) / 1000));
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+  return formatFocusCountdown(typeof session === "number" ? session - Date.now() : studyTimerMilliseconds(session));
 };
 export function StudyLockControl({ uid, desktop = false, profile = false, getDatabase, source = "windows", onResize, onPin, lockedImage, onPracticeSession }: { uid: string; desktop?: boolean; profile?: boolean; getDatabase: () => Firestore; source?: string; onResize?: (expanded: boolean) => Promise<void>; onPin?: () => Promise<void>; lockedImage?: string; onPracticeSession?: () => void }) {
   const [open, setOpen] = useState(false), [status, setStatus] = useState<Status | null>(null);
   const [minutes, setMinutes] = useState("25"), [domains, setDomains] = useState(() => typeof localStorage === "undefined" ? "" : localStorage.getItem(`ssc-browser-allowlist:${uid}`) ?? "chatgpt.com");
+  const [breakLimit, setBreakLimit] = useState(0);
+  const maxBreaks = maxStudyBreaks(Number(minutes));
+  useEffect(() => setBreakLimit(value => Math.min(value, maxBreaks)), [maxBreaks]);
   const [website, setWebsite] = useState(""), [pickingTime, setPickingTime] = useState(false);
   const [error, setError] = useState(""), [busy, setBusy] = useState(false);
   const [now, setNow] = useState(Date.now()), [focusData, setFocusData] = useState<FocusDay>(emptyFocusDay);
@@ -46,7 +50,8 @@ export function StudyLockControl({ uid, desktop = false, profile = false, getDat
     const db = getDatabase(); let control: StudyControl | null = null, devices: StudyDevice[] = [];
     const refresh = () => {
       setNow(Date.now());
-      const session = control?.session && (control.session.paused || control.session.endsAt > Date.now()) ? control.session : null;
+      const candidate = control?.session ? effectiveStudySession(control.session) : null;
+      const session = candidate && (candidate.paused || candidate.endsAt > Date.now()) ? candidate : null;
       const connected = devices.filter(device => Date.now() - device.lastSeenAt < 90000);
       setStatus({ session, connected: connected.length, protected: session ? connected.filter(device => device.sessionId === session.id && !device.error).length : 0 });
     };
@@ -83,13 +88,20 @@ export function StudyLockControl({ uid, desktop = false, profile = false, getDat
       void run(() => saveStudyWebsites(getDatabase(), uid, next.split("\n").filter(Boolean), source));
     } catch (e) { setError(e instanceof Error ? e.message : "Enter a domain like parmar.com."); }
   };
+  useEffect(() => {
+    if (focusSession?.breakUntil && now >= focusSession.breakUntil) void reconcileStudySession(getDatabase(), uid).catch(() => {});
+  }, [focusSession?.breakUntil, Math.floor(now / 5000), uid, getDatabase]);
   const session = status?.session;
+  const breaking = onStudyBreak(session, now);
+  const breakState = session ? studyBreakState(session, now) : null;
+  const breakLabel = breaking ? "Break · auto-resumes" : session?.breakLimit === undefined && session?.paused ? "Resume focus" : breakState?.available ? "Take a break · 10 min" : !breakState?.left ? "No breaks remaining" : `Break in ${Math.ceil((breakState?.waitMs ?? 0) / 60000)} min`;
+  const canBreak = !breaking && (!!breakState?.available || session?.breakLimit === undefined);
   const run = async (action: () => Promise<void>) => {
     setBusy(true); setError(""); try { await action(); } catch (e) { const message = String(e); setError(/firebase/i.test(message) ? "Could not update your focus session. Please try again." : message); } finally { setBusy(false); }
   };
   return <>
     {desktop ? <section ref={desktopTrigger} className="study-desktop-content" {...(!session ? { role: "button", tabIndex: 0, "aria-label": "Set up Focus Lock", onClick: () => setOpen(true), onKeyDown: (event: React.KeyboardEvent<HTMLElement>) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setOpen(true); } } } : {})}>
-      <div className="study-desktop-heading"><span data-tauri-drag-region><LockKeyhole size={14} />Focus Lock</span>{session && <button className={`study-desktop-toggle ${session.paused ? "is-paused" : "is-running"}`} type="button" aria-label={session.paused ? "Resume Focus Lock" : "Pause Focus Lock"} title={session.paused ? "Resume focus" : "Pause focus"} disabled={busy} onClick={event => { event.stopPropagation(); void run(() => session.paused ? resumeStudySession(getDatabase(), uid, source) : pauseStudySession(getDatabase(), uid, source)); }}>{session.paused ? <Play size={14} fill="currentColor" /> : <Pause size={14} fill="currentColor" />}</button>}</div>
+      <div className="study-desktop-heading"><span data-tauri-drag-region><LockKeyhole size={14} />Focus Lock</span>{session && <button className={`study-desktop-toggle ${session.paused ? "is-paused" : "is-running"}`} type="button" aria-label={session.paused ? "Resume Focus Lock" : "Pause Focus Lock"} title={breakLabel} disabled={busy || !canBreak} onClick={event => { event.stopPropagation(); void run(() => session.paused ? resumeStudySession(getDatabase(), uid, source) : pauseStudySession(getDatabase(), uid, source)); }}>{session.paused ? <Play size={14} fill="currentColor" /> : <Pause size={14} fill="currentColor" />}</button>}</div>
       <div className="study-desktop-summary"><span className="study-desktop-daily">Today's focus time <b><SlotTime value={formatFocusTime(todayFocus)} /></b></span><strong className={`study-desktop-time ${session ? "is-running" : ""}`}>{session ? <SlotTime value={remaining(session)} /> : "Ready to focus"}</strong></div>
     </section> : <button ref={trigger} className={`browser-study-trigger ${profile ? "study-profile-trigger" : "icon-button"} ${session ? "active" : ""}`} aria-label="Focus Lock" title={session ? `Focus Lock - ${remaining(session.endsAt)}` : "Focus Lock"} onClick={() => setOpen(true)}><LockKeyhole size={17} />{profile && <><span>Focus Lock</span><small>Today · <SlotTime value={formatFocusTime(todayFocus)} /></small></>}{session && !profile && <i aria-hidden="true" />}</button>}
 
@@ -104,7 +116,7 @@ export function StudyLockControl({ uid, desktop = false, profile = false, getDat
         {session ? <>
           {lockedImage && <><p className="focus-lock-eyebrow">ONE SESSION. ONE STEP CLOSER.</p><h3 className="focus-lock-message">Your goals deserve this time.</h3></>}
           <div className="browser-study-live-time"><SlotTime value={remaining(session)} /></div>
-          <button className="browser-study-secondary study-pause-button" disabled={busy} onClick={() => void run(() => session.paused ? resumeStudySession(getDatabase(), uid, source) : pauseStudySession(getDatabase(), uid, source))}>{busy ? "Please wait…" : session.paused ? "Resume focus" : "Take a break"}</button>
+          <button className="browser-study-secondary study-pause-button" disabled={busy || !canBreak} onClick={() => void run(() => session.paused ? resumeStudySession(getDatabase(), uid, source) : pauseStudySession(getDatabase(), uid, source))}>{busy ? "Please wait…" : breakLabel}</button>
           {source === "web" ? (onPracticeSession && <button className="focus-lock-recall" onClick={() => { setOpen(false); onPracticeSession(); }}>Practice session</button>) : source !== "windows" && !desktop && <div className="browser-study-domains">{session.domains.slice(0, MAX_STUDY_WEBSITES).map(domain => lockedImage ? <a key={domain} href={`https://${domain}`} className="focus-lock-site" rel="noreferrer"><span className="focus-lock-site-icon">{domain.replace(/^www\./, "").charAt(0).toUpperCase()}</span><strong>{domain}</strong><span aria-hidden="true">&#8599;</span></a> : <span key={domain} title={domain}>{domain}</span>)}</div>}
         </> : <>
           <div className="study-websites"><h3>Allowed websites <small>{websites.length}/{MAX_STUDY_WEBSITES}</small></h3>
@@ -113,9 +125,10 @@ export function StudyLockControl({ uid, desktop = false, profile = false, getDat
           </div>
           <button className="study-duration-trigger" onClick={() => setPickingTime(true)}><Clock3 size={17} /><span>Focus time</span><strong><SlotTime value={formatFocusMinutes(Number(minutes))} /></strong></button>
           <AnimatedChoices className="study-time-presets" label="Focus duration" options={[15, 30, 60, 90].map(value => ({ value: String(value), label: formatFocusMinutes(value), disabled: busy }))} value={minutes} onChange={setMinutes} />
+          <div className="study-break-setup"><span>Breaks <small>10 min each</small></span><div><button aria-label="Fewer breaks" disabled={busy || breakLimit === 0} onClick={() => setBreakLimit(value => value - 1)}>−</button><strong>{breakLimit}</strong><button aria-label="More breaks" disabled={busy || breakLimit >= maxBreaks} onClick={() => setBreakLimit(value => value + 1)}>+</button></div></div>
           <button className="browser-study-primary" disabled={busy || !websites.length || !!website.trim()} onClick={() => void run(async () => {
             const duration = Number(minutes); if (!Number.isInteger(duration) || duration < 1 || duration > 720) throw Error("Choose 1–720 minutes.");
-            await startStudySession(getDatabase(), uid, duration, websites, source); localStorage.setItem(`ssc-browser-allowlist:${uid}`, domains);
+            await startStudySession(getDatabase(), uid, duration, websites, source, 2, breakLimit); localStorage.setItem(`ssc-browser-allowlist:${uid}`, domains);
           })}>{busy ? "Please wait…" : "Start Focus Lock"}</button>
         </>}
         {error && <p className="browser-study-error" role="alert">{error}</p>}

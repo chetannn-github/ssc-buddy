@@ -1,3 +1,4 @@
+import { onStudyBreak } from "../shared/study-breaks.ts";
 import { validSession, rulesFor, allowed, normalizeWebsite, RULE_IDS } from './policy.js';
 function blockedTarget(value) { try { const hash = new URL(value).hash; const raw = hash.startsWith('#site=') ? hash.slice(6) : hash.startsWith('#youtube=') ? hash.slice(9) : ''; const url = new URL(/^https?:\/\//.test(raw) ? raw : decodeURIComponent(raw)); return ['http:', 'https:'].includes(url.protocol) ? url.href : null; } catch { return null; } }
 import { MAX_STUDY_WEBSITES, isSocialHost, websiteDomain } from '../shared/study-selection.ts';
@@ -27,13 +28,19 @@ export function startWorker(cloud) {
     await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: RULE_IDS, addRules: rulesFor(session, chrome.runtime.getURL('blocked.html')) });
     await chrome.storage.local.set({ study: { session, revision, uid } });
     await chrome.alarms.clear('study-end');
-    if (session && !session.paused) await chrome.alarms.create('study-end', { when: session.endsAt });
-    await chrome.action.setBadgeText({ text: session ? 'ON' : '' });
+    if (session && (!session.paused || session.breakUntil)) await chrome.alarms.create('study-end', { when: session.breakUntil ?? session.endsAt });
+    if (session && !onStudyBreak(session)) await blockOpenTabs(session);
+    await chrome.action.setBadgeText({ text: onStudyBreak(session) ? 'BREAK' : session ? 'ON' : '' });
     await chrome.action.setBadgeBackgroundColor({ color: '#577c3e' });
+  }
+  async function blockOpenTabs(session) {
+    for (const tab of await chrome.tabs.query({})) {
+      if (tab.id && /^https?:\/\//.test(tab.url ?? '') && !allowed(tab.url, session.domains)) await chrome.tabs.update(tab.id, { url: chrome.runtime.getURL('blocked.html') + '#site=' + encodeURIComponent(tab.url) }).catch(() => {});
+    }
   }
   async function expire() {
     const { study } = await get(); const session = validSession(study?.session ?? null);
-    if (!session && study?.session) await apply(null, study.revision, study.uid);
+    if (study?.session && JSON.stringify(session) !== JSON.stringify(study.session)) await apply(session, study.revision, study.uid);
     return session;
   }
   async function receive(packet, uid) {
@@ -55,9 +62,7 @@ export function startWorker(cloud) {
     const { study } = await get();
     if (study?.uid !== uid || study?.revision !== packet.revision || JSON.stringify(study?.session ?? null) !== JSON.stringify(session)) {
       await apply(session, packet.revision, uid);
-      if (session) for (const tab of await chrome.tabs.query({})) {
-        if (tab.id && /^https?:\/\//.test(tab.url ?? '') && !allowed(tab.url, session.domains)) await chrome.tabs.update(tab.id, { url: chrome.runtime.getURL('blocked.html') + '#site=' + encodeURIComponent(tab.url) }).catch(() => {});
-      }
+
     }
     return session;
   }
@@ -77,7 +82,7 @@ export function startWorker(cloud) {
       // hold a browser locked beyond its deadline, including while offline.
       if (cloud.recordFocus) {
         try {
-          if (packet.session && !packet.session.paused) await cloud.recordFocus(packet.session);
+          if (packet.session) await cloud.recordFocus(packet.session);
           const { pendingFocus = [] } = await chrome.storage.local.get('pendingFocus');
           for (const entry of pendingFocus.filter(entry => entry.uid === user.uid)) {
             if (cloud.user()?.uid !== user.uid) break;

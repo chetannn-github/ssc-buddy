@@ -1,4 +1,5 @@
-export type FocusSession = { id: string; startedAt: number; endsAt: number; timeZone?: string; paused?: boolean; pausedAt?: number };
+import { effectiveStudySession } from "./study-breaks.ts";
+export type FocusSession = { id: string; startedAt: number; endsAt: number; timeZone?: string; paused?: boolean; pausedAt?: number; lockId?: string; remainingMs?: number; breakLimit?: number; breaksTaken?: number; breakUntil?: number };
 export type FocusDay = { totalMilliseconds: number; sessionCredits: Record<string, number> };
 export const emptyFocusDay = (): FocusDay => ({ totalMilliseconds: 0, sessionCredits: {} });
 export const studyTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
@@ -35,6 +36,7 @@ export function creditFocusDay(value: Partial<FocusDay> | null | undefined, sess
   return { totalMilliseconds: Math.max(0, Number(value?.totalMilliseconds) || 0) + next - previous, sessionCredits: credits };
 }
 export function todayFocusMilliseconds(value: FocusDay | null, session: FocusSession | null, now = Date.now()) {
+  session = session ? effectiveStudySession(session, now) : null;
   const date = focusDayKey(now, session?.timeZone || studyTimeZone());
   const elapsed = focusSlices(session, now).find(slice => slice.date === date)?.milliseconds ?? 0;
   const credited = session ? value?.sessionCredits[session.id] ?? 0 : 0;
@@ -49,8 +51,15 @@ export function formatFocusMinutes(value: number) {
   const minutes = Math.max(0, Math.floor(value));
   return minutes >= 60 ? `${Math.floor(minutes / 60)}h${minutes % 60 ? ` ${minutes % 60}m` : ""}` : `${minutes}m`;
 }
+/** A live countdown keeps seconds, adding an hour segment once needed. */
+export function formatFocusCountdown(milliseconds: number) {
+  const seconds = Math.max(0, Math.ceil(milliseconds / 1000));
+  const hours = Math.floor(seconds / 3600), minutes = Math.floor(seconds % 3600 / 60), remainder = seconds % 60;
+  return hours ? `${hours}:${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}` : `${minutes}:${String(remainder).padStart(2, "0")}`;
+}
 /** Include uncredited live focus once, using the same day filter as profile stats. */
 export function rangeFocusMilliseconds(days: Record<string, FocusDay>, session: FocusSession | null, includesDay: (date: string) => boolean, now = Date.now()) {
+  session = session ? effectiveStudySession(session, now) : null;
   let total = Object.entries(days).reduce((sum, [date, day]) => sum + (includesDay(date) ? day.totalMilliseconds : 0), 0);
   for (const slice of focusSlices(session, now)) {
     if (includesDay(slice.date)) total += Math.max(0, slice.milliseconds - (days[slice.date]?.sessionCredits[session!.id] ?? 0));

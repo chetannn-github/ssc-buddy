@@ -17,6 +17,7 @@ import expo.modules.kotlin.Promise
 import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import org.json.JSONObject
 import org.json.JSONArray
 
 @OptIn(UnstableApi::class)
@@ -55,6 +56,10 @@ class BuddyMusicModule : Module() {
     }.runOnQueue(Queues.MAIN)
     AsyncFunction("syncFocusStateWithLimit") { id: String, endsAt: Double, accent: String, paused: Boolean, remainingMs: Double, image: String, appLimit: Int ->
       BuddyFocusService.sync(requireNotNull(appContext.reactContext), id, endsAt, accent, paused, remainingMs, image, appLimit)
+    }.runOnQueue(Queues.MAIN)
+    AsyncFunction("syncFocusStateWithBreaks") { state: String, accent: String, image: String ->
+      val value = JSONObject(state)
+      BuddyFocusService.sync(requireNotNull(appContext.reactContext), value.optString("lockId", value.optString("id", "")), value.optDouble("endsAt", 0.0), accent, value.optBoolean("paused", false), value.optDouble("remainingMs", 0.0), image, value.optInt("appLimit", 2), state)
     }.runOnQueue(Queues.MAIN)
     AsyncFunction("openFocusLockSettings") {
       val context = requireNotNull(appContext.reactContext)

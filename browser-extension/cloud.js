@@ -1,3 +1,4 @@
+import { effectiveStudySession } from "../shared/study-breaks.ts";
 import { initializeApp } from 'firebase/app';
 import { initializeAuth, indexedDBLocalPersistence, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth/web-extension';
 import { decodeDocument, encode } from './firestore-codec.js';
@@ -59,6 +60,7 @@ export function createCloud() {
     throw Error('Could not update focus points. Please try again.');
   }
   async function recordFocus(session, time = Date.now()) {
+    session = effectiveStudySession(session, time);
     const uid = auth.currentUser?.uid;
     if (!uid) throw Error("Sign in to your SSC Buddy account.");
     for (const slice of focusSlices(session, time, true)) {

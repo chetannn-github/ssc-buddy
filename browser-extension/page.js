@@ -1,3 +1,4 @@
+import { onStudyBreak, studyTimerMilliseconds } from "../shared/study-breaks.ts";
 import { MAX_STUDY_WEBSITES } from '../shared/study-selection.ts';
 
 const $ = id => document.getElementById(id);
@@ -32,7 +33,7 @@ async function action(button, label, work) {
   }
 }
 function tick() {
-  const seconds = Math.max(0, Math.ceil((session?.paused ? Number(session.remainingMs) || 0 : (session?.endsAt ?? 0) - Date.now()) / 1000));
+  const seconds = Math.max(0, Math.ceil((session ? studyTimerMilliseconds(session) : 0) / 1000));
   const value = seconds ? (Math.floor(seconds / 3600) ? Math.floor(seconds / 3600) + ':' : '') + String(Math.floor(seconds / 60) % 60).padStart(2, '0') + ':' + String(seconds % 60).padStart(2, '0') : '';
   renderSlotTime($('countdown'), value);
 }
@@ -65,7 +66,7 @@ async function refresh(type = 'status', extra = {}) {
     if ($('approve-site')) { $('approve-site').hidden = !result.blockedSite?.canAdd; $('approve-site').textContent = 'Add ' + (result.blockedSite?.domain ?? 'website'); }
     if (document.body.classList.contains('popup') && $('motivation')) $('motivation').hidden = !result.user;
     $('error').textContent = result.error ?? '';
-    $('status').textContent = session ? session.paused ? 'Focus Lock is paused. Websites stay protected.' : result.connected ? 'Focus Lock is active.' : 'Offline. Your focus timer is still running.' : result.connected ? '' : result.user ? 'Offline' : '';
+    $('status').textContent = session ? onStudyBreak(session) ? 'Break · focus resumes automatically.' : session.paused ? 'Focus Lock is paused. Websites stay protected.' : result.connected ? 'Focus Lock is active.' : 'Offline. Your focus timer is still running.' : result.connected ? '' : result.user ? 'Offline' : '';
     $('status').hidden = !$('status').textContent;
     if (document.body.classList.contains('blocked') && !session) { $('title').textContent = 'Your focus session is complete.'; $('status').textContent = 'Websites are unlocked. You can return to your previous page.'; }
     if ($('login')) $('login').hidden = !!result.user || !!session;

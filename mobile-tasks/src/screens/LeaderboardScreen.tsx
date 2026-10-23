@@ -355,8 +355,7 @@ export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { 
               <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={s.profileStatLabel}>Focus time</Text>
             </View>
           </View>
-          <View style={{ alignSelf: "stretch", flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 14 }}>
-            <Text style={s.inactivePenalty}>{inactiveDates.includes(selectedDate) ? "−50 pts · Inactive day" : ""}</Text>
+          <View style={{ alignSelf: "stretch", flexDirection: "row", alignItems: "center", justifyContent: "flex-end", marginTop: 14 }}>
             <DayFilter
               dates={dates}
               value={selectedDate}
@@ -476,7 +475,6 @@ const s = createThemedStyles({
   detailIdentity: { maxWidth: "100%", alignItems: "center", marginTop: 7 },
   centeredUsername: { textAlign: "center" },
   xpMeta: { color: "#c4b5fd", fontSize: 12, fontWeight: "700", marginTop: 3 },
-  inactivePenalty: { color: "#fca5a5", fontSize: 12, fontWeight: "800" },
   publicProfile: { alignItems: "center", padding: 24, paddingBottom: 42 },
   bigAvatar: {
     width: 56,

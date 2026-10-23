@@ -1,3 +1,4 @@
+import { effectiveStudySession, maxStudyBreaks, onStudyBreak, studyBreakState, studyTimerMilliseconds } from "../../../shared/study-breaks";
 import { useEffect, useRef, useState } from "react";
 import { AccessibilityInfo, Alert, Animated, Easing, ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -5,7 +6,7 @@ import Svg, { Circle, Line } from "react-native-svg";
 import * as Crypto from "expo-crypto";
 import { collection, doc, onSnapshot, runTransaction, serverTimestamp } from "firebase/firestore";
 import { createStudyController, type StudyControl } from "../../../shared/study-controller";
-import { emptyFocusDay, focusDayKey, formatFocusMinutes, formatFocusTime, todayFocusMilliseconds, type FocusDay } from "../../../shared/study-focus";
+import { emptyFocusDay, focusDayKey, formatFocusCountdown, formatFocusMinutes, formatFocusTime, todayFocusMilliseconds, type FocusDay } from "../../../shared/study-focus";
 import { getFirebaseFirestore } from "../lib/firebase";
 import { colors, useAppAccent } from "../theme";
 import { accentInk } from "../domain/app-accent";
@@ -19,8 +20,7 @@ import { MAX_STUDY_WEBSITES } from "../../../shared/study-selection";
 // Use the mobile app's SDK instance and native UUID source with the shared contract.
 export const controller = createStudyController({ collection, doc, onSnapshot, runTransaction, serverTimestamp }, () => Crypto.randomUUID());
 const remaining = (end: number, now: number) => {
-  const seconds = Math.max(0, Math.ceil((end - now) / 1000));
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+  return formatFocusCountdown(end - now);
 };
 export function StudyLock({ uid, taskButton = false, openRequest = 0, onRequestOpened }: { uid: string; taskButton?: boolean; openRequest?: number; onRequestOpened?: () => void }) {
   const accent = useAppAccent();
@@ -28,6 +28,9 @@ export function StudyLock({ uid, taskButton = false, openRequest = 0, onRequestO
   useEffect(() => { if (openRequest) { setOpen(true); onRequestOpened?.(); } }, [openRequest, onRequestOpened]);
   const [control, setControl] = useState<StudyControl | null>(null);
   const [now, setNow] = useState(Date.now()), [minutes, setMinutes] = useState(25);
+  const [breakLimit, setBreakLimit] = useState(0);
+  const maxBreaks = maxStudyBreaks(minutes);
+  useEffect(() => setBreakLimit(value => Math.min(value, maxBreaks)), [maxBreaks]);
   const [appLimit, setAppLimit] = useState(2);
   const [reducedMotion, setReducedMotion] = useState(false);
   useEffect(() => {
@@ -68,7 +71,12 @@ export function StudyLock({ uid, taskButton = false, openRequest = 0, onRequestO
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => { stopControl(); clearInterval(timer); };
   }, [uid]);
-  const session = control?.session && (control.session.paused || control.session.endsAt > now) ? control.session : null;
+  const candidate = control?.session ? effectiveStudySession(control.session, now) : null;
+  const session = candidate && (candidate.paused || candidate.endsAt > now) ? candidate : null;
+  const breaking = onStudyBreak(session, now);
+  const breakState = session ? studyBreakState(session, now) : null;
+  const canBreak = !breaking && (!!breakState?.available || session?.breakLimit === undefined);
+  const breakLabel = breaking ? "Break · auto-resumes" : session?.breakLimit === undefined && session?.paused ? "Resume focus" : breakState?.available ? "Take a break · 10 min" : !breakState?.left ? "No breaks remaining" : `Break in ${Math.ceil((breakState?.waitMs ?? 0) / 60000)} min`;
   const domains = (session?.domains ?? control?.allowedDomains ?? []).slice(0, MAX_STUDY_WEBSITES);
   const run = async (action: () => Promise<void>) => {
     if (busy) return;
@@ -80,7 +88,7 @@ export function StudyLock({ uid, taskButton = false, openRequest = 0, onRequestO
   const icon = (name: React.ComponentProps<typeof MaterialCommunityIcons>["name"], size = 17, tint = "#999") => <MaterialCommunityIcons name={name} size={size} color={tint} />;
   return <>
     {taskButton ? <Pressable accessibilityRole="button" accessibilityLabel={session ? "Open focus timer" : "Start Focus"} style={s.taskStart} onPress={() => setOpen(true)}>
-      {icon("timer-outline", 19, "#111")}<Text style={s.taskStartText}>{session ? `${session.paused ? "Focus paused" : "Focus"} · ${remaining(session.paused ? now + (session.remainingMs ?? 0) : session.endsAt, now)}` : "Start Focus"}</Text>
+      {icon("timer-outline", 19, "#111")}<Text style={s.taskStartText}>{session ? `${breaking ? "Break" : session.paused ? "Focus paused" : "Focus"} · ${remaining(now + studyTimerMilliseconds(session, now), now)}` : "Start Focus"}</Text>
     </Pressable> : <Pressable accessibilityRole="button" accessibilityLabel="Focus Lock" style={s.profileTrigger} onPress={() => setOpen(true)}>
       <View style={s.profileLock}>{icon("lock-outline", 18, session ? accent : "#eee")}{session && <ActiveLockDot color={accent} />}</View><Text style={s.profileLabel}>Focus Lock</Text>
       <View style={s.profileFocus}><Text style={s.profileFocusTime}>Today · </Text><SlotTime value={formatFocusTime(todayFocus)} color="#ddd" size={12} weight="600" compact /></View>
@@ -94,11 +102,12 @@ export function StudyLock({ uid, taskButton = false, openRequest = 0, onRequestO
             {!ready && !error && <ActivityIndicator color={accent} />}
             <DeviceFocusSetup />
             {session ? <>
-              <SlotTime value={remaining(session.paused ? now + (session.remainingMs ?? 0) : session.endsAt, now)} color={accent} />
-              <Pressable accessibilityRole="button" accessibilityLabel={session.paused ? "Resume focus" : "Take a break"} disabled={busy} style={[s.secondary, busy && { opacity: 0.45 }]} onPress={() => void run(() => session.paused ? controller.resumeStudySession(getFirebaseFirestore(), uid, "mobile") : controller.pauseStudySession(getFirebaseFirestore(), uid, "mobile"))}><Text style={s.secondaryText}>{session.paused ? "Resume focus" : "Take a break"}</Text></Pressable>
+              <SlotTime value={remaining(now + studyTimerMilliseconds(session, now), now)} color={accent} />
+              <Pressable accessibilityRole="button" accessibilityLabel={breakLabel} disabled={busy || !canBreak} style={[s.secondary, (busy || !canBreak) && { opacity: 0.45 }]} onPress={() => void run(() => session.paused ? controller.resumeStudySession(getFirebaseFirestore(), uid, "mobile") : controller.pauseStudySession(getFirebaseFirestore(), uid, "mobile"))}><Text style={s.secondaryText}>{breakLabel}</Text></Pressable>
             </> : <>
               <Pressable accessibilityRole="button" accessibilityLabel="Focus time" style={s.duration} disabled={busy} onPress={() => setPicking(true)}>{icon("clock-outline", 17)}<Text style={s.durationLabel}>Focus time</Text><View style={s.durationValue}><SlotTime value={formatFocusMinutes(minutes)} color="#eee" size={12} weight="600" compact /></View></Pressable>
               <AnimatedTimeChips options={[15, 30, 60, 90]} labels={[15, 30, 60, 90].map(formatFocusMinutes)} value={minutes} onChange={setMinutes} disabled={busy} color={accent} ink={accentInk(accent)} style={s.quickTimes} />
+              <View style={s.appLimitRow}><Text style={s.durationLabel}>Breaks · 10 min each</Text><View style={s.appLimitOptions}><Pressable accessibilityLabel="Fewer breaks" disabled={busy || breakLimit === 0} style={[s.appLimitOption, breakLimit === 0 && { opacity: 0.3 }]} onPress={() => setBreakLimit(value => value - 1)}><Text style={s.quickTimeText}>−</Text></Pressable><View style={s.appLimitOption}><Text style={s.quickTimeText}>{breakLimit}</Text></View><Pressable accessibilityLabel="More breaks" disabled={busy || breakLimit >= maxBreaks} style={[s.appLimitOption, breakLimit >= maxBreaks && { opacity: 0.3 }]} onPress={() => setBreakLimit(value => value + 1)}><Text style={s.quickTimeText}>+</Text></Pressable></View></View>
               <View style={s.appLimitRow}>
                 <Text style={s.durationLabel}>Allowed apps</Text>
                 <View style={s.appLimitOptions}>
@@ -125,7 +134,7 @@ export function StudyLock({ uid, taskButton = false, openRequest = 0, onRequestO
                   ]);
                   return;
                 }
-                const started = await controller.startStudySession(getFirebaseFirestore(), uid, minutes, domains, "mobile", appLimit);
+                const started = await controller.startStudySession(getFirebaseFirestore(), uid, minutes, domains, "mobile", appLimit, breakLimit);
                 await syncDeviceFocusState(started, accent, "");
               })}>{busy ? <ActivityIndicator color="#111" /> : <Text style={s.primaryText}>Start Focus Lock</Text>}</Pressable>
             </>}

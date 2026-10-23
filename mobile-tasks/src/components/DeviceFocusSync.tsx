@@ -29,6 +29,7 @@ export function DeviceFocusSync({ user }: { user: User | null }) {
           await acknowledgeFocusBreak(action.id);
           actions = await readFocusBreaks();
         }
+        await controller.reconcileStudySession(getFirebaseFirestore(), user.uid);
         sync();
         if (!disposed && session && !session.paused) {
           const checkpoint = `${session.id}:${Math.floor(Math.min(Date.now(), session.endsAt) / 60000)}`;

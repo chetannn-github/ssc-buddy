@@ -30,6 +30,7 @@ internal object FocusProtection {
     return FocusAppPolicy.lockActive(p.getString("session", "").orEmpty(), p.getBoolean("paused", false), p.getLong("endsAt", 0), System.currentTimeMillis())
   }
   fun reconcile(context: Context) {
+    BuddyFocusService.finishTimedBreak(context)
     val p = BuddyFocusService.prefs(context)
     val active = active(context)
     val dpm = manager(context)
@@ -45,9 +46,10 @@ internal object FocusProtection {
       Intent(context, FocusRestoreReceiver::class.java).setAction("expo.modules.buddymusic.FOCUS_EXPIRY"),
       PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
     alarm.cancel(pending)
-    if (active && !p.getBoolean("paused", false)) {
+    val breakUntil = p.getLong("breakUntil", 0)
+    if (active && (!p.getBoolean("paused", false) || breakUntil > 0)) {
       // No exact-alarm permission needed; service also reconciles every second.
-      alarm.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, p.getLong("endsAt", 0), pending)
+      alarm.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, if (p.getBoolean("paused", false)) breakUntil else p.getLong("endsAt", 0), pending)
     }
   }
 }

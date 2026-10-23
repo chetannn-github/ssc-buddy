@@ -1,8 +1,9 @@
+import { beginStudyBreak, effectiveStudySession, maxStudyBreaks } from "./study-breaks.ts";
 import { creditFocusDay, emptyFocusDay, focusSlices, studyTimeZone, type FocusDay, type FocusSession } from "./study-focus.ts";
 import { MAX_STUDY_WEBSITES, splitSelection } from "./study-selection.ts";
 import { focusLeaderboardPatch, focusWeek } from "./focus-rewards.ts";
 import type { collection, doc, onSnapshot, runTransaction, serverTimestamp, Firestore, Transaction } from "firebase/firestore";
-export type StudySession = { id: string; lockId?: string; startedAt: number; endsAt: number; domains: string[]; timeZone?: string; paused?: boolean; pausedAt?: number; remainingMs?: number; appLimit?: number };
+export type StudySession = { id: string; lockId?: string; startedAt: number; endsAt: number; domains: string[]; timeZone?: string; paused?: boolean; pausedAt?: number; remainingMs?: number; appLimit?: number; breakLimit?: number; breaksTaken?: number; breakUntil?: number };
 export type StudyControl = { version: 1; revision: string; session: StudySession | null; source: string; allowedDomains?: string[]; overlayBreakId?: string };
 export type OverlayBreak = { id: string; lockId: string; at: number; paused: boolean };
 export type StudyDevice = { id: string; label: string; sessionId: string | null; lastSeenAt: number; error: string };
@@ -36,7 +37,7 @@ function watchStudyFocusDays(db: Firestore, uid: string, callback: (value: Recor
     })));
   }, error);
 }
-function sessionIsActive(session: StudySession | null | undefined, time = Date.now()) { return !!session && (session.paused === true || session.endsAt > time); }
+function sessionIsActive(session: StudySession | null | undefined, time = Date.now()) { if (!session) return false; const current = effectiveStudySession(session, time); return current.paused === true || current.endsAt > time; }
 async function publishStudyFocusDay(db: Firestore, uid: string, date: string, timeZone = studyTimeZone()) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
   await runTransaction(db, async transaction => {
@@ -59,6 +60,7 @@ async function publishStudyFocusDay(db: Firestore, uid: string, date: string, ti
   });
 }
 async function prepareFocusCredits(transaction: Transaction, db: Firestore, uid: string, session: FocusSession | null | undefined, time: number) {
+  session = session ? effectiveStudySession(session, time) : session;
   const credits = await Promise.all(focusSlices(session, time, true).map(async slice => {
     const reference = doc(db, ...studyFocusPath(uid, slice.date));
     const snapshot = await transaction.get(reference), value = snapshot.data() as FocusDay | undefined;
@@ -96,9 +98,10 @@ async function recordStudyFocus(db: Firestore, uid: string, session: FocusSessio
   await runTransaction(db, async transaction => { const commit = await prepareFocusCredits(transaction, db, uid, session, time); commit(); });
 }
 /** Same private document contract for Windows today, and web/Android controllers later. */
-async function startStudySession(db: Firestore, uid: string, minutes: number, values: string[], source = "windows", appLimit = 2) {
+async function startStudySession(db: Firestore, uid: string, minutes: number, values: string[], source = "windows", appLimit = 2, breakLimit = maxStudyBreaks(minutes)) {
   if (!Number.isInteger(appLimit) || appLimit < 0 || appLimit > 2) throw Error("Choose 0, 1 or 2 allowed apps.");
   if (!Number.isInteger(minutes) || minutes < 1 || minutes > 720 || (!values.length && source !== "mobile") || values.length > MAX_STUDY_WEBSITES) throw Error(`Choose 1–720 minutes and up to ${MAX_STUDY_WEBSITES} websites.`);
+  if (!Number.isInteger(breakLimit) || breakLimit < 0 || breakLimit > maxStudyBreaks(minutes)) throw Error("Choose a valid number of breaks.");
   const { domains } = splitSelection(values);
   const reference = doc(db, ...studyControlPath(uid));
   return runTransaction(db, async transaction => {
@@ -107,7 +110,7 @@ async function startStudySession(db: Firestore, uid: string, minutes: number, va
     const startedAt = Date.now();
     const creditPrevious = await prepareFocusCredits(transaction, db, uid, current?.["session"], startedAt);
     creditPrevious();
-    const session: StudySession = { id: randomUUID(), startedAt, endsAt: startedAt + minutes * 60000, domains, timeZone: studyTimeZone(), ...(source === "mobile" ? { appLimit } : {}) };
+    const session: StudySession = { id: randomUUID(), startedAt, endsAt: startedAt + minutes * 60000, domains, timeZone: studyTimeZone(), breakLimit, breaksTaken: 0, ...(source === "mobile" ? { appLimit } : {}) };
     transaction.set(reference, { version: 1, revision: randomUUID(), session, allowedDomains: domains, source, updatedAt: serverTimestamp() });
     return session;
   });
@@ -128,18 +131,25 @@ async function pauseStudySession(db: Firestore, uid: string, source = "windows")
   await runTransaction(db, async transaction => {
     const current = (await transaction.get(reference)).data() as StudyControl | undefined, session = current?.session;
     const now = Date.now();
-    if (!session || session.paused || session.endsAt <= now) throw Error("There is no running focus session to pause.");
-    const credit = await prepareFocusCredits(transaction, db, uid, { ...session, paused: true, pausedAt: now }, now); credit();
-    transaction.set(reference, { ...current, version: 1, revision: randomUUID(), source, session: { ...session, paused: true, pausedAt: now, remainingMs: session.endsAt - now }, updatedAt: serverTimestamp() });
+    const active = session ? effectiveStudySession(session, now) : null;
+    if (!active || active.paused || active.endsAt <= now) throw Error("There is no running focus session to pause.");
+    const next = active.breakLimit !== undefined ? beginStudyBreak(active, now) : { ...active, paused: true, pausedAt: now, remainingMs: active.endsAt - now };
+    const credit = await prepareFocusCredits(transaction, db, uid, next, now); credit();
+    transaction.set(reference, { ...current, version: 1, revision: randomUUID(), source, session: next, updatedAt: serverTimestamp() });
   });
 }
 async function resumeStudySession(db: Firestore, uid: string, source = "windows") {
   const reference = doc(db, ...studyControlPath(uid));
   await runTransaction(db, async transaction => {
     const current = (await transaction.get(reference)).data() as StudyControl | undefined, paused = current?.session;
+    if (paused?.breakUntil && Date.now() < paused.breakUntil) throw Error("Your break resumes automatically after 10 minutes.");
     const remainingMs = Number(paused?.remainingMs);
     if (!paused?.paused || !Number.isSafeInteger(remainingMs) || remainingMs < 1 || remainingMs > 720 * 60000) throw Error("There is no paused focus session to resume.");
     const startedAt = Date.now();
+    if (paused.breakUntil) {
+      transaction.set(reference, { ...current, revision: randomUUID(), source, session: effectiveStudySession(paused, startedAt), updatedAt: serverTimestamp() });
+      return;
+    }
     transaction.set(reference, { ...current, version: 1, revision: randomUUID(), source, session: { id: randomUUID(), lockId: paused.lockId ?? paused.id, startedAt, endsAt: startedAt + remainingMs, domains: paused.domains, timeZone: paused.timeZone, ...(paused.appLimit !== undefined ? { appLimit: paused.appLimit } : {}) }, updatedAt: serverTimestamp() });
   });
 }
@@ -151,13 +161,13 @@ async function applyOverlayBreak(db: Firestore, uid: string, action: OverlayBrea
     const current = (await transaction.get(reference)).data() as StudyControl | undefined, session = current?.session;
     if (!session || (session.lockId ?? session.id) !== action.lockId) throw Error("This break belongs to a different focus session.");
     if (current?.overlayBreakId === action.id) return session;
-    if (action.at < session.startedAt) throw Error("This break is older than your current timer.");
-    let next = session;
-    if (action.paused && !session.paused) {
-      if (action.at >= session.endsAt) throw Error("Your focus session already ended.");
-      const credit = await prepareFocusCredits(transaction, db, uid, { ...session, paused: true, pausedAt: action.at }, action.at); credit();
-      next = { ...session, paused: true, pausedAt: action.at, remainingMs: session.endsAt - action.at };
-    } else if (!action.paused && session.paused) {
+    if (action.at < session.startedAt) return session;
+    let next = effectiveStudySession(session, action.at);
+    if (action.paused && !next.paused) {
+      if (action.at >= next.endsAt) throw Error("Your focus session already ended.");
+      next = next.breakLimit !== undefined ? beginStudyBreak(next, action.at) : { ...next, paused: true, pausedAt: action.at, remainingMs: next.endsAt - action.at };
+      const credit = await prepareFocusCredits(transaction, db, uid, next, action.at); credit();
+    } else if (!action.paused && session.paused && !session.breakUntil) {
       const remainingMs = session.remainingMs ?? 0;
       if (remainingMs < 1 || action.at < (session.pausedAt ?? session.startedAt)) throw Error("Invalid resume time.");
       next = { id: randomUUID(), lockId: session.lockId ?? session.id, startedAt: action.at, endsAt: action.at + remainingMs, domains: session.domains, timeZone: session.timeZone ?? studyTimeZone(), ...(session.appLimit !== undefined ? { appLimit: session.appLimit } : {}) };
@@ -166,5 +176,14 @@ async function applyOverlayBreak(db: Firestore, uid: string, action: OverlayBrea
     return next;
   });
 }
-return { watchStudyControl, watchStudyDevices, watchStudyFocusDay, watchStudyFocusDays, watchPublicStudyFocus, publishStudyFocusDay, recordStudyFocus, startStudySession, saveStudyWebsites, pauseStudySession, resumeStudySession, applyOverlayBreak };
+async function reconcileStudySession(db: Firestore, uid: string) {
+  const reference = doc(db, ...studyControlPath(uid));
+  await runTransaction(db, async transaction => {
+    const current = (await transaction.get(reference)).data() as StudyControl | undefined;
+    if (!current?.session) return;
+    const next = effectiveStudySession(current.session);
+    if (next !== current.session) transaction.set(reference, { ...current, session: next, revision: randomUUID(), updatedAt: serverTimestamp() });
+  });
+}
+return { reconcileStudySession, watchStudyControl, watchStudyDevices, watchStudyFocusDay, watchStudyFocusDays, watchPublicStudyFocus, publishStudyFocusDay, recordStudyFocus, startStudySession, saveStudyWebsites, pauseStudySession, resumeStudySession, applyOverlayBreak };
 }
