@@ -2245,9 +2245,6 @@ function QuestionBank({
           <Text style={s.eyebrow}>PRACTICE SESSION</Text>
           <Text style={s.title}>Question bank</Text>
         </View>
-        <Pressable onPress={onBack}>
-          <Text style={s.back}>Back</Text>
-        </Pressable>
       </View>
         <View style={[s.bankFilters, s.fixedFilters]} onTouchStart={(event) => event.stopPropagation()}>
           <BankDropdown
