@@ -2,6 +2,7 @@ import { accentInk } from "@/lib/app-accent";
 import { HabitIconSheet } from "./HabitIconSheet";
 import { HabitIcon } from "./HabitIcon";
 import { AnimatedChoices } from "../../../shared/AnimatedChoices";
+import { TimeOfDayField } from "../../../shared/TimeOfDayField";
 import { useRef, useState } from "react";
 import { Check, LoaderCircle, X } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -238,12 +239,9 @@ export function HabitEditor({
                   />
                 </label>
                 {settings.reminder && (
-                  <input
-                    type="time"
-                    aria-label="Reminder time"
-                    className={input}
+                  <TimeOfDayField
                     value={settings.reminder}
-                    onChange={(event) => patch({ reminder: event.target.value })}
+                    onChange={(value) => patch({ reminder: value })}
                   />
                 )}
                 <label className="mt-4 block space-y-2">
