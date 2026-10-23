@@ -21,7 +21,7 @@ import {
 } from "@/lib/exam";
 import { isQuickRecallRecord } from "../../mobile-tasks/src/domain/quick-recall-history";
 
-function friendlyDate(timestamp: string, fallbackDate?: string) {
+function friendlyDate(timestamp: string, fallbackDate?: string, showTime = true) {
   // Android records use `date` as a local calendar key (YYYY-MM-DD) and keep
   // the real timestamp in `createdAt`. Parsing the calendar key as ISO made
   // every mobile-synced attempt look like 5:30 AM in India (UTC offset).
@@ -31,7 +31,7 @@ function friendlyDate(timestamp: string, fallbackDate?: string) {
   const now = new Date();
   const day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
   const diffDays = Math.round((day(now) - day(d)) / 86400000);
-  const time = hasClock
+  const time = hasClock && showTime
     ? d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
     : null;
   if (diffDays === 0) return time ? `Today, ${time}` : "Today";
@@ -225,8 +225,8 @@ function HistoryPage() {
                           )}
                           <p className="mt-1 text-xs text-muted-foreground">
                             {isRecall
-                              ? friendlyDate(r.date)
-                              : friendlyDate(r.createdAt ?? r.date, r.date)}
+                              ? friendlyDate(r.date, undefined, false)
+                              : friendlyDate(r.createdAt ?? r.date, r.date, false)}
                           </p>
                         </div>
                         <div className="shrink-0 text-right tabular-nums">
