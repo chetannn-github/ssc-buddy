@@ -674,11 +674,9 @@ function TargetProgress({
       {!showTracker && <div className="grid grid-cols-3 divide-x divide-y divide-white/10 px-2 py-1.5 sm:divide-y-0 sm:px-3">
         <StatCell label="Study time"><RollingDuration minutes={studyMinutes} /></StatCell>
         <StatCell label="Tasks completed">
-          <RollingNumber value={completedTasks} />
+          <RollingNumber value={completedTasks} />/{completedTasks + incompleteTasks}
         </StatCell>
-        <StatCell label="Incomplete tasks">
-          <RollingNumber value={incompleteTasks} />
-        </StatCell>
+        <StatCell label="Focus time">{focusTime}</StatCell>
       </div>}
     </section>
   );

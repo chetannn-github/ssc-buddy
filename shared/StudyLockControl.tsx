@@ -1,5 +1,6 @@
 import { effectiveStudySession, maxStudyBreaks, onStudyBreak, studyBreakState, studyTimerMilliseconds } from "./study-breaks";
 import "./study-breaks.css";
+import { STUDY_DEVICE_STALE_MS } from "./study-presence";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Firestore } from "firebase/firestore";
@@ -52,7 +53,7 @@ export function StudyLockControl({ uid, desktop = false, profile = false, getDat
       setNow(Date.now());
       const candidate = control?.session ? effectiveStudySession(control.session) : null;
       const session = candidate && (candidate.paused || candidate.endsAt > Date.now()) ? candidate : null;
-      const connected = devices.filter(device => Date.now() - device.lastSeenAt < 90000);
+      const connected = devices.filter(device => Date.now() - device.lastSeenAt < STUDY_DEVICE_STALE_MS);
       setStatus({ session, connected: connected.length, protected: session ? connected.filter(device => device.sessionId === session.id && !device.error).length : 0 });
     };
     const failed = (e: Error) => setError(/firebase/i.test(e.message) ? "Could not load your focus session. Please try again." : e.message);

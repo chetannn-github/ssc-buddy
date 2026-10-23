@@ -4,7 +4,87 @@ import { startWorker } from './worker-engine.js';
 import { encode, decodeDocument } from './firestore-codec.js';
 import { MAX_STUDY_WEBSITES } from '../shared/study-selection.ts';
 import { beginStudyBreak } from '../shared/study-breaks.ts';
+import { STUDY_HEARTBEAT_MS } from '../shared/study-presence.ts';
 const wait = async check => { for(let i=0;i<100;i++){ if(check()) return; await new Promise(r=>setTimeout(r,5)); } throw Error('Worker did not settle'); };
+
+test('live session updates replace polling; seven-hour heartbeats are throttled and survive worker restart', async () => {
+  const realNow = Date.now, realInterval = globalThis.setInterval;
+  let now = realNow(), intervalCalls = 0, reads = 0, watches = 0, onAlarm, onMessage, push, failAck = false;
+  const data = {}, acknowledgements = [], rules = [];
+  const user = { uid: 'student' };
+  let packet = { version: 1, revision: 'idle', session: null, allowedDomains: ['study.example'] };
+  const cloud = {
+    ready: Promise.resolve(), user: () => user, subscribe: () => {},
+    watchControl: callback => { watches++; push = callback; queueMicrotask(() => callback(structuredClone(packet))); return () => {}; },
+    read: async () => { reads++; return structuredClone(packet); },
+    acknowledge: async (id, sessionId) => { if (failAck) throw Error('Offline'); acknowledgements.push({ id, sessionId, at: now }); },
+  };
+  Date.now = () => now;
+  globalThis.setInterval = () => { intervalCalls++; return 0; };
+  globalThis.chrome = {
+    runtime: { id: 'test', getURL: p => `chrome-extension://test/${p}`, onMessage: { addListener: fn => onMessage = fn } },
+    storage: { local: { get: async () => structuredClone(data), set: async value => Object.assign(data, structuredClone(value)), setAccessLevel: async () => {} } },
+    declarativeNetRequest: { getSessionRules: async () => [], updateSessionRules: async () => {}, updateDynamicRules: async value => rules.splice(0, rules.length, ...value.addRules) },
+    alarms: { clear: async () => {}, create: async () => {}, onAlarm: { addListener: fn => onAlarm = fn } },
+    action: { setBadgeText: async () => {}, setBadgeBackgroundColor: async () => {} },
+    tabs: { query: async () => [], update: async () => {} },
+  };
+  const message = type => new Promise(resolve => onMessage({ type }, { id: 'test', url: chrome.runtime.getURL('popup.html') }, resolve));
+  try {
+    startWorker(cloud);
+    await wait(() => !!data.studyHeartbeat);
+    for (let i = 0; i < 60; i++) { now += 60000; await onAlarm({ name: 'study-watch' }); }
+    assert.equal(reads, 0, 'idle watchdog never polls the control document');
+    assert.equal(acknowledgements.length, 1, 'idle registration has no periodic write');
+    assert.equal(watches, 1);
+    assert.equal(intervalCalls, 0, '10-second polling interval removed');
+
+    const startedAt = now;
+    packet = { ...packet, revision: 'start', session: { id: 'seven-hours', startedAt, endsAt: now + 420 * 60000, domains: ['study.example'], breakLimit: 3, breaksTaken: 0 } };
+    push(structuredClone(packet));
+    await wait(() => data.studyHeartbeat.state.includes('seven-hours'));
+    assert.equal(rules.length, 2, 'remote session start enforced without polling');
+    const atStart = acknowledgements.length;
+    for (let i = 1; i < 420; i++) { now = startedAt + i * 60000; await onAlarm({ name: 'study-watch' }); }
+    assert.equal(acknowledgements.length - atStart, 83, 'one heartbeat per five minutes across seven hours');
+    now = startedAt + 420 * 60000;
+    await onAlarm({ name: 'study-end' });
+    assert.equal(rules.length, 0);
+    assert.equal(data.study.session, null);
+    assert.equal(acknowledgements.at(-1).sessionId, null, 'completion acknowledged immediately');
+    const completedCount = acknowledgements.length;
+    startWorker(cloud); // Same durable storage, fresh in-memory heartbeat state.
+    await wait(() => watches === 2);
+    await onAlarm({ name: 'study-watch' });
+    assert.equal(acknowledgements.length, completedCount, 'restart does not duplicate idle acknowledgement');
+    assert.equal(reads, 0);
+
+    packet = { ...packet, revision: 'next', session: { id: 'next', startedAt: now, endsAt: now + 120 * 60000, domains: ['study.example'], breakLimit: 3, breaksTaken: 0 } };
+    push(structuredClone(packet));
+    await wait(() => data.studyHeartbeat.state.includes('next'));
+    now += 30 * 60000;
+    packet = { ...packet, revision: 'break', session: beginStudyBreak(packet.session, now) };
+    push(structuredClone(packet));
+    await wait(() => data.study.session?.paused && rules.length === 0);
+    await onAlarm({ name: 'study-watch' });
+    assert.equal(data.studyHeartbeat.state.includes('true'), true, 'break state acknowledged without a five-minute wait');
+    now = packet.session.breakUntil;
+    await onAlarm({ name: 'study-end' });
+    assert.equal(rules.length, 2);
+    assert.equal(data.studyHeartbeat.state.includes('false'), true, 'auto-resume acknowledged immediately');
+
+    now += STUDY_HEARTBEAT_MS;
+    failAck = true;
+    const lastHeartbeat = structuredClone(data.studyHeartbeat);
+    await onAlarm({ name: 'study-watch' });
+    assert.deepEqual(data.studyHeartbeat, lastHeartbeat, 'failed heartbeat is never marked successful');
+    failAck = false;
+    await onAlarm({ name: 'study-watch' });
+    assert.equal(data.studyHeartbeat.at, now, 'failed writes retry on the next watchdog');
+    assert.equal((await message('sync')).ok, true);
+    assert.equal(reads, 1, 'explicit Refresh still fetches fresh cloud state');
+  } finally { Date.now = realNow; globalThis.setInterval = realInterval; delete globalThis.chrome; }
+});
 test('Firebase Firestore REST values preserve the shared session contract', () => {
   const value={version:1,revision:'one',session:{id:'s',startedAt:1000,endsAt:61000,domains:['chatgpt.com']}};
   assert.deepEqual(decodeDocument({fields:encode(value).mapValue.fields}),value);
