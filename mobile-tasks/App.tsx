@@ -1,7 +1,6 @@
 import { DestructiveDialog } from "./src/components/DestructiveDialog";
 import { DeviceFocusSync } from "./src/components/DeviceFocusSync";
 import { FocusWidgetSync } from "./src/components/FocusWidgetSync";
-import { ProfileFocusProvider } from "./src/components/ProfileFocusProvider";
 import { AccentBackdrop } from "./src/components/AccentBackdrop";
 import { launchImages } from "./src/lib/launch-images";
 import { LaunchMotivation } from "./src/components/LaunchMotivation";
@@ -244,13 +243,9 @@ export default function App() {
   const [publicTracker, setPublicTracker] = useState<Record<string, any>>({ subjects: [], revision: {}, activity: [], tests: { log: [] } });
   const [profileMockTests, setProfileMockTests] = useState<any[]>([]);
   const [profileActivityReady, setProfileActivityReady] = useState(false);
-  const [publicActivityOwner, setPublicActivityOwner] = useState<string | null>(null);
-  const [publicTasksOwner, setPublicTasksOwner] = useState<string | null>(null);
-  const [publicProfileOwner, setPublicProfileOwner] = useState<string | null>(null);
   const [celebratedStreak, setCelebratedStreak] = useState<number | null>(null);
   const [celebratedLevel, setCelebratedLevel] = useState<number | null>(null);
   const [profileSettings, setProfileSettings] = useState<PracticeProfile | null>(null);
-  const hasProfileSettings = profileSettings !== null;
   const launchQuotesEnabled = useRef(true);
   launchQuotesEnabled.current = profileSettings?.randomQuotesEnabled !== false;
   useEffect(() => { if (profileSettings?.randomQuotesEnabled === false) setShowLaunchMotivation(false); }, [profileSettings?.randomQuotesEnabled]);
@@ -458,14 +453,12 @@ export default function App() {
       } catch {}
     };
     const start = async () => {
-      setPublicProfileOwner(null);
       try {
         const remote = await readCloudProfile(user);
         if (cancelled) return;
         if (remote) { applyingRemote = true; await apply(remote); applyingRemote = false; }
         else await patchCloudProfile(user, profileSettings);
         if (cancelled) return;
-        setPublicProfileOwner(user.uid);
         unsubscribe = watchCloudProfile(user, (value) => {
           if (value && !applyingRemote) void apply(value);
         });
@@ -474,7 +467,7 @@ export default function App() {
     };
     void start();
     return () => { cancelled = true; unsubscribe?.(); };
-  }, [authenticated, user?.uid, hasProfileSettings]);
+  }, [authenticated, user?.uid]);
 
   const saveSharedProfile = async (next: PracticeProfile) => {
     const normalized = normalizeProfile(next);
@@ -620,7 +613,6 @@ export default function App() {
   }, [tasks, tasksLoaded]);
   useEffect(() => {
     if (!authenticated || !user || !tasksLoaded) return;
-    setPublicTasksOwner(null);
     let cancelled = false;
     let unsubscribe: (() => void) | undefined;
     void (async () => {
@@ -628,12 +620,11 @@ export default function App() {
         await migrateTasksIfEmpty(user, tasks);
         if (cancelled) return;
         unsubscribe = watchTasks(user, (remote) => {
-          if (cancelled) return;
           const next = remote as Task[];
           setTasks(next);
           void AsyncStorage.setItem(TASK_STORAGE_KEY, JSON.stringify(next));
           refreshDailyTasksWidget(next);
-        }, () => { if (!cancelled) setPublicTasksOwner(user.uid); });
+        });
       } catch {}
     })();
     return () => { cancelled = true; unsubscribe?.(); };
@@ -642,34 +633,35 @@ export default function App() {
   }, [authenticated, user?.uid, tasksLoaded]);
   // Matches the web consistency count: practice, tracker, and completed tasks.
   useEffect(() => {
-    setPublicActivityOwner(null);
     if (!user) { setPracticeActivityDates([]); setTrackerActivityDates([]); setProfileActivityReady(false); return; }
-    let active = true;
     let attemptsReady = false;
     let trackerReady = false;
     let testsReady = false;
     const markReady = () => {
-      if (active && attemptsReady && trackerReady && testsReady) { setProfileActivityReady(true); setPublicActivityOwner(user.uid); }
+      if (attemptsReady && trackerReady && testsReady) setProfileActivityReady(true);
     };
     setProfileActivityReady(false);
     const stopAttempts = watchPracticeEntities(user, "practiceAttempts", (items) => {
-      if (!active) return;
       setPracticeActivityDates(items.map((item) => typeof item.date === "string" ? item.date : "").filter(Boolean));
       setPublicPracticeRecords(items.map((item) => ({ ...item, answers: Array.isArray(item.answers) ? item.answers.map((answer) => answer ? "A" : null) : [] })));
-    }, () => { attemptsReady = true; markReady(); });
+      attemptsReady = true;
+      markReady();
+    });
     const stopTracker = watchTrackerSections(user, (sections) => {
-      if (!active) return;
       setTrackerActivityDates(Array.isArray(sections.activity) ? sections.activity.map((entry: any) => typeof entry?.date === "string" ? entry.date : "").filter(Boolean) : []);
       setPublicTracker(sections);
-    }, () => { trackerReady = true; markReady(); });
+      trackerReady = true;
+      markReady();
+    });
     const stopTests = watchTrackerTests(user, (tests) => {
-      if (!active) return;
       setProfileMockTests(tests);
-    }, () => { testsReady = true; markReady(); });
-    return () => { active = false; stopAttempts?.(); stopTracker?.(); stopTests?.(); };
+      testsReady = true;
+      markReady();
+    });
+    return () => { stopAttempts?.(); stopTracker?.(); stopTests?.(); };
   }, [user?.uid]);
   useEffect(() => {
-    if (!user || !profileSettings?.username || !tasksLoaded || !profileActivityReady || publicActivityOwner !== user.uid || publicTasksOwner !== user.uid || publicProfileOwner !== user.uid) return;
+    if (!user || !profileSettings?.username) return;
     const activity: Record<string, number> = {};
     const add = (value: unknown, count = 1) => {
       const date = typeof value === "string" ? value.slice(0, 10) : "";
@@ -685,7 +677,7 @@ export default function App() {
       tracker: publicTracker,
       dailyTasks: tasks as any,
     }).catch(() => undefined);
-  }, [profileSettings, publicPracticeRecords, publicTracker, tasks, user, tasksLoaded, profileActivityReady, publicActivityOwner, publicTasksOwner, publicProfileOwner]);
+  }, [profileSettings, publicPracticeRecords, publicTracker, tasks, user]);
   const persist = (next: Task[]) => {
     const previous = tasks;
     setTasks(next);
@@ -930,7 +922,7 @@ export default function App() {
   const selectDailyDate = (day: string) => { if (day === tomorrow) setTaskDay("tomorrow"); else if (day === today) setTaskDay("today"); else setTaskHistoryDate(day); };
   const dailyRankAction = widgetRank !== null && <Pressable accessibilityRole="button" accessibilityLabel="Open weekly leaderboard" onPress={() => setLeaderboardOpen(true)} style={styles.taskRank}>{widgetRank <= 3 ? <Image source={rankMedals[widgetRank - 1]} style={styles.taskRankMedal} /> : <MaterialCommunityIcons name="trophy" size={15} color="#fcd34d" />}<RollingMetric value={widgetRank} prefix="#" color="#e4e4e7" fontSize={12} /></Pressable>;
   return (
-    <SafeAreaProvider><ProfileFocusProvider uid={user?.uid}>
+    <SafeAreaProvider>
       <View style={{ flex: 1, backgroundColor: colors.background }}><AccentBackdrop />
       <SafeAreaView style={[styles.safe, { backgroundColor: "transparent" }]} edges={["top", "left", "right"]} onTouchStart={() => resetBottomNavigation()}>
       <StatusBar hidden style="light" />
@@ -952,7 +944,6 @@ export default function App() {
           sharedTracker={publicTracker}
           sharedMockTests={profileMockTests}
           sharedActivityReady={profileActivityReady}
-          sharedTasksReady={tasksLoaded && publicTasksOwner === user?.uid}
           sharedRank={widgetRank}
           onLogout={() => {
             void logout();
@@ -1129,7 +1120,7 @@ export default function App() {
       />
       </SafeAreaView>
       </View>
-    </ProfileFocusProvider></SafeAreaProvider>
+    </SafeAreaProvider>
   );
 }
 

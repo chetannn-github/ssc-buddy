@@ -1,6 +1,6 @@
 import { ProfileStudyLock } from "@/components/profile/ProfileStudyLock";
 import { PublicFocusTime } from "@/components/profile/PublicFocusTime";
-import { webFocusReader as focusReader } from "@/lib/web-focus-reader";
+import * as focusReader from "../../shared/study-lock";
 import { useProfileFocusData } from "../../shared/use-profile-focus";
 import { getFirebaseFirestore } from "@/lib/firebase-sync";
 import { AccentPicker } from "@/components/profile/AccentPicker";

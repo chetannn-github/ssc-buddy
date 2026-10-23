@@ -28,7 +28,7 @@ import {
 import { PROFILE_KEY, loadPracticeProfile } from "@/lib/profile";
 import { applyWebAccent } from "@/lib/app-accent";
 import { startPracticeSync } from "@/lib/practice-sync";
-import { AuthUserContext, WorkspaceHydratedUserContext } from "@/lib/auth-context";
+import { AuthUserContext } from "@/lib/auth-context";
 import { loadDailyTasks, saveDailyTasks } from "@/lib/daily-tasks";
 import { migrateTasksIfEmpty, readTasks, watchTasks } from "@/lib/task-sync";
 import { loadTrackerData, saveTrackerData } from "@/lib/tracker-store";
@@ -169,7 +169,6 @@ function RootComponent() {
   const [syncUser, setSyncUser] = useState<User | null>(null);
   const [authResolved, setAuthResolved] = useState(!isFirebaseConfigured);
   const [workspaceReady, setWorkspaceReady] = useState(!isFirebaseConfigured);
-  const [hydratedUser, setHydratedUser] = useState<string | null>(null);
   const [uiSettingsReady, setUiSettingsReady] = useState(false);
   useEffect(() => {
     if (!isFirebaseConfigured) {
@@ -323,7 +322,6 @@ function RootComponent() {
   }, [syncUser]);
 
   useEffect(() => {
-    setHydratedUser(null);
     if (!syncUser) {
       setWorkspaceReady(true);
       return;
@@ -361,7 +359,6 @@ function RootComponent() {
       stopPracticeSync = stop;
       saveDailyTasks(remoteTasks);
       saveTrackerData(remoteTracker);
-      setHydratedUser(syncUser.uid);
       // Start listeners only after migration/hydration. Their equality guard makes
       // Firestore's initial snapshot a no-op and prevents local-event feedback.
       const stopTasks = watchTasks(syncUser, (remote) => {
@@ -491,7 +488,6 @@ function RootComponent() {
 
   return (
     <AuthUserContext.Provider value={syncUser}>
-      <WorkspaceHydratedUserContext.Provider value={hydratedUser}>
       <QueryClientProvider client={queryClient}>
         {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
         {authResolved && uiSettingsReady && <Outlet />}
@@ -511,7 +507,6 @@ function RootComponent() {
           />
         )}
       </QueryClientProvider>
-      </WorkspaceHydratedUserContext.Provider>
     </AuthUserContext.Provider>
   );
 }

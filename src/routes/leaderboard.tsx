@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { RollingNumber } from "@/components/ui/rolling-number";
 import { AppShell } from "@/components/layout/AppShell";
 import { useAuthUser } from "@/lib/auth-context";
-import { publishLeaderboardEntry, loadLeaderboard, type LeaderboardEntry } from "@/lib/leaderboard";
+import { publishLeaderboardEntry, watchLeaderboard, type LeaderboardEntry } from "@/lib/leaderboard";
 import { loadDailyTasks } from "@/lib/daily-tasks";
 import { loadPracticeProfile } from "@/lib/profile";
 import { useLeaderboardWeek, validLeaderboardWeek } from "@/lib/weekly-results";
@@ -28,7 +28,7 @@ function Leaderboard() {
   const currentWeek = useLeaderboardWeek();
   const search = Route.useSearch();
   const week = search.week ?? currentWeek;
-  const currentXp = useLeaderboardXp(entries, week, currentWeek, getFirebaseFirestore, user?.uid, loadDailyTasks(), false);
+  const currentXp = useLeaderboardXp(entries, week, currentWeek, getFirebaseFirestore, user?.uid, loadDailyTasks());
 
   useEffect(() => {
     if (!user) return;
@@ -38,7 +38,7 @@ function Leaderboard() {
   useEffect(() => {
     setIsSyncing(true);
     setEntries([]);
-    return loadLeaderboard(week, (nextEntries) => { setEntries(nextEntries); setIsSyncing(false); });
+    return watchLeaderboard(week, (nextEntries) => { setEntries(nextEntries); setIsSyncing(false); });
   }, [week, currentWeek]);
 
   return <AppShell title="Weekly leaderboard"><div className="leaderboard-page profile-dark -mx-4 -my-6 min-h-[calc(100vh-4rem)] bg-[#121212] px-4 py-6 text-zinc-100 sm:-mx-6 sm:px-6"><div className="mx-auto max-w-3xl space-y-2">

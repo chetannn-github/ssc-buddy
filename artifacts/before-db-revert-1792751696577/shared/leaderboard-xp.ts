@@ -6,12 +6,14 @@ export type LeaderboardXpEntry = { uid: unknown; username?: unknown; xp?: unknow
 export type PublicXpData = { tasks: Task[] | null; focusXp?: number };
 
 /** Identity XP is current; the selected week's score/rank stays on its own row. */
-export function currentLeaderboardXp(entry: LeaderboardXpEntry, week: string, currentWeek: string, latest: LeaderboardXpEntry | undefined, profile?: PublicXpData, viewer?: { uid?: string; tasks?: Task[]; focusXp?: number }) {
+export function currentLeaderboardXp(entry: LeaderboardXpEntry, week: string, currentWeek: string, latest: LeaderboardXpEntry | undefined, profile?: PublicXpData, viewer?: { uid?: string | undefined; tasks?: Task[] | undefined; focusXp?: number | null | undefined }) {
   const current = week === currentWeek ? entry : latest;
   const ownTasks = String(entry.uid) === viewer?.uid ? viewer.tasks : undefined;
-  if (ownTasks && viewer?.focusXp !== undefined) return getXpSummary(ownTasks, viewer.focusXp);
-  if (profile?.tasks && profile.focusXp !== undefined) return getXpSummary(profile.tasks, profile.focusXp);
+  if (ownTasks && viewer?.focusXp === null) return null;
+  if (ownTasks && typeof viewer?.focusXp === "number") return getXpSummary(ownTasks, viewer.focusXp);
+  if (ownTasks && profile?.focusXp !== undefined) return getXpSummary(ownTasks, profile.focusXp);
   if (current?.focusDays && typeof current.xp === "number" && Number.isFinite(current.xp)) return summarizeXp(current.xp);
+  if (profile?.tasks && profile.focusXp !== undefined) return getXpSummary(profile.tasks, profile.focusXp);
   const tasks = ownTasks ?? profile?.tasks;
   if (tasks) return getXpSummary(tasks, Number(current?.focusXp) || 0);
   return typeof current?.xp === "number" && Number.isFinite(current.xp) ? summarizeXp(current.xp) : null;

@@ -1,0 +1,558 @@
+import { createThemedStyles } from "../theme";
+import { DropdownChevron } from "../components/DropdownChevron";
+import { NumberFlow } from "number-flow-react-native";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  Animated,
+  BackHandler,
+  Easing,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { collection, onSnapshot } from "firebase/firestore";
+import type { User } from "firebase/auth";
+import { getFirebaseFirestore, readPublicProfile, type PublicProfile } from "../lib/firebase";
+import { colors, dailyTaskColors } from "../theme";
+import { avatarAssets, ProfileScreen } from "./ProfileScreen";
+
+import { ALL_LEADERBOARD_DAYS, leaderboardPeriodStats, leaderboardPeriodTasks } from "../domain/leaderboard-period";
+import { leaderboardWeekLabel, shiftLeaderboardWeek, resolveWeeklyResults } from "../domain/weekly-results";
+import { useLeaderboardWeek } from "../hooks/use-weekly-results";
+import { useLeaderboardXp } from "../../../shared/use-leaderboard-xp";
+import { useOwnProfileFocusData } from "../components/ProfileFocusProvider";
+
+const dayKey = (date = new Date()) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+const medalAssets = [
+  require("../../assets/gold-medal.png"),
+  require("../../assets/silver-medal.png"),
+  require("../../assets/bronze-medal.png"),
+];
+const dateLabel = (date: string) =>
+  date === ALL_LEADERBOARD_DAYS ? "Full week" : date === dayKey()
+    ? "Today"
+    : new Date(`${date}T00:00:00`).toLocaleDateString(undefined, {
+        weekday: "short",
+        day: "numeric",
+        month: "short",
+      });
+const formatPoints = (value: unknown) => {
+  const points = Number(value) || 0;
+  return `${points > 0 ? "+" : points < 0 ? "-" : ""}${Math.abs(points)} pts`;
+};
+const formatPointValue = (value: unknown) => {
+  const points = Number(value) || 0;
+  return `${points > 0 ? "+" : points < 0 ? "-" : ""}${Math.abs(points)}`;
+};
+
+const pointsColor = (points: number) => points > 0 ? "#86efac" : points < 0 ? "#fca5a5" : colors.subdued;
+function RollingLeaderboardNumber({ value, prefix = "", suffix = "", color = colors.text, fontSize = 18 }: { value: number; prefix?: string; suffix?: string; color?: string; fontSize?: number }) {
+  return <NumberFlow value={value} prefix={prefix} suffix={suffix} style={{ color, fontSize, fontWeight: "800", fontVariant: ["tabular-nums"] }} />;
+}
+function RollingLeaderboardDuration({ minutes }: { minutes: number }) {
+  const hours = Math.floor(minutes / 60);
+  const remainder = Math.floor(minutes) % 60;
+  return <View style={{ flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 2 }}>
+    {hours > 0 && <RollingLeaderboardNumber key="hours" value={hours} suffix="h" fontSize={16} />}
+    {(hours === 0 || remainder > 0) && <RollingLeaderboardNumber key="minutes" value={remainder} suffix="m" fontSize={16} />}
+  </View>;
+}
+
+function DayFilter({
+  dates,
+  value,
+  onChange,
+  open,
+  onOpenChange,
+}: {
+  dates: string[];
+  value: string;
+  onChange: (date: string) => void;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const [mounted, setMounted] = useState(false);
+  const progress = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    progress.stopAnimation();
+    if (open) {
+      setMounted(true);
+      progress.setValue(0);
+      Animated.timing(progress, {
+        toValue: 1,
+        duration: 180,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+      return;
+    }
+    Animated.timing(progress, {
+      toValue: 0,
+      duration: 140,
+      easing: Easing.in(Easing.cubic),
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished) setMounted(false);
+    });
+  }, [open, progress]);
+  const choose = (date: string) => {
+    onChange(date);
+    onOpenChange(false);
+  };
+  return (
+    <View style={s.filterWrap}>
+      <Pressable style={[s.filter, open && s.filterOpen]} onPress={() => onOpenChange(!open)}>
+        <Text numberOfLines={1} style={s.filterText}>
+          {dateLabel(value)}
+        </Text>
+        <DropdownChevron open={open} size={17} color={colors.muted} />
+      </Pressable>
+      {mounted && (
+        <Animated.View
+          style={[
+            s.menu,
+            {
+              opacity: progress,
+              transform: [
+                { translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [-7, 0] }) },
+                { scale: progress.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) },
+              ],
+            },
+          ]}
+        >
+          {dates.map((date) => {
+            const selected = date === value;
+            return (
+              <Pressable
+                key={date}
+                onPress={() => choose(date)}
+                style={[s.menuItem, selected && s.menuItemSelected]}
+              >
+                <Text style={[s.menuText, selected && s.menuTextSelected]}>{dateLabel(date)}</Text>
+                {selected && <MaterialCommunityIcons name="check" size={16} color="#171717" />}
+              </Pressable>
+            );
+          })}
+        </Animated.View>
+      )}
+    </View>
+  );
+}
+
+function PublicProfileView({ entry, onBack, onOpenWeeklyStats, viewerUser, viewerTasks }: { entry: any; onBack: () => void; onOpenWeeklyStats: () => void; viewerUser: User | null; viewerTasks: any[] }) {
+  const [profile, setProfile] = useState<PublicProfile | null | undefined>(undefined);
+  useEffect(() => { let active = true; void readPublicProfile(String(entry.username ?? "")).then((next) => { if (active) setProfile(next); }).catch(() => { if (active) setProfile(null); }); return () => { active = false; }; }, [entry.username]);
+  if (profile === undefined) return <View style={s.page}><View style={s.header}><Pressable onPress={onBack}><MaterialCommunityIcons name="arrow-left" size={24} color={colors.text} /></Pressable><Text style={s.title}>Profile</Text><View style={{ width: 24 }} /></View><View style={s.loadingProfile}><ActivityIndicator size="small" color="#86efac" /><Text style={s.sub}>Loading profile…</Text></View></View>;
+  const isOwnProfile = entry.uid === viewerUser?.uid;
+  if (!profile && !isOwnProfile) return <View style={s.page}><View style={s.header}><Pressable onPress={onBack}><MaterialCommunityIcons name="arrow-left" size={24} color={colors.text} /></Pressable><Text style={s.title}>Profile</Text><View style={{ width: 24 }} /></View><View style={s.loadingProfile}><Text style={s.sub}>This profile is no longer available.</Text></View></View>;
+  const shown = profile ?? entry;
+  const activeDates = new Set(Object.keys(profile?.activity ?? {}).filter((date) => Number(profile?.activity?.[date]) > 0));
+  // Older shared profiles may not yet have an activity aggregate. Rebuild the
+  // streak from the same dashboard data used by their visible stats.
+  (profile?.dashboard?.records ?? []).forEach((record: any) => {
+    if (typeof record?.date === "string") activeDates.add(record.date.slice(0, 10));
+  });
+  const sharedTracker: any = profile?.dashboard?.tracker;
+  (Array.isArray(sharedTracker?.activity) ? sharedTracker.activity : []).forEach((entry: any) => {
+    if (typeof entry?.date === "string") activeDates.add(entry.date.slice(0, 10));
+  });
+  (Array.isArray(sharedTracker?.tests?.log) ? sharedTracker.tests.log : []).forEach((test: any) => {
+    if (typeof test?.date === "string") activeDates.add(test.date.slice(0, 10));
+  });
+  (profile?.dashboard?.dailyTasks ?? []).filter((task: any) => task?.completed).forEach((task: any) => {
+    const date = task.completedAt ?? task.date;
+    if (typeof date === "string") activeDates.add(date.slice(0, 10));
+  });
+  let streak = 0;
+  for (let cursor = new Date(), index = 0; ; index += 1) { const key = dayKey(cursor); if (!activeDates.has(key)) { if (index === 0) { cursor.setDate(cursor.getDate() - 1); continue; } break; } streak += 1; cursor.setDate(cursor.getDate() - 1); }
+  return <ProfileScreen user={isOwnProfile ? viewerUser : null} tasks={(isOwnProfile ? viewerTasks : profile?.dashboard?.dailyTasks ?? []) as any} profileSettings={{ name: shown.name, username: shown.username, questionGoal: shown.questionGoal, avatar: shown.avatar, examName: shown.examName, practiceSessionEnabled: shown.practiceSessionEnabled !== false, trackProgressEnabled: shown.trackProgressEnabled !== false } as any} onProfileSaved={() => undefined} onLogout={() => undefined} onOpenVideo={() => undefined} onOpenMusic={() => undefined} onOpenTracker={() => undefined} onOpenLeaderboard={onOpenWeeklyStats} streak={streak} readOnly onBack={onBack} publicDashboard={profile?.dashboard} publicActivity={isOwnProfile || profile?.dashboard ? undefined : profile?.activity} publicUid={String(entry.uid ?? "")} publicRank={entry.leaderboardRank} />;
+}
+
+export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { onClose: () => void; user: User | null; tasks?: any[] }) {
+  const [rows, setRows] = useState<any[]>([]);
+  const [selectedEntry, setSelected] = useState<any>(null);
+  const selected = rows.find((row) => row.uid === selectedEntry?.uid) ?? selectedEntry;
+  const [selectedDate, setSelectedDate] = useState(dayKey());
+  const [publicEntry, setPublicEntry] = useState<any>(null);
+  const [isSyncing, setIsSyncing] = useState(true);
+  const [dayFilterOpen, setDayFilterOpen] = useState(false);
+  useEffect(() => {
+    const back = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (dayFilterOpen) setDayFilterOpen(false);
+      else if (publicEntry) setPublicEntry(null);
+      else if (selectedEntry) setSelected(null);
+      else onClose();
+      return true;
+    });
+    return () => back.remove();
+  }, [dayFilterOpen, publicEntry, selectedEntry, onClose]);
+  const currentWeek = useLeaderboardWeek();
+  const [historyWeek, setHistoryWeek] = useState<string | null>(null);
+  const selectedWeek = historyWeek ?? currentWeek;
+  const ownFocus = useOwnProfileFocusData(user?.uid);
+  const currentXp = useLeaderboardXp(rows, selectedWeek, currentWeek, getFirebaseFirestore, user?.uid, viewerTasks, true, ownFocus ? ownFocus.ready ? ownFocus.totalPoints : null : undefined);
+  const currentXpFor = (row: any) => row ? currentXp[String(row.uid)] ?? null : null;
+  const selectedXp = currentXpFor(selected);
+  const changeWeek = (next: string) => { setSelected(null); setPublicEntry(null); setRows([]); setHistoryWeek(next === currentWeek ? null : next); setSelectedDate(next === currentWeek ? dayKey() : ALL_LEADERBOARD_DAYS); };
+  useEffect(() => {
+    setSelected(null);
+    setPublicEntry(null);
+    setSelectedDate(selectedWeek === currentWeek ? dayKey() : ALL_LEADERBOARD_DAYS);
+  }, [selectedWeek, currentWeek]);
+  useEffect(() => {
+    setIsSyncing(true);
+    setRows([]);
+    return onSnapshot(
+      collection(getFirebaseFirestore(), "leaderboards", selectedWeek, "entries"),
+      (snapshot) => {
+        setRows(
+          resolveWeeklyResults(snapshot.docs.map((doc) => ({ ...doc.data(), uid: doc.id })), selectedWeek),
+        );
+        setIsSyncing(false);
+      },
+      () => setIsSyncing(false),
+    );
+  }, [selectedWeek, currentWeek]);
+  const tasks = useMemo(
+    () =>
+      selected?.leaderboardTasks ??
+      (selected?.completedTasks ?? []).map((task: any) => ({
+        ...task,
+        completed: true,
+        date: selectedWeek === currentWeek ? dayKey() : selectedWeek,
+        points: 10,
+      })),
+    [selected, selectedWeek, currentWeek],
+  );
+  const inactiveDates = useMemo(() => Array.isArray(selected?.inactiveDates) ? selected.inactiveDates : [], [selected]);
+  const dates = useMemo(
+    () =>
+      [ALL_LEADERBOARD_DAYS, ...Array.from(new Set([...(selectedWeek === currentWeek ? [dayKey()] : []), ...inactiveDates, ...Object.keys(selected?.focusDays ?? {}), ...tasks.map((task: any) => task.date).filter(Boolean)]))
+        .sort()
+        .reverse()],
+    [inactiveDates, tasks, selectedWeek, currentWeek, selected?.focusDays],
+  );
+  if (publicEntry) return <PublicProfileView entry={publicEntry} viewerUser={user} viewerTasks={viewerTasks} onBack={() => setPublicEntry(null)} onOpenWeeklyStats={() => { setSelected(publicEntry); setSelectedDate(selectedWeek === currentWeek ? dayKey() : ALL_LEADERBOARD_DAYS); setPublicEntry(null); }} />;
+  if (selected) {
+    const stats = leaderboardPeriodStats(selected, tasks, selectedDate);
+    const rank = rows.findIndex((row) => row.uid === selected.uid) + 1;
+    const medal = medalAssets[rank - 1];
+    const tasksForDay = leaderboardPeriodTasks(tasks, inactiveDates, selectedDate, selected?.focusDays);
+    const taskList = tasksForDay.length ? (
+      tasksForDay.map((task: any, index: number) => {
+        const overdue = !task.completed && String(task.date ?? "") < dayKey();
+        const meta = [selectedDate === ALL_LEADERBOARD_DAYS ? dateLabel(task.date) : "", task.subject, task.type, task.minutesSpent ? `${task.minutesSpent}m` : ""]
+          .filter(Boolean)
+          .join(" · ");
+        return (
+          <View key={`${task.name}-${index}`} style={[s.task, index === tasksForDay.length - 1 && s.taskLast]}>
+            <View style={[s.taskCheck, task.completed ? s.taskCheckDone : overdue ? s.taskCheckMissed : s.taskCheckPending]}>
+              {task.completed ? <MaterialCommunityIcons name="check-bold" size={14} color={dailyTaskColors.ink} /> : overdue ? <MaterialCommunityIcons name="close-thick" size={12} color="#f19a9f" /> : null}
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[s.taskTitle, task.completed && s.taskTitleDone]} numberOfLines={2}>
+                {task.name}
+              </Text>
+              {meta ? <Text style={s.taskMeta} numberOfLines={1}>{meta}</Text> : null}
+            </View>
+            {(task.points !== 0 || task.focus) && <Text
+              style={[
+                s.taskPoints,
+                task.points < 0 ? s.taskPenalty : task.points === 0 ? s.taskNeutral : undefined,
+              ]}
+            >
+              {task.points > 0
+                ? `+${task.points}`
+                : task.points < 0
+                  ? `−${Math.abs(task.points)}`
+                  : "0"}{" "}
+              pts
+            </Text>}
+          </View>
+        );
+      })
+    ) : (
+      <Text style={s.sub}>{selectedDate === ALL_LEADERBOARD_DAYS ? "No tasks this week." : "No tasks for this day."}</Text>
+    );
+    return (
+      <View style={s.page}>
+        <View style={s.detailSticky}>
+          <View style={s.detailProfileHeader}>
+            <View style={s.avatarRankLine}>
+              <Pressable accessibilityRole="button" accessibilityLabel="Back to leaderboard" hitSlop={8} style={s.profileBack} onPress={() => { setDayFilterOpen(false); setSelected(null); }}>
+                <MaterialCommunityIcons name="arrow-left" size={24} color={colors.text} />
+              </Pressable>
+              <Pressable style={s.bigAvatar} onPress={() => setPublicEntry({ ...selected, leaderboardRank: rank })}>
+                {selected.avatar && avatarAssets[selected.avatar] ? (
+                  <Image source={avatarAssets[selected.avatar]} style={s.bigImage} />
+                ) : (
+                  <Text style={s.bigAvatarText}>
+                    {String(selected.name || "?")
+                      .slice(0, 1)
+                      .toUpperCase()}
+                  </Text>
+                )}
+              </Pressable>
+              <View style={[s.profileRank, s.detailRank]}>{medal ? <Image source={medal} style={s.profileMedal} /> : null}<Text style={s.profileRankText}>#{rank}</Text></View>
+            </View>
+            <Pressable style={s.detailIdentity} onPress={() => setPublicEntry({ ...selected, leaderboardRank: rank })}><Text numberOfLines={1} style={s.profileName}>{selected.name}</Text><Text numberOfLines={1} style={s.sub}>@{selected.username}</Text><Text numberOfLines={1} style={s.xpMeta}>{selectedXp ? `Lv. ${selectedXp.level} · ${selectedXp.xp > 0 ? "+" : ""}${selectedXp.xp} XP` : "Current XP unavailable"}</Text></Pressable>
+          </View>
+          <View style={s.profileStats}>
+            <View style={s.profileStat}>
+              <View style={{ alignItems: "center" }}><RollingLeaderboardNumber value={stats.points} prefix={stats.points > 0 ? "+" : ""} color={pointsColor(stats.points)} /></View>
+              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={s.profileStatLabel}>Points</Text>
+            </View>
+            <View style={s.profileStat}>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center" }}><RollingLeaderboardNumber value={stats.completed} /><Text style={{ color: colors.text, fontSize: 18, fontWeight: "800" }}>/</Text><RollingLeaderboardNumber value={stats.completed + stats.notCompleted} /></View>
+              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={s.profileStatLabel}>Tasks completed</Text>
+            </View>
+            <View style={s.profileStat}>
+              <RollingLeaderboardDuration minutes={stats.studyMinutes} />
+              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={s.profileStatLabel}>Study time</Text>
+            </View>
+            <View style={s.profileStat}>
+              <RollingLeaderboardDuration minutes={Math.floor(stats.focusMilliseconds / 60000)} />
+              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={s.profileStatLabel}>Focus time</Text>
+            </View>
+          </View>
+          <View style={{ alignSelf: "stretch", flexDirection: "row", alignItems: "center", justifyContent: "flex-end", marginTop: 14 }}>
+            <DayFilter
+              dates={dates}
+              value={selectedDate}
+              onChange={setSelectedDate}
+              open={dayFilterOpen}
+              onOpenChange={setDayFilterOpen}
+            />
+          </View>
+        </View>
+        <ScrollView showsVerticalScrollIndicator={false} onTouchStart={() => { if (dayFilterOpen) setDayFilterOpen(false); }} contentContainerStyle={s.tasksScroll}>
+          {tasksForDay.length ? <View style={s.taskGroup}>{taskList}</View> : taskList}
+        </ScrollView>
+      </View>
+    );
+  }
+  return (
+    <View style={s.page}>
+      <View style={s.header}>
+        <Pressable onPress={onClose}>
+          <MaterialCommunityIcons name="arrow-left" size={24} color={colors.text} />
+        </Pressable>
+        <Text style={s.title}>Weekly leaderboard</Text>
+        <View style={{ width: 24 }} />
+      </View>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 18, paddingVertical: 12 }}>
+        <Pressable accessibilityLabel="Previous week" onPress={() => changeWeek(shiftLeaderboardWeek(selectedWeek, -1))} style={{ padding: 8 }}><MaterialCommunityIcons name="chevron-left" size={24} color={colors.text} /></Pressable>
+        <View style={{ alignItems: "center", flex: 1 }}><Text style={s.name}>{selectedWeek === currentWeek ? "This week · Live" : "Weekly results"}</Text><Text style={[s.sub, { fontSize: 10 }]}>{leaderboardWeekLabel(selectedWeek)}</Text>{selectedWeek !== currentWeek && <Pressable onPress={() => changeWeek(currentWeek)}><Text style={{ color: "#86efac", fontSize: 11, marginTop: 4 }}>Back to this week</Text></Pressable>}</View>
+        <Pressable accessibilityLabel="Next week" disabled={selectedWeek >= currentWeek} onPress={() => changeWeek(shiftLeaderboardWeek(selectedWeek, 1))} style={{ padding: 8, opacity: selectedWeek >= currentWeek ? 0.3 : 1 }}><MaterialCommunityIcons name="chevron-right" size={24} color={colors.text} /></Pressable>
+      </View>
+      {isSyncing ? (
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 10 }}>
+          <ActivityIndicator size="small" color="#86efac" />
+          <Text style={s.sub}>Syncing leaderboard…</Text>
+        </View>
+      ) : (
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.body}>
+          {rows.map((row, index) => {
+            const currentXp = currentXpFor(row);
+            return (
+            <View key={row.uid} style={s.row}>
+              <Pressable onPress={() => { setSelected(row); setSelectedDate(selectedWeek === currentWeek ? dayKey() : ALL_LEADERBOARD_DAYS); }} style={s.rankPress}>{index < 3 ? <Image source={medalAssets[index]} style={s.medal} /> : <Text style={s.rank}>#{index + 1}</Text>}</Pressable>
+              <Pressable style={s.publicIdentity} onPress={() => { setSelected(row); setSelectedDate(selectedWeek === currentWeek ? dayKey() : ALL_LEADERBOARD_DAYS); }}><View style={s.avatar}>
+                {row.avatar && avatarAssets[row.avatar] ? (
+                  <Image source={avatarAssets[row.avatar]} style={s.avatarImage} />
+                ) : (
+                  <Text style={s.avatarText}>
+                    {String(row.name || "?")
+                      .slice(0, 1)
+                      .toUpperCase()}
+                  </Text>
+                )}
+              </View><View style={{ flex: 1 }}>
+                <Text style={s.name}>{row.uid === user?.uid ? "You" : row.name}</Text>
+                {false && <Text style={s.sub}>
+                  {row.completed} completed · {row.studyMinutes} min study
+                </Text>}
+                <Text style={s.xpMeta} numberOfLines={1}>{currentXp ? `Lv. ${currentXp.level} · ${currentXp.xp > 0 ? "+" : ""}${currentXp.xp} XP` : "Current XP unavailable"}</Text>
+              </View></Pressable>
+              <Pressable onPress={() => { setSelected(row); setSelectedDate(selectedWeek === currentWeek ? dayKey() : ALL_LEADERBOARD_DAYS); }}><RollingLeaderboardNumber value={Number(row.points) || 0} prefix={Number(row.points) > 0 ? "+" : ""} suffix=" pts" fontSize={16} color={pointsColor(Number(row.points) || 0)} /></Pressable>
+            </View>
+          ); })}
+          {!rows.length && <Text style={s.empty}>{selectedWeek === currentWeek ? "No activity this week yet." : "No saved results for this week."}</Text>}
+        </ScrollView>
+      )}
+    </View>
+  );
+}
+
+const s = createThemedStyles({
+  page: { flex: 1, backgroundColor: "transparent" },
+  header: {
+    height: 58,
+    paddingHorizontal: 18,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderBottomWidth: 1,
+    borderColor: colors.border,
+  },
+  title: { color: colors.text, fontSize: 18, fontWeight: "800" },
+  body: { padding: 16, gap: 9 },
+  sub: { color: colors.subdued, fontSize: 12 },
+  you: { color: "#7dd3fc", fontSize: 10, fontWeight: "800" },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  rankPress: { width: 30, alignItems: "center" },
+  publicIdentity: { flex: 1, flexDirection: "row", alignItems: "center", gap: 12 },
+  rank: { width: 30, color: "#a1a1aa", fontWeight: "800" },
+  medal: { width: 26, height: 26, resizeMode: "contain" },
+  avatar: {
+    height: 34,
+    width: 34,
+    borderRadius: 17,
+    backgroundColor: "#303030",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  avatarImage: { width: "100%", height: "100%" },
+  avatarText: { color: colors.text, fontWeight: "800" },
+  name: { color: colors.text, fontWeight: "700" },
+  points: { fontWeight: "800", fontSize: 16 },
+  empty: { color: colors.subdued, textAlign: "center", marginTop: 45 },
+  profile: { alignItems: "center", padding: 30 },
+  detailSticky: { alignItems: "center", paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10, backgroundColor: "transparent", zIndex: 2 },
+  detailProfileHeader: { alignSelf: "stretch", alignItems: "center" },
+  profileBack: { position: "absolute", left: 0, top: 0, width: 40, height: 56, alignItems: "flex-start", justifyContent: "center", zIndex: 2 },
+  avatarRankLine: { alignSelf: "stretch", alignItems: "center", justifyContent: "center", position: "relative" },
+  detailIdentity: { maxWidth: "100%", alignItems: "center", marginTop: 7 },
+  centeredUsername: { textAlign: "center" },
+  xpMeta: { color: "#c4b5fd", fontSize: 12, fontWeight: "700", marginTop: 3 },
+  publicProfile: { alignItems: "center", padding: 24, paddingBottom: 42 },
+  bigAvatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#303030",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  bigImage: { width: "100%", height: "100%" },
+  bigAvatarText: { color: colors.text, fontSize: 23, fontWeight: "800" },
+  profileName: { color: colors.text, fontSize: 18, fontWeight: "800" },
+  publicExam: { color: colors.muted, fontSize: 11, letterSpacing: 1.4, textTransform: "uppercase", marginTop: 14 },
+  weeklyStatsAction: { marginTop: 24, flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, paddingHorizontal: 15, paddingVertical: 11 },
+  weeklyStatsActionText: { color: colors.text, fontWeight: "800", fontSize: 13 },
+  publicNote: { color: colors.muted, fontSize: 11, marginTop: 12 },
+  loadingProfile: { paddingTop: 50, alignItems: "center", gap: 10 },
+  publicSection: { alignSelf: "stretch", marginTop: 24, borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, overflow: "hidden" },
+  publicSectionTitle: { color: colors.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.6, paddingHorizontal: 14, paddingTop: 13 },
+  publicMetricGrid: { marginTop: 11, flexDirection: "row", flexWrap: "wrap", borderTopWidth: 1, borderTopColor: colors.border },
+  publicMetric: { width: "50%", minHeight: 71, alignItems: "center", justifyContent: "center", borderRightWidth: 1, borderBottomWidth: 1, borderColor: colors.border, paddingHorizontal: 8 },
+  publicMetricValue: { color: colors.text, fontSize: 18, fontWeight: "800" },
+  publicMetricLabel: { color: colors.subdued, fontSize: 10, marginTop: 4, textAlign: "center" },
+  publicHeatHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingRight: 14 },
+  publicHeatmap: { flexDirection: "row", flexWrap: "wrap", gap: 5, padding: 14, paddingTop: 12 },
+  publicHeatCell: { width: 15, height: 15, borderRadius: 4 },
+  profileRank: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 7, borderWidth: 1, borderColor: colors.border, borderRadius: 14, backgroundColor: "rgba(0,0,0,.16)", paddingHorizontal: 9, paddingVertical: 4 },
+  detailRank: { position: "absolute", right: 0, top: 2, marginTop: 0 },
+  profileMedal: { width: 16, height: 16, resizeMode: "contain" },
+  profileRankText: { color: colors.text, fontSize: 12, fontWeight: "800" },
+  profileStats: { marginTop: 16, flexDirection: "row", width: "100%", gap: 4 },
+  profileStat: { flex: 1, minWidth: 0, alignItems: "center" },
+  profileStatLabel: { color: colors.subdued, fontSize: 10, marginTop: 3, textAlign: "center", alignSelf: "stretch" },
+  profileValue: { color: colors.text, fontSize: 18, fontWeight: "800", textAlign: "center" },
+  positivePoints: { color: "#86efac" },
+  negativePoints: { color: "#fca5a5" },
+  neutralPoints: { color: colors.subdued },
+  tasks: { alignSelf: "stretch", marginTop: 30, gap: 9 },
+  tasksScroll: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 36 },
+  tasksTitle: { color: colors.subdued, fontSize: 10, fontWeight: "800", letterSpacing: 1.5 },
+  taskGroup: { borderRadius: 14, backgroundColor: "#141414", borderWidth: 1, borderColor: "#292929", overflow: "hidden" },
+  taskLast: { borderBottomWidth: 0 },
+  task: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    minHeight: 58,
+    paddingHorizontal: 11,
+    paddingVertical: 9,
+    borderBottomWidth: 1,
+    borderBottomColor: "#292929",
+  },
+  taskCheck: { width: 25, height: 25, borderRadius: 13, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  taskCheckDone: { backgroundColor: dailyTaskColors.accent, borderColor: dailyTaskColors.accent },
+  taskCheckMissed: { backgroundColor: "#27191d", borderColor: "#64363c" },
+  taskCheckPending: { backgroundColor: "transparent", borderColor: colors.accent + "99", borderWidth: 1.5 },
+  taskTitle: { color: colors.text, fontSize: 13, lineHeight: 18, fontWeight: "600" },
+  taskTitleDone: { color: colors.muted, textDecorationLine: "line-through" },
+  taskMeta: { color: "#909099", fontSize: 10, marginTop: 4 },
+  taskNameLine: { flexDirection: "row", alignItems: "center", gap: 7 },
+  taskPoints: { color: "#86efac", fontSize: 11, fontWeight: "800" },
+  taskPenalty: { color: "#fca5a5" },
+  taskNeutral: { color: colors.subdued },
+  filterRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 7,
+    zIndex: 20,
+    elevation: 20,
+  },
+  filterWrap: { width: 132, position: "relative", zIndex: 30, elevation: 30 },
+  filter: {
+    height: 38,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderRadius: 9,
+    paddingHorizontal: 10,
+    backgroundColor: "#252525",
+    borderWidth: 1,
+    borderColor: "#414141",
+  },
+  filterOpen: { borderColor: colors.accent, backgroundColor: "#22272a" },
+  filterText: { color: colors.text, fontSize: 12, fontWeight: "700" },
+  menu: {
+    position: "absolute",
+    top: 43,
+    left: 0,
+    right: 0,
+    overflow: "hidden",
+    borderRadius: 11,
+    padding: 4,
+    backgroundColor: "#282828",
+    borderWidth: 1,
+    borderColor: "#414141",
+    elevation: 30,
+    shadowColor: "#000",
+    shadowOpacity: 0.45,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 5 },
+  },
+  menuItem: {
+    minHeight: 37,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 10,
+    borderRadius: 8,
+  },
+  menuItemSelected: { backgroundColor: "#f4f4f5" },
+  menuText: { color: "#e4e4e7", fontSize: 12 },
+  menuTextSelected: { color: "#171717", fontWeight: "700" },
+});

@@ -1,5 +1,4 @@
 import { onStudyBreak } from "../shared/study-breaks.ts";
-import { STUDY_HEARTBEAT_MS } from '../shared/study-presence.ts';
 import { validSession, rulesFor, allowed, normalizeWebsite, RULE_IDS } from './policy.js';
 function blockedTarget(value) { try { const hash = new URL(value).hash; const raw = hash.startsWith('#site=') ? hash.slice(6) : hash.startsWith('#youtube=') ? hash.slice(9) : ''; const url = new URL(/^https?:\/\//.test(raw) ? raw : decodeURIComponent(raw)); return ['http:', 'https:'].includes(url.protocol) ? url.href : null; } catch { return null; } }
 import { MAX_STUDY_WEBSITES, isSocialHost, websiteDomain } from '../shared/study-selection.ts';
@@ -14,8 +13,6 @@ function userError(error) {
 }
 export function startWorker(cloud) {
   let lastSync = 0, error = '', chain = Promise.resolve(), syncing;
-  let stopControl, watchingUid, latestPacket;
-  let watchUpdates = Promise.resolve();
   const serialize = work => { const next = chain.then(work); chain = next.catch(() => {}); return next; };
   const get = async () => await chrome.storage.local.get(['study', 'deviceId']);
   async function apply(session, revision, uid) {
@@ -69,23 +66,17 @@ export function startWorker(cloud) {
     }
     return session;
   }
-  async function sync(packetOverride) {
+  async function sync() {
     if (syncing) return syncing;
     syncing = (async () => {
       await cloud.ready;
       const user = cloud.user(); if (!user) return;
-      const packet = packetOverride ?? await cloud.read();
+      const packet = await cloud.read();
       if (cloud.user()?.uid !== user.uid) return;
       const session = await serialize(() => receive(packet, user.uid));
       let { deviceId } = await get();
       if (!deviceId) { deviceId = crypto.randomUUID(); await chrome.storage.local.set({ deviceId }); }
-      const state = JSON.stringify([user.uid, session?.id ?? null, !!session?.paused, session?.breakUntil ?? null]);
-      const { studyHeartbeat } = await chrome.storage.local.get('studyHeartbeat');
-      // Survives MV3 worker restarts. Idle browsers write only on state changes.
-      if (studyHeartbeat?.state !== state || (session && Date.now() - studyHeartbeat.at >= STUDY_HEARTBEAT_MS)) {
-        await cloud.acknowledge(deviceId, session?.id ?? null);
-        await chrome.storage.local.set({ studyHeartbeat: { state, at: Date.now() } });
-      }
+      await cloud.acknowledge(deviceId, session?.id ?? null);
       lastSync = Date.now(); error = '';
       // Enforcement/acknowledgement always complete first. Stats retries never
       // hold a browser locked beyond its deadline, including while offline.
@@ -165,38 +156,12 @@ export function startWorker(cloud) {
     })().then(result => reply({ ok: true, ...result }), e => reply({ ok: false, error: userError(e) }));
     return true;
   });
-  function watchAccount() {
-    const uid = cloud.user()?.uid;
-    if (uid === watchingUid && stopControl) return;
-    stopControl?.(); stopControl = undefined; latestPacket = undefined; watchingUid = uid;
-    if (!uid) return;
-    if (!cloud.watchControl) { void sync(); return; }
-    stopControl = cloud.watchControl(packet => {
-      if (cloud.user()?.uid !== uid) return;
-      latestPacket = packet;
-      // Preserve every transition: dropping an intermediate pause could credit
-      // its break as focus when the following resume arrives during a slow save.
-      watchUpdates = watchUpdates.catch(() => {}).then(async () => {
-        if (syncing) await syncing;
-        if (cloud.user()?.uid === uid) await sync(packet);
-      });
-    }, e => {
-      error = userError(e);
-      stopControl?.(); stopControl = undefined;
-    });
-  }
-  chrome.alarms.onAlarm.addListener(() => {
-    return serialize(expire).then(async () => {
-      watchAccount();
-      await watchUpdates;
-      if (latestPacket) await sync(latestPacket);
-      else if (!cloud.watchControl) await sync();
-    }).catch(e => { error = userError(e); });
-  });
+  chrome.alarms.onAlarm.addListener(() => { void serialize(expire).then(sync).catch(e => { error = userError(e); }); });
   void serialize(async () => {
     await chrome.storage.local.setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' });
     const { study } = await get();
     await apply(validSession(study?.session ?? null), study?.revision ?? 'empty', study?.uid ?? null);
-    await chrome.alarms.create('study-watch', { periodInMinutes: 1 });
-  }).then(() => { cloud.subscribe(watchAccount); watchAccount(); }).catch(e => { error = String(e); });
+    await chrome.alarms.create('study-watch', { periodInMinutes: 0.5 });
+  }).then(() => { cloud.subscribe(() => { void sync(); }); void sync(); }).catch(e => { error = String(e); });
+  setInterval(() => { void serialize(expire).then(sync); }, 10000);
 }

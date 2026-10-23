@@ -4,6 +4,7 @@ import { useProfileFocusData } from "../../shared/use-profile-focus";
 import { focusDayKey } from "../../shared/study-focus";
 import { ProfileFocusProvider, useOwnProfileFocusData } from "../../mobile-tasks/src/components/ProfileFocusProvider";
 import { selectProfileFocusRange } from "../../shared/profile-focus-range";
+export { runLeaderboardXpRegression } from "./leaderboard-xp-regression";
 
 export async function runFocusHookRegression() {
   const realNow = Date.now, fixedNow = Date.now();

@@ -28,10 +28,6 @@ async function launch() {
     const request=route.request(), url=request.url();
     if (url.includes('accounts:signInWithPassword') || request.method()==='PATCH') await new Promise(resolve=>setTimeout(resolve,180));
     if(offline){await route.abort();return;}
-    // This suite exercises the real extension during a listener transport outage.
-    // Ordered live updates/heartbeats are covered by worker.test.mjs; REST is
-    // intercepted below, and DNS isolation prevents all production DB access.
-    if (url.includes('firestore.googleapis.com') && url.includes('/Listen/')) { await route.abort(); return; }
     let result;
     if(url.includes('firestore.googleapis.com')) {
       assert.match(url,new RegExp(`/users/${uid}/`));assert.equal(request.headers().authorization,`Bearer ${jwt}`);

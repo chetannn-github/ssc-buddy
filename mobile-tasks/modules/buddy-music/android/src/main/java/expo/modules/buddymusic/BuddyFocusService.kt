@@ -416,7 +416,11 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
     val row = timer ?: return
     val milliseconds = if (preferences.getBoolean("paused", false)) preferences.getLong("remainingMs", 0) else preferences.getLong("endsAt", 0) - System.currentTimeMillis()
     val seconds = ((milliseconds + 999) / 1000).coerceAtLeast(0)
-    val value = "%d:%02d".format(seconds / 60, seconds % 60)
+    val value = if (seconds >= 3600) {
+      "%02d:%02d:%02d".format(seconds / 3600, (seconds / 60) % 60, seconds % 60)
+    } else {
+      "%d:%02d".format(seconds / 60, seconds % 60)
+    }
     if (value == renderedTime) return
     if (row.childCount != value.length) {
       row.removeAllViews()

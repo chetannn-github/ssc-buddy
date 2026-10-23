@@ -1,6 +1,5 @@
 import { effectiveStudySession } from "../shared/study-breaks.ts";
 import { initializeApp } from 'firebase/app';
-import { getFirestore, doc, onSnapshot } from 'firebase/firestore';
 import { initializeAuth, indexedDBLocalPersistence, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth/web-extension';
 import { decodeDocument, encode } from './firestore-codec.js';
 import { creditFocusDay, focusSlices } from '../shared/study-focus.ts';
@@ -11,7 +10,6 @@ export function createCloud() {
   if (!config.apiKey || !config.projectId || !config.appId) throw Error('The extension is not configured. Please install the latest version.');
   const app = initializeApp(config);
   const auth = initializeAuth(app, { persistence: indexedDBLocalPersistence });
-  const database = getFirestore(app);
   const ready = new Promise(resolve => { const stop = onAuthStateChanged(auth, () => { stop(); resolve(); }); });
   const root = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(config.projectId)}/databases/(default)/documents`;
   async function request(relative, options = {}, expectedUid, publicUsername, leaderboardWeek) {
@@ -102,14 +100,6 @@ export function createCloud() {
     recordFocus,
     user: () => auth.currentUser ? { uid: auth.currentUser.uid, email: auth.currentUser.email } : null,
     subscribe: callback => onAuthStateChanged(auth, callback),
-    watchControl(callback, failed) {
-      const uid = auth.currentUser?.uid;
-      if (!uid) return () => {};
-      return onSnapshot(doc(database, 'users', uid, 'studyLock', 'current'), { includeMetadataChanges: true }, snapshot => {
-        if (auth.currentUser?.uid !== uid || snapshot.metadata.fromCache) return;
-        callback(snapshot.exists() ? snapshot.data() : { version: 1, revision: 'empty', session: null });
-      }, failed);
-    },
     login: (email, password) => signInWithEmailAndPassword(auth, email, password),
     logout: () => signOut(auth),
     async read() { const document = await request('studyLock/current'); return document ? decodeDocument(document) : { version: 1, revision: 'empty', session: null }; },

@@ -1,8 +1,8 @@
 import { effectiveStudySession, maxStudyBreaks, onStudyBreak, studyBreakState, studyTimerMilliseconds } from "../../../shared/study-breaks";
-import { publishChangedFocusDay } from "../../../shared/focus-publication";
 import { useEffect, useRef, useState } from "react";
 import { AccessibilityInfo, Alert, Animated, Easing, ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { NumberFlow } from "number-flow-react-native";
 import Svg, { Circle, Line } from "react-native-svg";
 import * as Crypto from "expo-crypto";
 import { collection, doc, onSnapshot, runTransaction, serverTimestamp } from "firebase/firestore";
@@ -59,7 +59,7 @@ export function StudyLock({ uid, taskButton = false, openRequest = 0, onRequestO
   const [focusData, setFocusData] = useState<FocusDay>(emptyFocusDay);
   const date = focusDayKey(now, control?.session?.timeZone);
   useEffect(() => controller.watchStudyFocusDay(getFirebaseFirestore(), uid, date, setFocusData, () => setError("Could not load today's focus time.")), [uid, date]);
-  useEffect(() => { void publishChangedFocusDay(getFirebaseFirestore(), uid, date, focusData.totalMilliseconds, controller.publishStudyFocusDay, control?.session?.timeZone).catch(() => {}); }, [uid, date, focusData.totalMilliseconds, Math.floor(now / 60000), control?.session?.timeZone]);
+  useEffect(() => { void controller.publishStudyFocusDay(getFirebaseFirestore(), uid, date, control?.session?.timeZone).catch(() => {}); }, [uid, date, focusData.totalMilliseconds, Math.floor(now / 60000)]);
   const todayFocus = todayFocusMilliseconds(focusData, control?.session ?? null, now);
   const [ready, setReady] = useState(false);
   useEffect(() => {
@@ -109,7 +109,14 @@ export function StudyLock({ uid, taskButton = false, openRequest = 0, onRequestO
             </> : <>
               <Pressable accessibilityRole="button" accessibilityLabel="Focus time" style={s.duration} disabled={busy} onPress={() => setPicking(true)}>{icon("clock-outline", 17)}<Text style={s.durationLabel}>Focus time</Text><View style={s.durationValue}><SlotTime value={formatFocusMinutes(minutes)} color="#eee" size={12} weight="600" compact /></View></Pressable>
               <AnimatedTimeChips options={[15, 30, 60, 90]} labels={[15, 30, 60, 90].map(formatFocusMinutes)} value={minutes} onChange={setMinutes} disabled={busy} color={accent} ink={accentInk(accent)} style={s.quickTimes} />
-              <View style={s.appLimitRow}><Text style={s.durationLabel}>Breaks · 10 min each</Text><View style={s.appLimitOptions}><Pressable accessibilityLabel="Fewer breaks" disabled={busy || breakLimit === 0} style={[s.appLimitOption, breakLimit === 0 && { opacity: 0.3 }]} onPress={() => setBreakLimit(value => value - 1)}><Text style={s.quickTimeText}>−</Text></Pressable><View style={s.appLimitOption}><Text style={s.quickTimeText}>{breakLimit}</Text></View><Pressable accessibilityLabel="More breaks" disabled={busy || breakLimit >= maxBreaks} style={[s.appLimitOption, breakLimit >= maxBreaks && { opacity: 0.3 }]} onPress={() => setBreakLimit(value => value + 1)}><Text style={s.quickTimeText}>+</Text></Pressable></View></View>
+              <View style={s.breakCard}>
+                <View style={s.breakCopy}><Text style={s.breakTitle}>Breaks</Text><Text style={s.breakHint}>10 min each · up to {maxBreaks}</Text></View>
+                <View style={s.breakControls}>
+                  <Pressable accessibilityRole="button" accessibilityLabel="Fewer breaks" disabled={busy || breakLimit === 0} style={({ pressed }) => [s.breakButton, (busy || breakLimit === 0) && s.breakDisabled, pressed && s.breakPressed]} onPress={() => setBreakLimit(value => Math.max(0, value - 1))}><MaterialCommunityIcons name="minus" size={20} color="#f9fcf5" /></Pressable>
+                  <View accessible accessibilityLabel={`${breakLimit} breaks selected`} accessibilityLiveRegion="polite" style={s.breakCount}><NumberFlow value={breakLimit} style={s.breakNumber} /></View>
+                  <Pressable accessibilityRole="button" accessibilityLabel="More breaks" disabled={busy || breakLimit >= maxBreaks} style={({ pressed }) => [s.breakButton, (busy || breakLimit >= maxBreaks) && s.breakDisabled, pressed && s.breakPressed]} onPress={() => setBreakLimit(value => Math.min(maxBreaks, value + 1))}><MaterialCommunityIcons name="plus" size={20} color="#f9fcf5" /></Pressable>
+                </View>
+              </View>
               <View style={s.appLimitRow}>
                 <Text style={s.durationLabel}>Allowed apps</Text>
                 <View style={s.appLimitOptions}>
@@ -181,6 +188,16 @@ function ActiveLockDot({ color }: { color: string }) {
 }
 
 const s = StyleSheet.create({
+  breakCard: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, padding: 12, marginBottom: 18, borderRadius: 18, backgroundColor: "#191919" },
+  breakCopy: { flex: 1 },
+  breakTitle: { color: "#f9fcf5", fontSize: 13, fontWeight: "600" },
+  breakHint: { color: "#929292", fontSize: 10, marginTop: 4 },
+  breakControls: { flexDirection: "row", alignItems: "center", gap: 2 },
+  breakButton: { width: 40, height: 44, borderRadius: 22, backgroundColor: "#292929", alignItems: "center", justifyContent: "center" },
+  breakDisabled: { opacity: 0.25 },
+  breakPressed: { backgroundColor: "#3b3b3b", transform: [{ scale: 0.94 }] },
+  breakCount: { minWidth: 36, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  breakNumber: { color: "#f9fcf5", fontSize: 22, fontWeight: "700", fontVariant: ["tabular-nums"] },
   taskStart: { alignSelf: "center", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 48, minWidth: 180, paddingHorizontal: 28, borderRadius: 28, backgroundColor: "#f9fcf5" },
   taskStartText: { color: "#111", fontSize: 14, fontWeight: "700", fontVariant: ["tabular-nums"] },
   appLimitRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 18 },

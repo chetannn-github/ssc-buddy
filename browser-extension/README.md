@@ -13,5 +13,3 @@ The blocked page shows a motivational image and offers Add for eligible non-soci
 A connected browser extension enforces browser restrictions; the task widget manages the same account session.
 
 Start begins the timer immediately, including when no browser is connected. A browser that connects later applies Focus Lock for the remaining time, preserving the original deadline.
-
-Session changes use one Firestore document listener instead of ten-second REST polling. The minute watchdog checks local deadlines and restarts a failed listener; it does not fetch the control document on every tick. Listener initialization/reconnection and actual remote changes can still incur reads. Device acknowledgement writes happen on session/break state changes, or every five minutes while active. Idle registrations do not send periodic heartbeat writes. The successful heartbeat is cached in extension storage across service-worker restarts. Configure the interval in `shared/study-presence.ts`.

@@ -36,9 +36,6 @@ test("web shared modules build without Expo installed", async () => {
     for (const file of await readdir(domain)) {
       if (/\.(ts|json)$/.test(file)) await cp(new URL(file, domain), path.join(destination, file));
     }
-    // Shared scoring helpers are pure TypeScript too; include their real source.
-    await mkdir(path.join(directory, "shared"), { recursive: true });
-    await cp(new URL("shared/focus-rewards.ts", root), path.join(directory, "shared/focus-rewards.ts"));
     const entry = path.join(directory, "entry.ts");
     await writeFile(entry, [...modules].map((name, index) =>
       `export * as shared${index} from "./mobile-tasks/src/domain/${name}";`
@@ -50,8 +47,6 @@ test("web shared modules build without Expo installed", async () => {
       build: { write: false, minify: false, lib: { entry, formats: ["es"] } },
     });
   } finally {
-    assert.equal(path.dirname(path.resolve(directory)), path.resolve(tmpdir()));
-    assert.match(path.basename(directory), /^ssc-web-shared-/);
     await rm(directory, { recursive: true, force: true });
   }
 });
