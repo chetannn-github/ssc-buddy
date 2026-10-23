@@ -1556,7 +1556,9 @@ function History({
 }
 function HistoryFilter({ label, open, onPress, onClose, options, onSelect }: { label: string; open: boolean; onPress: () => void; onClose: () => void; options: string[]; onSelect: (value: string) => void }) {
   const trigger = useRef<View>(null);
+  const menuRoot = useRef<View>(null);
   const window = useWindowDimensions();
+  const [menuFrame, setMenuFrame] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const [anchor, setAnchor] = useState({ x: 14, y: 80, width: 160, height: 42 });
   const visibility = useRef(new Animated.Value(open ? 1 : 0)).current;
   const [renderMenu, setRenderMenu] = useState(open);
@@ -1574,12 +1576,18 @@ function HistoryFilter({ label, open, onPress, onClose, options, onSelect }: { l
     });
   }, [open, renderMenu, visibility]);
 
-  const menuHeight = Math.min(210, Math.max(42, options.length * 42), window.height - 32);
-  const menuTop = anchor.y + anchor.height + 5 + menuHeight <= window.height - 16
-    ? anchor.y + anchor.height + 5
-    : Math.max(16, anchor.y - menuHeight - 5);
+  // Native window and transparent Modal coordinates can have different origins
+  // (status bar / edge-to-edge). Position relative to the measured Modal root.
+  const frame = menuFrame ?? { x: 0, y: 0, width: window.width, height: window.height };
+  const localX = anchor.x - frame.x;
+  const localY = anchor.y - frame.y;
+  const menuHeight = Math.min(210, Math.max(42, options.length * 42), Math.max(42, frame.height - 32));
+  const menuTop = localY + anchor.height + 5 + menuHeight <= frame.height - 16
+    ? localY + anchor.height + 5
+    : Math.max(16, localY - menuHeight - 5);
   const toggle = () => {
     if (open) { onClose(); return; }
+    if (!renderMenu) setMenuFrame(null);
     trigger.current?.measureInWindow((x, y, width, height) => {
       setAnchor({ x, y, width, height });
       onPress();
@@ -1594,9 +1602,11 @@ function HistoryFilter({ label, open, onPress, onClose, options, onSelect }: { l
       </Pressable>
       </View>
       <Modal transparent visible={renderMenu} statusBarTranslucent onRequestClose={onClose}>
-        <View style={{ flex: 1 }}>
+        <View ref={menuRoot} collapsable={false} style={{ flex: 1 }} onLayout={() => {
+          menuRoot.current?.measureInWindow((x, y, width, height) => setMenuFrame({ x, y, width, height }));
+        }}>
           <Pressable accessibilityLabel="Close history filter" style={NativeStyleSheet.absoluteFill} onPress={onClose} />
-          <Animated.View pointerEvents={open ? "auto" : "none"} style={[s.historyFilterMenu, { top: menuTop, left: Math.max(8, Math.min(anchor.x, window.width - anchor.width - 8)), right: undefined, width: anchor.width, maxHeight: menuHeight, opacity: visibility, transform: [{ translateY: visibility.interpolate({ inputRange: [0, 1], outputRange: [-6, 0] }) }, { scale: visibility.interpolate({ inputRange: [0, 1], outputRange: [0.98, 1] }) }] }]}>
+          <Animated.View pointerEvents={open && menuFrame ? "auto" : "none"} style={[s.historyFilterMenu, { top: menuTop, left: Math.max(8, Math.min(localX, frame.width - anchor.width - 8)), right: undefined, width: anchor.width, maxHeight: menuHeight, opacity: menuFrame ? visibility : 0, transform: [{ translateY: visibility.interpolate({ inputRange: [0, 1], outputRange: [-6, 0] }) }, { scale: visibility.interpolate({ inputRange: [0, 1], outputRange: [0.98, 1] }) }] }]}>
             <NativeScrollView nestedScrollEnabled keyboardShouldPersistTaps="always" style={{ maxHeight: menuHeight }}>
               {options.map((option) => { const selected = option === label; return <Pressable key={option} accessibilityRole="button" accessibilityState={{ selected }} onPress={() => onSelect(option)} style={[s.historyFilterOption, selected && s.historyFilterOptionActive]}><Text numberOfLines={1} style={[s.historyFilterOptionText, selected && s.historyFilterOptionTextActive]}>{option}</Text>{selected && <MaterialCommunityIcons name="check" size={16} color="#171717" />}</Pressable>; })}
             </NativeScrollView>
