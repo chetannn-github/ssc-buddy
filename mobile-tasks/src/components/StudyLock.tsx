@@ -87,8 +87,8 @@ export function StudyLock({ uid, taskButton = false, openRequest = 0, onRequestO
   const close = () => { if (picking) setPicking(false); else setOpen(false); };
   const icon = (name: React.ComponentProps<typeof MaterialCommunityIcons>["name"], size = 17, tint = "#999") => <MaterialCommunityIcons name={name} size={size} color={tint} />;
   return <>
-    {taskButton ? <Pressable accessibilityRole="button" accessibilityLabel={session ? "Open focus timer" : "Start Focus"} style={s.taskStart} onPress={() => setOpen(true)}>
-      {icon("timer-outline", 19, "#111")}{session ? <View style={s.taskTimer}>
+    {taskButton ? <Pressable accessibilityRole="button" accessibilityLabel={session ? "Open focus timer" : "Start Focus"} hitSlop={4} style={s.taskStart} onPress={() => setOpen(true)}>
+      {icon("timer-outline", 17, "#111")}{session ? <View style={s.taskTimer}>
         <Text style={s.taskStartText}>{breaking ? "Break" : session.paused ? "Focus paused" : "Focus"} · </Text>
         <SlotTime value={remaining(now + studyTimerMilliseconds(session, now), now)} color="#111" size={14} weight="700" compact />
       </View> : <Text style={s.taskStartText}>Start Focus</Text>}
@@ -199,7 +199,7 @@ const s = StyleSheet.create({
   breakDisabled: { opacity: 0.25 },
   breakPressed: { backgroundColor: "#3b3b3b", transform: [{ scale: 0.94 }] },
   breakCount: { minWidth: 28, alignItems: "center", justifyContent: "center", overflow: "hidden" },
-  taskStart: { alignSelf: "center", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 48, minWidth: 180, paddingHorizontal: 28, borderRadius: 28, backgroundColor: "#f9fcf5" },
+  taskStart: { alignSelf: "center", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, minHeight: 40, minWidth: 156, paddingHorizontal: 20, borderRadius: 24, backgroundColor: "#f9fcf5" },
   taskStartText: { color: "#111", fontSize: 14, fontWeight: "700", fontVariant: ["tabular-nums"] },
   taskTimer: { flexDirection: "row", alignItems: "center" },
   appLimitRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 18 },
