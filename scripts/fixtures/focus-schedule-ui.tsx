@@ -19,7 +19,7 @@ export async function run() {
   const schedule={id:"sleep",name:"Sleep",weekdays:[1,3,5],startMinute:1320,endMinute:360,timeZone:"Asia/Kolkata",appLimit:0,domains:[],enabled:true,createdAt:0};
   const reading={...schedule,id:"reading",name:"Reading",weekdays:[2,4],startMinute:720,endMinute:780};
   const path="users/student/studyLock/current",docs=new Map<string,any>([[path,{version:1,revision:"initial",session:null,focusSchedules:[schedule,reading]}]]);
-  const snap=(ref:string)=>({exists:()=>docs.has(ref),data:()=>docs.get(ref),metadata:{hasPendingWrites:false}});
+  const snap=(ref:string)=>({exists:()=>docs.has(ref),data:()=>docs.get(ref),docs:[],metadata:{hasPendingWrites:false}});
   (globalThis as any).__scheduleSdk={
     listen:(ref:string,...args:any[])=>{const next=args.find(value=>typeof value==="function"),listener={ref,next,active:true};listeners.push(listener);next(snap(ref));return()=>{listener.active=false;};},
     transact:async(_:unknown,work:any)=>{transactions++;return work({get:async(ref:string)=>snap(ref),set:(ref:string,value:any)=>{docs.set(ref,value);queueMicrotask(()=>listeners.filter(item=>item.ref===ref&&item.active).forEach(item=>item.next(snap(ref))));}});},
