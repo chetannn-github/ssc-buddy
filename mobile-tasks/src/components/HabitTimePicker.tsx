@@ -1,4 +1,3 @@
-import { accentInk } from "../domain/app-accent";
 import { clockValueFromPoint } from "../domain/clock-hand";
 import { useRef, useState } from "react";
 import { Modal, Pressable, Text, TextInput, View } from "react-native";
@@ -6,6 +5,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { ClockFaceMotion } from "./ClockFaceMotion";
 import { ClockDigitHighlight } from "./ClockDigitHighlight";
 import { ClockHand } from "./ClockHand";
+import { AnimatedTimeChips } from "./AnimatedTimeChips";
 export function HabitTimePicker({
   value,
   tint,
@@ -165,29 +165,7 @@ export function HabitTimePicker({
               ))}
               <Text pointerEvents="none" style={{position:"absolute",left:"50%",marginLeft:-6,width:12,top:0,lineHeight:66,color:"white",fontSize:36,textAlign:"center"}}>:</Text>
               </View>
-              <View
-                style={{
-                  borderRadius: 10,
-                  overflow: "hidden",
-                  borderWidth: 1,
-                  borderColor: "#aaa",
-                }}
-              >
-                {[false, true].map((isPM) => (
-                  <Pressable
-                    key={String(isPM)}
-                    accessibilityLabel={isPM ? "PM" : "AM"}
-                    onPress={() => setPm(isPM)}
-                    style={{
-                      paddingHorizontal: 9,
-                      paddingVertical: 8,
-                      backgroundColor: pm === isPM ? tint : "#000",
-                    }}
-                  >
-                    <Text style={{ color: pm === isPM ? accentInk(tint) : "white", fontWeight: "700" }}>{isPM ? "PM" : "AM"}</Text>
-                  </Pressable>
-                ))}
-              </View>
+              <AnimatedTimeChips vertical options={[0,1]} labels={["AM","PM"]} value={pm?1:0} onChange={value=>setPm(value===1)} color="#f9fcf5" ink="#111" height={33} radius={0} gap={0} style={{width:48,height:66,borderRadius:10,overflow:"hidden",backgroundColor:"#202020"}} />
             </View>
             {!keyboard && (
               <ClockFaceMotion mode={part} style={{ width: 220, height: 220, alignSelf: "center" }}>
