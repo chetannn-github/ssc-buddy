@@ -7,7 +7,7 @@ const title = "Profile";
 const description = "Your yearly practice activity and progress.";
 
 export const Route = createFileRoute("/")({
-  head: () => ({ meta: [{ title }, { name: "description", content: description }] }),
+  head: () => ({ meta: [{ title: `${title} · SSC Buddy` }, { property: "og:title", content: `${title} · SSC Buddy` }, { name: "description", content: description }] }),
   component: HomeProfile,
 });
 

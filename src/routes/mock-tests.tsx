@@ -10,7 +10,7 @@ import { useAuthUser } from "@/lib/auth-context";
 type TestType = "all" | "Sectional" | "Pre" | "Mains";
 
 export const Route = createFileRoute("/mock-tests")({
-  head: () => ({ meta: [{ title: "Mock Tests" }] }),
+  head: () => ({ meta: [{ title: "Mock Tests · SSC Buddy" }, { property: "og:title", content: "Mock Tests · SSC Buddy" }] }),
   component: MockTests,
 });
 

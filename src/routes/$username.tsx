@@ -6,7 +6,9 @@ import { useAuthUser } from "@/lib/auth-context";
 import { loadPracticeProfile } from "@/lib/profile";
 import { Profile } from "./profile";
 
-export const Route = createFileRoute("/$username")({ component: PublicProfilePage });
+export const Route = createFileRoute("/$username")({
+  head: () => ({ meta: [{ title: "Public Profile · SSC Buddy" }, { property: "og:title", content: "Public Profile · SSC Buddy" }] }),
+  component: PublicProfilePage });
 
 function PublicProfilePage() {
   const { username: rawUsername } = Route.useParams();

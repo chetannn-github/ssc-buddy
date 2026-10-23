@@ -27,6 +27,7 @@
 }
 .web-task-controls { --sticky-inset: calc(1.5rem + 1px); }
 .web-habit-controls { --sticky-inset: 1.5rem; }
+.web-history-filters { --sticky-inset: 1.5rem; }
 .web-profile-header { --sticky-inset: 1.25rem; }
 @media (min-width: 640px) {
   .web-profile-header { --sticky-inset: 1.5rem; }

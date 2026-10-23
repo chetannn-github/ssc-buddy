@@ -77,6 +77,13 @@ try {
       assert.equal(await page.locator('article').count(),expected,'time range filters the actual history list');
       await range.click();await page.getByRole('option',{name:'All time',exact:true}).click();
       assert.equal(await page.locator('article').count(),records.length,'all time restores every session');
+      await page.locator('article').last().evaluate(node=>node.parentElement.style.paddingBottom='1800px');
+      await page.evaluate(()=>scrollTo(0,600));
+      await page.waitForTimeout(80);
+      const stuck=await page.getByLabel('History filters',{exact:true}).boundingBox();
+      assert.ok(Math.abs(stuck.y-88)<1,'history dropdowns remain pinned below the navigation');
+      await range.click();await page.getByRole('option',{name:'All time',exact:true}).click();
+      assert.equal(await page.locator('article').count(),records.length,'dropdown remains usable after scrolling');
       await page.getByRole('link').filter({hasText:'ENGLISH'}).first().click();
       assert.equal((await page.evaluate(()=>globalThis.__navigation)).to,'/history/$id');
     } else if(mode==='result') {

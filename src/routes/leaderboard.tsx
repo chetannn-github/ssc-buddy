@@ -13,6 +13,7 @@ import { useLeaderboardXp } from "../../shared/use-leaderboard-xp";
 import { getFirebaseFirestore } from "@/lib/firebase-sync";
 
 export const Route = createFileRoute("/leaderboard")({
+  head: () => ({ meta: [{ title: "Leaderboard · SSC Buddy" }, { property: "og:title", content: "Leaderboard · SSC Buddy" }] }),
   validateSearch: (search: Record<string, unknown>): { week?: string } => {
     const week = validLeaderboardWeek(search["week"]);
     return week ? { week } : {};

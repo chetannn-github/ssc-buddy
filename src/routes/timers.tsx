@@ -13,7 +13,8 @@ import { loadPracticeProfile } from "@/lib/profile";
 import { useDateTimers } from "@/lib/date-timers";
 import { dateCountdown, timerDial, TIMER_COLORS, makeDateTimer, timerInputFields, type DateTimer } from "../../mobile-tasks/src/domain/date-timers";
 
-export const Route = createFileRoute("/timers")({ head: () => ({ meta: [{ title: "Timers" }] }), component: Timers });
+export const Route = createFileRoute("/timers")({ head: () => ({ meta: [{ title: "Timers · SSC Buddy" }, { property: "og:title", content: "Timers · SSC Buddy" }] }),
+  component: Timers });
 
 function Timers() {
   const user = useAuthUser();

@@ -15,6 +15,7 @@ import { WeeklyResultControls } from "@/components/WeeklyResultControls";
 import { ALL_LEADERBOARD_DAYS, leaderboardPeriodStats, leaderboardPeriodTasks } from "../../mobile-tasks/src/domain/leaderboard-period";
 
 export const Route = createFileRoute("/weekly-stats/$username")({
+  head: () => ({ meta: [{ title: "Weekly Stats · SSC Buddy" }, { property: "og:title", content: "Weekly Stats · SSC Buddy" }] }),
   validateSearch: (search: Record<string, unknown>): { week?: string } => {
     const week = validLeaderboardWeek(search["week"]);
     return week ? { week } : {};
