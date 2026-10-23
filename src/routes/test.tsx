@@ -55,9 +55,9 @@ export const Route = createFileRoute("/test")({
   }),
   head: () => ({
     meta: [
-      { title },
+      { title: `${title} · SSC Buddy` },
       { name: "description", content: description },
-      { property: "og:title", content: title },
+      { property: "og:title", content: `${title} · SSC Buddy` },
       { property: "og:description", content: description },
     ],
   }),

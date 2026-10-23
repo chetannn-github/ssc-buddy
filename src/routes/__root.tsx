@@ -111,14 +111,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "CBT MCQ Practice for Government Exams" },
+      { title: "SSC Buddy — Study & Practice" },
       {
         name: "description",
         content:
           "Offline CBT-style answer marking app for SSC, UPSC, Banking and Railway aspirants.",
       },
       { name: "author", content: "Lovable" },
-      { property: "og:title", content: "CBT MCQ Practice for Government Exams" },
+      { property: "og:title", content: "SSC Buddy — Study & Practice" },
       {
         property: "og:description",
         content:

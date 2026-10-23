@@ -14,7 +14,9 @@ import {
 } from "@/lib/firebase-sync";
 import { prepareWebAccountCache } from "@/lib/account-cache";
 
-export const Route = createFileRoute("/auth")({ component: AuthPage });
+export const Route = createFileRoute("/auth")({
+  head: () => ({ meta: [{ title: "Sign in · SSC Buddy" }, { property: "og:title", content: "Sign in · SSC Buddy" }] }),
+  component: AuthPage });
 
 function AuthPage() {
   const navigate = useNavigate();

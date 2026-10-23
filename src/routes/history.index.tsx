@@ -50,9 +50,9 @@ const description =
 export const Route = createFileRoute("/history/")({
   head: () => ({
     meta: [
-      { title },
+      { title: `${title} · SSC Buddy` },
       { name: "description", content: description },
-      { property: "og:title", content: title },
+      { property: "og:title", content: `${title} · SSC Buddy` },
       { property: "og:description", content: description },
     ],
   }),
@@ -121,6 +121,7 @@ function HistoryPage() {
           <PageLoader label="Loading test history" />
         ) : (
           <div className="space-y-4">
+            <div aria-label="History filters" className="web-sticky-section web-history-filters rounded-2xl">
             <div className="grid grid-cols-2 gap-3 rounded-2xl border border-white/10 bg-[#161616] p-3">
               <Select value={timeRange} onValueChange={(value) => setTimeRange(value as HistoryTimeRange)}>
                 <SelectTrigger aria-label="Time range"><SelectValue placeholder="Today" /></SelectTrigger>
@@ -144,6 +145,7 @@ function HistoryPage() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
             </div>
 
             {visible.length === 0 ? (
