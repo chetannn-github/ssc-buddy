@@ -1,8 +1,8 @@
-.study-break-setup{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 18px;padding:12px;border-radius:18px;background:#191919;color:#f9fcf5;font-size:13px;font-weight:600}
-.study-break-setup>span small{display:block;margin-top:4px;color:#888;font-size:11px}
+.study-break-setup{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 12px;padding:6px 10px;border-radius:14px;background:#191919;color:#f9fcf5;font-size:12px;font-weight:600}
+.study-break-setup>span small{display:block;margin-top:2px;color:#888;font-size:10px}
 .study-break-setup>div{display:flex;align-items:center;gap:2px;flex-shrink:0}
-.study-break-setup button,.study-break-setup strong{display:grid;place-items:center;width:40px;height:44px;border:0;border-radius:22px;background:#292929;color:#f9fcf5;font-size:17px}
-.study-break-setup strong{width:36px;background:transparent;font-size:22px;font-variant-numeric:tabular-nums;overflow:hidden}
+.study-break-setup button,.study-break-setup strong{display:grid;place-items:center;width:34px;height:34px;border:0;border-radius:17px;background:#292929;color:#f9fcf5;font-size:16px}
+.study-break-setup strong{width:28px;background:transparent;font-size:18px;font-variant-numeric:tabular-nums;overflow:hidden}
 .study-break-setup button{cursor:pointer;transition:background .18s,transform .18s,opacity .18s}
 .study-break-setup button:focus-visible{outline:2px solid #f9fcf5;outline-offset:2px}
 .study-break-setup button:not(:disabled):active{transform:scale(.94)}

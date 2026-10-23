@@ -51,6 +51,7 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
   private var renderedTime = ""
   private var foreground = ""
   private var protectionState = ""
+  private var wasRestricted = false
   private var motivation: ImageView? = null
   private var imageBusy = false
   private val imageWorker = java.util.concurrent.Executors.newSingleThreadExecutor()
@@ -95,8 +96,14 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
       if (isRinging()) hide()
       return // Preserve the underlying app so its lock returns after ringing stops.
     }
-    this@BuddyFocusService.foreground = target
-    enforce()
+    val className = event.className?.toString().orEmpty()
+    val appActivity = className.isNotBlank() && (
+      runCatching { packageManager.getActivityInfo(ComponentName(target, className), 0) }.isSuccess ||
+        (event.isFullScreen && className in setOf("android.app.Activity", "android.app.NativeActivity")))
+    val next = FocusWindowPolicy.foreground(foreground, target, packageName, overlay != null, appActivity)
+    if (next == foreground) return
+    foreground = next
+    enforce(appSwitch = true)
   }
   private val refreshOverlay = Runnable {
     if (appPicker != null) { enforce(); return@Runnable }
@@ -116,9 +123,17 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
     handler.removeCallbacks(refreshOverlay)
     handler.post(refreshOverlay)
   }
-  private fun enforce() {
-    if (!shouldBlockForeground()) { hide(); return }
+  private fun enforce(appSwitch: Boolean = false) {
+    val now = System.currentTimeMillis()
+    // A ringing call temporarily hides the overlay; it must be eligible again
+    // when the call UI closes, even without a new application launch event.
+    val restricted = now < restrictionDeadline() && !isRinging()
+    val restrictionStarted = restricted && !wasRestricted
+    wasRestricted = restricted
+    val blocked = shouldBlockForeground()
+    if (!blocked) { hide(); return }
     if (overlay != null) return
+    if (!FocusWindowPolicy.mayShow(blocked, appSwitch, restrictionStarted)) return
     show(foreground)
   }
   private fun shouldBlockForeground() = FocusAppPolicy.blocks(foreground, System.currentTimeMillis(), restrictionDeadline(), essentials, preferences.getStringSet("allowed", emptySet()).orEmpty(), isRinging())

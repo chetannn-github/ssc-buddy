@@ -11,7 +11,6 @@ import { StudyDurationPicker } from "./StudyDurationPicker";
 import { reconcileStudySession, publishStudyFocusDay } from "./study-lock";
 import { MAX_STUDY_WEBSITES } from "./study-selection";
 import { Clock3, Globe2, MonitorUp, Monitor, Pause, Play, Plus, Minus, LockKeyhole, X } from "lucide-react";
-import NumberFlow from "@number-flow/react";
 type Session = StudySession;
 type Status = { session: Session | null; connected: number; protected: number };
 const remaining = (session: Session | number) => {
@@ -127,7 +126,7 @@ export function StudyLockControl({ uid, desktop = false, profile = false, getDat
           </div>
           <button className="study-duration-trigger" onClick={() => setPickingTime(true)}><Clock3 size={17} /><span>Focus time</span><strong><SlotTime value={formatFocusMinutes(Number(minutes))} /></strong></button>
           <AnimatedChoices className="study-time-presets" label="Focus duration" options={[15, 30, 60, 90].map(value => ({ value: String(value), label: formatFocusMinutes(value), disabled: busy }))} value={minutes} onChange={setMinutes} />
-          <div className="study-break-setup"><span>Breaks <small>10 min each · up to {maxBreaks}</small></span><div><button type="button" aria-label="Fewer breaks" disabled={busy || breakLimit === 0} onClick={() => setBreakLimit(value => Math.max(0, value - 1))}><Minus size={18} /></button><strong aria-live="polite" aria-label={`${breakLimit} breaks selected`}><NumberFlow value={breakLimit} /></strong><button type="button" aria-label="More breaks" disabled={busy || breakLimit >= maxBreaks} onClick={() => setBreakLimit(value => Math.min(maxBreaks, value + 1))}><Plus size={18} /></button></div></div>
+          <div className="study-break-setup"><span>Breaks <small>10 min each · up to {maxBreaks}</small></span><div><button type="button" aria-label="Fewer breaks" disabled={busy || breakLimit === 0} onClick={() => setBreakLimit(value => Math.max(0, value - 1))}><Minus size={18} /></button><strong aria-live="polite" aria-label={`${breakLimit} breaks selected`}><SlotTime value={String(breakLimit)} /></strong><button type="button" aria-label="More breaks" disabled={busy || breakLimit >= maxBreaks} onClick={() => setBreakLimit(value => Math.min(maxBreaks, value + 1))}><Plus size={18} /></button></div></div>
           <button className="browser-study-primary" disabled={busy || !websites.length || !!website.trim()} onClick={() => void run(async () => {
             const duration = Number(minutes); if (!Number.isInteger(duration) || duration < 1 || duration > 720) throw Error("Choose 1–720 minutes.");
             await startStudySession(getDatabase(), uid, duration, websites, source, 2, breakLimit); localStorage.setItem(`ssc-browser-allowlist:${uid}`, domains);

@@ -248,6 +248,7 @@ export function ProfileScreen({
     : "";
   const [range, setRange] = useState<Range>("week");
   const focusData = useProfileFocusData(getFirebaseFirestore, focusReader, readOnly ? publicUid : user?.uid, readOnly ? profileSettings?.username : undefined, readOnly, date => withinRange(date, range));
+  useEffect(() => { if (!focusData.canLogout) setConfirmLogout(false); }, [focusData.canLogout]);
   const xpSummary = useMemo(() => getXpSummary(tasks, focusData.totalPoints), [tasks, focusData.totalPoints]);
   const xpTimelineStart = Math.max(0, xpSummary.level - 3);
   const xpTimelineLevels = Array.from({ length: 6 }, (_, index) => xpTimelineStart + index);
@@ -824,7 +825,7 @@ export function ProfileScreen({
             </Pressable>
           </Pressable>
         </Modal>
-        <DestructiveDialog visible={confirmLogout} title="Are you sure you want to sign out?" confirmLabel="Yes, sign out" onCancel={() => setConfirmLogout(false)} onConfirm={onLogout} />
+        <DestructiveDialog visible={confirmLogout && focusData.canLogout} title="Are you sure you want to sign out?" confirmLabel="Yes, sign out" onCancel={() => setConfirmLogout(false)} onConfirm={() => { if (focusData.canLogout) onLogout(); }} />
         <Modal
           transparent
           visible={editing}
@@ -844,7 +845,7 @@ export function ProfileScreen({
                 <Text style={styles.editTitle}>{isInitialProfileSetup ? "Setup your profile" : "Edit your profile"}</Text>
                 <View style={styles.editHeaderActions}>
                   <Pressable hitSlop={9} onPress={() => setProfileSettingsOpen((open) => !open)} style={styles.settingsButton}><MaterialCommunityIcons name="cog-outline" size={19} color={colors.muted} /></Pressable>
-                  <Pressable accessibilityLabel="Log out" hitSlop={9} onPress={() => { setEditing(false); setConfirmLogout(true); }} style={styles.settingsButton}><MaterialCommunityIcons name="logout" size={18} color={colors.muted} /></Pressable>
+                  {focusData.canLogout && <Pressable accessibilityLabel="Log out" hitSlop={9} onPress={() => { setEditing(false); setConfirmLogout(true); }} style={styles.settingsButton}><MaterialCommunityIcons name="logout" size={18} color={colors.muted} /></Pressable>}
                 </View>
               </View>
               {profileSettingsOpen && (

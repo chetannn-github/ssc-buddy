@@ -2,7 +2,6 @@ import { effectiveStudySession, maxStudyBreaks, onStudyBreak, studyBreakState, s
 import { useEffect, useRef, useState } from "react";
 import { AccessibilityInfo, Alert, Animated, Easing, ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { NumberFlow } from "number-flow-react-native";
 import Svg, { Circle, Line } from "react-native-svg";
 import * as Crypto from "expo-crypto";
 import { collection, doc, onSnapshot, runTransaction, serverTimestamp } from "firebase/firestore";
@@ -113,7 +112,7 @@ export function StudyLock({ uid, taskButton = false, openRequest = 0, onRequestO
                 <View style={s.breakCopy}><Text style={s.breakTitle}>Breaks</Text><Text style={s.breakHint}>10 min each · up to {maxBreaks}</Text></View>
                 <View style={s.breakControls}>
                   <Pressable accessibilityRole="button" accessibilityLabel="Fewer breaks" disabled={busy || breakLimit === 0} style={({ pressed }) => [s.breakButton, (busy || breakLimit === 0) && s.breakDisabled, pressed && s.breakPressed]} onPress={() => setBreakLimit(value => Math.max(0, value - 1))}><MaterialCommunityIcons name="minus" size={20} color="#f9fcf5" /></Pressable>
-                  <View accessible accessibilityLabel={`${breakLimit} breaks selected`} accessibilityLiveRegion="polite" style={s.breakCount}><NumberFlow value={breakLimit} style={s.breakNumber} /></View>
+                  <View accessibilityLiveRegion="polite" style={s.breakCount}><SlotTime value={String(breakLimit)} color="#f9fcf5" size={18} weight="700" compact /></View>
                   <Pressable accessibilityRole="button" accessibilityLabel="More breaks" disabled={busy || breakLimit >= maxBreaks} style={({ pressed }) => [s.breakButton, (busy || breakLimit >= maxBreaks) && s.breakDisabled, pressed && s.breakPressed]} onPress={() => setBreakLimit(value => Math.min(maxBreaks, value + 1))}><MaterialCommunityIcons name="plus" size={20} color="#f9fcf5" /></Pressable>
                 </View>
               </View>
@@ -188,16 +187,15 @@ function ActiveLockDot({ color }: { color: string }) {
 }
 
 const s = StyleSheet.create({
-  breakCard: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, padding: 12, marginBottom: 18, borderRadius: 18, backgroundColor: "#191919" },
+  breakCard: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, paddingHorizontal: 10, paddingVertical: 6, marginBottom: 12, borderRadius: 14, backgroundColor: "#191919" },
   breakCopy: { flex: 1 },
-  breakTitle: { color: "#f9fcf5", fontSize: 13, fontWeight: "600" },
-  breakHint: { color: "#929292", fontSize: 10, marginTop: 4 },
+  breakTitle: { color: "#f9fcf5", fontSize: 12, fontWeight: "600" },
+  breakHint: { color: "#929292", fontSize: 10, marginTop: 2 },
   breakControls: { flexDirection: "row", alignItems: "center", gap: 2 },
-  breakButton: { width: 40, height: 44, borderRadius: 22, backgroundColor: "#292929", alignItems: "center", justifyContent: "center" },
+  breakButton: { width: 34, height: 34, borderRadius: 17, backgroundColor: "#292929", alignItems: "center", justifyContent: "center" },
   breakDisabled: { opacity: 0.25 },
   breakPressed: { backgroundColor: "#3b3b3b", transform: [{ scale: 0.94 }] },
-  breakCount: { minWidth: 36, alignItems: "center", justifyContent: "center", overflow: "hidden" },
-  breakNumber: { color: "#f9fcf5", fontSize: 22, fontWeight: "700", fontVariant: ["tabular-nums"] },
+  breakCount: { minWidth: 28, alignItems: "center", justifyContent: "center", overflow: "hidden" },
   taskStart: { alignSelf: "center", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 48, minWidth: 180, paddingHorizontal: 28, borderRadius: 28, backgroundColor: "#f9fcf5" },
   taskStartText: { color: "#111", fontSize: 14, fontWeight: "700", fontVariant: ["tabular-nums"] },
   appLimitRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 18 },

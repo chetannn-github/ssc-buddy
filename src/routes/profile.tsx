@@ -871,6 +871,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
   const navigate = useNavigate();
   const authUser = useAuthUser();
   const focusData = useProfileFocusData(getFirebaseFirestore, focusReader, readOnly ? publicProfile?.uid : authUser?.uid, readOnly ? publicProfile?.username : undefined, readOnly, date => isInRange(date, range));
+  useEffect(() => { if (!focusData.canLogout) setLogoutConfirmOpen(false); }, [focusData.canLogout]);
   const resultUid = readOnly ? publicProfile?.uid : authUser?.uid;
   const medalCounts = useWeeklyMedalCounts(resultUid, dailyTasks.map((task) => task.date));
 
@@ -1165,6 +1166,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
     }
   };
   const logout = async () => {
+    if (!focusData.canLogout) return;
     setIsLoggingOut(true);
     try {
       localStorage.removeItem("ssc-buddy-firebase-sync-enabled");
@@ -1326,7 +1328,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
           />
         </button>
       )}
-      <Dialog open={logoutConfirmOpen} onOpenChange={setLogoutConfirmOpen}>
+      <Dialog open={logoutConfirmOpen && focusData.canLogout} onOpenChange={setLogoutConfirmOpen}>
         <DialogContent onOpenAutoFocus={(event) => event.preventDefault()} className="border-white/10 bg-[#121212] p-5 text-zinc-100 sm:max-w-sm">
           <DialogHeader className="space-y-1">
             <DialogTitle className="text-base">Sign out?</DialogTitle>
@@ -1354,7 +1356,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
       {editingProfile && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-md" onMouseDown={(event) => { if (event.target === event.currentTarget) setEditingProfile(false); }}>
           <section className="profile-settings-scroll relative max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-2xl border border-white/10 bg-[#121212] p-4 text-zinc-100 shadow-2xl sm:p-5" onMouseDown={(event) => event.stopPropagation()}>
-            <div className="flex items-center justify-between gap-3"><h2 className="text-lg font-semibold tracking-tight text-zinc-50">{profile ? "Edit your profile" : "Setup your profile"}</h2><div className="flex items-center gap-1"><button type="button" aria-label="Profile settings" onClick={() => setProfileSettingsOpen((open) => !open)} className="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 transition hover:bg-white/10 hover:text-zinc-100"><Settings className="h-4 w-4" /></button><button type="button" aria-label="Log out" disabled={isLoggingOut} onClick={() => { setEditingProfile(false); setLogoutConfirmOpen(true); }} className="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 transition hover:bg-rose-500/10 hover:text-rose-300 disabled:opacity-50"><LogOut className="h-4 w-4" /></button></div></div>
+            <div className="flex items-center justify-between gap-3"><h2 className="text-lg font-semibold tracking-tight text-zinc-50">{profile ? "Edit your profile" : "Setup your profile"}</h2><div className="flex items-center gap-1"><button type="button" aria-label="Profile settings" onClick={() => setProfileSettingsOpen((open) => !open)} className="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 transition hover:bg-white/10 hover:text-zinc-100"><Settings className="h-4 w-4" /></button>{focusData.canLogout && <button type="button" aria-label="Log out" disabled={isLoggingOut} onClick={() => { setEditingProfile(false); setLogoutConfirmOpen(true); }} className="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 transition hover:bg-rose-500/10 hover:text-rose-300 disabled:opacity-50"><LogOut className="h-4 w-4" /></button>}</div></div>
             <div className="mt-4 space-y-3">
               <label className="block text-sm font-medium text-zinc-200">
                 Your name

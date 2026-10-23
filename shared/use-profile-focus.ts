@@ -10,13 +10,16 @@ type FocusReader = Pick<ReturnType<typeof createStudyController>, "watchStudyFoc
 export function useProfileFocusData(getDatabase: () => Firestore, reader: FocusReader, uid: string | undefined, username: string | undefined, readOnly: boolean, includesDay: (date: string) => boolean) {
   const [days, setDays] = useState<Record<string, FocusDay> | null>(null);
   const [session, setSession] = useState<StudySession | null>(null);
+  const [controlOwner, setControlOwner] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
+    let active = true;
     setDays(null);
     setSession(null);
+    setControlOwner(null);
     if (!uid) return;
     const stops: (() => void)[] = [];
-    const failed = () => { setDays(null); setSession(null); };
+    const failed = () => { if (active) { setDays(null); setSession(null); setControlOwner(null); } };
     try {
       const db = getDatabase();
       if (readOnly) {
@@ -25,11 +28,15 @@ export function useProfileFocusData(getDatabase: () => Firestore, reader: FocusR
         }, failed));
       } else {
         stops.push(reader.watchStudyFocusDays(db, uid, setDays, failed));
-        stops.push(reader.watchStudyControl(db, uid, value => setSession(value?.session ?? null), failed));
+        stops.push(reader.watchStudyControl(db, uid, value => {
+          if (!active) return;
+          setSession(value?.session ?? null);
+          setControlOwner(uid);
+        }, failed));
       }
     } catch { failed(); }
     const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => { stops.forEach(stop => stop()); clearInterval(timer); };
+    return () => { active = false; stops.forEach(stop => stop()); clearInterval(timer); };
   }, [getDatabase, reader, uid, username, readOnly]);
   useEffect(() => {
     if (!uid || readOnly || !days) return;
@@ -46,7 +53,8 @@ export function useProfileFocusData(getDatabase: () => Firestore, reader: FocusR
   const current = session ? effectiveStudySession(session, now) : null;
   if (!readOnly && current) for (const slice of focusSlices(current, now)) totals[slice.date] = (totals[slice.date] ?? 0) + Math.max(0, slice.milliseconds - (days?.[slice.date]?.sessionCredits[current.id] ?? 0));
   const milliseconds = rangeFocusMilliseconds(days ?? {}, readOnly ? null : session, includesDay, now);
-  return { days: totals, text: days ? formatFocusTime(milliseconds) : "—", milliseconds, points: Object.entries(totals).reduce((sum, [date, value]) => sum + (includesDay(date) ? focusPoints(value) : 0), 0), totalPoints: focusRewardTotal(totals) };
+  const canLogout = !!uid && !readOnly && controlOwner === uid && !(current && (current.paused || current.endsAt > now));
+  return { canLogout, days: totals, text: days ? formatFocusTime(milliseconds) : "—", milliseconds, points: Object.entries(totals).reduce((sum, [date, value]) => sum + (includesDay(date) ? focusPoints(value) : 0), 0), totalPoints: focusRewardTotal(totals) };
 }
 
 export function useProfileFocus(...args: Parameters<typeof useProfileFocusData>) { return useProfileFocusData(...args).text; }
