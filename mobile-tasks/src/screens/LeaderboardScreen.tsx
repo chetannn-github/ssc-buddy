@@ -356,10 +356,10 @@ export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { 
         </View>
       ) : (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.body}>
-          {rows.map((row, index) => {
+          {!!rows.length && <View style={s.peopleGroup}>{rows.map((row, index) => {
             const currentXp = currentXpFor(row);
             return (
-            <View key={row.uid} style={s.row}>
+            <View key={row.uid} style={[s.row, index > 0 && s.personDivider]}>
               <Pressable onPress={() => { setSelected(row); setSelectedDate(selectedWeek === currentWeek ? dayKey() : ALL_LEADERBOARD_DAYS); }} style={s.rankPress}>{index < 3 ? <Image source={medalAssets[index]} style={s.medal} /> : <Text style={s.rank}>#{index + 1}</Text>}</Pressable>
               <Pressable style={s.publicIdentity} onPress={() => { setSelected(row); setSelectedDate(selectedWeek === currentWeek ? dayKey() : ALL_LEADERBOARD_DAYS); }}><View style={s.avatar}>
                 {row.avatar && avatarAssets[row.avatar] ? (
@@ -380,7 +380,7 @@ export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { 
               </View></Pressable>
               <Pressable onPress={() => { setSelected(row); setSelectedDate(selectedWeek === currentWeek ? dayKey() : ALL_LEADERBOARD_DAYS); }}><RollingLeaderboardNumber value={Number(row.points) || 0} prefix={Number(row.points) > 0 ? "+" : ""} suffix=" pts" fontSize={16} color={pointsColor(Number(row.points) || 0)} /></Pressable>
             </View>
-          ); })}
+          ); })}</View>}
           {!rows.length && <Text style={s.empty}>{selectedWeek === currentWeek ? "No activity this week yet." : "No saved results for this week."}</Text>}
         </ScrollView>
       )}
@@ -403,15 +403,13 @@ const s = createThemedStyles({
   body: { padding: 16, gap: 9 },
   sub: { color: colors.subdued, fontSize: 12 },
   you: { color: "#7dd3fc", fontSize: 10, fontWeight: "800" },
+  peopleGroup: { borderRadius: 14, overflow: "hidden", backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  personDivider: { borderTopWidth: 1, borderTopColor: colors.border },
   row: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
     padding: 14,
-    borderRadius: 14,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   rankPress: { width: 30, alignItems: "center" },
   publicIdentity: { flex: 1, flexDirection: "row", alignItems: "center", gap: 12 },
