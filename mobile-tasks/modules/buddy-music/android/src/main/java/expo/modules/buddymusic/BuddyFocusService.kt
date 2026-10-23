@@ -117,10 +117,11 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
     handler.post(refreshOverlay)
   }
   private fun enforce() {
-    if (!FocusAppPolicy.blocks(foreground, System.currentTimeMillis(), restrictionDeadline(), essentials, preferences.getStringSet("allowed", emptySet()).orEmpty(), isRinging())) { hide(); return }
+    if (!shouldBlockForeground()) { hide(); return }
     if (overlay != null) return
     show(foreground)
   }
+  private fun shouldBlockForeground() = FocusAppPolicy.blocks(foreground, System.currentTimeMillis(), restrictionDeadline(), essentials, preferences.getStringSet("allowed", emptySet()).orEmpty(), isRinging())
   private fun allowedAppLimit() = FocusAppPolicy.appLimit(preferences.getInt("appLimit", 2))
   private fun isRinging() = runCatching { (getSystemService(AUDIO_SERVICE) as AudioManager).mode == AudioManager.MODE_RINGTONE }.getOrDefault(false)
   private fun restrictionDeadline(): Long = if (preferences.getBoolean("paused", false) && !preferences.getString("session", "").isNullOrEmpty()) Long.MAX_VALUE else preferences.getLong("endsAt", 0)
@@ -130,7 +131,10 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
   }
   private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
   private fun rotateMotivation(force: Boolean = false) {
-    if (motivation == null) return
+    val host = overlay ?: return
+    val imageView = motivation ?: return
+    if (!host.isAttachedToWindow || !shouldBlockForeground()) return
+    val sessionId = preferences.getString("session", "")
     val now = android.os.SystemClock.elapsedRealtime()
     if (imageBusy || (!force && now - lastImageRotation < 60000)) return
     imageBusy = true; lastImageRotation = now
@@ -141,7 +145,12 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
       }.getOrNull()
       handler.post {
         imageBusy = false
-        if (bitmap != null) motivation?.setImageBitmap(bitmap)
+        // Downloads may finish after an allowed app opens or a new overlay is
+        // created. A rotation belongs only to the visible window that requested it.
+        if (bitmap != null && overlay === host && motivation === imageView &&
+          host.isAttachedToWindow && sessionId == preferences.getString("session", "") && shouldBlockForeground()) {
+          imageView.setImageBitmap(bitmap)
+        }
       }
     }
   }
@@ -288,6 +297,8 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
     }.start()
   }
   private fun show(target: String) {
+    // Recheck at the window boundary as refreshes can outlive an app switch.
+    if (target != foreground || !shouldBlockForeground()) return
     val accent = runCatching { Color.parseColor(preferences.getString("accent", "#ffe000")) }.getOrDefault(Color.YELLOW)
     val root = LinearLayout(this).apply {
       orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; setPadding(dp(24), dp(24), dp(24), dp(24))
