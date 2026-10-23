@@ -1514,10 +1514,6 @@ function History({
                 style={s.historyCard}
               >
                 <View style={s.historyCardTop}>
-                  <View style={s.scoreRing}>
-                    <Text style={s.scoreRingValue}>{record.score}</Text>
-                    <Text style={s.scoreRingLabel}>score</Text>
-                  </View>
                   <View style={s.historyCopy}>
                     <Text numberOfLines={1} style={s.sessionTitle}>
                       {record.subject}
@@ -1529,6 +1525,10 @@ function History({
                       {isQuickRecallRecord(record) ? `Daily summary · ${record.answers.length} questions` : `${record.chapter} · ${record.exercise}`}
                     </Text>
                     <Text style={s.historyDate}>{friendlyRecordDate(isQuickRecallRecord(record) ? record.date?.slice(0, 10) : record.createdAt, record.date ?? record.createdAt)}</Text>
+                  </View>
+                  <View style={s.historyScore}>
+                    <Text style={s.historyScoreValue}>{record.score}</Text>
+                    <Text style={s.historyScoreLabel}>score</Text>
                   </View>
                   <MaterialCommunityIcons name="chevron-right" size={20} color={colors.subdued} />
                 </View>
@@ -2734,18 +2734,9 @@ const s = StyleSheet.create({
     borderColor: colors.border,
   },
   historyCardTop: { flexDirection: "row", alignItems: "center", gap: 10 },
-  scoreRing: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: colors.accent + "66",
-    backgroundColor: colors.accent + "14",
-  },
-  scoreRingValue: { color: colors.text, fontSize: 14, fontWeight: "900" },
-  scoreRingLabel: { color: colors.muted, fontSize: 7, marginTop: -1 },
+  historyScore: { flexShrink: 0, alignItems: "flex-end", justifyContent: "center" },
+  historyScoreValue: { color: colors.text, fontSize: 18, fontWeight: "800", fontVariant: ["tabular-nums"] },
+  historyScoreLabel: { color: colors.muted, fontSize: 9, marginTop: 2 },
   historyCopy: { flex: 1, minWidth: 0 },
   historyChapter: { color: colors.muted, fontSize: 11, marginTop: 2 },
   historyDate: { color: colors.subdued, fontSize: 10, marginTop: 3 },
