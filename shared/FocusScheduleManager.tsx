@@ -8,7 +8,7 @@ import { focusSchedulePreviews, isFocusSchedulePreview, focusScheduleIconIndex }
 import { ArrowLeft, Plus, Moon, Sunrise, BookOpen, Coffee, Leaf } from "lucide-react";
 import "./focus-schedules.css";
 
-export function FocusScheduleManager({uid,getDatabase,domains,onBack}:{uid:string;getDatabase:()=>Firestore;domains:string[];onBack?:()=>void}) {
+export function FocusScheduleManager({uid,getDatabase,domains,onBack,onSaved}:{uid:string;getDatabase:()=>Firestore;domains:string[];onBack?:()=>void;onSaved?:()=>void}) {
   const [items,setItems]=useState<FocusSchedule[]>([]),[draft,setDraft]=useState<FocusSchedule|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState(""),[now,setNow]=useState(Date.now());
   const [previews,setPreviews]=useState(focusSchedulePreviews);
   useEffect(()=>{
@@ -20,7 +20,7 @@ export function FocusScheduleManager({uid,getDatabase,domains,onBack}:{uid:strin
   },[uid,getDatabase]);
   useEffect(()=>{const timer=setInterval(()=>setNow(Date.now()),1000);return()=>clearInterval(timer);},[]);
   const fresh=(preset=SCHEDULE_PRESETS[0]!)=>({id:crypto.randomUUID(),name:preset.name,startMinute:preset.startMinute,endMinute:preset.endMinute,weekdays:[0,1,2,3,4,5,6],domains,timeZone:studyTimeZone(),appLimit:0,enabled:true,createdAt:Date.now()});
-  const run=async(value:FocusSchedule|null,id:string)=>{setBusy(true);setError("");try{if(isFocusSchedulePreview(id)){setPreviews(previous=>previous.flatMap(item=>item.id===id?(value?[{...value,enabled:false}]:[]):[item]));}else await saveFocusSchedule(getDatabase(),uid,value,id);setDraft(null);}catch(e){setError(e instanceof Error?e.message:"Could not save schedule.");}finally{setBusy(false);}};
+  const run=async(value:FocusSchedule|null,id:string)=>{setBusy(true);setError("");try{if(isFocusSchedulePreview(id)){setPreviews(previous=>previous.flatMap(item=>item.id===id?(value?[{...value,enabled:false}]:[]):[item]));}else await saveFocusSchedule(getDatabase(),uid,value,id);setDraft(null);if(value)onSaved?.();}catch(e){setError(e instanceof Error?e.message:"Could not save schedule.");}finally{setBusy(false);}};
   const frozen=!!draft&&!!items.find(item=>item.id===draft.id)&&focusScheduleFrozen(items.find(item=>item.id===draft.id)!,now);
   return <section className="focus-schedules" aria-label="Focus schedules">
     <div className="focus-schedule-toolbar">
@@ -31,7 +31,7 @@ export function FocusScheduleManager({uid,getDatabase,domains,onBack}:{uid:strin
       </button>;})}</div>
       <button type="button" className="focus-schedule-icon" aria-label="Add focus schedule" disabled={busy} onClick={()=>{setError("");setDraft(fresh());}}><Plus size={21}/></button>
     </div>
-    {draft&&<div className="focus-schedule-form">
+    {draft&&<div className="focus-schedule-form" key={draft.id}>
       <label>Name<input aria-label="Schedule name" maxLength={40} disabled={busy||frozen} value={draft.name} onChange={e=>setDraft({...draft,name:e.target.value})}/></label>
       <div className="focus-schedule-times">{(["startMinute","endMinute"] as const).map(field=><label key={field}>{field==="startMinute"?"Start":"End"}<input type="time" aria-label={field==="startMinute"?"Schedule start":"Schedule end"} value={scheduleTime(draft[field])} disabled={busy||frozen} onChange={e=>{const [hour,minute]=e.target.value.split(":").map(Number);if(Number.isFinite(hour)&&Number.isFinite(minute))setDraft({...draft,[field]:hour!*60+minute!});}}/></label>)}</div>
       <div className="focus-schedule-days">{WEEKDAY_LABELS.map((day,index)=><button type="button" key={day} aria-pressed={draft.weekdays.includes(index)} disabled={busy||frozen} onClick={()=>setDraft({...draft,weekdays:draft.weekdays.includes(index)?draft.weekdays.filter(value=>value!==index):[...draft.weekdays,index]})}>{day}</button>)}</div>

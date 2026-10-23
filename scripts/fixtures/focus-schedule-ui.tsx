@@ -4,6 +4,7 @@ import { FocusScheduleManager } from "../../shared/FocusScheduleManager";
 import { useFocusScheduleRunner } from "../../shared/use-focus-schedule-runner";
 import * as reader from "../../shared/study-lock";
 import { StudyLockControl } from "../../shared/StudyLockControl";
+import { StudyDurationPicker } from "../../shared/StudyDurationPicker";
 
 export async function run() {
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT=true;
@@ -41,6 +42,7 @@ export async function run() {
     if(savedRow.getBoundingClientRect().top<addButton.getBoundingClientRect().bottom)throw Error("saved schedules should be in the next row");
     if(savedRow.textContent?.includes('Preview')||savedRow.textContent?.includes(':')||savedRow.querySelectorAll('svg').length!==6)throw Error("saved chips should only show names and icons");
     await act(async()=>previewCards[2]!.click());
+    if(getComputedStyle(container.querySelector('.focus-schedule-form')!).animationName!=='focus-schedule-enter')throw Error("schedule switching animation missing");
     await act(async()=>button("Save schedule").click());
     if(transactions)throw Error("saving a preview touched the database");
     await act(async()=>button("Edit").click());
@@ -83,9 +85,34 @@ export async function run() {
     if(document.querySelector<HTMLInputElement>('[aria-label="Schedule name"]')?.value!=="Sleep")throw Error("empty account did not open a new schedule directly");
     await act(async()=>document.querySelector<HTMLButtonElement>('[aria-label="Back to Focus Lock"]')!.click());
     if(document.querySelector('.focus-schedules'))throw Error("schedule back navigation failed");
+    await act(async()=>document.querySelector<HTMLButtonElement>('[aria-label="Focus schedules"]')!.click());
+    await act(async()=>[...document.querySelectorAll<HTMLButtonElement>('button')].find(item=>item.textContent==='Save schedule')!.click());
+    if(document.querySelector('.browser-study-dialog'))throw Error("successful schedule save did not close the dialog");
     await act(async()=>panelRoot.unmount());
     if(timers.size||listeners.some(item=>item.active))throw Error("focus dialog leaked timers or listeners");
-    return "direct new/existing editor, five local previews, preview saves without DB writes, animated selections, freeze, auto-start/end, cleanup";
+    const clockRoot=createRoot(container),saved:number[]=[];
+    await act(async()=>clockRoot.render(<StudyDurationPicker minutes={95} onCancel={()=>{}} onConfirm={value=>saved.push(value)}/>));
+    const clockButton=(label:string)=>container.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`)!;
+    const face=()=>container.querySelector<HTMLElement>('.clock-face-motion')!;
+    if(face().dataset.clockMode!=='hour')throw Error("clock started on wrong field");
+    await act(async()=>clockButton('2 hours').click());
+    if(face().dataset.clockMode!=='minute'||!face().getAnimations().some(animation=>animation.effect?.getTiming().duration===220))throw Error("automatic hour-to-minute transition missing");
+    await act(async()=>clockButton('10 minutes').click());
+    await act(async()=>clockButton('Select hours').click());
+    if(face().dataset.clockMode!=='hour'||face().getAnimations().length!==1)throw Error("manual minute-to-hour transition missing");
+    if(!clockButton('Select hours').style.transition.includes('background-color'))throw Error("clock digit background transition missing");
+    await act(async()=>clockButton('Select minutes').click());
+    if(clockButton('Select hours').textContent!=='02'||clockButton('Select minutes').textContent!=='10')throw Error("switching clock fields changed the selected time");
+    await act(async()=>button('Save').click());
+    if(saved[0]!==130)throw Error("animated clock saved an incorrect duration");
+    const originalMatchMedia=window.matchMedia;
+    try{
+      window.matchMedia=(()=>({matches:true})) as any;
+      await act(async()=>clockButton('Select hours').click());
+      if(face().getAnimations().length)throw Error("clock ignored reduced-motion preference");
+    }finally{window.matchMedia=originalMatchMedia;}
+    await act(async()=>clockRoot.unmount());
+    return "direct schedule editor, five local fixtures, clean saved row, auto/manual clock transitions, preserved duration, reduced motion, freeze, cleanup";
   }finally{
     Date.now=originals.now;window.setInterval=originals.interval;window.setTimeout=originals.timeout;window.clearInterval=originals.clearInterval;window.clearTimeout=originals.clearTimeout;
     container.remove();delete (globalThis as any).__scheduleSdk;

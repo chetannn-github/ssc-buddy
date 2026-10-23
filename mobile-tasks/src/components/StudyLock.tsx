@@ -17,6 +17,7 @@ import { deviceFocusStatus, openDeviceFocusSettings, supportsDeviceFocus, syncDe
 import { clockValueFromPoint } from "../domain/clock-hand";
 import { MAX_STUDY_WEBSITES } from "../../../shared/study-selection";
 import { FocusSchedules } from "./FocusSchedules";
+import { ClockFaceMotion } from "./ClockFaceMotion";
 
 // Use the mobile app's SDK instance and native UUID source with the shared contract.
 export const controller = createStudyController({ collection, doc, onSnapshot, runTransaction, serverTimestamp }, () => Crypto.randomUUID());
@@ -113,7 +114,7 @@ export function StudyLock({ uid, taskButton = false, openRequest = 0, onRequestO
         <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} style={s.dialog} contentContainerStyle={s.dialogContent}>
           <Animated.View style={{ opacity: panelMotion, transform: [{ translateY: panelMotion.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }] }}>
           {schedulesOpen ? <>
-            {ready?<FocusSchedules onBack={()=>setSchedulesOpen(false)} items={control?.focusSchedules??[]} now={now} saveSchedule={(draft,id)=>controller.saveFocusSchedule(getFirebaseFirestore(),uid,draft,id)} renderClock={(value,onSave,onCancel,title)=><StudyClock minutes={value} accent={accent} onSave={onSave} onCancel={onCancel} timeOfDay title={title} />} />:<ActivityIndicator color="#f9fcf5"/>}
+            {ready?<FocusSchedules onBack={()=>setSchedulesOpen(false)} onSaved={()=>setOpen(false)} items={control?.focusSchedules??[]} now={now} saveSchedule={(draft,id)=>controller.saveFocusSchedule(getFirebaseFirestore(),uid,draft,id)} renderClock={(value,onSave,onCancel,title)=><StudyClock minutes={value} accent={accent} onSave={onSave} onCancel={onCancel} timeOfDay title={title} />} />:<ActivityIndicator color="#f9fcf5"/>}
           </> : picking && !session ? <StudyClock minutes={minutes} accent={accent} onCancel={() => setPicking(false)} onSave={value => { setMinutes(value); setPicking(false); }} /> : <>
             <View style={s.heading}><Text accessibilityRole="header" style={s.title}>Focus Lock</Text><Pressable accessibilityRole="button" accessibilityLabel="Focus schedules" hitSlop={10} onPress={()=>setSchedulesOpen(true)}>{icon("calendar-clock-outline", 21)}</Pressable></View>
             {!ready && !error && <ActivityIndicator color={accent} />}
@@ -193,11 +194,11 @@ function StudyClock({ minutes, accent, onCancel, onSave, timeOfDay=false, title=
       </View>)}
       {timeOfDay&&<AnimatedTimeChips vertical options={[0,12]} labels={["AM","PM"]} value={hour>=12?12:0} onChange={value=>setHour(hour%12+value)} color="#f9fcf5" ink="#111" height={33} radius={0} gap={0} style={{width:48,height:66,alignSelf:"flex-start",borderRadius:12,overflow:"hidden",backgroundColor:"#202020"}} />}
     </View>
-    {!keyboard && <View style={s.clock}>
+    {!keyboard && <ClockFaceMotion mode={part} style={s.clock}>
       <Svg pointerEvents="none" width={220} height={220} style={StyleSheet.absoluteFill}><Line x1={110} y1={110} x2={110 + Math.sin(angle) * 82} y2={110 - Math.cos(angle) * 82} stroke={accent} strokeWidth={2} /><Circle cx={110} cy={110} r={4} fill={accent} /><Circle cx={110 + Math.sin(angle) * 82} cy={110 - Math.cos(angle) * 82} r={17} fill={accent} /></Svg>
       <View style={StyleSheet.absoluteFill} onStartShouldSetResponder={() => true} onMoveShouldSetResponder={() => true} onResponderGrant={event => { const value = clockValueFromPoint(event.nativeEvent.locationX, event.nativeEvent.locationY, part); if (value !== null) choose(part === "hour" ? value % 12 : value); }} onResponderMove={event => { const value = clockValueFromPoint(event.nativeEvent.locationX, event.nativeEvent.locationY, part); if (value !== null) choose(part === "hour" ? value % 12 : value); }} onResponderRelease={() => { if (part === "hour") setPart("minute"); }} />
       {Array.from({ length: 12 }, (_, index) => { const value = part === "hour" ? index : index * 5, label=timeOfDay&&part==="hour"&&value===0?12:value; return <Pressable key={value} accessibilityRole="button" accessibilityLabel={`${label} ${part === "hour" ? "hours" : "minutes"}`} style={[s.clockNumber, { left: 110 + Math.sin(index * Math.PI / 6) * 82 - 17, top: 110 - Math.cos(index * Math.PI / 6) * 82 - 17 }]} onPress={() => { choose(value); if (part === "hour") setPart("minute"); }}><Text style={{ fontSize: 15, color: selected === value ? accentInk(accent) : "#eee" }}>{label}</Text></Pressable>; })}
-    </View>}
+    </ClockFaceMotion>}
     {!valid && <Text style={s.error}>Choose 1 minute to 12 hours.</Text>}
     <View style={s.clockActions}><Pressable accessibilityRole="button" accessibilityLabel={keyboard ? "Use clock" : "Use keyboard"} onPress={() => setKeyboard(!keyboard)}><MaterialCommunityIcons name={keyboard ? "clock-outline" : "keyboard-outline"} size={21} color="#aaa" /></Pressable><View style={{ flex: 1 }} /><Pressable accessibilityRole="button" onPress={onCancel}><Text style={[s.clockAction, { color: accent }]}>Cancel</Text></Pressable><Pressable accessibilityRole="button" disabled={!valid} onPress={() => onSave(total)}><Text style={[s.clockAction, { color: accent, opacity: valid ? 1 : 0.4 }]}>Save</Text></Pressable></View>
   </>;
