@@ -94,3 +94,28 @@ test('controllers enforce eligibility, auto-resume across clients, and never awa
     await assert.rejects(() => controller.pauseStudySession({}, 'student'), /30 minutes/);
   } finally { Date.now = realNow; }
 });
+
+test('offline Android break journals replay in order without resetting slots or duplicating focus', async () => {
+  const documents = new Map(), ref = 'users/student/studyLock/current';
+  documents.set(ref, { version: 1, revision: 'initial', source: 'mobile', session: initial() });
+  const api = { doc: (_db, ...parts) => parts.join('/'), collection: () => '', onSnapshot: () => () => {}, serverTimestamp: () => null,
+    runTransaction: async (_db, work) => work({ get: async ref => ({ data: () => documents.get(ref) }), set: (ref, value) => documents.set(ref, value) }) };
+  const controller = createStudyController(api), realNow = Date.now;
+  Date.now = () => start + 110 * minute;
+  try {
+    for (const [index, [elapsed, paused]] of [[30, true], [40, false], [70, true], [80, false]].entries()) {
+      const action = { id: `native-${index}`, lockId: 'session', at: start + elapsed * minute, paused };
+      const value = await controller.applyOverlayBreak({}, 'student', action);
+      assert.deepEqual(await controller.applyOverlayBreak({}, 'student', action), value);
+    }
+    const resumed = documents.get(ref).session;
+    assert.equal(resumed.breaksTaken, 2);
+    assert.equal(resumed.breakLimit, 3);
+    assert.equal(resumed.appLimit, 1);
+    assert.equal(resumed.endsAt, start + 140 * minute);
+    await controller.recordStudyFocus({}, 'student', resumed);
+    assert.equal(documents.get('users/student/studyFocusDays/2026-10-23').totalMilliseconds, 90 * minute);
+    const stale = await controller.applyOverlayBreak({}, 'student', { id: 'late-ack', lockId: 'session', at: start + 40 * minute, paused: false });
+    assert.deepEqual(stale, resumed, 'an already-settled resume cannot move the timer backwards');
+  } finally { Date.now = realNow; }
+});
