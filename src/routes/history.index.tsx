@@ -1,7 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
-import { DonutChart } from "@/components/exam/DonutChart";
 import { Button } from "@/components/ui/button";
 import { PageLoader } from "@/components/ui/page-loader";
 import { consumeLightPageLoader } from "@/lib/navigation";
@@ -205,21 +204,6 @@ function HistoryPage() {
                       className="card-surface group flex cursor-pointer flex-col p-4 transition-shadow hover:shadow-[var(--shadow-lift)] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
                     >
                       <div className="flex items-center gap-4">
-                        <DonutChart
-                          size={64}
-                          thickness={9}
-                          segments={[
-                            { label: "Correct", value: correct, color: "var(--color-answered)" },
-                            { label: "Wrong", value: wrong, color: "var(--color-destructive)" },
-                            {
-                              label: "Unattempted",
-                              value: unattempted,
-                              color: "var(--color-unvisited)",
-                            },
-                          ]}
-                          centerValue={r.score ?? "—"}
-                          centerSubValue={`/ ${maxMarks}`}
-                        />
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
                             <h2 className="truncate text-sm font-semibold">{r.subject}</h2>
@@ -243,7 +227,15 @@ function HistoryPage() {
                               : friendlyDate(r.createdAt ?? r.date, r.date)}
                           </p>
                         </div>
+                        <div className="shrink-0 text-right tabular-nums">
+                          <p className="text-lg font-bold leading-tight">{r.score ?? "—"}</p>
+                          <p className="mt-1 text-[10px] text-muted-foreground">/ {maxMarks} marks</p>
+                        </div>
                       </div>
+
+                      <p className="mt-3 text-xs text-muted-foreground">
+                        <span className="text-[var(--color-answered)]">{correct} correct</span> · <span className="text-destructive">{wrong} wrong</span> · {unattempted} skipped
+                      </p>
 
                       <div className="mt-3 flex gap-2">
                         <Button
