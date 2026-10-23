@@ -48,7 +48,7 @@ export function SolutionScreen({ record, onExit }: Props) {
 
   const paletteClass = (i: number) =>
     cn(
-      "flex h-10 w-10 items-center justify-center rounded-md border text-xs font-semibold transition-all hover:scale-105",
+      "flex h-10 w-full min-w-0 max-w-10 items-center justify-center rounded-md border text-xs font-semibold transition-all hover:scale-105",
       verdicts[i] === "correct"
         ? "border-answered bg-answered text-answered-foreground"
         : verdicts[i] === "incorrect"
@@ -107,11 +107,11 @@ export function SolutionScreen({ record, onExit }: Props) {
 
   return (
     <div className="exam-dark bg-[#121212] text-zinc-100">
-      <main className="mx-auto grid max-w-7xl items-start gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
-        <section className="rounded-xl border border-white/10 bg-[#121212] p-5 sm:p-6">
+      <main className="mx-auto grid w-full min-w-0 max-w-5xl items-start gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
+        <section className="min-w-0 rounded-xl border border-white/10 bg-[#121212] p-5 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-3">
           <div className="min-w-0">
-            <p className="text-xs text-zinc-500">
+            <p className="break-words text-xs text-zinc-500">
               {[record.subject, record.chapter, record.exercise].filter(Boolean).join(" · ")}
             </p>
             <h2 className="mt-1 text-lg font-semibold">
@@ -125,7 +125,7 @@ export function SolutionScreen({ record, onExit }: Props) {
         </div>
 
           {question && (
-            <p className="mt-5 whitespace-pre-wrap text-sm leading-6 text-zinc-100">
+            <p className="mt-5 whitespace-pre-wrap break-words text-sm leading-6 text-zinc-100">
               {question.question}
             </p>
           )}
@@ -149,7 +149,7 @@ export function SolutionScreen({ record, onExit }: Props) {
                   )
                 }
                 className={cn(
-                  "flex w-full items-center gap-3 rounded-lg border px-4 py-4 text-left text-sm transition-all",
+                  "flex w-full min-w-0 items-center gap-3 rounded-lg border px-4 py-4 text-left text-sm transition-all",
                   reattempt && "active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
                   optionClass(opt),
                 )}
@@ -214,7 +214,7 @@ export function SolutionScreen({ record, onExit }: Props) {
           </div>
         </section>
 
-        <aside className="h-fit rounded-xl border border-white/10 bg-[#121212] p-4 lg:sticky lg:top-24">
+        <aside className="h-fit min-w-0 rounded-xl border border-white/10 bg-[#121212] p-4 lg:sticky lg:top-24">
           <h3 className="text-sm font-semibold">Question palette</h3>
           <ul className="mt-3 grid grid-cols-2 gap-2 text-xs text-zinc-500">
             <li className="flex items-center gap-2">

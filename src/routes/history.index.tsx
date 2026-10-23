@@ -1,9 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { Trash2, RotateCcw } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
-import { AlertDialog, AlertDialogContent, AlertDialogTitle, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog";
 import { PageLoader } from "@/components/ui/page-loader";
 import { consumeLightPageLoader } from "@/lib/navigation";
 import {
@@ -15,7 +13,6 @@ import {
 } from "@/components/ui/select";
 import {
   attemptKey,
-  deleteRecord,
   loadHistory,
   onPracticePersist,
   type TestRecord,
@@ -68,7 +65,6 @@ function HistoryPage() {
   const [records, setRecords] = useState<TestRecord[]>([]);
   const [subject, setSubject] = useState(ALL);
   const [chapter, setChapter] = useState(ALL);
-  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(consumeLightPageLoader);
 
   useEffect(() => {
@@ -244,45 +240,6 @@ function HistoryPage() {
                         </div>)}
                       </dl>
 
-                      <div className="mt-auto flex items-center justify-between gap-2 pt-3">
-                        <Button
-                          size="sm"
-                          className="h-8 gap-1.5 rounded-full bg-[#f6f8f2] px-3 text-xs font-medium text-[#171717] hover:bg-white"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (isRecall) {
-                              void navigate({ to: "/quick-recall" });
-                              return;
-                            }
-                            navigate({
-                              to: "/test",
-                              search: {
-                                subject: r.subject,
-                                chapter: r.chapter,
-                                exercise: r.exercise,
-                                minutes: r.durationMinutes ?? undefined,
-                                start: r.startNumber,
-                                count: r.answers.length,
-                              },
-                            });
-                          }}
-                        >
-                          <RotateCcw className="h-3 w-3" />{isRecall ? "Practice again" : "Reattempt"}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 rounded-full p-0 text-zinc-500 hover:bg-rose-400/10 hover:text-rose-300"
-                          aria-label={isReattempt ? "Delete latest attempt" : "Delete attempt"}
-                          title={isReattempt ? "Delete latest attempt" : "Delete attempt"}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setPendingDelete(r.id);
-                          }}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
                     </article>
                   );
                 })}
@@ -291,20 +248,6 @@ function HistoryPage() {
           </div>
         )}
       </div>
-      <AlertDialog open={pendingDelete !== null} onOpenChange={(open) => { if (!open) setPendingDelete(null); }}>
-        <AlertDialogContent aria-describedby={undefined} className="w-[calc(100%-3rem)] max-w-sm rounded-[28px] border-0 bg-[#181818] p-7 text-zinc-100 sm:rounded-[28px]">
-          <AlertDialogTitle className="text-left text-xl font-semibold leading-snug">Are you sure you want to delete this attempt?</AlertDialogTitle>
-          <div className="mt-8 flex items-center justify-end gap-4">
-            <AlertDialogCancel className="mt-0 border-0 bg-transparent px-2 text-zinc-100 shadow-none hover:bg-white/5">Cancel</AlertDialogCancel>
-            <AlertDialogAction className="bg-transparent px-2 text-[#ff1744] shadow-none hover:bg-white/5" onClick={() => {
-              if (!pendingDelete) return;
-              deleteRecord(pendingDelete);
-              setRecords(loadHistory());
-              setPendingDelete(null);
-            }}>Yes, delete</AlertDialogAction>
-          </div>
-        </AlertDialogContent>
-      </AlertDialog>
     </AppShell>
   );
 }

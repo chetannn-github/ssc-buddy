@@ -196,7 +196,7 @@ export function HabitEditor({
     </section>
   );
   return <Dialog open onOpenChange={(open) => { if (!open && !busy) onClose(); }}>
-    <DialogContent className="flex max-h-[90dvh] w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden rounded-2xl border-white/10 bg-[#121212] p-0 text-white sm:max-w-4xl [&>button]:hidden"
+    <DialogContent className="habit-editor flex max-h-[90dvh] w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden rounded-2xl border-white/10 bg-[#121212] p-0 text-white sm:max-w-4xl [&>button]:hidden"
       style={{ "--habit-color": tint } as React.CSSProperties}>
       <header className="flex shrink-0 items-center justify-between border-b border-white/10 px-5 py-4 sm:px-6">
         <div><DialogTitle className="text-lg font-semibold">{habit ? "Edit habit" : "Create a habit"}</DialogTitle><p className="mt-1 text-xs text-zinc-500">Choose how you want to track your routine.</p></div>

@@ -89,13 +89,15 @@ export async function run() {
     const panelRoot=createRoot(container);
     await act(async()=>panelRoot.render(<StudyLockControl uid="student" source="web" getDatabase={getDb}/>));
     await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Focus Lock"]')!.click());
+    const websites=document.querySelector<HTMLElement>('.study-websites')!;
+    if(getComputedStyle(websites).marginTop!=='18px'||getComputedStyle(websites.querySelector('h3')!).marginBottom!=='4px'||getComputedStyle(websites.querySelector('.study-domain-chips')!).marginTop!=='4px')throw Error('Focus Lock website spacing regressed');
     if(document.querySelector('[aria-label="Focus schedules"]')===null||document.querySelector('[aria-label="Focus schedules"]')?.closest('.browser-study-heading')===null)throw Error("schedule icon missing from header");
     if(document.querySelector('.focus-schedules'))throw Error("schedules are still inline in focus setup");
     await act(async()=>document.querySelector<HTMLButtonElement>('[aria-label="Focus schedules"]')!.click());
     if(!document.querySelector('.focus-schedules'))throw Error("schedule icon did not open schedules");
     if(document.querySelector<HTMLInputElement>('[aria-label="Schedule name"]')?.value!=="Sleep")throw Error("empty account did not open a new schedule directly");
-    await act(async()=>document.querySelector<HTMLButtonElement>('[aria-label="Back to Focus Lock"]')!.click());
-    if(document.querySelector('.focus-schedules'))throw Error("schedule back navigation failed");
+    await act(async()=>[...document.querySelectorAll<HTMLButtonElement>('button')].find(item=>item.textContent==='Cancel')!.click());
+    if(document.querySelector('.focus-schedules')||!document.querySelector('.browser-study-dialog'))throw Error("schedule Cancel did not return to the open Focus Lock setup");
     await act(async()=>document.querySelector<HTMLButtonElement>('[aria-label="Focus schedules"]')!.click());
     await act(async()=>[...document.querySelectorAll<HTMLButtonElement>('button')].find(item=>item.textContent==='Save schedule')!.click());
     if(document.querySelector('.browser-study-dialog'))throw Error("successful schedule save did not close the dialog");
