@@ -2,6 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
+import { AlertDialog, AlertDialogContent, AlertDialogTitle, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog";
 import { PageLoader } from "@/components/ui/page-loader";
 import { consumeLightPageLoader } from "@/lib/navigation";
 import {
@@ -66,6 +67,7 @@ function HistoryPage() {
   const [records, setRecords] = useState<TestRecord[]>([]);
   const [subject, setSubject] = useState(ALL);
   const [chapter, setChapter] = useState(ALL);
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(consumeLightPageLoader);
 
   useEffect(() => {
@@ -269,8 +271,7 @@ function HistoryPage() {
                           className="h-7 text-xs text-muted-foreground"
                           onClick={(e) => {
                             e.stopPropagation();
-                            deleteRecord(r.id);
-                            setRecords(loadHistory());
+                            setPendingDelete(r.id);
                           }}
                         >
                           {isReattempt ? "Delete latest" : "Delete"}
@@ -284,6 +285,20 @@ function HistoryPage() {
           </div>
         )}
       </div>
+      <AlertDialog open={pendingDelete !== null} onOpenChange={(open) => { if (!open) setPendingDelete(null); }}>
+        <AlertDialogContent aria-describedby={undefined} className="w-[calc(100%-3rem)] max-w-sm rounded-[28px] border-0 bg-[#181818] p-7 text-zinc-100 sm:rounded-[28px]">
+          <AlertDialogTitle className="text-left text-xl font-semibold leading-snug">Are you sure you want to delete this attempt?</AlertDialogTitle>
+          <div className="mt-8 flex items-center justify-end gap-4">
+            <AlertDialogCancel className="mt-0 border-0 bg-transparent px-2 text-zinc-100 shadow-none hover:bg-white/5">Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-transparent px-2 text-[#ff1744] shadow-none hover:bg-white/5" onClick={() => {
+              if (!pendingDelete) return;
+              deleteRecord(pendingDelete);
+              setRecords(loadHistory());
+              setPendingDelete(null);
+            }}>Yes, delete</AlertDialogAction>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppShell>
   );
 }
