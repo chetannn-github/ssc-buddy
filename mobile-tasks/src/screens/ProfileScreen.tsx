@@ -2,6 +2,7 @@
 import { StudyLock, controller as focusReader } from "../components/StudyLock";
 import { PublicFocusTime } from "../components/PublicFocusTime";
 import { useProfileFocusData } from "../../../shared/use-profile-focus";
+import { profileTrackerVisibility } from "../../../shared/profile-tracker-visibility";
 import { getFirebaseFirestore } from "../lib/firebase";
 import { DestructiveDialog } from "../components/DestructiveDialog";
 import { createThemedStyles, setAppAccent, useAppAccent } from "../theme";
@@ -239,7 +240,8 @@ export function ProfileScreen({
     profileSettings?.trackProgressEnabled !== false,
   );
   const [showTrackerOnProfile, setShowTrackerOnProfile] = useState(profileSettings?.showTrackerOnProfile !== false);
-  const profileTrackerVisible = trackProgressEnabled && showTrackerOnProfile;
+  const trackerVisibility=profileTrackerVisibility(trackProgressEnabled,showTrackerOnProfile);
+  const profileTrackerVisible = trackerVisibility.details;
   const [timersEnabled, setTimersEnabled] = useState(profileSettings?.timersEnabled !== false);
   const [habitsEnabled, setHabitsEnabled] = useState(profileSettings?.habitsEnabled !== false);
   const [randomQuotesEnabled, setRandomQuotesEnabled] = useState(profileSettings?.randomQuotesEnabled !== false);
@@ -679,7 +681,7 @@ export function ProfileScreen({
           )}
           <View style={[styles.cardHeader, { elevation: 31 }]}>
             <Text style={styles.cardEyebrow}>
-              {practiceSessionEnabled ? "PRACTICE" : profileTrackerVisible ? "STUDY TRACKER" : "TASKS"}
+              {practiceSessionEnabled ? "PRACTICE" : trackerVisibility.summary ? "STUDY TRACKER" : "TASKS"}
             </Text>
             <View style={[styles.rangeWrap, { elevation: 40 }]}>
               <Pressable style={styles.rangeButton} onPress={() => setRangeOpen((value) => !value)}>
@@ -748,10 +750,10 @@ export function ProfileScreen({
                 <Stat columns={2} lastRow label="Wrong" value={String(practiceWrong)} />
               </View>
             )}
-            {practiceSessionEnabled && profileTrackerVisible && (
+            {practiceSessionEnabled && trackerVisibility.summary && (
               <Text style={[styles.cardEyebrow, styles.trackerEyebrow]}>STUDY TRACKER</Text>
             )}
-            {practiceSessionEnabled && profileTrackerVisible ? (
+            {practiceSessionEnabled && trackerVisibility.summary ? (
               <View style={styles.trackerGrid}>
                 <Stat label="Lectures" value={String(trackerLectures)} />
                 <Stat label="Revisions" value={String(trackerRevisions)} />
@@ -762,7 +764,7 @@ export function ProfileScreen({
               </View>
             ) : (
               <>
-                {profileTrackerVisible && <View style={styles.trackerGrid}>
+                {trackerVisibility.summary && <View style={styles.trackerGrid}>
                   <Stat lastRow label="Lectures" value={String(trackerLectures)} />
                   <Stat lastRow label="Revisions" value={String(trackerRevisions)} />
                   <Stat lastColumn lastRow label="Mock tests" value={String(loggedMocks)} />
@@ -900,7 +902,7 @@ export function ProfileScreen({
                     {savingFeature === "track" ? <ActivityIndicator size="small" color={colors.accent} /> : <View style={[styles.featureSwitch, trackProgressEnabled && styles.featureSwitchOn]}><View style={[styles.featureKnob, trackProgressEnabled && styles.featureKnobOn]} /></View>}
                   </Pressable>
                   <Pressable accessibilityRole="switch" accessibilityState={{ checked: showTrackerOnProfile }} disabled={savingFeature !== null || savingAccent} onPress={() => void saveFeature("profileTracker")} style={[styles.featureToggle, styles.settingsToggleRow, styles.settingsToggleDivider]}>
-                    <View style={styles.featureToggleContent}><Text style={styles.featureToggleTitle}>Show tracker on profile</Text><Text style={styles.featureToggleCopy}>Display Study Tracker statistics and progress on your profile.</Text></View>
+                    <View style={styles.featureToggleContent}><Text style={styles.featureToggleTitle}>Show tracker on profile</Text><Text style={styles.featureToggleCopy}>Show detailed syllabus, revision and mock progress cards below.</Text></View>
                     {savingFeature === "profileTracker" ? <ActivityIndicator size="small" color={colors.accent} /> : <View style={[styles.featureSwitch, showTrackerOnProfile && styles.featureSwitchOn]}><View style={[styles.featureKnob, showTrackerOnProfile && styles.featureKnobOn]} /></View>}
                   </Pressable>
                   <Pressable accessibilityRole="switch" accessibilityState={{ checked: timersEnabled }} disabled={savingFeature !== null || savingAccent} onPress={() => void saveFeature("timers")} style={[styles.featureToggle, styles.settingsToggleRow, styles.settingsToggleDivider]}>
