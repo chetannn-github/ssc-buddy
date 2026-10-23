@@ -48,13 +48,21 @@ test("swipes stay within the test; reaching the last question does not submit or
   assert.equal(afterSwipe(0, 0, -90, 0), 0);
 });
 
-test("every selected palette item, including the last, can align at the left edge", () => {
+test("palette starts naturally and centers selected questions once they reach the middle", () => {
   for (const count of [1, 3, 50, 500]) {
     for (const viewport of [200, 320, 700]) {
       const contentWidth = count * width + (count - 1) * gap + endPadding(viewport);
-      assert.equal(contentWidth - viewport, offset(count - 1));
-      assert.equal(offset(0), 0);
-      if (count > 1) assert.equal(offset(1), 42);
+      assert.equal(Math.max(0, contentWidth - viewport), offset(count - 1, viewport));
+      assert.equal(offset(0, viewport), 0);
+      for (let index = 0; index < count; index++) {
+        const itemCenter = index * (width + gap) + width / 2;
+        const scroll = offset(index, viewport);
+        if (itemCenter >= viewport / 2) {
+          assert.equal(itemCenter - scroll, viewport / 2);
+        } else {
+          assert.equal(scroll, 0);
+        }
+      }
     }
   }
 });
