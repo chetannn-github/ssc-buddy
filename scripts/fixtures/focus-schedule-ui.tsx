@@ -6,6 +6,8 @@ import * as reader from "../../shared/study-lock";
 import { StudyLockControl } from "../../shared/StudyLockControl";
 import { StudyDurationPicker } from "../../shared/StudyDurationPicker";
 import "../../shared/study-lock.css";
+import { AccentPicker } from "../../src/components/profile/AccentPicker";
+import { useState } from "react";
 
 export async function run() {
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT=true;
@@ -128,6 +130,15 @@ export async function run() {
       if(face().getAnimations().length||digitHighlight.style.transition!=='none'||hand.style.transition!=='none')throw Error("clock ignored reduced-motion preference");
     }finally{window.matchMedia=originalMatchMedia;}
     await act(async()=>clockRoot.unmount());
+    const accentRoot=createRoot(container);
+    function AccentView(){const [value,setValue]=useState('#ffe000');return <AccentPicker value={value} onChange={setValue}/>;}
+    await act(async()=>accentRoot.render(<AccentView/>));
+    const ring=container.querySelector<HTMLElement>('.sliding-highlight')!,firstPosition=ring.style.transform;
+    await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Blue"]')!.click());
+    if(container.querySelector('.sliding-highlight')!==ring||ring.style.transform===firstPosition||ring.style.borderColor!=='rgb(112, 180, 255)'||!ring.style.transition.includes('border-color'))throw Error('accent border did not move and change colour smoothly');
+    await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Green"]')!.click());
+    if(container.querySelector('.sliding-highlight')!==ring||ring.style.borderColor!=='rgb(142, 229, 63)')throw Error('rapid accent switching replaced the selection ring');
+    await act(async()=>accentRoot.unmount());
     return "sliding schedule/hour-minute backgrounds without remount/fade, fixed selected time, save closes dialog, reduced motion, freeze, cleanup";
   }finally{
     Date.now=originals.now;window.setInterval=originals.interval;window.setTimeout=originals.timeout;window.clearInterval=originals.clearInterval;window.clearTimeout=originals.clearTimeout;
