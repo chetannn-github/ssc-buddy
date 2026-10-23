@@ -137,6 +137,43 @@ export function ResultScreen({ record, onRestart, attempts = [], hideAnswers = f
         "!border-[#60a5fa] bg-blue-500/20 text-blue-100 ring-1 ring-[#60a5fa]/45",
     );
 
+  if (hideAnswers) return (
+    <section aria-label="Session result" className="overflow-hidden rounded-2xl border border-white/10 bg-[#161616]">
+      <div className="grid gap-6 p-5 sm:grid-cols-2 sm:gap-10 sm:p-7">
+        <div className="min-w-0">
+          <p className="text-xs font-medium text-zinc-500">Total score</p>
+          <p className="mt-2 break-words text-4xl font-semibold tracking-tight text-zinc-100 tabular-nums sm:text-5xl">{score ?? 0}</p>
+          <p className="mt-2 text-xs text-zinc-500">out of {maxMarks} marks</p>
+        </div>
+        <div className="flex min-w-0 flex-col justify-center">
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="text-sm text-zinc-400">Accuracy</span>
+            <strong className="text-2xl font-semibold tabular-nums text-zinc-100">{checked === 0 ? "—" : `${Math.round((c / checked) * 100)}%`}</strong>
+          </div>
+          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/5" role="progressbar" aria-label="Evaluation progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
+            <div className="h-full rounded-full bg-zinc-200 transition-[width] duration-300" style={{width:`${percent}%`}} />
+          </div>
+          <div className="mt-2 flex flex-wrap justify-between gap-2 text-xs text-zinc-500">
+            <span>{complete ? "Evaluation complete" : `${percent}% checked`}</span>
+            <span>{checked} / {total} checked</span>
+          </div>
+        </div>
+      </div>
+      <dl className="grid grid-cols-4 divide-x divide-white/10 border-t border-white/10 px-2 py-4 sm:px-4">
+        {[
+          {label:"Questions",value:total,color:"text-zinc-100"},
+          {label:"Correct",value:c,color:"text-emerald-400"},
+          {label:"Wrong",value:w,color:"text-rose-400"},
+          {label:"Skipped",value:unattempted,color:"text-zinc-400"},
+        ].map(item=><div key={item.label} className="min-w-0 px-2 text-center">
+          <dt className="text-[10px] text-zinc-500 sm:text-xs">{item.label}</dt>
+          <dd className={cn("mt-1 text-xl font-semibold tabular-nums",item.color)}>{item.value}</dd>
+        </div>)}
+      </dl>
+      {attempts.length > 1 && <div className="px-5 pb-5 sm:px-7"><AttemptMarksChart attempts={attempts} activeId={record.id} /></div>}
+    </section>
+  );
+
   return (
     <div className={cn("grid items-start gap-3", !hideAnswers && "lg:grid-cols-[300px_minmax(0,1fr)]")}>
       <div className="card-surface flex items-center gap-4 p-3 sm:p-4 lg:sticky lg:top-4 lg:flex-col lg:items-start">
