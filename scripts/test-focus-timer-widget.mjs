@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import ts from 'typescript';
 
 const source = await readFile(new URL('../mobile-tasks/src/domain/focus-timer-widget.ts', import.meta.url), 'utf8');
-const compiled = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText.replaceAll('"../../../shared/study-focus"', JSON.stringify(new URL('../shared/study-focus.ts', import.meta.url).href));
+const compiled = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText.replaceAll('"../../../shared/study-focus"', JSON.stringify(new URL('../shared/study-focus.ts', import.meta.url).href)).replaceAll('"../../../shared/study-breaks"', JSON.stringify(new URL('../shared/study-breaks.ts', import.meta.url).href));
 const { focusTimerWidgetModel: model, FOCUS_WIDGET_URI } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
 const now = Date.parse('2026-10-22T10:30:00+05:30');
 const session = { id: 'focus', startedAt: now - 30 * 60000, endsAt: now + 30 * 60000, timeZone: 'Asia/Kolkata' };

@@ -1,3 +1,4 @@
+import { effectiveStudySession } from "./study-breaks";
 import { useEffect, useState } from "react";
 import type { Firestore } from "firebase/firestore";
 import type { createStudyController, StudySession } from "./study-controller";
@@ -42,7 +43,8 @@ export function useProfileFocusData(getDatabase: () => Firestore, reader: FocusR
     return () => { disposed = true; };
   }, [days, uid, readOnly, reader, getDatabase]);
   const totals = Object.fromEntries(Object.entries(days ?? {}).map(([date, value]) => [date, value.totalMilliseconds]));
-  if (!readOnly && session) for (const slice of focusSlices(session, now)) totals[slice.date] = (totals[slice.date] ?? 0) + Math.max(0, slice.milliseconds - (days?.[slice.date]?.sessionCredits[session.id] ?? 0));
+  const current = session ? effectiveStudySession(session, now) : null;
+  if (!readOnly && current) for (const slice of focusSlices(current, now)) totals[slice.date] = (totals[slice.date] ?? 0) + Math.max(0, slice.milliseconds - (days?.[slice.date]?.sessionCredits[current.id] ?? 0));
   const milliseconds = rangeFocusMilliseconds(days ?? {}, readOnly ? null : session, includesDay, now);
   return { days: totals, text: days ? formatFocusTime(milliseconds) : "—", milliseconds, points: Object.entries(totals).reduce((sum, [date, value]) => sum + (includesDay(date) ? focusPoints(value) : 0), 0), totalPoints: focusRewardTotal(totals) };
 }

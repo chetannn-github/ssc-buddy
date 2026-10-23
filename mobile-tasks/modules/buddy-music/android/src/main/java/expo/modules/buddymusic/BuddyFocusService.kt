@@ -126,7 +126,7 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
   private fun shouldBlockForeground() = FocusAppPolicy.blocks(foreground, System.currentTimeMillis(), restrictionDeadline(), essentials, preferences.getStringSet("allowed", emptySet()).orEmpty(), isRinging())
   private fun allowedAppLimit() = FocusAppPolicy.appLimit(preferences.getInt("appLimit", 2))
   private fun isRinging() = runCatching { (getSystemService(AUDIO_SERVICE) as AudioManager).mode == AudioManager.MODE_RINGTONE }.getOrDefault(false)
-  private fun restrictionDeadline(): Long = if (preferences.getLong("breakUntil", 0) > System.currentTimeMillis() && preferences.getBoolean("paused", false)) 0 else if (preferences.getBoolean("paused", false) && !preferences.getString("session", "").isNullOrEmpty()) Long.MAX_VALUE else preferences.getLong("endsAt", 0)
+  private fun restrictionDeadline(): Long = FocusBreakPolicy.restrictionDeadline(System.currentTimeMillis(), preferences.getLong("endsAt", 0), preferences.getBoolean("paused", false), preferences.getLong("breakUntil", 0), !preferences.getString("session", "").isNullOrEmpty())
   private fun text(value: String, size: Float, tint: Int = Color.WHITE) = TextView(this).apply {
     text = value; textSize = size; setTextColor(tint); gravity = Gravity.CENTER
     setPadding(dp(10), dp(8), dp(10), dp(8))

@@ -102,6 +102,7 @@ export function StudyLock({ uid, taskButton = false, openRequest = 0, onRequestO
             {!ready && !error && <ActivityIndicator color={accent} />}
             <DeviceFocusSetup />
             {session ? <>
+              <Text style={s.secondaryText}>{breaking ? "Break time" : "Focus time"}{session.breakLimit !== undefined ? ` · ${breakState?.left ?? 0} breaks left` : ""}</Text>
               <SlotTime value={remaining(now + studyTimerMilliseconds(session, now), now)} color={accent} />
               <Pressable accessibilityRole="button" accessibilityLabel={breakLabel} disabled={busy || !canBreak} style={[s.secondary, (busy || !canBreak) && { opacity: 0.45 }]} onPress={() => void run(() => session.paused ? controller.resumeStudySession(getFirebaseFirestore(), uid, "mobile") : controller.pauseStudySession(getFirebaseFirestore(), uid, "mobile"))}><Text style={s.secondaryText}>{breakLabel}</Text></Pressable>
             </> : <>

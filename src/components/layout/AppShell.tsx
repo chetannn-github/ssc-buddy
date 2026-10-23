@@ -1164,6 +1164,8 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
   const [taskActivityDates, setTaskActivityDates] = useState<string[]>([]);
   const [xpLevel, setXpLevel] = useState<number | null>(null);
   const [focusXp, setFocusXp] = useState(0);
+  const [focusXpReady, setFocusXpReady] = useState(false);
+  const [xpLevelReady, setXpLevelReady] = useState(false);
   const [profile, setProfile] = useState<PracticeProfile | null | undefined>(() => loadPracticeProfile());
   const [profileHydrated, setProfileHydrated] = useState(false);
   useEffect(() => { applyWebAccent(profile?.accentColor); }, [profile?.accentColor]);
@@ -1174,8 +1176,18 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
   const authUser = useAuthUser();
   useEffect(() => {
     setFocusXp(0);
-    if (!authUser) return;
-    return watchStudyFocusDays(getFirebaseFirestore(), authUser.uid, days => setFocusXp(focusRewardTotal(Object.fromEntries(Object.entries(days).map(([date, value]) => [date, value.totalMilliseconds])))), () => {});
+    setFocusXpReady(false);
+    setXpLevelReady(false);
+    if (!authUser) { setFocusXpReady(true); return; }
+    return watchStudyFocusDays(
+      getFirebaseFirestore(),
+      authUser.uid,
+      days => {
+        setFocusXp(focusRewardTotal(Object.fromEntries(Object.entries(days).map(([date, value]) => [date, value.totalMilliseconds]))));
+        setFocusXpReady(true);
+      },
+      () => setFocusXpReady(true),
+    );
   }, [authUser?.uid]);
   useEffect(() => {
     if (!profileHydrated || !profile?.avatar || !authUser) return;
@@ -1243,6 +1255,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
       const tasks = loadDailyTasks();
       setTaskActivityDates(tasks.filter((task) => task.completed).map((task) => (task.completedAt ?? task.date).slice(0, 10)));
       setXpLevel(getXpSummary(tasks, focusXp).level);
+      setXpLevelReady(focusXpReady);
       setStreakReady(true);
     };
     refresh();
@@ -1256,7 +1269,7 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
       window.removeEventListener("ssc-daily-tasks-updated", refresh);
       stopPracticeObserver();
     };
-  }, [focusXp]);
+  }, [focusXp, focusXpReady]);
 
   useEffect(() => {
     const refresh = () => setProfile(loadPracticeProfile());
@@ -1333,11 +1346,11 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
   }, [currentStreak, streakReady]);
 
   useEffect(() => {
-    if (xpLevel === null) return;
+    if (xpLevel === null || !xpLevelReady) return;
     if (previousXpLevel.current === null) { previousXpLevel.current = xpLevel; return; }
     if (xpLevel > previousXpLevel.current) setCelebratedLevel(xpLevel);
     previousXpLevel.current = xpLevel;
-  }, [xpLevel]);
+  }, [xpLevel, xpLevelReady]);
 
   return (
     <div className="flex min-h-screen w-full flex-col bg-[#121212] text-zinc-100">

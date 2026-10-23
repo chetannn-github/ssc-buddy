@@ -20,6 +20,7 @@ export function validSession(session, time = Date.now()) {
 }
 export function normalizeWebsite(value) { return splitSelection([String(value).trim()]).domains[0] ?? (() => { throw Error('Enter a website domain.'); })(); }
 export function editWebsites(control, value, remove = false, time = Date.now()) {
+  control = { ...control, session: control.session ? effectiveStudySession(control.session, time) : null };
   const text = String(value).trim();
   const item = websiteDomain(text);
   const active = control.session && (control.session.paused || control.session.endsAt > time);
@@ -30,6 +31,7 @@ export function editWebsites(control, value, remove = false, time = Date.now()) 
   return { ...control, version: 1, revision: crypto.randomUUID(), session: active ? { ...control.session, domains } : null, allowedDomains: domains, source: 'extension' };
 }
 export function startControl(control, minutes, time = Date.now()) {
+  control = { ...control, session: control.session ? effectiveStudySession(control.session, time) : null };
   if (!Number.isInteger(minutes) || minutes < 1 || minutes > 720) throw Error('Choose 1 minute to 12 hours.');
   if (control.session && (control.session.paused || control.session.endsAt > time)) throw Error('Your session is already running.');
   const { domains } = splitSelection((control.allowedDomains ?? []).slice(0, MAX_STUDY_WEBSITES));

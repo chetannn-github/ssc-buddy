@@ -73,7 +73,7 @@ test('offline overlay break replay preserves restrictions, remaining time and re
   const total = [...documents].filter(([key]) => key.includes('/studyFocusDays/')).reduce((sum, [, day]) => sum + day.totalMilliseconds, 0);
   assert.equal(total, 180000, 'three minutes of focus, excluding breaks');
 });
-test('repeated breaks preserve native app allowance identity while counting separate focus segments', async () => {
+test('legacy repeated pauses preserve native app allowance identity while counting separate focus segments', async () => {
   const documents = new Map();
   const api = {
     doc: (_db, ...parts) => parts.join('/'), collection: () => '', onSnapshot: () => () => {}, serverTimestamp: () => null,
@@ -82,6 +82,8 @@ test('repeated breaks preserve native app allowance identity while counting sepa
   const controller = createStudyController(api);
   const ref = 'users/student/studyLock/current';
   await controller.startStudySession({}, 'student', 25, ['example.org']);
+  delete documents.get(ref).session.breakLimit;
+  delete documents.get(ref).session.breaksTaken;
   const originalId = documents.get(ref).session.id;
   for (let i = 0; i < 2; i++) {
     await controller.pauseStudySession({}, 'student');
@@ -131,14 +133,15 @@ test('web and mobile share one session and preserve its active websites and dead
   const appOnly = await mobile.startStudySession({}, 'app-only', 15, [], 'mobile');
   assert.deepEqual(appOnly.domains, []);
   assert.equal(appOnly.endsAt - appOnly.startedAt, 15 * 60000);
-  await mobile.pauseStudySession({}, 'app-only', 'mobile');
-  await mobile.resumeStudySession({}, 'app-only', 'mobile');
+  await assert.rejects(() => mobile.pauseStudySession({}, 'app-only', 'mobile'), /No breaks/);
   assert.deepEqual(documents.get('users/app-only/studyLock/current').session.domains, []);
   await assert.rejects(() => web.startStudySession({}, 'web-empty', 15, [], 'web'), /websites/);
   for (const limit of [0, 1, 2]) {
     const uid = `app-limit-${limit}`;
     const selected = await mobile.startStudySession({}, uid, 15, [], 'mobile', limit);
     assert.equal(selected.appLimit, limit);
+    delete documents.get(`users/${uid}/studyLock/current`).session.breakLimit;
+    delete documents.get(`users/${uid}/studyLock/current`).session.breaksTaken;
     await mobile.pauseStudySession({}, uid, 'mobile');
     await mobile.resumeStudySession({}, uid, 'mobile');
     const resumed = documents.get(`users/${uid}/studyLock/current`).session;

@@ -763,8 +763,8 @@ export function ProfileScreen({
                 </View>}
                 <View style={styles.trackerGrid}>
                   <Stat lastRow label="Study time" value={formatMinutes(filteredSummary.minutes)} />
-                  <Stat lastRow label="Tasks completed" value={profileTrackerVisible ? `${filteredSummary.done}/${filteredSummary.total}` : String(filteredSummary.done)} />
-                  <Stat lastColumn lastRow label={profileTrackerVisible ? "Focus time" : "Incomplete tasks"} value={profileTrackerVisible ? focusData.text : String(filteredSummary.total - filteredSummary.done)} />
+                  <Stat lastRow label="Tasks completed" value={`${filteredSummary.done}/${filteredSummary.total}`} />
+                  <Stat lastColumn lastRow label="Focus time" value={focusData.text} />
                 </View>
               </>
             )}
