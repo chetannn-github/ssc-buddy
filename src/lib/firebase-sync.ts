@@ -1,5 +1,8 @@
 import { initializeApp, type FirebaseApp } from "firebase/app";
+import { profileDataSource } from "../../shared/profile-data-source";
 import { appendRecallQuestionSnapshots, type RecallQuestionInput } from "../../mobile-tasks/src/domain/quick-recall-solutions";
+import { createInFlightLoader, createOrderedPublisher, learningPatchUnchanged, mergePatchUnchanged } from "../../mobile-tasks/src/domain/practice-sync-policy";
+import { practiceSnapshots, type PracticeCollectionSnapshot } from "../../mobile-tasks/src/domain/practice-live-source";
 import {
   getAuth,
   onAuthStateChanged,
@@ -109,7 +112,8 @@ export async function writeQuestionLearning(user: User, value: Record<string, un
         lastOutcome: localIsNewer ? local["lastOutcome"] : cloud["lastOutcome"],
       };
     });
-    transaction.set(reference, { ...remote, ...value, stats, updatedAt: serverTimestamp() }, { merge: true });
+    if (!learningPatchUnchanged(remote, value, stats))
+      transaction.set(reference, { ...remote, ...value, stats, updatedAt: serverTimestamp() }, { merge: true });
   });
 }
 
@@ -121,7 +125,11 @@ export type QuickRecallSeed = {
 };
 
 /** Uses the exact seed sources used by the Windows and Android Quick Recall widgets. */
-export async function loadQuickRecallSeed(user: User): Promise<QuickRecallSeed> {
+const seedLoads = createInFlightLoader<Awaited<ReturnType<typeof readQuickRecallSeed>>>();
+export function loadQuickRecallSeed(user: User) {
+  return seedLoads(user.uid, () => readQuickRecallSeed(user));
+}
+async function readQuickRecallSeed(user: User): Promise<QuickRecallSeed> {
   const database = getFirebaseFirestore();
   const [subjects, attempts, favourites, learning] = await Promise.all([
     getDocs(collection(database, "users", user.uid, "practiceSubjects")),
@@ -145,6 +153,10 @@ export async function loadQuickRecallSeed(user: User): Promise<QuickRecallSeed> 
  */
 export function watchQuickRecallSeed(user: User, callback: (seed: QuickRecallSeed) => void): Unsubscribe {
   const database = getFirebaseFirestore();
+  const watchCollection = (name: string, callback: (snapshot: PracticeCollectionSnapshot) => void) =>
+    practiceSnapshots(database, JSON.stringify([user.uid, name]),
+      (next, error) => onSnapshot(collection(database, "users", user.uid, name), { includeMetadataChanges: name === "practiceSubjects" }, next, error),
+      callback, () => console.warn("Could not load recall data."));
   let subjects: Array<Record<string, unknown>> = [];
   let attempts: Array<Record<string, unknown>> = [];
   let favouriteQuestionIds: string[] = [];
@@ -158,15 +170,15 @@ export function watchQuickRecallSeed(user: User, callback: (seed: QuickRecallSee
       callback({ subjects, attempts, favouriteQuestionIds, learningStats });
     });
   };
-  const stopSubjects = onSnapshot(collection(database, "users", user.uid, "practiceSubjects"), (snapshot) => {
+  const stopSubjects = watchCollection("practiceSubjects", (snapshot) => {
     subjects = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
     emit();
   });
-  const stopAttempts = onSnapshot(collection(database, "users", user.uid, "practiceAttempts"), (snapshot) => {
+  const stopAttempts = watchCollection("practiceAttempts", (snapshot) => {
     attempts = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
     emit();
   });
-  const stopFavourites = onSnapshot(collection(database, "users", user.uid, "practiceFavourites"), (snapshot) => {
+  const stopFavourites = watchCollection("practiceFavourites", (snapshot) => {
     favouriteQuestionIds = snapshot.docs.map((item) => String(item.data()["id"] ?? item.id));
     emit();
   });
@@ -376,7 +388,7 @@ export function watchCloudPreferences(user: User, callback: (value: Record<strin
 
 export async function readCloudProfile(user: User) {
   const { db: dbValue } = services();
-  const data = (await getDoc(profileDoc(dbValue, user.uid))).data();
+  const data = (await profileDataSource({ collection, doc, onSnapshot }).readDocument(dbValue, ["users", user.uid, "profile", "current"], getDoc)).data();
   return data ?? null;
 }
 
@@ -388,7 +400,7 @@ export async function patchCloudProfile(user: User, fields: Record<string, unkno
 
 export function watchCloudProfile(user: User, callback: (profile: Record<string, unknown> | null) => void) {
   const { db: dbValue } = services();
-  return onSnapshot(profileDoc(dbValue, user.uid), (snapshot) => callback(snapshot.data() ?? null));
+  return profileDataSource({ collection, doc, onSnapshot }).watchDocument(dbValue, ["users", user.uid, "profile", "current"], (snapshot) => callback(snapshot.data() ?? null));
 }
 
 const USERNAME_PATTERN = /^[a-z0-9._]{3,24}$/;
@@ -449,7 +461,7 @@ export async function readPublicProfile(value: string): Promise<PublicProfile | 
   const username = normalizeUsername(value.replace(/^@/, ""));
   if (usernameValidationMessage(username)) return null;
   const { db: dbValue } = services();
-  const data = (await getDoc(publicProfileDoc(dbValue, username))).data();
+  const data = (await profileDataSource({ collection, doc, onSnapshot }).readDocument(dbValue, ["publicProfiles", username], getDoc)).data();
   if (!data || typeof data["uid"] !== "string" || typeof data["name"] !== "string") return null;
   return {
     uid: data["uid"], username,
@@ -473,6 +485,7 @@ export async function readPublicProfile(value: string): Promise<PublicProfile | 
 }
 
 /** Publishes only daily activity totals needed for a public heatmap. */
+const publicActivitySaves = createOrderedPublisher();
 export async function savePublicProfileActivity(
   user: User,
   profile: Record<string, unknown>,
@@ -489,11 +502,21 @@ export async function savePublicProfileActivity(
     ),
   );
   const { db: dbValue } = services();
-  await setDoc(
-    publicProfileDoc(dbValue, username),
-    { ...publicProfileFields(user, username, profile), activity: sanitizedActivity, dashboard, updatedAt: serverTimestamp() },
-    { merge: true },
-  );
+  const reference = publicProfileDoc(dbValue, username);
+  const payload = { ...publicProfileFields(user, username, profile), activity: sanitizedActivity, dashboard };
+  return publicActivitySaves(JSON.stringify([user.uid, username]), JSON.stringify(payload), async () => {
+    try {
+      await runTransaction(dbValue, async transaction => {
+        const current = await transaction.get(reference);
+        if (!mergePatchUnchanged(current.data() ?? {}, payload))
+          transaction.set(reference, { ...payload, updatedAt: serverTimestamp() }, { merge: true });
+      });
+    } catch {
+      // Transactions cannot queue offline. Retain the original setDoc delivery
+      // path on failure, so an offline update can still be replayed by the SDK.
+      await setDoc(reference, { ...payload, updatedAt: serverTimestamp() }, { merge: true });
+    }
+  });
 }
 
 export async function checkUsernameAvailability(user: User, value: string) {
@@ -526,8 +549,10 @@ export async function saveProfileWithUsername(user: User, fields: Record<string,
     ]);
     const claimedBy = typeof claimed.data()?.["uid"] === "string" ? claimed.data()!["uid"] : "";
     if (claimed.exists() && claimedBy !== user.uid) throw new Error("This username is already taken.");
-    transaction.set(nextUsernameRef, { uid: user.uid, username, updatedAt: serverTimestamp() }, { merge: true });
-    transaction.set(profileRef, { ...fields, username, updatedAt: serverTimestamp() }, { merge: true });
+    if (!claimed.exists() || claimed.data()?.["username"] !== username)
+      transaction.set(nextUsernameRef, { uid: user.uid, username, updatedAt: serverTimestamp() }, { merge: true });
+    if (Object.entries({ ...fields, username }).some(([key, value]) => currentProfile.data()?.[key] !== value))
+      transaction.set(profileRef, { ...fields, username, updatedAt: serverTimestamp() }, { merge: true });
     transaction.set(nextPublicProfileRef, { ...publicProfileFields(user, username, fields), updatedAt: serverTimestamp() }, { merge: true });
     if (previousUsernameRef && previousClaim?.data()?.["uid"] === user.uid) transaction.delete(previousUsernameRef);
     if (previousPublicProfileRef) transaction.delete(previousPublicProfileRef);

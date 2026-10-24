@@ -43,11 +43,11 @@ export function DeviceFocusSetup() {
 }
 
 const styles = StyleSheet.create({
-  card: { marginVertical: 12, borderRadius: 18, backgroundColor: "#191919", overflow: "hidden" },
-  row: { minHeight: 76, flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 14 },
-  copy: { flex: 1, gap: 4 },
-  title: { color: "#f5f5f5", fontSize: 14, fontWeight: "600" },
-  subtitle: { color: "#929292", fontSize: 12 },
+  card: { marginVertical: 8, borderRadius: 14, backgroundColor: "#191919", overflow: "hidden" },
+  row: { minHeight: 60, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 12, paddingVertical: 10 },
+  copy: { flex: 1, gap: 2 },
+  title: { color: "#f5f5f5", fontSize: 13, fontWeight: "600" },
+  subtitle: { color: "#929292", fontSize: 11 },
   action: { fontSize: 12, fontWeight: "600" },
-  error: { color: "#ff8495", fontSize: 12, paddingHorizontal: 16, paddingBottom: 14 },
+  error: { color: "#ff8495", fontSize: 11, paddingHorizontal: 12, paddingBottom: 10 },
 });

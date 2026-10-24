@@ -27,7 +27,7 @@ export function PinnedHabitWindow({ pin }: { pin: DesktopHabitPin }) {
     return () => window.removeEventListener("resize", resize);
   }, [checklist]);
   const today = useHabitToday();
-  const api = useHabits(user?.uid === pin.uid ? user.uid : undefined);
+  const api = useHabits(user?.uid === pin.uid ? user.uid : undefined, pin.habitId);
   const habit = api.habits.find(h => h.id === pin.habitId);
   const checklistCount = habit ? normalizeHabitSettings(habit.settings).checklist.length : 0;
   useEffect(() => {

@@ -2,10 +2,14 @@
 import { StudyLock, controller as focusReader } from "../components/StudyLock";
 import { PublicFocusTime } from "../components/PublicFocusTime";
 import { useProfileFocusData } from "../../../shared/use-profile-focus";
+import { profileTrackerVisibility } from "../../../shared/profile-tracker-visibility";
 import { getFirebaseFirestore } from "../lib/firebase";
 import { DestructiveDialog } from "../components/DestructiveDialog";
 import { createThemedStyles, setAppAccent, useAppAccent } from "../theme";
-import { APP_ACCENTS, accentInk, type AppAccent } from "../domain/app-accent";
+import { type AppAccent } from "../domain/app-accent";
+import { AccentPicker } from "../components/AccentPicker";
+import { ConsistencyCard } from "../components/ConsistencyCard";
+import { MedalsCard } from "../components/MedalsCard";
 import { DropdownChevron } from "../components/DropdownChevron";
 import { NumberFlow } from "number-flow-react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -229,6 +233,8 @@ export function ProfileScreen({
     profileSettings?.practiceSessionEnabled !== false,
   );
   const [profileSettingsOpen, setProfileSettingsOpen] = useState(false);
+  const [consistencyOpen,setConsistencyOpen]=useState(false);
+  const [medalsOpen, setMedalsOpen] = useState(false);
   const appAccent = useAppAccent();
   const [savingAccent, setSavingAccent] = useState(false);
   const [accentSaveError, setAccentSaveError] = useState("");
@@ -236,7 +242,8 @@ export function ProfileScreen({
     profileSettings?.trackProgressEnabled !== false,
   );
   const [showTrackerOnProfile, setShowTrackerOnProfile] = useState(profileSettings?.showTrackerOnProfile !== false);
-  const profileTrackerVisible = trackProgressEnabled && showTrackerOnProfile;
+  const trackerVisibility=profileTrackerVisibility(trackProgressEnabled,showTrackerOnProfile);
+  const profileTrackerVisible = trackerVisibility.details;
   const [timersEnabled, setTimersEnabled] = useState(profileSettings?.timersEnabled !== false);
   const [habitsEnabled, setHabitsEnabled] = useState(profileSettings?.habitsEnabled !== false);
   const [randomQuotesEnabled, setRandomQuotesEnabled] = useState(profileSettings?.randomQuotesEnabled !== false);
@@ -248,6 +255,7 @@ export function ProfileScreen({
     : "";
   const [range, setRange] = useState<Range>("week");
   const focusData = useProfileFocusData(getFirebaseFirestore, focusReader, readOnly ? publicUid : user?.uid, readOnly ? profileSettings?.username : undefined, readOnly, date => withinRange(date, range));
+  useEffect(() => { if (!focusData.canLogout) setConfirmLogout(false); }, [focusData.canLogout]);
   const xpSummary = useMemo(() => getXpSummary(tasks, focusData.totalPoints), [tasks, focusData.totalPoints]);
   const xpTimelineStart = Math.max(0, xpSummary.level - 3);
   const xpTimelineLevels = Array.from({ length: 6 }, (_, index) => xpTimelineStart + index);
@@ -577,6 +585,8 @@ export function ProfileScreen({
   }, [rangeOpen, rangeMenuProgress, rangeMenuVisible]);
   return (
     <View style={styles.page}>
+      <ConsistencyCard visible={consistencyOpen} streak={streak} onClose={()=>setConsistencyOpen(false)}/>
+      <MedalsCard visible={medalsOpen} counts={medalCounts} onClose={() => setMedalsOpen(false)} />
       <View style={styles.profileTop}>
         <View style={styles.profileRow}>
           {readOnly && <Pressable accessibilityRole="button" accessibilityLabel="Back" hitSlop={8} onPress={onBack} style={styles.publicBackRow}>
@@ -584,13 +594,13 @@ export function ProfileScreen({
           </Pressable>}
           <View style={styles.profileTopActions}>
 
-          <View
+          <Pressable accessibilityRole="button" onPress={()=>setConsistencyOpen(true)}
             accessibilityLabel={`Practice streak: ${streak} days`}
             style={[styles.profileStreak, { position: "relative", top: undefined, right: undefined }, streak > 0 && styles.profileStreakActive]}
           >
             {streak > 0 ? <StreakFlame streak={streak} /> : <MaterialCommunityIcons name="fire" size={15} color="#a1a1aa" />}
             <ProfileNumber value={streak} style={[styles.profileStreakText, streak > 0 && styles.profileStreakTextActive]} />
-          </View>
+          </Pressable>
           {!readOnly && <Pressable accessibilityRole="button" accessibilityLabel="Profile settings"
             hitSlop={6} style={styles.profileSettingsAction}
             onPress={() => {
@@ -626,17 +636,19 @@ export function ProfileScreen({
               </Text>
 
             </View>
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginVertical: 4 }}>
+            <Pressable accessibilityRole="button" accessibilityLabel="View weekly medals" hitSlop={8} onPress={() => setMedalsOpen(true)} style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginVertical: 4 }}>
               {(["gold", "silver", "bronze"] as const).map((medal, index) => (
                 <View key={medal} accessibilityLabel={`${medal} medals: ${medalCounts[medal]}`} style={{ flexDirection: "row", alignItems: "center", gap: 3, borderRadius: 12, borderWidth: 1, borderColor: "#383838", backgroundColor: "#242424", paddingHorizontal: 6, paddingVertical: 3 }}>
                   <Image source={rankMedals[index]} style={{ width: 17, height: 17, resizeMode: "contain" }} />
                   <ProfileNumber value={medalCounts[medal]} prefix="×" style={{ color: "#e4e4e7", fontSize: 10, fontWeight: "800" }} />
                 </View>
               ))}
-            </View>
-            <Pressable accessibilityRole="button" accessibilityLabel="View XP level roadmap" style={styles.xpBlock} onPress={() => setXpTimelineOpen(true)}>
+            </Pressable>
+            <Pressable accessibilityRole="button" accessibilityLabel="View XP level roadmap" disabled={!focusData.ready} style={styles.xpBlock} onPress={() => setXpTimelineOpen(true)}>
+              {focusData.ready ? <>
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", flexWrap: "wrap", gap: 3 }}><Text style={styles.xpText}>Lv.</Text><ProfileNumber value={xpSummary.level} style={styles.xpText} /><Text style={styles.xpText}>· {levelName(xpSummary.level)} ·</Text><ProfileNumber value={xpSummary.xp} prefix={xpSummary.xp > 0 ? "+" : ""} suffix=" XP" style={[styles.xpText, xpSummary.xp < 0 && styles.xpNegative]} /></View>
               {xpSummary.level > 0 && <ProfileXpBar progress={xpSummary.progress} />}
+              </> : <Text accessibilityLabel="Loading XP and level" style={styles.xpText}>—</Text>}
             </Pressable>
           </View>
         </View>
@@ -674,7 +686,7 @@ export function ProfileScreen({
           )}
           <View style={[styles.cardHeader, { elevation: 31 }]}>
             <Text style={styles.cardEyebrow}>
-              {practiceSessionEnabled ? "PRACTICE" : profileTrackerVisible ? "STUDY TRACKER" : "TASKS"}
+              {practiceSessionEnabled ? "PRACTICE" : trackerVisibility.summary ? "STUDY TRACKER" : "TASKS"}
             </Text>
             <View style={[styles.rangeWrap, { elevation: 40 }]}>
               <Pressable style={styles.rangeButton} onPress={() => setRangeOpen((value) => !value)}>
@@ -743,10 +755,10 @@ export function ProfileScreen({
                 <Stat columns={2} lastRow label="Wrong" value={String(practiceWrong)} />
               </View>
             )}
-            {practiceSessionEnabled && profileTrackerVisible && (
+            {practiceSessionEnabled && trackerVisibility.summary && (
               <Text style={[styles.cardEyebrow, styles.trackerEyebrow]}>STUDY TRACKER</Text>
             )}
-            {practiceSessionEnabled && profileTrackerVisible ? (
+            {practiceSessionEnabled && trackerVisibility.summary ? (
               <View style={styles.trackerGrid}>
                 <Stat label="Lectures" value={String(trackerLectures)} />
                 <Stat label="Revisions" value={String(trackerRevisions)} />
@@ -757,7 +769,7 @@ export function ProfileScreen({
               </View>
             ) : (
               <>
-                {profileTrackerVisible && <View style={styles.trackerGrid}>
+                {trackerVisibility.summary && <View style={styles.trackerGrid}>
                   <Stat lastRow label="Lectures" value={String(trackerLectures)} />
                   <Stat lastRow label="Revisions" value={String(trackerRevisions)} />
                   <Stat lastColumn lastRow label="Mock tests" value={String(loggedMocks)} />
@@ -824,11 +836,12 @@ export function ProfileScreen({
             </Pressable>
           </Pressable>
         </Modal>
-        <DestructiveDialog visible={confirmLogout} title="Are you sure you want to sign out?" confirmLabel="Yes, sign out" onCancel={() => setConfirmLogout(false)} onConfirm={onLogout} />
+        <DestructiveDialog visible={confirmLogout && focusData.canLogout} title="Are you sure you want to sign out?" confirmLabel="Yes, sign out" onCancel={() => setConfirmLogout(false)} onConfirm={() => { if (focusData.canLogout) onLogout(); }} />
         <Modal
           transparent
           visible={editing}
           animationType="fade"
+          statusBarTranslucent
           onRequestClose={() => !savingProfile && !isInitialProfileSetup && setEditing(false)}
         >
           <KeyboardAvoidingView
@@ -844,7 +857,7 @@ export function ProfileScreen({
                 <Text style={styles.editTitle}>{isInitialProfileSetup ? "Setup your profile" : "Edit your profile"}</Text>
                 <View style={styles.editHeaderActions}>
                   <Pressable hitSlop={9} onPress={() => setProfileSettingsOpen((open) => !open)} style={styles.settingsButton}><MaterialCommunityIcons name="cog-outline" size={19} color={colors.muted} /></Pressable>
-                  <Pressable accessibilityLabel="Log out" hitSlop={9} onPress={() => { setEditing(false); setConfirmLogout(true); }} style={styles.settingsButton}><MaterialCommunityIcons name="logout" size={18} color={colors.muted} /></Pressable>
+                  {focusData.canLogout && <Pressable accessibilityLabel="Log out" hitSlop={9} onPress={() => { setEditing(false); setConfirmLogout(true); }} style={styles.settingsButton}><MaterialCommunityIcons name="logout" size={18} color={colors.muted} /></Pressable>}
                 </View>
               </View>
               {profileSettingsOpen && (
@@ -895,7 +908,7 @@ export function ProfileScreen({
                     {savingFeature === "track" ? <ActivityIndicator size="small" color={colors.accent} /> : <View style={[styles.featureSwitch, trackProgressEnabled && styles.featureSwitchOn]}><View style={[styles.featureKnob, trackProgressEnabled && styles.featureKnobOn]} /></View>}
                   </Pressable>
                   <Pressable accessibilityRole="switch" accessibilityState={{ checked: showTrackerOnProfile }} disabled={savingFeature !== null || savingAccent} onPress={() => void saveFeature("profileTracker")} style={[styles.featureToggle, styles.settingsToggleRow, styles.settingsToggleDivider]}>
-                    <View style={styles.featureToggleContent}><Text style={styles.featureToggleTitle}>Show tracker on profile</Text><Text style={styles.featureToggleCopy}>Display Study Tracker statistics and progress on your profile.</Text></View>
+                    <View style={styles.featureToggleContent}><Text style={styles.featureToggleTitle}>Show tracker on profile</Text><Text style={styles.featureToggleCopy}>Show detailed syllabus, revision and mock progress cards below.</Text></View>
                     {savingFeature === "profileTracker" ? <ActivityIndicator size="small" color={colors.accent} /> : <View style={[styles.featureSwitch, showTrackerOnProfile && styles.featureSwitchOn]}><View style={[styles.featureKnob, showTrackerOnProfile && styles.featureKnobOn]} /></View>}
                   </Pressable>
                   <Pressable accessibilityRole="switch" accessibilityState={{ checked: timersEnabled }} disabled={savingFeature !== null || savingAccent} onPress={() => void saveFeature("timers")} style={[styles.featureToggle, styles.settingsToggleRow, styles.settingsToggleDivider]}>
@@ -917,18 +930,7 @@ export function ProfileScreen({
                       {savingAccent && <ActivityIndicator size="small" color={colors.accent} />}
                     </View>
                     <Text style={styles.featureToggleCopy}>Choose a color for buttons and selected controls.</Text>
-                    <NativeScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator={false}
-                      style={{ marginTop: 14 }} contentContainerStyle={styles.accentChoices}>
-                      {APP_ACCENTS.map((option) => <Pressable key={option.color}
-                        accessibilityRole="radio" accessibilityLabel={option.name + " accent"}
-                        accessibilityState={{ selected: appAccent === option.color, disabled: savingAccent || savingFeature !== null }}
-                        disabled={savingAccent || savingFeature !== null} onPress={() => void chooseAccent(option.color)}
-                        style={[styles.accentChoice, appAccent === option.color && { borderColor: colors.text }]}>
-                        <View style={[styles.accentSwatch, { backgroundColor: option.color }]}>
-                          {appAccent === option.color && <MaterialCommunityIcons name="check-bold" size={16} color={accentInk(option.color)} />}
-                        </View>
-                      </Pressable>)}
-                    </NativeScrollView>
+                    <AccentPicker value={appAccent} disabled={savingAccent || savingFeature !== null} onChange={value=>void chooseAccent(value)}/>
                     {!!accentSaveError && <Text style={{ color: "#fca5a5", fontSize: 11 }}>{accentSaveError}</Text>}
                   </View>
                   </NativeScrollView>
@@ -1034,7 +1036,7 @@ export function ProfileScreen({
           </KeyboardAvoidingView>
         </Modal>
       </ScrollView>
-      <Modal transparent visible={xpTimelineOpen} animationType="fade" statusBarTranslucent onRequestClose={() => setXpTimelineOpen(false)}>
+      <Modal transparent visible={xpTimelineOpen && focusData.ready} animationType="fade" statusBarTranslucent onRequestClose={() => setXpTimelineOpen(false)}>
         <Pressable style={styles.xpDialogBackdrop} onPress={() => setXpTimelineOpen(false)}>
           <Pressable style={styles.xpDialog} onPress={() => undefined}>
             <View style={styles.xpDialogHeader}><View><Text style={styles.xpDialogEyebrow}>YOUR XP PATH</Text><Text style={styles.xpDialogTitle}>Level {xpSummary.level} · {levelName(xpSummary.level)}</Text></View><Pressable hitSlop={10} onPress={() => setXpTimelineOpen(false)}><MaterialCommunityIcons name="close" size={20} color={colors.muted} /></Pressable></View>
@@ -1105,6 +1107,16 @@ const heatmapActivityFromTracker = (tracker?: Record<string, any>): HeatmapTrack
       chapterId: entry.chapterId,
       revisionTypeId: entry.revisionTypeId,
     }));
+
+function activityDotColor(label: string) {
+  const value = label.toLowerCase();
+  if (value === "lecture") return "#38bdf8";
+  if (value.startsWith("revision")) return "#34d399";
+  if (value.includes("mock")) return "#a78bfa";
+  if (value === "quick recall") return "#fbbf24";
+  if (value.includes("task")) return "#fb7185";
+  return "#60a5fa";
+}
 
 function ActivityHeatmap({
   colorTheme,
@@ -1481,7 +1493,7 @@ function ActivityHeatmap({
         ) : activityRows.length ? (
           activityRows.map((row) => (
             <View key={row.id} style={styles.activityRow}>
-              <View style={styles.activityDot} />
+              <View style={[styles.activityDot, { backgroundColor: activityDotColor(row.label) }]} />
               <Text numberOfLines={1} style={styles.activityText}>
                 <Text style={styles.activityTitle}>{row.label}</Text> · {row.detail}
               </Text>

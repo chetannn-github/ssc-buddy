@@ -12,7 +12,9 @@ import {
 } from "@/components/ui/select";
 import { loadSubjects, onPracticePersist, type Exercise, type Subject } from "@/lib/exam";
 
-export const Route = createFileRoute("/question-bank")({ component: QuestionBank });
+export const Route = createFileRoute("/question-bank")({
+  head: () => ({ meta: [{ title: "Question Bank · SSC Buddy" }, { property: "og:title", content: "Question Bank · SSC Buddy" }] }),
+  component: QuestionBank });
 
 type QuestionExercise = { subject: Subject; chapter: string; exercise: Exercise };
 

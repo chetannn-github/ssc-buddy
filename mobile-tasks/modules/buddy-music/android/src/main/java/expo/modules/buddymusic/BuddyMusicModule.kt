@@ -45,6 +45,7 @@ class BuddyMusicModule : Module() {
       BuddyFocusService.ensureRunning(context)
       mapOf("enabled" to BuddyFocusService.enabled(context), "allowedCount" to prefs.getStringSet("allowed", emptySet()).orEmpty().size,
         "usageAccess" to BuddyFocusService.usageEnabled(context), "overlayAccess" to android.provider.Settings.canDrawOverlays(context),
+        "scheduleAlarmAccess" to FocusSchedules.exactAccess(context),
         "serviceConnected" to BuddyFocusService.connected, "lastEventAt" to BuddyFocusService.lastEventAt,
         "sessionActive" to (prefs.getLong("endsAt", 0) > System.currentTimeMillis() || prefs.getBoolean("paused", false)),
         "unlockAt" to prefs.getLong("endsAt", 0),
@@ -75,6 +76,26 @@ class BuddyMusicModule : Module() {
     AsyncFunction("openFocusOverlaySettings") {
       val context = requireNotNull(appContext.reactContext)
       openFocusPermission(context, android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
+    }.runOnQueue(Queues.MAIN)
+    AsyncFunction("configureFocusSchedules") { uid: String, json: String ->
+      FocusSchedules.configure(requireNotNull(appContext.reactContext), uid, json)
+    }.runOnQueue(Queues.MAIN)
+    AsyncFunction("openFocusScheduleSettings") {
+      val context = requireNotNull(appContext.reactContext)
+      if (android.os.Build.VERSION.SDK_INT >= 31) context.startActivity(android.content.Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${context.packageName}")).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+    }.runOnQueue(Queues.MAIN)
+    AsyncFunction("readScheduledFocus") {
+      BuddyFocusService.prefs(requireNotNull(appContext.reactContext)).getString("scheduledFocusJournal", "[]") ?: "[]"
+    }.runOnQueue(Queues.MAIN)
+    AsyncFunction("acknowledgeScheduledFocus") { id: String, uid: String ->
+      val prefs = BuddyFocusService.prefs(requireNotNull(appContext.reactContext))
+      val previous = JSONArray(prefs.getString("scheduledFocusJournal", "[]"))
+      val next = JSONArray()
+      for (index in 0 until previous.length()) {
+        val value = previous.getJSONObject(index)
+        if (value.optString("uid") != uid || value.getJSONObject("session").optString("id") != id) next.put(value)
+      }
+      prefs.edit().putString("scheduledFocusJournal", next.toString()).commit()
     }.runOnQueue(Queues.MAIN)
     AsyncFunction("configureFocusImages") { localFiles: String, manifest: String ->
       FocusImages.configure(requireNotNull(appContext.reactContext), localFiles, manifest)

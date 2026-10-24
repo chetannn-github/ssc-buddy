@@ -1,9 +1,7 @@
 import {
   AlertDialog,
   AlertDialogContent,
-  AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogFooter,
   AlertDialogCancel,
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
@@ -28,6 +26,7 @@ import { cn } from "@/lib/utils";
 type ViewerSearch = { subject: string; chapter: string; exercise: string };
 
 export const Route = createFileRoute("/question-view")({
+  head: () => ({ meta: [{ title: "Question Viewer · SSC Buddy" }, { property: "og:title", content: "Question Viewer · SSC Buddy" }] }),
   validateSearch: (search: Record<string, unknown>): ViewerSearch => ({
     subject: typeof search["subject"] === "string" ? search["subject"] : "",
     chapter: typeof search["chapter"] === "string" ? search["chapter"] : "",
@@ -77,11 +76,11 @@ function QuestionViewer() {
     <AppShell title="Question viewer">
       <div className="exam-dark -mx-4 -my-6 min-h-[calc(100vh-4rem)] bg-[#121212] px-4 py-6 text-zinc-100 sm:-mx-6 sm:px-6">
         {question ? (
-          <div className="mx-auto grid max-w-7xl gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
-            <section className="rounded-xl border border-white/10 bg-[#121212] p-5 sm:p-6">
+          <div className="mx-auto grid w-full min-w-0 max-w-5xl items-start gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
+            <section className="min-w-0 rounded-xl border border-white/10 bg-[#121212] p-5 sm:p-6">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-3">
                 <div>
-                  <p className="text-xs text-zinc-500">
+                  <p className="break-words text-xs text-zinc-500">
                     {subjectName} · {chapterName} · {exerciseName}
                   </p>
                   <h2 className="mt-1 text-lg font-semibold">
@@ -119,7 +118,7 @@ function QuestionViewer() {
                   </Button>
                 </div>
               </div>
-              <p className="mt-5 whitespace-pre-wrap text-sm leading-6 text-zinc-100">
+              <p className="mt-5 whitespace-pre-wrap break-words text-sm leading-6 text-zinc-100">
                 {question.question}
               </p>
               <div className="mt-4 grid gap-2 sm:grid-cols-2">
@@ -200,17 +199,15 @@ function QuestionViewer() {
       >
         <AlertDialogContent
           aria-describedby={undefined}
-          className="max-w-sm border-white/10 bg-[#121212] text-zinc-100"
+          className="w-[calc(100%-3rem)] max-w-sm rounded-[28px] border-0 bg-[#181818] p-7 text-zinc-100 sm:rounded-[28px]"
         >
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete question?</AlertDialogTitle>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="border-white/15 bg-transparent text-zinc-300 hover:bg-white/10 hover:text-white">
+          <AlertDialogTitle className="text-left text-xl font-semibold leading-snug">Are you sure you want to delete this question?</AlertDialogTitle>
+          <div className="mt-8 flex items-center justify-end gap-4">
+            <AlertDialogCancel className="mt-0 border-0 bg-transparent px-2 text-zinc-100 shadow-none hover:bg-white/5">
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
-              className="bg-red-500 text-white hover:bg-red-600"
+              className="bg-transparent px-2 text-[#ff1744] shadow-none hover:bg-white/5"
               onClick={() => {
                 if (!deleting) return;
                 setSubjects(
@@ -219,9 +216,9 @@ function QuestionViewer() {
                 setDeleting(null);
               }}
             >
-              Delete
+              Yes, delete
             </AlertDialogAction>
-          </AlertDialogFooter>
+          </div>
         </AlertDialogContent>
       </AlertDialog>
     </AppShell>
@@ -252,7 +249,7 @@ function AnswerOption({
       aria-pressed={interactive ? selected : undefined}
       onClick={onSelect}
       className={cn(
-        "flex w-full items-center gap-3 rounded-lg border px-4 py-4 text-left text-sm transition-all",
+        "flex w-full min-w-0 items-center gap-3 rounded-lg border px-4 py-4 text-left text-sm transition-all",
         interactive &&
           "active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
         correct
@@ -266,7 +263,7 @@ function AnswerOption({
     >
       <span
         className={cn(
-          "flex h-8 w-8 items-center justify-center rounded-full border text-sm font-semibold",
+          "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-sm font-semibold",
           correct
             ? "border-answered bg-answered text-answered-foreground"
             : wrong
@@ -276,7 +273,7 @@ function AnswerOption({
       >
         {option}
       </span>
-      {text}
+      <span className="min-w-0 whitespace-pre-wrap break-words">{text}</span>
       {correct && (
         <span className="ml-auto rounded-full bg-answered/15 px-2 py-0.5 text-[10px] font-medium text-answered">
           Correct
@@ -309,7 +306,7 @@ function QuestionPalette({
   onSelect: (index: number) => void;
 }) {
   return (
-    <aside className="h-fit rounded-xl border border-white/10 bg-[#121212] p-4 lg:sticky lg:top-24">
+    <aside className="h-fit min-w-0 rounded-xl border border-white/10 bg-[#121212] p-4 lg:sticky lg:top-24">
       <h3 className="text-sm font-semibold">Question palette</h3>
       <p className="mt-1 text-xs text-zinc-500">Gold = favourite</p>
       <div className="mt-4 grid max-h-[420px] grid-cols-5 gap-2 overflow-y-auto pt-2 pr-1 pb-2 pl-2">
@@ -322,7 +319,7 @@ function QuestionPalette({
               key={`${question.number ?? index}-${index}`}
               type="button"
               className={cn(
-                "relative flex h-10 w-10 items-center justify-center rounded-md border text-xs font-semibold transition-all hover:scale-105",
+                "relative flex h-10 w-full min-w-0 max-w-10 items-center justify-center rounded-md border text-xs font-semibold transition-all hover:scale-105",
                 index === current
                   ? isFavorite
                     ? "border-amber-300 bg-amber-400 text-amber-950 ring-2 ring-amber-300 ring-offset-2 ring-offset-[#1b1b1b]"

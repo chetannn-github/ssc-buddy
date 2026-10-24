@@ -1,0 +1,169 @@
+import { act } from "react";
+import { createRoot } from "react-dom/client";
+import { FocusScheduleManager } from "../../shared/FocusScheduleManager";
+import { useFocusScheduleRunner } from "../../shared/use-focus-schedule-runner";
+import * as reader from "../../shared/study-lock";
+import { StudyLockControl } from "../../shared/StudyLockControl";
+import { StudyDurationPicker } from "../../shared/StudyDurationPicker";
+import "../../shared/study-lock.css";
+import { AccentPicker } from "../../src/components/profile/AccentPicker";
+import { useState } from "react";
+import { TimeOfDayField } from "../../shared/TimeOfDayField";
+
+export async function run() {
+  (globalThis as any).IS_REACT_ACT_ENVIRONMENT=true;
+  const originals={now:Date.now,interval:window.setInterval,timeout:window.setTimeout,clearInterval:window.clearInterval,clearTimeout:window.clearTimeout};
+  let now=Date.parse("2026-10-19T15:29:59Z"),serial=0,transactions=0;
+  const timers=new Map<number,{fn:()=>void;at:number;period?:number}>(),listeners:any[]=[];
+  Date.now=()=>now;
+  window.setTimeout=((fn:()=>void,delay=0)=>{timers.set(++serial,{fn,at:now+delay});return serial;}) as any;
+  window.setInterval=((fn:()=>void,delay=0)=>{timers.set(++serial,{fn,at:now+delay,period:delay});return serial;}) as any;
+  window.clearTimeout=window.clearInterval=((id:number)=>timers.delete(id)) as any;
+  const schedule={id:"sleep",name:"Sleep",weekdays:[1,3,5],startMinute:1320,endMinute:360,timeZone:"Asia/Kolkata",appLimit:0,domains:[],enabled:true,createdAt:0};
+  const reading={...schedule,id:"reading",name:"Reading",weekdays:[2,4],startMinute:720,endMinute:780};
+  const path="users/student/studyLock/current",docs=new Map<string,any>([[path,{version:1,revision:"initial",session:null,focusSchedules:[schedule,reading]}]]);
+  const snap=(ref:string)=>({exists:()=>docs.has(ref),data:()=>docs.get(ref),docs:[],metadata:{hasPendingWrites:false}});
+  (globalThis as any).__scheduleSdk={
+    listen:(ref:string,...args:any[])=>{const next=args.find(value=>typeof value==="function"),listener={ref,next,active:true};listeners.push(listener);next(snap(ref));return()=>{listener.active=false;};},
+    transact:async(_:unknown,work:any)=>{transactions++;return work({get:async(ref:string)=>snap(ref),set:(ref:string,value:any)=>{docs.set(ref,value);queueMicrotask(()=>listeners.filter(item=>item.ref===ref&&item.active).forEach(item=>item.next(snap(ref))));}});},
+  };
+  const db={} as any,getDb=()=>db;
+  const container=document.createElement("div");container.style.cssText="width:360px;padding:20px;background:#121212;box-sizing:border-box;color:#eee;font-family:Arial";document.body.append(container);
+  const root=createRoot(container);
+  function View(){useFocusScheduleRunner("student",getDb,reader);return <FocusScheduleManager uid="student" getDatabase={getDb} domains={[]}/>;}
+  const button=(text:string)=>text==="Edit"?container.querySelector<HTMLButtonElement>('[aria-label="Edit Sleep"]')!:[...container.querySelectorAll("button")].find(item=>item.textContent===text)!;
+  const tick=async(time:number)=>act(async()=>{
+    now=time;
+    const due=[...timers].filter(([,timer])=>timer.at<=now);
+    for(const [id,timer]of due){if(timer.period)timer.at=now+timer.period;else timers.delete(id);timer.fn();}
+  });
+  try{
+    await act(async()=>root.render(<View/>));
+    if(transactions)throw Error("scheduler polled DB before a due start");
+    if(container.querySelector<HTMLInputElement>('[aria-label="Schedule name"]')?.value!=="Sleep")throw Error("existing schedule editor did not open immediately");
+    await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Schedule start"]')!.click());
+    if(!container.querySelector('.study-duration-clock')||container.querySelector<HTMLButtonElement>('[aria-label="PM"]')?.getAttribute('aria-pressed')!=='true')throw Error('schedule start did not open a clock with PM');
+    if(container.querySelector<HTMLButtonElement>('[aria-label="Select hours"]')?.textContent!=='10')throw Error('schedule clock did not display 12-hour time');
+    await act(async()=>button('Cancel').click());
+    if(container.querySelector<HTMLButtonElement>('[aria-label="Schedule start"]')?.textContent!=='Start10:00 PM')throw Error('clock cancellation changed schedule start');
+    const previewCards=[...container.querySelectorAll<HTMLButtonElement>('[data-schedule-preview]')];
+    if(previewCards.length)throw Error("temporary preview schedules remain visible");
+    const savedRow=container.querySelector<HTMLElement>('[aria-label="Saved schedules"]')!,addButton=container.querySelector<HTMLElement>('[aria-label="Add focus schedule"]')!;
+    if(savedRow.getBoundingClientRect().top<addButton.getBoundingClientRect().bottom)throw Error("saved schedules should be in the next row");
+    if(savedRow.textContent?.includes('Preview')||savedRow.textContent?.includes(':')||savedRow.querySelectorAll('svg').length!==2)throw Error("saved chips should only show real schedules with names and icons");
+    const initialForm=container.querySelector('.focus-schedule-form'),savedHighlight=savedRow.querySelector<HTMLElement>('.sliding-highlight')!,savedPosition=savedHighlight.style.transform;
+    await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Edit Reading"]')!.click());
+    if(container.querySelector('.focus-schedule-form')!==initialForm||getComputedStyle(initialForm!).animationName!=='none')throw Error("schedule form remounted or faded during selection");
+    if(savedRow.querySelector('.sliding-highlight')!==savedHighlight||savedHighlight.style.transform===savedPosition||!savedHighlight.style.transition.includes('transform'))throw Error("schedule background did not slide between chips");
+    if(transactions)throw Error("switching saved schedules touched the database");
+    await act(async()=>button("Edit").click());
+    if(container.textContent?.includes("Asia/Kolkata")||container.textContent?.includes("No breaks"))throw Error("extra setup descriptions remain visible");
+    if(container.querySelector('[aria-label="Schedule preset"]'))throw Error("preset categories should be removed");
+    const appsGroup=container.querySelector('[aria-label="Extra allowed apps"]')!;
+    await act(async()=>appsGroup.querySelectorAll('button')[2]!.click());
+    if(appsGroup.querySelector('[aria-pressed="true"]')?.textContent!=="2")throw Error("allowed apps switch failed");
+    const weekday=container.querySelector<HTMLButtonElement>('.focus-schedule-days button')!;
+    const before=weekday.getAttribute('aria-pressed');
+    await act(async()=>weekday.click());
+    if(weekday.getAttribute('aria-pressed')===before||getComputedStyle(weekday).transitionDuration==='0s')throw Error("weekday tap animation missing");
+    await act(async()=>weekday.click());
+    const friday=[...container.querySelectorAll<HTMLButtonElement>('.focus-schedule-days button')].find(item=>item.textContent==='Fri')!;
+    await act(async()=>friday.click());await act(async()=>friday.click());
+    const fridayText=document.createRange();fridayText.selectNodeContents(friday);
+    if(fridayText.getClientRects().length!==1||getComputedStyle(friday).whiteSpace!=='nowrap')throw Error("Friday label wraps when selected");
+    if(transactions)throw Error("selection-only changes wrote to DB");
+    if(button("Save schedule").disabled)throw Error("schedule froze before 9 PM");
+    await tick(Date.parse("2026-10-19T15:30:00Z"));
+    if(!button("Save schedule").disabled||!button("Delete").disabled)throw Error("open editor did not freeze at 9 PM");
+    await tick(Date.parse("2026-10-19T16:30:00Z"));
+    const session=docs.get(path).session;
+    if(session?.id!==`schedule-sleep-${now}`||session.endsAt!==Date.parse("2026-10-20T00:30:00Z"))throw Error("schedule did not start with the expected deadline: "+JSON.stringify({session,transactions,crypto:typeof crypto.randomUUID}));
+    if(transactions!==1)throw Error("scheduled start was not idempotent");
+    await tick(now+60000);if(transactions!==1)throw Error("running scheduled session generated extra transactions");
+    await tick(Date.parse("2026-10-20T00:30:00Z"));
+    if(button("Save schedule").disabled||button("Delete").disabled)throw Error("editor remained frozen after the end");
+    await act(async()=>button("Cancel").click());
+    await act(async()=>root.unmount());
+    if(timers.size||listeners.some(item=>item.active))throw Error("scheduler leaked a timer/listener");
+    docs.set(path,{version:1,revision:'empty',session:null,focusSchedules:[]});
+    const panelRoot=createRoot(container);
+    await act(async()=>panelRoot.render(<StudyLockControl uid="student" source="web" getDatabase={getDb}/>));
+    await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Focus Lock"]')!.click());
+    const websites=document.querySelector<HTMLElement>('.study-websites')!;
+    if(getComputedStyle(websites).marginTop!=='18px'||getComputedStyle(websites.querySelector('h3')!).marginBottom!=='4px'||getComputedStyle(websites.querySelector('.study-domain-chips')!).marginTop!=='4px')throw Error('Focus Lock website spacing regressed');
+    if(document.querySelector('[aria-label="Focus schedules"]')===null||document.querySelector('[aria-label="Focus schedules"]')?.closest('.browser-study-heading')===null)throw Error("schedule icon missing from header");
+    if(document.querySelector('.focus-schedules'))throw Error("schedules are still inline in focus setup");
+    await act(async()=>document.querySelector<HTMLButtonElement>('[aria-label="Focus schedules"]')!.click());
+    if(!document.querySelector('.focus-schedules'))throw Error("schedule icon did not open schedules");
+    if(document.querySelector<HTMLInputElement>('[aria-label="Schedule name"]')?.value!=="Sleep")throw Error("empty account did not open a new schedule directly");
+    await act(async()=>[...document.querySelectorAll<HTMLButtonElement>('button')].find(item=>item.textContent==='Cancel')!.click());
+    if(document.querySelector('.focus-schedules')||!document.querySelector('.browser-study-dialog'))throw Error("schedule Cancel did not return to the open Focus Lock setup");
+    await act(async()=>document.querySelector<HTMLButtonElement>('[aria-label="Focus schedules"]')!.click());
+    await act(async()=>[...document.querySelectorAll<HTMLButtonElement>('button')].find(item=>item.textContent==='Save schedule')!.click());
+    if(document.querySelector('.browser-study-dialog'))throw Error("successful schedule save did not close the dialog");
+    await act(async()=>panelRoot.unmount());
+    if(timers.size||listeners.some(item=>item.active))throw Error("focus dialog leaked timers or listeners");
+    const clockRoot=createRoot(container),saved:number[]=[];
+    await act(async()=>clockRoot.render(<StudyDurationPicker minutes={95} onCancel={()=>{}} onConfirm={value=>saved.push(value)}/>));
+    const clockButton=(label:string)=>container.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`)!;
+    const face=()=>container.querySelector<HTMLElement>('.clock-face-motion')!;
+    const stableFace=face(),digitHighlight=container.querySelector<HTMLElement>('.study-duration-digits .sliding-highlight')!,hourPosition=digitHighlight.style.transform;
+    if(face().dataset.clockMode!=='hour')throw Error("clock started on wrong field");
+    await act(async()=>clockButton('2 hours').click());
+    if(face().dataset.clockMode!=='minute'||face()!==stableFace||face().getAnimations().length)throw Error("clock dial blinked during automatic field switch");
+    if(container.querySelector('.study-duration-digits .sliding-highlight')!==digitHighlight||digitHighlight.style.transform===hourPosition||!digitHighlight.style.transition.includes('transform'))throw Error("hour-to-minute background did not slide");
+    await act(async()=>clockButton('10 minutes').click());
+    const hand=container.querySelector<SVGGElement>('[data-clock-hand]')!;
+    if(!hand.style.transition.includes('transform'))throw Error("clock hand rotation is not animated");
+    const finishHand=()=>{getComputedStyle(hand).transform;hand.getAnimations().forEach(animation=>animation.finish());};
+    const handAngle=()=>Number(hand.style.transform.match(/rotate\(([-\d.]+)deg\)/)![1]);
+    finishHand();
+    await act(async()=>clockButton('55 minutes').click());finishHand();const beforeWrap=handAngle();
+    await act(async()=>clockButton('0 minutes').click());
+    if(container.querySelector('[data-clock-hand]')!==hand||Math.abs(handAngle()-beforeWrap)!==30)throw Error("clock hand jumped the long way across 00 or remounted");
+    finishHand();await act(async()=>clockButton('55 minutes').click());
+    if(Math.abs(handAngle()-(beforeWrap+30))!==30)throw Error("reverse clock wrap did not take the shorter arc");
+    finishHand();await act(async()=>clockButton('10 minutes').click());
+    await act(async()=>clockButton('Select hours').click());
+    if(face().dataset.clockMode!=='hour'||face()!==stableFace||face().getAnimations().length||digitHighlight.style.transform!==hourPosition)throw Error("minute-to-hour background did not return without blinking");
+    if(!clockButton('Select hours').style.transition.includes('background-color'))throw Error("clock digit background transition missing");
+    await act(async()=>clockButton('Select minutes').click());
+    if(clockButton('Select hours').textContent!=='02'||clockButton('Select minutes').textContent!=='10')throw Error("switching clock fields changed the selected time");
+    await act(async()=>button('Save').click());
+    if(saved[0]!==130)throw Error("animated clock saved an incorrect duration");
+    const originalMatchMedia=window.matchMedia;
+    try{
+      window.matchMedia=(()=>({matches:true})) as any;
+      await act(async()=>clockButton('Select hours').click());
+      if(face().getAnimations().length||digitHighlight.style.transition!=='none'||hand.style.transition!=='none')throw Error("clock ignored reduced-motion preference");
+    }finally{window.matchMedia=originalMatchMedia;}
+    await act(async()=>clockRoot.unmount());
+    const accentRoot=createRoot(container);
+    function AccentView(){const [value,setValue]=useState('#ffe000');return <AccentPicker value={value} onChange={setValue}/>;}
+    await act(async()=>accentRoot.render(<AccentView/>));
+    const ring=container.querySelector<HTMLElement>('.sliding-highlight')!,firstPosition=ring.style.transform;
+    await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Blue"]')!.click());
+    if(container.querySelector('.sliding-highlight')!==ring||ring.style.transform===firstPosition||ring.style.borderColor!=='rgb(112, 180, 255)'||!ring.style.transition.includes('border-color'))throw Error('accent border did not move and change colour smoothly');
+    await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Green"]')!.click());
+    if(container.querySelector('.sliding-highlight')!==ring||ring.style.borderColor!=='rgb(142, 229, 63)')throw Error('rapid accent switching replaced the selection ring');
+    await act(async()=>accentRoot.unmount());
+    const reminderRoot=createRoot(container),reminders:string[]=[];
+    function ReminderView(){const [value,setValue]=useState('00:05');return <TimeOfDayField value={value} onChange={next=>{setValue(next);reminders.push(next);}}/>;}
+    await act(async()=>reminderRoot.render(<ReminderView/>));
+    await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Reminder time"]')!.click());
+    if(!document.querySelector('.study-duration-clock')||document.querySelector<HTMLButtonElement>('[aria-label="Select hours"]')?.textContent!=='12')throw Error('habit reminder clock missing or midnight displays incorrectly');
+    await act(async()=>document.querySelector<HTMLButtonElement>('[aria-label="PM"]')!.click());
+    await act(async()=>[...document.querySelectorAll<HTMLButtonElement>('.study-duration-actions button')].find(item=>item.textContent==='Save')!.click());
+    if(reminders[0]!=='12:05'||document.querySelector('.study-duration-clock'))throw Error('habit clock PM save/close failed');
+    await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Reminder time"]')!.click());
+    await act(async()=>document.querySelector<HTMLButtonElement>('[aria-label="AM"]')!.click());
+    await act(async()=>[...document.querySelectorAll<HTMLButtonElement>('.study-duration-actions button')].find(item=>item.textContent==='Save')!.click());
+    if(reminders[1]!=='00:05')throw Error('habit clock midnight AM conversion failed');
+    await act(async()=>reminderRoot.unmount());
+    return "sliding schedule/hour-minute backgrounds without remount/fade, fixed selected time, save closes dialog, reduced motion, freeze, cleanup";
+  }finally{
+    Date.now=originals.now;window.setInterval=originals.interval;window.setTimeout=originals.timeout;window.clearInterval=originals.clearInterval;window.clearTimeout=originals.clearTimeout;
+    container.remove();delete (globalThis as any).__scheduleSdk;
+  }
+}
+

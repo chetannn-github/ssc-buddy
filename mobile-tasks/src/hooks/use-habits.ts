@@ -1,4 +1,5 @@
 import { applyHabitPreview } from "../domain/optimistic-habits";
+import { createSharedLiveSource } from "../domain/shared-live-source";
 import { useEffect, useRef, useState } from "react";
 import { AppState } from "react-native";
 import {
@@ -17,6 +18,7 @@ import {
   habitDay,
   normalizeHabit,
   applyHabitAction,
+  habitDayNeedsUpdate,
   type Habit,
   type HabitColor,
   type HabitSettings,
@@ -36,6 +38,8 @@ export function useHabitToday() {
   }, []);
   return today;
 }
+const subscribeHabits = createSharedLiveSource<Habit[]>();
+
 export function useHabits(uid?: string) {
   const [state, setState] = useState<{
     uid: string | undefined;
@@ -74,13 +78,15 @@ export function useHabits(uid?: string) {
     setState({ uid, habits: [], loading: !!uid, error: "" });
     if (!uid) return;
     let active = true;
-    const stop = onSnapshot(
-      collection(getFirebaseFirestore(), "users", uid, "habits"),
-      (snapshot) => {
-        const habits = snapshot.docs
-          .map((item) => normalizeHabit(item.id, item.data()))
-          .filter((item): item is Habit => !!item)
-          .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+    const database = getFirebaseFirestore();
+    const stop = subscribeHabits(database, uid, (next, failed) => {
+      const deliver = (items: { id: string; data: () => Record<string, unknown> }[]) => next(items
+        .map(item => normalizeHabit(item.id, item.data()))
+        .filter((item): item is Habit => !!item)
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)));
+      return onSnapshot(collection(database, "users", uid, "habits"), snapshot => deliver(snapshot.docs), failed);
+    },
+      (habits) => {
         if (active) {
           const visible = habits.map((h) =>
             mutations.current.has(h.id)
@@ -161,7 +167,7 @@ export function useHabits(uid?: string) {
               if (!latest) throw new Error("Habit no longer exists.");
               const next = applyHabitPreview(latest, day, action);
               const result = applyHabitAction(latest, day, action);
-              transaction.update(reference, {
+              if (habitDayNeedsUpdate(latest, day, result)) transaction.update(reference, {
                 ["entries." + day]: result.entry,
                 completedDates: result.completed ? arrayUnion(day) : arrayRemove(day),
               });

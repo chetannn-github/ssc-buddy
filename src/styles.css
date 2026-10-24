@@ -1,7 +1,47 @@
 @import "tailwindcss" source(none);
 @source "../src";
 @source "../tracker/src";
+@source "../shared";
 @import "tw-animate-css";
+
+/* The app navigation and screen controls stay visible while page content scrolls. */
+.web-app-header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  flex-shrink: 0;
+}
+.web-sticky-section {
+  position: sticky;
+  top: calc(4rem + var(--sticky-inset, 0px));
+  z-index: 20;
+  background: #121212;
+}
+.web-sticky-section::before {
+  content: "";
+  position: absolute;
+  inset: auto 0 100%;
+  height: var(--sticky-inset, 0px);
+  background: #121212;
+  pointer-events: none;
+}
+.web-task-controls { --sticky-inset: calc(1.5rem + 1px); }
+.web-habit-controls { --sticky-inset: 1.5rem; }
+.web-history-filters { --sticky-inset: 1.5rem; }
+.web-profile-header { --sticky-inset: 1.25rem; }
+@media (min-width: 640px) {
+  .web-profile-header { --sticky-inset: 1.5rem; }
+}
+
+.habit-editor input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+.habit-editor input[type="number"]::-webkit-inner-spin-button,
+.habit-editor input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
 
 /* Edge/WebView2 renders its own password-reveal glyph. Auth already provides
    a deliberate custom eye control, so keep only that one visible. */

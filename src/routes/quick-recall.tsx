@@ -18,7 +18,9 @@ import { loadQuickRecallSeed, recordQuickRecallAnswer, recordQuickRecallPractice
 
 import { ALL_RECALL_EXERCISES, RECALL_QUESTION_COUNTS, type RecallQuestionCount, filterRecallScope, mergeRecallLearning, selectRecallQuestions } from "../../mobile-tasks/src/domain/recall-selection";
 
-export const Route = createFileRoute("/quick-recall")({ component: QuickRecall });
+export const Route = createFileRoute("/quick-recall")({
+  head: () => ({ meta: [{ title: "Quick Recall · SSC Buddy" }, { property: "og:title", content: "Quick Recall · SSC Buddy" }] }),
+  component: QuickRecall });
 
 type RecallQuestion = McqQuestion & { subject: string; subjectId: string; chapter: string; exerciseId: string; exercise: string };
 type RecallScope = { subjectId: string; chapter: string; exerciseId?: string };

@@ -33,8 +33,9 @@ export function QuestionPalette({
   const scroll = useRef<ScrollView>(null);
   const [viewportWidth, setViewportWidth] = useState(0);
   const align = useCallback((index: number, animated: boolean) => {
-    scroll.current?.scrollTo({ x: questionPaletteOffset(index), y: 0, animated });
-  }, []);
+    if (viewportWidth <= 0) return;
+    scroll.current?.scrollTo({ x: questionPaletteOffset(index, viewportWidth), y: 0, animated });
+  }, [viewportWidth]);
   useEffect(() => {
     align(current, true);
   }, [align, current, count, viewportWidth]);
@@ -42,6 +43,7 @@ export function QuestionPalette({
   return (
     <ScrollView
       ref={scroll}
+      style={styles.spacing}
       horizontal
       directionalLockEnabled
       showsHorizontalScrollIndicator={false}
@@ -72,6 +74,7 @@ export function QuestionPalette({
 }
 
 const styles = createThemedStyles({
+  spacing: { marginTop: 10 },
   row: { flexDirection: "row", alignItems: "center", gap: QUESTION_PALETTE_GAP },
   item: {
     width: QUESTION_PALETTE_ITEM_WIDTH,

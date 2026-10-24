@@ -16,6 +16,7 @@ import {
   View,
 } from "react-native";
 import { collection, doc, onSnapshot } from "firebase/firestore";
+import { profileDataSource } from "../../../shared/profile-data-source";
 import type { User } from "firebase/auth";
 import { getFirebaseFirestore, readPublicProfile, type PublicProfile } from "../lib/firebase";
 import { colors, dailyTaskColors } from "../theme";
@@ -24,7 +25,8 @@ import { avatarAssets, ProfileScreen } from "./ProfileScreen";
 import { ALL_LEADERBOARD_DAYS, leaderboardPeriodStats, leaderboardPeriodTasks } from "../domain/leaderboard-period";
 import { leaderboardWeekLabel, shiftLeaderboardWeek, resolveWeeklyResults } from "../domain/weekly-results";
 import { useLeaderboardWeek } from "../hooks/use-weekly-results";
-import { getXpSummary } from "../domain/xp";
+import { useLeaderboardXp } from "../hooks/use-leaderboard-xp";
+import { formatFocusMinutes } from "../../../shared/study-focus";
 
 const dayKey = (date = new Date()) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -49,11 +51,6 @@ const formatPointValue = (value: unknown) => {
   const points = Number(value) || 0;
   return `${points > 0 ? "+" : points < 0 ? "-" : ""}${Math.abs(points)}`;
 };
-const xpMeta = (entry: { xp?: unknown; level?: unknown }) => {
-  const xp = Number(entry.xp) || 0;
-  return { xp, level: Number.isFinite(Number(entry.level)) ? Number(entry.level) : xp < 0 ? 0 : 1 };
-};
-
 const pointsColor = (points: number) => points > 0 ? "#86efac" : points < 0 ? "#fca5a5" : colors.subdued;
 function RollingLeaderboardNumber({ value, prefix = "", suffix = "", color = colors.text, fontSize = 18 }: { value: number; prefix?: string; suffix?: string; color?: string; fontSize?: number }) {
   return <NumberFlow value={value} prefix={prefix} suffix={suffix} style={{ color, fontSize, fontWeight: "800", fontVariant: ["tabular-nums"] }} />;
@@ -198,40 +195,9 @@ export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { 
   const currentWeek = useLeaderboardWeek();
   const [historyWeek, setHistoryWeek] = useState<string | null>(null);
   const selectedWeek = historyWeek ?? currentWeek;
-  const membersKey = JSON.stringify(rows.map(row => [String(row.uid), String(row.username ?? "")]).sort((a,b) => a[0].localeCompare(b[0])));
-  const [profileTasks, setProfileTasks] = useState<{ key: string; values: Record<string, any[] | null> }>({ key: "", values: {} });
-  const [currentEntries, setCurrentEntries] = useState<{ week: string; values: Record<string, any> }>({ week: "", values: {} });
-  useEffect(() => {
-    if (selectedWeek === currentWeek) return;
-    let active = true;
-    const stop = onSnapshot(collection(getFirebaseFirestore(), "leaderboards", currentWeek, "entries"), snapshot => {
-      if (active) setCurrentEntries({ week: currentWeek, values: Object.fromEntries(snapshot.docs.map(item => [item.id, item.data()])) });
-    }, () => { if (active) setCurrentEntries({ week: currentWeek, values: {} }); });
-    return () => { active = false; stop(); };
-  }, [selectedWeek, currentWeek]);
-  useEffect(() => {
-    let active = true;
-    setProfileTasks({ key: membersKey, values: {} });
-    const stops = (JSON.parse(membersKey) as string[][]).filter(([uid, username]) => uid !== user?.uid && /^[a-z0-9._-]{3,24}$/.test(username!)).map(([uid, username]) => {
-      const update = (tasks: any[] | null) => {
-        if (active) setProfileTasks(previous => ({ key: membersKey, values: { ...(previous.key === membersKey ? previous.values : {}), [uid!]: tasks } }));
-      };
-      return onSnapshot(doc(getFirebaseFirestore(), "publicProfiles", username!), snapshot => {
-        const profile = snapshot.data();
-        update(profile?.uid === uid && Array.isArray(profile?.dashboard?.dailyTasks) ? profile.dashboard.dailyTasks : null);
-      }, () => update(null));
-    });
-    return () => { active = false; stops.forEach(stop => stop()); };
-  }, [membersKey, user?.uid]);
-  const currentXpFor = (row: any) => {
-    if (!row) return null;
-    if (row.focusDays && typeof row.xp === "number") return xpMeta(row);
-    if (row.uid === user?.uid) return getXpSummary(viewerTasks, Number(row.focusXp) || 0);
-    const tasks = profileTasks.key === membersKey ? profileTasks.values[row.uid] : null;
-    if (tasks) return getXpSummary(tasks, Number(row.focusXp) || 0);
-    const current = selectedWeek === currentWeek ? row : currentEntries.week === currentWeek ? currentEntries.values[row.uid] : null;
-    return current && typeof current.xp === "number" && Number.isFinite(current.xp) ? xpMeta(current) : null;
-  };
+  const xpTarget = publicEntry ?? selected;
+  const xpByUser = useLeaderboardXp(xpTarget ? [xpTarget] : rows, selectedWeek, currentWeek, getFirebaseFirestore, user?.uid, viewerTasks);
+  const currentXpFor = (row: any) => row ? xpByUser[String(row.uid)] ?? null : null;
   const selectedXp = currentXpFor(selected);
   const changeWeek = (next: string) => { setSelected(null); setPublicEntry(null); setRows([]); setHistoryWeek(next === currentWeek ? null : next); setSelectedDate(next === currentWeek ? dayKey() : ALL_LEADERBOARD_DAYS); };
   useEffect(() => {
@@ -242,8 +208,8 @@ export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { 
   useEffect(() => {
     setIsSyncing(true);
     setRows([]);
-    return onSnapshot(
-      collection(getFirebaseFirestore(), "leaderboards", selectedWeek, "entries"),
+    return profileDataSource({ collection, doc, onSnapshot }).watchWeek(
+      getFirebaseFirestore(), selectedWeek,
       (snapshot) => {
         setRows(
           resolveWeeklyResults(snapshot.docs.map((doc) => ({ ...doc.data(), uid: doc.id })), selectedWeek),
@@ -281,16 +247,16 @@ export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { 
     const taskList = tasksForDay.length ? (
       tasksForDay.map((task: any, index: number) => {
         const overdue = !task.completed && String(task.date ?? "") < dayKey();
-        const meta = [selectedDate === ALL_LEADERBOARD_DAYS ? dateLabel(task.date) : "", task.subject, task.type, task.minutesSpent ? `${task.minutesSpent}m` : ""]
+        const meta = [selectedDate === ALL_LEADERBOARD_DAYS ? dateLabel(task.date) : "", ...(task.focus ? [formatFocusMinutes(task.minutesSpent)] : [task.subject, task.type, task.minutesSpent ? `${task.minutesSpent}m` : ""])]
           .filter(Boolean)
           .join(" · ");
         return (
           <View key={`${task.name}-${index}`} style={[s.task, index === tasksForDay.length - 1 && s.taskLast]}>
-            <View style={[s.taskCheck, task.completed ? s.taskCheckDone : overdue ? s.taskCheckMissed : s.taskCheckPending]}>
+            {task.focus ? <MaterialCommunityIcons name="timer-outline" size={25} color="#a1a1aa" /> : <View style={[s.taskCheck, task.completed ? s.taskCheckDone : overdue ? s.taskCheckMissed : s.taskCheckPending]}>
               {task.completed ? <MaterialCommunityIcons name="check-bold" size={14} color={dailyTaskColors.ink} /> : overdue ? <MaterialCommunityIcons name="close-thick" size={12} color="#f19a9f" /> : null}
-            </View>
+            </View>}
             <View style={{ flex: 1 }}>
-              <Text style={[s.taskTitle, task.completed && s.taskTitleDone]} numberOfLines={2}>
+              <Text style={[s.taskTitle, task.completed && !task.focus && s.taskTitleDone]} numberOfLines={2}>
                 {task.name}
               </Text>
               {meta ? <Text style={s.taskMeta} numberOfLines={1}>{meta}</Text> : null}
@@ -392,10 +358,10 @@ export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { 
         </View>
       ) : (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.body}>
-          {rows.map((row, index) => {
+          {!!rows.length && <View style={s.peopleGroup}>{rows.map((row, index) => {
             const currentXp = currentXpFor(row);
             return (
-            <View key={row.uid} style={s.row}>
+            <View key={row.uid} style={[s.row, index > 0 && s.personDivider]}>
               <Pressable onPress={() => { setSelected(row); setSelectedDate(selectedWeek === currentWeek ? dayKey() : ALL_LEADERBOARD_DAYS); }} style={s.rankPress}>{index < 3 ? <Image source={medalAssets[index]} style={s.medal} /> : <Text style={s.rank}>#{index + 1}</Text>}</Pressable>
               <Pressable style={s.publicIdentity} onPress={() => { setSelected(row); setSelectedDate(selectedWeek === currentWeek ? dayKey() : ALL_LEADERBOARD_DAYS); }}><View style={s.avatar}>
                 {row.avatar && avatarAssets[row.avatar] ? (
@@ -416,7 +382,7 @@ export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { 
               </View></Pressable>
               <Pressable onPress={() => { setSelected(row); setSelectedDate(selectedWeek === currentWeek ? dayKey() : ALL_LEADERBOARD_DAYS); }}><RollingLeaderboardNumber value={Number(row.points) || 0} prefix={Number(row.points) > 0 ? "+" : ""} suffix=" pts" fontSize={16} color={pointsColor(Number(row.points) || 0)} /></Pressable>
             </View>
-          ); })}
+          ); })}</View>}
           {!rows.length && <Text style={s.empty}>{selectedWeek === currentWeek ? "No activity this week yet." : "No saved results for this week."}</Text>}
         </ScrollView>
       )}
@@ -439,15 +405,13 @@ const s = createThemedStyles({
   body: { padding: 16, gap: 9 },
   sub: { color: colors.subdued, fontSize: 12 },
   you: { color: "#7dd3fc", fontSize: 10, fontWeight: "800" },
+  peopleGroup: { borderRadius: 14, overflow: "hidden", backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  personDivider: { borderTopWidth: 1, borderTopColor: colors.border },
   row: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
     padding: 14,
-    borderRadius: 14,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   rankPress: { width: 30, alignItems: "center" },
   publicIdentity: { flex: 1, flexDirection: "row", alignItems: "center", gap: 12 },

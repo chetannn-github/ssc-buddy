@@ -3,6 +3,14 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 import ts from 'typescript';
+import { profileTrackerVisibility } from '../shared/profile-tracker-visibility.ts';
+
+test('tracker summary follows Study Tracker independently of detailed profile cards',()=>{
+    assert.deepEqual(profileTrackerVisibility(true,true),{summary:true,details:true});
+    assert.deepEqual(profileTrackerVisibility(true,false),{summary:true,details:false});
+    assert.deepEqual(profileTrackerVisibility(false,true),{summary:false,details:false});
+    assert.deepEqual(profileTrackerVisibility(false,false),{summary:false,details:false});
+});
 
 const source = await readFile(new URL('../src/lib/profile.ts', import.meta.url), 'utf8');
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;

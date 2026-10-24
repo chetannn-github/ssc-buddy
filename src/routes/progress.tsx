@@ -28,7 +28,7 @@ type ChartPoint = {
 };
 
 export const Route = createFileRoute("/progress")({
-  head: () => ({ meta: [{ title: "Analysis" }] }),
+  head: () => ({ meta: [{ title: "Analysis · SSC Buddy" }, { property: "og:title", content: "Analysis · SSC Buddy" }] }),
   component: Progress,
 });
 

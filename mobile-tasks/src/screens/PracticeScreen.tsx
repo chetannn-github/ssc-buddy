@@ -1,5 +1,7 @@
 // @ts-nocheck
 import { DestructiveDialog } from "../components/DestructiveDialog";
+import { HISTORY_TIME_RANGES, matchesHistoryTimeRange, type HistoryTimeRange } from "../domain/practice-history-range";
+import { PracticeSubmitSummary } from "../components/PracticeSubmitSummary";
 import { UppercaseTextInput as TextInput } from "../components/UppercaseTextInput";
 import { useAndroidBack } from "../hooks/use-android-back";
 import { ReattemptModeButton } from "../components/ReattemptModeButton";
@@ -310,8 +312,12 @@ export function PracticeScreen({ user, onOpenQuickRecall, focusLocked = false }:
     setBank(next);
     void AsyncStorage.setItem(STORE, JSON.stringify(next.subjects));
     void AsyncStorage.setItem(MARKING, JSON.stringify(next.marking));
+    const markingChanged = previous.marking.positive !== next.marking.positive || previous.marking.negative !== next.marking.negative;
     return user
-      ? syncPracticeEntities(user, "practiceSubjects", toCloudSubjects(previous.subjects) as any, toCloudSubjects(next.subjects) as any)
+      ? Promise.all([
+          syncPracticeEntities(user, "practiceSubjects", toCloudSubjects(previous.subjects) as any, toCloudSubjects(next.subjects) as any),
+          markingChanged ? patchPracticeSettings(user, { marking: next.marking }) : Promise.resolve(),
+        ]).then(() => undefined)
       : Promise.resolve();
   };
   const saveHistory = (next: Record[]) => {
@@ -339,9 +345,11 @@ export function PracticeScreen({ user, onOpenQuickRecall, focusLocked = false }:
       ]);
       if (stopped) return;
       const settings = await readPracticeSettings(user);
+      if (stopped) return;
       if (!settings?.marking || !Number.isFinite(Number((settings.marking as any)?.positive)) || !Number.isFinite(Number((settings.marking as any)?.negative))) {
         await patchPracticeSettings(user, { marking: bankRef.current.marking });
       }
+      if (stopped) return;
       stops.push(
         watchPracticeEntities(user, "practiceSubjects", (items) => {
           const subjects = items.map((item) => mergeQuestionDeletions(item as any, bankRef.current.subjects.find((local) => local.id === item.id)));
@@ -370,7 +378,7 @@ export function PracticeScreen({ user, onOpenQuickRecall, focusLocked = false }:
     if (!chapter) return;
     if (isAllExercises && combinedExercise) {
       setFixed(true); setStart("1");
-      setCount((current) => String(Math.max(1, Math.min(500, combinedExercise.questionCount, Number(current) || 20))));
+      setCount(String(Math.min(500, combinedExercise.questionCount)));
       return;
     }
     if (!chapter.exercises.some((item) => item.id === exerciseId))
@@ -812,6 +820,7 @@ export function PracticeScreen({ user, onOpenQuickRecall, focusLocked = false }:
       <TestScreen
         title={[activeTest?.subject, activeTest?.chapter, activeTest?.exercise].filter(Boolean).join(" · ")}
         seconds={remaining}
+        elapsed={Math.max(0, (activeTest?.duration ?? duration) * 60 - remaining)}
         current={current}
         count={activeTest?.answerKey?.length ?? questionCount}
         questions={activeTest?.questions}
@@ -876,10 +885,19 @@ export function PracticeScreen({ user, onOpenQuickRecall, focusLocked = false }:
         />
         <SetupSelect
           label="Exercise"
-          value={exercise?.name ?? "Select exercise"}
+          value={exercise ? `${exercise.name} · ${exercise.questions?.length ?? exercise.questionCount}Q` : "Select exercise"}
           open={menu === "exercise"}
           onPress={() => setMenu(menu === "exercise" ? null : "exercise")}
-          items={[...(combinedExercise ? [{ id: ALL_PRACTICE_EXERCISES, label: `${ALL_PRACTICE_EXERCISES_LABEL} · ${combinedExercise.questionCount}Q` }] : []), ...(chapter?.exercises.map((x) => ({ id: x.id, label: x.name })) ?? [])]}
+          items={[
+            ...(combinedExercise ? [{ id: ALL_PRACTICE_EXERCISES, label: `${ALL_PRACTICE_EXERCISES_LABEL} · ${combinedExercise.questionCount}Q` }] : []),
+            ...[true, false].flatMap(questionBased => {
+              const exercises = (chapter?.exercises ?? []).filter(x => Array.isArray(x.questions) === questionBased);
+              return exercises.length ? [
+                { id: questionBased ? "question-heading" : "answer-key-heading", label: questionBased ? "Question-based exercises" : "Answer-key exercises", heading: true },
+                ...exercises.map(x => ({ id: x.id, label: `${x.name} · ${x.questions?.length ?? x.questionCount}Q` })),
+              ] : [];
+            }),
+          ]}
           onSelect={(value) => {
             setExerciseId(value);
             setMenu(null);
@@ -979,7 +997,9 @@ export function PracticeScreen({ user, onOpenQuickRecall, focusLocked = false }:
           </Text>
         </View>
         <View style={s.configDivider} />
-        <MarkingCard embedded marking={bank.marking} onSave={(marking) => saveBank({ ...bank, marking })} />
+        <MarkingCard embedded marking={bank.marking} onSave={(marking) => {
+          void saveBank({ ...bankRef.current, marking }).catch(() => Alert.alert("Sync pending", "Marking scheme is saved on this phone. Connect to sync this change."));
+        }} />
         <Pressable disabled={!canContinue} style={[s.primary, s.setupContinue, !canContinue && s.disabled]} onPress={begin}>
           <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72} style={[s.primaryText, s.primaryWideText]}>Continue to instructions</Text>
           <MaterialCommunityIcons name="arrow-right" size={19} color={colors.buttonInk} />
@@ -1032,7 +1052,7 @@ function SetupSelect({
   label: string;
   value: string;
   open: boolean;
-  items: { id: string; label: string }[];
+  items: { id: string; label: string; heading?: boolean }[];
   disabled?: boolean;
   onPress: () => void;
   onSelect: (id: string) => void;
@@ -1064,7 +1084,9 @@ function SetupSelect({
       {renderMenu && (
         <Animated.View style={[s.menu, { opacity: visibility, transform: [{ translateY: visibility.interpolate({ inputRange: [0, 1], outputRange: [-6, 0] }) }, { scale: visibility.interpolate({ inputRange: [0, 1], outputRange: [0.98, 1] }) }] }]} pointerEvents={open ? "auto" : "none"}>
           <NativeScrollView nestedScrollEnabled style={s.menuList} keyboardShouldPersistTaps="handled">
-            {items.map((item) => (
+            {items.map((item) => item.heading ? (
+              <Text key={item.id} accessibilityRole="header" style={{ color: colors.muted, fontSize: 10, fontWeight: "700", paddingHorizontal: 12, paddingTop: 12, paddingBottom: 6 }}>{item.label}</Text>
+            ) : (
               <Pressable key={item.id} onPress={() => onSelect(item.id)} style={[s.menuItem, item.label === value && s.menuItemSelected]}>
                 <Text numberOfLines={1} style={[s.menuText, item.label === value && s.menuTextSelected]}>{item.label}</Text>
                 {item.label === value && <MaterialCommunityIcons name="check" size={16} color="#171717" />}
@@ -1264,6 +1286,7 @@ function Instructions({
 function TestScreen({
   title,
   seconds,
+  elapsed,
   current,
   count,
   questions,
@@ -1274,17 +1297,26 @@ function TestScreen({
 }: {
   title: string;
   seconds: number;
+  elapsed: number;
   current: number;
   count: number;
   questions?: Question[];
   answers: Array<Option | null>;
   onPick: (choice: Option) => void;
   onCurrent: (value: number) => void;
-  onSubmit: () => void;
+  onSubmit: () => void | Promise<void>;
 }) {
   const display = `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
   const question = questions?.[current];
   const swipeHandlers = useQuestionSwipe(current, count, onCurrent);
+  const [reviewing, setReviewing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  useAndroidBack(() => setReviewing(false), reviewing && !busy);
+  if (reviewing) return <PracticeSubmitSummary title={title} count={count} attempted={answers.slice(0, count).filter(Boolean).length} seconds={seconds} elapsed={elapsed} busy={busy} onBack={() => setReviewing(false)} onSubmit={async () => {
+    if (busy) return;
+    setBusy(true);
+    try { await onSubmit(); } finally { setBusy(false); }
+  }} />;
   return (
     <View style={s.page}>
       <View style={s.testHeader}>
@@ -1337,7 +1369,7 @@ function TestScreen({
               <Text style={s.primaryText}>Next</Text>
             </Pressable>
           ) : (
-            <Pressable onPress={onSubmit} style={s.primarySmall}>
+            <Pressable onPress={() => setReviewing(true)} style={s.primarySmall}>
               <Text style={s.primaryText}>Submit test</Text>
             </Pressable>
           )}
@@ -1362,8 +1394,18 @@ function History({
   onReattempt: (record: Record) => void;
 }) {
   const [subject, setSubject] = useState("All subjects");
-  const [chapter, setChapter] = useState("All chapters");
-  const [filterMenu, setFilterMenu] = useState<"subject" | "chapter" | null>(null);
+  const [timeRange, setTimeRange] = useState<HistoryTimeRange>("today");
+  const rangeLabel = HISTORY_TIME_RANGES.find(item => item.value === timeRange)?.label ?? "All time";
+  const [filterMenu, setFilterMenu] = useState<"subject" | "timeRange" | null>(null);
+  const lastFilter = useRef<"subject" | "timeRange">("subject");
+  const [pageHeight, setPageHeight] = useState(0);
+  const [filterRowLayout, setFilterRowLayout] = useState({ x: 0, y: 0, width: 0, height: 0 });
+  const [filterLayouts, setFilterLayouts] = useState({ subject: { x: 0, y: 0, width: 0, height: 0 }, timeRange: { x: 0, y: 0, width: 0, height: 0 } });
+  const toggleFilter = (kind: "subject" | "timeRange") => {
+    lastFilter.current = kind;
+    setFilterMenu(current => current === kind ? null : kind);
+  };
+  const activeFilter = filterMenu ?? lastFilter.current;
   const [selected, setSelected] = useState<{ record: Record; attempts: Record[] } | null>(null);
   const [confirmAttemptDelete, setConfirmAttemptDelete] = useState(false);
   useAndroidBack(() => {
@@ -1373,17 +1415,10 @@ function History({
 
   const sessionRecords = records;
   const subjects = Array.from(new Set(sessionRecords.map((record) => record.subject))).sort();
-  const chapters = Array.from(
-    new Set(
-      sessionRecords
-        .filter((record) => subject === "All subjects" || record.subject === subject)
-        .map((record) => record.chapter).filter(Boolean),
-    ),
-  ).sort();
   const visible = sessionRecords.filter(
     (record) =>
       (subject === "All subjects" || record.subject === subject) &&
-      (chapter === "All chapters" || record.chapter === chapter),
+      matchesHistoryTimeRange(record, timeRange),
   );
   const visibleGroups = Array.from(
     visible.reduce((groups, record) => {
@@ -1458,7 +1493,7 @@ function History({
       </>
     );
   return (
-    <View style={s.page}>
+    <View style={s.page} onLayout={event => setPageHeight(event.nativeEvent.layout.height)}>
       <View style={s.header}>
         <View>
           <Text style={s.eyebrow}>PRACTICE</Text>
@@ -1468,25 +1503,21 @@ function History({
           <Text style={s.back}>New session</Text>
         </Pressable>
       </View>
-      <ScrollView contentContainerStyle={s.content}>
-        <View style={s.historyFilters}>
+        <View style={[s.historyFilters, s.fixedFilters]} onLayout={event => setFilterRowLayout(event.nativeEvent.layout)}>
+          <HistoryFilter
+            label={rangeLabel}
+            open={filterMenu === "timeRange"}
+            onPress={() => toggleFilter("timeRange")}
+            onLayout={event => { const layout = event.nativeEvent.layout; setFilterLayouts(current => ({ ...current, timeRange: layout })); }}
+          />
           <HistoryFilter
             label={subject}
             open={filterMenu === "subject"}
-            onPress={() => setFilterMenu(filterMenu === "subject" ? null : "subject")}
-            onClose={() => setFilterMenu(null)}
-            options={["All subjects", ...subjects]}
-            onSelect={(next) => { setSubject(next); setChapter("All chapters"); setFilterMenu(null); }}
-          />
-          <HistoryFilter
-            label={chapter}
-            open={filterMenu === "chapter"}
-            onPress={() => setFilterMenu(filterMenu === "chapter" ? null : "chapter")}
-            onClose={() => setFilterMenu(null)}
-            options={["All chapters", ...chapters]}
-            onSelect={(next) => { setChapter(next); setFilterMenu(null); }}
+            onPress={() => toggleFilter("subject")}
+            onLayout={event => { const layout = event.nativeEvent.layout; setFilterLayouts(current => ({ ...current, subject: layout })); }}
           />
         </View>
+      <ScrollView style={s.filteredList} contentContainerStyle={s.content}>
         {visibleGroups.length ? (
           visibleGroups.map((group) => {
             const record = group.attempts[group.attempts.length - 1];
@@ -1497,10 +1528,6 @@ function History({
                 style={s.historyCard}
               >
                 <View style={s.historyCardTop}>
-                  <View style={s.scoreRing}>
-                    <Text style={s.scoreRingValue}>{record.score}</Text>
-                    <Text style={s.scoreRingLabel}>score</Text>
-                  </View>
                   <View style={s.historyCopy}>
                     <Text numberOfLines={1} style={s.sessionTitle}>
                       {record.subject}
@@ -1511,9 +1538,12 @@ function History({
                     <Text numberOfLines={1} style={s.historyChapter}>
                       {isQuickRecallRecord(record) ? `Daily summary · ${record.answers.length} questions` : `${record.chapter} · ${record.exercise}`}
                     </Text>
-                    <Text style={s.historyDate}>{friendlyRecordDate(isQuickRecallRecord(record) ? record.date?.slice(0, 10) : record.createdAt, record.date ?? record.createdAt)}</Text>
+                    <Text style={s.historyDate}>{friendlyRecordDate(isQuickRecallRecord(record) ? record.date?.slice(0, 10) : record.createdAt, record.date ?? record.createdAt, false)}</Text>
                   </View>
-                  <MaterialCommunityIcons name="chevron-right" size={20} color={colors.subdued} />
+                  <View style={s.historyScore}>
+                    <Text style={s.historyScoreValue}>{record.score}</Text>
+                    <Text style={s.historyScoreLabel}>score</Text>
+                  </View>
                 </View>
                 <View style={s.historyResultRow}>
                   <Info icon="check" label="Correct" value={String(record.correct)} />
@@ -1531,64 +1561,60 @@ function History({
           <View style={s.empty}>
             <MaterialCommunityIcons name="notebook-outline" size={30} color={colors.subdued} />
             <Text style={s.sessionTitle}>No matching sessions</Text>
-            <Text style={s.helper}>Try another subject or chapter.</Text>
+            <Text style={s.helper}>Try another time range or subject.</Text>
           </View>
         )}
       </ScrollView>
+      <HistoryFilterMenu
+        open={filterMenu !== null}
+        label={activeFilter === "subject" ? subject : rangeLabel}
+        options={activeFilter === "subject" ? ["All subjects", ...subjects] : HISTORY_TIME_RANGES.map(item => item.label)}
+        anchor={{ x: filterRowLayout.x + filterLayouts[activeFilter].x, y: filterRowLayout.y + filterLayouts[activeFilter].y, width: filterLayouts[activeFilter].width, height: filterLayouts[activeFilter].height }}
+        pageHeight={pageHeight}
+        onClose={() => setFilterMenu(null)}
+        onSelect={next => {
+          if (activeFilter === "subject") setSubject(next);
+          else setTimeRange(HISTORY_TIME_RANGES.find(item => item.label === next)?.value ?? "all");
+          setFilterMenu(null);
+        }}
+      />
     </View>
   );
 }
-function HistoryFilter({ label, open, onPress, onClose, options, onSelect }: { label: string; open: boolean; onPress: () => void; onClose: () => void; options: string[]; onSelect: (value: string) => void }) {
-  const trigger = useRef<View>(null);
-  const window = useWindowDimensions();
-  const [anchor, setAnchor] = useState({ x: 14, y: 80, width: 160, height: 42 });
-  const visibility = useRef(new Animated.Value(open ? 1 : 0)).current;
-  const [renderMenu, setRenderMenu] = useState(open);
+function HistoryFilter({ label, open, onPress, onLayout }) {
+  return <Pressable onLayout={onLayout} onPress={onPress} accessibilityRole="button" accessibilityState={{ expanded: open }} style={s.historyFilterButton}>
+    <Text numberOfLines={1} style={s.historyFilterText}>{label}</Text>
+    <DropdownChevron open={open} size={17} color={colors.muted} />
+  </Pressable>;
+}
 
+function HistoryFilterMenu({ label, open, onClose, options, onSelect, anchor, pageHeight }) {
+  const visibility = useRef(new Animated.Value(0)).current;
+  const [renderMenu, setRenderMenu] = useState(false);
   useEffect(() => {
     visibility.stopAnimation();
     if (open) {
       setRenderMenu(true);
       Animated.timing(visibility, { toValue: 1, duration: 180, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
-      return;
+    } else if (renderMenu) {
+      Animated.timing(visibility, { toValue: 0, duration: 130, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(({ finished }) => {
+        if (finished) setRenderMenu(false);
+      });
     }
-    if (!renderMenu) return;
-    Animated.timing(visibility, { toValue: 0, duration: 130, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(({ finished }) => {
-      if (finished) setRenderMenu(false);
-    });
   }, [open, renderMenu, visibility]);
-
-  const menuHeight = Math.min(210, Math.max(42, options.length * 42), window.height - 32);
-  const menuTop = anchor.y + anchor.height + 5 + menuHeight <= window.height - 16
-    ? anchor.y + anchor.height + 5
-    : Math.max(16, anchor.y - menuHeight - 5);
-  const toggle = () => {
-    if (open) { onClose(); return; }
-    trigger.current?.measureInWindow((x, y, width, height) => {
-      setAnchor({ x, y, width, height });
-      onPress();
-    });
-  };
-  return (
-    <View style={s.historyFilterWrap}>
-      <View ref={trigger} collapsable={false}>
-      <Pressable onPress={toggle} accessibilityRole="button" accessibilityState={{ expanded: open }} style={s.historyFilterButton}>
-        <Text numberOfLines={1} style={s.historyFilterText}>{label}</Text>
-        <DropdownChevron open={open} size={17} color={colors.muted} />
-      </Pressable>
-      </View>
-      <Modal transparent visible={renderMenu} statusBarTranslucent onRequestClose={onClose}>
-        <View style={{ flex: 1 }}>
-          <Pressable accessibilityLabel="Close history filter" style={NativeStyleSheet.absoluteFill} onPress={onClose} />
-          <Animated.View pointerEvents={open ? "auto" : "none"} style={[s.historyFilterMenu, { top: menuTop, left: Math.max(8, Math.min(anchor.x, window.width - anchor.width - 8)), right: undefined, width: anchor.width, maxHeight: menuHeight, opacity: visibility, transform: [{ translateY: visibility.interpolate({ inputRange: [0, 1], outputRange: [-6, 0] }) }, { scale: visibility.interpolate({ inputRange: [0, 1], outputRange: [0.98, 1] }) }] }]}>
-            <NativeScrollView nestedScrollEnabled keyboardShouldPersistTaps="always" style={{ maxHeight: menuHeight }}>
-              {options.map((option) => { const selected = option === label; return <Pressable key={option} accessibilityRole="button" accessibilityState={{ selected }} onPress={() => onSelect(option)} style={[s.historyFilterOption, selected && s.historyFilterOptionActive]}><Text numberOfLines={1} style={[s.historyFilterOptionText, selected && s.historyFilterOptionTextActive]}>{option}</Text>{selected && <MaterialCommunityIcons name="check" size={16} color="#171717" />}</Pressable>; })}
-            </NativeScrollView>
-          </Animated.View>
-        </View>
-      </Modal>
-    </View>
-  );
+  if (!renderMenu) return null;
+  // Anchor and popup both use History's local layout, without native-window offsets.
+  const below = Math.max(0, pageHeight - anchor.y - anchor.height - 13);
+  const menuHeight = Math.min(210, Math.max(42, options.length * 42), below);
+  const top = anchor.y + anchor.height + 5;
+  return <View pointerEvents={open ? "auto" : "none"} style={[NativeStyleSheet.absoluteFill, { zIndex: 100, elevation: 100 }]}>
+    <Pressable accessibilityRole="button" accessibilityLabel="Close history filter" style={NativeStyleSheet.absoluteFill} onPress={onClose} />
+    <Animated.View style={[s.historyFilterMenu, { top, left: anchor.x, right: undefined, width: anchor.width, maxHeight: menuHeight, opacity: visibility, transform: [{ translateY: visibility.interpolate({ inputRange: [0, 1], outputRange: [-6, 0] }) }, { scale: visibility.interpolate({ inputRange: [0, 1], outputRange: [0.98, 1] }) }] }]}>
+      <NativeScrollView nestedScrollEnabled keyboardShouldPersistTaps="always" style={{ maxHeight: menuHeight }}>
+        {options.map(option => { const selected = option === label; return <Pressable key={option} accessibilityRole="button" accessibilityState={{ selected }} onPress={() => onSelect(option)} style={[s.historyFilterOption, selected && s.historyFilterOptionActive]}><Text numberOfLines={1} style={[s.historyFilterOptionText, selected && s.historyFilterOptionTextActive]}>{option}</Text>{selected && <MaterialCommunityIcons name="check" size={16} color="#171717" />}</Pressable>; })}
+      </NativeScrollView>
+    </Animated.View>
+  </View>;
 }
 function HistoryDetail({
   subjects,
@@ -1860,7 +1886,7 @@ function SolutionView({ record, subjects, onBack }: { record: Record; subjects: 
     </View>
   );
 }
-function friendlyRecordDate(timestamp?: string | null, fallbackDate?: string | null) {
+function friendlyRecordDate(timestamp?: string | null, fallbackDate?: string | null, showTime = true) {
   const isValidDate = (value: unknown): value is string =>
     typeof value === "string" && value.trim().length > 0 && Number.isFinite(new Date(value).getTime());
   const iso = isValidDate(timestamp) ? timestamp : isValidDate(fallbackDate) ? fallbackDate : null;
@@ -1872,8 +1898,8 @@ function friendlyRecordDate(timestamp?: string | null, fallbackDate?: string | n
     new Date(value.getFullYear(), value.getMonth(), value.getDate()).getTime();
   const difference = Math.round((day(today) - day(date)) / 86_400_000);
   const time = date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-  if (difference === 0) return hasClock ? `Today, ${time}` : "Today";
-  if (difference === 1) return hasClock ? `Yesterday, ${time}` : "Yesterday";
+  if (difference === 0) return hasClock && showTime ? `Today, ${time}` : "Today";
+  if (difference === 1) return hasClock && showTime ? `Yesterday, ${time}` : "Yesterday";
   return date.toLocaleDateString([], {
     day: "numeric",
     month: "short",
@@ -2109,8 +2135,8 @@ function QuestionBank({
           </View>
           <View style={s.bankViewerActions}>
             <ReattemptModeButton active={attemptMode} onChange={setAttemptMode} />
-            <Pressable onPress={() => onView(null)}>
-              <Text style={s.back}>Back</Text>
+            <Pressable accessibilityRole="button" accessibilityLabel="Back to question bank" hitSlop={8} onPress={() => onView(null)}>
+              <MaterialCommunityIcons name="arrow-left" size={22} color={colors.text} />
             </Pressable>
           </View>
         </View>
@@ -2196,7 +2222,6 @@ function QuestionBank({
                 </View>
                 <View style={s.bankPalette}>
                   <Text style={s.sessionTitle}>Question palette</Text>
-                  <Text style={s.bankSubhead}>Jump to any question</Text>
                   <QuestionPalette
                     count={viewing.questions.length}
                     current={currentQuestion}
@@ -2222,12 +2247,8 @@ function QuestionBank({
           <Text style={s.eyebrow}>PRACTICE SESSION</Text>
           <Text style={s.title}>Question bank</Text>
         </View>
-        <Pressable onPress={onBack}>
-          <Text style={s.back}>Back</Text>
-        </Pressable>
       </View>
-      <ScrollView contentContainerStyle={s.content} onScrollBeginDrag={closeFilters} keyboardShouldPersistTaps="handled">
-        <View style={s.bankFilters} onTouchStart={(event) => event.stopPropagation()}>
+        <View style={[s.bankFilters, s.fixedFilters]} onTouchStart={(event) => event.stopPropagation()}>
           <BankDropdown
             title="Subject"
             label={
@@ -2269,6 +2290,7 @@ function QuestionBank({
             }}
           />
         </View>
+      <ScrollView style={s.filteredList} contentContainerStyle={s.content} onScrollBeginDrag={closeFilters} keyboardShouldPersistTaps="handled">
         {entries.length ? (
           entries.map(({ subject, chapter, exercise }) => (
             <Pressable
@@ -2389,6 +2411,8 @@ const s = StyleSheet.create({
   title: { color: colors.text, fontFamily: "Manrope_800ExtraBold", fontSize: 24, marginTop: 4 },
   headerCopy: { color: colors.muted, fontFamily: "Manrope_500Medium", fontSize: 11, marginTop: 3 },
   content: { paddingHorizontal: 14, paddingTop: 2, gap: 5, paddingBottom: 66 },
+  fixedFilters: { flexShrink: 0, marginHorizontal: 14, paddingTop: 2, paddingBottom: 5 },
+  filteredList: { flex: 1, zIndex: 0 },
   linkButton: { width: 38, height: 38, alignItems: "center", justifyContent: "center", borderRadius: 11, backgroundColor: "#252525", borderWidth: 1, borderColor: "#353535" },
   label: {
     color: colors.subdued,
@@ -2701,8 +2725,7 @@ const s = StyleSheet.create({
   outlineText: { color: colors.text, fontWeight: "700", fontSize: 13 },
   resultRow: { flexDirection: "row", marginTop: 17 },
   historyFilters: { zIndex: 20, flexDirection: "row", gap: 8 },
-  historyFilterWrap: { flex: 1, position: "relative", zIndex: 20 },
-  historyFilterButton: { height: 42, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 6, borderRadius: 12, paddingHorizontal: 12, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  historyFilterButton: { flex: 1, minWidth: 0, height: 42, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 6, borderRadius: 12, paddingHorizontal: 12, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   historyFilterText: { flex: 1, color: colors.text, fontSize: 12, fontWeight: "700" },
   historyFilterMenu: { position: "absolute", zIndex: 40, elevation: 40, top: 47, right: 0, left: 0, maxHeight: 210, overflow: "hidden", borderRadius: 12, backgroundColor: "#292929", borderWidth: 1, borderColor: "#454545", shadowColor: "#000", shadowOpacity: 0.5, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } },
   historyFilterOption: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12, paddingVertical: 10 },
@@ -2717,18 +2740,9 @@ const s = StyleSheet.create({
     borderColor: colors.border,
   },
   historyCardTop: { flexDirection: "row", alignItems: "center", gap: 10 },
-  scoreRing: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: colors.accent + "66",
-    backgroundColor: colors.accent + "14",
-  },
-  scoreRingValue: { color: colors.text, fontSize: 14, fontWeight: "900" },
-  scoreRingLabel: { color: colors.muted, fontSize: 7, marginTop: -1 },
+  historyScore: { flexShrink: 0, alignItems: "flex-end", justifyContent: "center" },
+  historyScoreValue: { color: colors.text, fontSize: 18, fontWeight: "800", fontVariant: ["tabular-nums"] },
+  historyScoreLabel: { color: colors.muted, fontSize: 9, marginTop: 2 },
   historyCopy: { flex: 1, minWidth: 0 },
   historyChapter: { color: colors.muted, fontSize: 11, marginTop: 2 },
   historyDate: { color: colors.subdued, fontSize: 10, marginTop: 3 },

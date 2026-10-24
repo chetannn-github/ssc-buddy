@@ -2,14 +2,16 @@ import { isQuestionAttempt } from "../../mobile-tasks/src/domain/question-deleti
 import { isQuickRecallRecord } from "../../mobile-tasks/src/domain/quick-recall-history";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, RefreshCw, RotateCcw } from "lucide-react";
+import { ArrowLeft, RefreshCw, RotateCcw, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { ResultScreen } from "@/components/exam/ResultScreen";
 import { SolutionScreen } from "@/components/exam/SolutionScreen";
 import { Button } from "@/components/ui/button";
+import { AlertDialog, AlertDialogContent, AlertDialogTitle, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import {
   getAttemptGroup,
+  deleteRecord,
   loadSubjects,
   getRecord,
   saveRecord,
@@ -24,9 +26,9 @@ const description =
 export const Route = createFileRoute("/history/$id")({
   head: () => ({
     meta: [
-      { title },
+      { title: `${title} · SSC Buddy` },
       { name: "description", content: description },
-      { property: "og:title", content: title },
+      { property: "og:title", content: `${title} · SSC Buddy` },
       { property: "og:description", content: description },
     ],
   }),
@@ -40,11 +42,13 @@ function ResultDetail() {
   const [solutionId, setSolutionId] = useState<string | null>(null);
   const [attempts, setAttempts] = useState<TestRecord[]>([]);
   const [reevaluating, setReevaluating] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const reevaluationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     setRecord(getRecord(id));
+    setConfirmDelete(false);
     setAttempts(getAttemptGroup(id));
     setLoaded(true);
   }, [id]);
@@ -99,7 +103,7 @@ function ResultDetail() {
   };
 
   const detailActions = record ? (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {!isQuestionAttempt(record) && !isQuickRecallRecord(record) && (
                 <Button
                   variant="outline"
@@ -112,6 +116,9 @@ function ResultDetail() {
                   Reevaluate
                 </Button>
               )}
+              <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2 text-xs text-rose-300 hover:bg-rose-400/10 hover:text-rose-200" onClick={() => setConfirmDelete(true)}>
+                <Trash2 className="h-3.5 w-3.5" />Delete attempt
+              </Button>
               {isQuickRecallRecord(record) ? (
                 <Button variant="outline" size="sm" className="h-8 gap-1.5 px-3 text-xs" asChild>
                   <Link to="/quick-recall">
@@ -146,14 +153,12 @@ function ResultDetail() {
       title={record ? record.subject : "Result details"}
       subtitle={
         record
-          ? record.exercise
-            ? `${record.chapter} · ${record.exercise}`
-            : record.chapter
+          ? [record.chapter !== record.subject ? record.chapter : "", record.exercise].filter(Boolean).join(" · ") || undefined
           : undefined
       }
     >
       <div className="exam-dark -mx-4 -my-6 min-h-[calc(100vh-4rem)] bg-[#121212] px-4 py-6 text-zinc-100 sm:-mx-6 sm:px-6">
-        {solutionId !== record?.id && <div className="mb-3 flex items-center justify-between gap-2">
+        {solutionId !== record?.id && <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2 text-xs" asChild>
             <Link to="/history">
               <ArrowLeft className="h-4 w-4" />
@@ -198,6 +203,20 @@ function ResultDetail() {
           </div>
         ) : null}
       </div>
+      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <AlertDialogContent aria-describedby={undefined} className="w-[calc(100%-3rem)] max-w-sm rounded-[28px] border-0 bg-[#181818] p-7 text-zinc-100 sm:rounded-[28px]">
+          <AlertDialogTitle className="text-left text-xl font-semibold leading-snug">Are you sure you want to delete this attempt?</AlertDialogTitle>
+          <div className="mt-8 flex items-center justify-end gap-4">
+            <AlertDialogCancel className="mt-0 border-0 bg-transparent px-2 text-zinc-100 shadow-none hover:bg-white/5">Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-transparent px-2 text-[#ff1744] shadow-none hover:bg-white/5" onClick={() => {
+              if (!record) return;
+              deleteRecord(record.id);
+              setConfirmDelete(false);
+              void navigate({ to: "/history" });
+            }}>Yes, delete</AlertDialogAction>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppShell>
   );
 }

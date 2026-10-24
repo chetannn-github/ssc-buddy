@@ -1,7 +1,6 @@
 // Activity levels run from light to dark within each vibrant color family.
 const PALETTES = [
   ["#e52e4d", "#c91638", "#a90e2e", "#870b26"],
-  ["#fff27a", "#ffe94d", "#ffe51f", "#ffe000"],
   ["#316ad6", "#2452b5", "#1b3f95", "#142f75"],
   ["#a345de", "#8a2bc2", "#701ba2", "#58127e"],
 ];

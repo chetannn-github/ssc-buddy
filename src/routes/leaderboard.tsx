@@ -13,6 +13,7 @@ import { useLeaderboardXp } from "../../shared/use-leaderboard-xp";
 import { getFirebaseFirestore } from "@/lib/firebase-sync";
 
 export const Route = createFileRoute("/leaderboard")({
+  head: () => ({ meta: [{ title: "Leaderboard · SSC Buddy" }, { property: "og:title", content: "Leaderboard · SSC Buddy" }] }),
   validateSearch: (search: Record<string, unknown>): { week?: string } => {
     const week = validLeaderboardWeek(search["week"]);
     return week ? { week } : {};
@@ -43,16 +44,16 @@ function Leaderboard() {
 
   return <AppShell title="Weekly leaderboard"><div className="leaderboard-page profile-dark -mx-4 -my-6 min-h-[calc(100vh-4rem)] bg-[#121212] px-4 py-6 text-zinc-100 sm:-mx-6 sm:px-6"><div className="mx-auto max-w-3xl space-y-2">
     <WeeklyResultControls week={week} currentWeek={currentWeek} onChange={(week) => void navigate({ to: "/leaderboard", search: week === currentWeek ? {} : { week } })} />
-    {isSyncing ? <div className="flex min-h-48 flex-col items-center justify-center gap-3 text-sm text-zinc-500"><LoaderCircle className="h-5 w-5 animate-spin text-emerald-400" /><span>Syncing leaderboard...</span></div> : <>{entries.map((entry, index) => {
+    {isSyncing ? <div className="flex min-h-48 flex-col items-center justify-center gap-3 text-sm text-zinc-500"><LoaderCircle className="h-5 w-5 animate-spin text-emerald-400" /><span>Syncing leaderboard...</span></div> : <div className={entries.length ? "overflow-hidden rounded-xl border border-white/10 bg-white/[0.025] divide-y divide-white/10" : undefined}>{entries.map((entry, index) => {
       const medal = ["/gold-medal.png", "/silver-medal.png", "/bronze-medal.png"][index];
       const points = Number(entry.points) || 0;
       const xp = currentXp[entry.uid];
-      return <button key={entry.uid} onClick={() => void navigate({ to: "/weekly-stats/$username", params: { username: entry.username }, search: { week } })} className="flex w-full items-center gap-3 rounded-xl border border-white/10 bg-white/[0.025] px-4 py-3 text-left transition-colors hover:bg-white/[0.07]">
+      return <button key={entry.uid} onClick={() => void navigate({ to: "/weekly-stats/$username", params: { username: entry.username }, search: { week } })} className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-white/[0.07] focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-white/50">
         <span className="grid w-7 place-items-center">{medal ? <img src={medal} alt={`Rank ${index + 1}`} className="h-6 w-6 object-contain" /> : <span className="font-mono text-sm text-zinc-500"><RollingNumber value={index + 1} prefix="#" /></span>}</span>
         <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full bg-white/10 text-xs font-semibold text-zinc-300">{entry.avatar ? <img src={`/avatars/${encodeURIComponent(entry.avatar)}`} className="h-full w-full object-cover" /> : entry.name.slice(0, 1).toUpperCase()}</span>
         <div className="min-w-0 flex-1"><p className="truncate font-medium">{entry.uid === user?.uid ? "You" : entry.name}</p><p className="truncate text-xs text-zinc-500">{xp ? <>Lv. <RollingNumber value={xp.level} /> · <RollingNumber value={xp.xp} prefix={xp.xp > 0 ? "+" : ""} suffix=" XP" /></> : "Current XP unavailable"}</p></div>
         <strong className={`font-mono ${points > 0 ? "text-emerald-300" : points < 0 ? "text-red-300" : "text-zinc-500"}`}><RollingNumber value={points} prefix={points > 0 ? "+" : ""} suffix=" pts" /></strong>
       </button>;
-    })}{!entries.length && <p className="py-12 text-center text-sm text-zinc-500">{week === currentWeek ? "No activity this week yet." : "No saved results for this week."}</p>}</>}
+    })}{!entries.length && <p className="py-12 text-center text-sm text-zinc-500">{week === currentWeek ? "No activity this week yet." : "No saved results for this week."}</p>}</div>}
   </div></div></AppShell>;
 }

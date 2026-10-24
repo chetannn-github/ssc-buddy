@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNod
 import { LockKeyhole, PenLine } from "lucide-react";
 import { useAuthUser } from "@/lib/auth-context";
 import { getFirebaseFirestore } from "@/lib/firebase-sync";
-import { watchStudyControl, recordStudyFocus, type StudySession } from "../../shared/study-lock";
+import { watchStudyControl, settleStudyFocus, type StudySession } from "../../shared/study-lock";
 import { SlotTime } from "../../shared/SlotTime";
 import "../../shared/study-lock.css";
 import "./focus-session.css";
@@ -39,7 +39,7 @@ export function FocusSessionGate({ children }: { children: ReactNode }) {
   }, []);
   useEffect(() => {
     if (!session || !user) return;
-    void recordStudyFocus(getFirebaseFirestore(), user.uid, session).catch(() => {});
+    void settleStudyFocus(getFirebaseFirestore(), user.uid, session).catch(() => {});
   }, [session?.id, user?.uid, Math.floor(now / 60000), active]);
   useEffect(() => {
     if (!active) { setPractice(false); return; }

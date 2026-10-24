@@ -1,7 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
-import { DonutChart } from "@/components/exam/DonutChart";
 import { Button } from "@/components/ui/button";
 import { PageLoader } from "@/components/ui/page-loader";
 import { consumeLightPageLoader } from "@/lib/navigation";
@@ -14,14 +13,14 @@ import {
 } from "@/components/ui/select";
 import {
   attemptKey,
-  deleteRecord,
   loadHistory,
   onPracticePersist,
   type TestRecord,
 } from "@/lib/exam";
 import { isQuickRecallRecord } from "../../mobile-tasks/src/domain/quick-recall-history";
+import { HISTORY_TIME_RANGES, matchesHistoryTimeRange, type HistoryTimeRange } from "../../mobile-tasks/src/domain/practice-history-range";
 
-function friendlyDate(timestamp: string, fallbackDate?: string) {
+function friendlyDate(timestamp: string, fallbackDate?: string, showTime = true) {
   // Android records use `date` as a local calendar key (YYYY-MM-DD) and keep
   // the real timestamp in `createdAt`. Parsing the calendar key as ISO made
   // every mobile-synced attempt look like 5:30 AM in India (UTC offset).
@@ -31,7 +30,7 @@ function friendlyDate(timestamp: string, fallbackDate?: string) {
   const now = new Date();
   const day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
   const diffDays = Math.round((day(now) - day(d)) / 86400000);
-  const time = hasClock
+  const time = hasClock && showTime
     ? d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
     : null;
   if (diffDays === 0) return time ? `Today, ${time}` : "Today";
@@ -46,14 +45,14 @@ function friendlyDate(timestamp: string, fallbackDate?: string) {
 
 const title = "History";
 const description =
-  "Browse every saved practice test: filter by subject and chapter, search, sort by latest or highest score, and open detailed results.";
+  "Browse saved practice tests by time range and subject, and open detailed results.";
 
 export const Route = createFileRoute("/history/")({
   head: () => ({
     meta: [
-      { title },
+      { title: `${title} · SSC Buddy` },
       { name: "description", content: description },
-      { property: "og:title", content: title },
+      { property: "og:title", content: `${title} · SSC Buddy` },
       { property: "og:description", content: description },
     ],
   }),
@@ -66,7 +65,7 @@ function HistoryPage() {
   const navigate = useNavigate();
   const [records, setRecords] = useState<TestRecord[]>([]);
   const [subject, setSubject] = useState(ALL);
-  const [chapter, setChapter] = useState(ALL);
+  const [timeRange, setTimeRange] = useState<HistoryTimeRange>("today");
   const [isLoading, setIsLoading] = useState(consumeLightPageLoader);
 
   useEffect(() => {
@@ -89,23 +88,10 @@ function HistoryPage() {
     () => Array.from(new Set(sessionRecords.map((r) => r.subject))).sort(),
     [sessionRecords],
   );
-  const chapters = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          sessionRecords
-            .filter((r) => subject === ALL || r.subject === subject)
-            .map((r) => r.chapter)
-            .filter(Boolean),
-        ),
-      ).sort(),
-    [sessionRecords, subject],
-  );
-
   const visible = useMemo(() => {
     const list = sessionRecords.filter(
       (r) =>
-        (subject === ALL || r.subject === subject) && (chapter === ALL || r.chapter === chapter),
+        (subject === ALL || r.subject === subject) && matchesHistoryTimeRange(r, timeRange),
     );
     const groups = new Map<string, TestRecord[]>();
     for (const r of list) {
@@ -126,7 +112,7 @@ function HistoryPage() {
         };
       })
       .sort((a, b) => new Date(b.latest.date).getTime() - new Date(a.latest.date).getTime());
-  }, [sessionRecords, subject, chapter]);
+  }, [sessionRecords, subject, timeRange]);
 
   return (
     <AppShell title="Test History">
@@ -135,13 +121,17 @@ function HistoryPage() {
           <PageLoader label="Loading test history" />
         ) : (
           <div className="space-y-4">
-            <div className="card-surface grid gap-3 p-4 sm:grid-cols-2">
+            <div aria-label="History filters" className="web-sticky-section web-history-filters rounded-2xl">
+            <div className="grid grid-cols-2 gap-3 rounded-2xl border border-white/10 bg-[#161616] p-3">
+              <Select value={timeRange} onValueChange={(value) => setTimeRange(value as HistoryTimeRange)}>
+                <SelectTrigger aria-label="Time range"><SelectValue placeholder="Today" /></SelectTrigger>
+                <SelectContent className="history-select-content">
+                  {HISTORY_TIME_RANGES.map(({value,label}) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
+                </SelectContent>
+              </Select>
               <Select
                 value={subject}
-                onValueChange={(v) => {
-                  setSubject(v);
-                  setChapter(ALL);
-                }}
+                onValueChange={setSubject}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="All subjects" />
@@ -155,19 +145,7 @@ function HistoryPage() {
                   ))}
                 </SelectContent>
               </Select>
-              <Select value={chapter} onValueChange={setChapter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="All chapters" />
-                </SelectTrigger>
-                <SelectContent className="history-select-content">
-                  <SelectItem value={ALL}>All chapters</SelectItem>
-                  {chapters.map((c) => (
-                    <SelectItem key={c} value={c}>
-                      {c}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            </div>
             </div>
 
             {visible.length === 0 ? (
@@ -197,93 +175,51 @@ function HistoryPage() {
                       tabIndex={0}
                       onClick={() => navigate({ to: "/history/$id", params: { id: r.id } })}
                       onKeyDown={(e) => {
+                        if (e.target !== e.currentTarget) return;
                         if (e.key === "Enter" || e.key === " ") {
                           e.preventDefault();
                           navigate({ to: "/history/$id", params: { id: r.id } });
                         }
                       }}
-                      className="card-surface group flex cursor-pointer flex-col p-4 transition-shadow hover:shadow-[var(--shadow-lift)] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                      className="group flex min-w-0 cursor-pointer flex-col rounded-2xl border border-white/10 bg-[#161616] p-4 transition-colors hover:border-white/20 hover:bg-[#1a1a1a] focus:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
                     >
-                      <div className="flex items-center gap-4">
-                        <DonutChart
-                          size={64}
-                          thickness={9}
-                          segments={[
-                            { label: "Correct", value: correct, color: "var(--color-answered)" },
-                            { label: "Wrong", value: wrong, color: "var(--color-destructive)" },
-                            {
-                              label: "Unattempted",
-                              value: unattempted,
-                              color: "var(--color-unvisited)",
-                            },
-                          ]}
-                          centerValue={r.score ?? "—"}
-                          centerSubValue={`/ ${maxMarks}`}
-                        />
+                      <div className="flex min-h-20 items-start gap-3">
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
                             <h2 className="truncate text-sm font-semibold">{r.subject}</h2>
                             {isReattempt && (
-                              <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                              <span className="shrink-0 rounded-full bg-white/5 px-2 py-0.5 text-[10px] font-medium text-zinc-400">
                                 {g.attempts.length} attempts
                               </span>
                             )}
                           </div>
-                          <p className="truncate text-xs text-muted-foreground">
+                          <p className="mt-1 truncate text-xs text-zinc-400">
                             {isRecall ? `Daily summary · ${r.answers.length} questions` : r.chapter}
                           </p>
                           {!isRecall && r.exercise && (
-                            <p className="truncate text-xs font-medium text-primary">
+                            <p className="mt-0.5 truncate text-xs text-zinc-300">
                               {r.exercise}
                             </p>
                           )}
-                          <p className="mt-1 text-xs text-muted-foreground">
+                          <p className="mt-2 text-[11px] text-zinc-500">
                             {isRecall
-                              ? friendlyDate(r.date)
-                              : friendlyDate(r.createdAt ?? r.date, r.date)}
+                              ? friendlyDate(r.date, undefined, false)
+                              : friendlyDate(r.createdAt ?? r.date, r.date, false)}
                           </p>
+                        </div>
+                        <div className="shrink-0 text-right tabular-nums">
+                          <p className="text-xl font-semibold leading-tight tracking-tight">{r.score ?? "—"}</p>
+                          <p className="mt-1 text-[10px] text-zinc-500">/ {maxMarks} marks</p>
                         </div>
                       </div>
 
-                      <div className="mt-3 flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-7 text-xs"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (isRecall) {
-                              void navigate({ to: "/quick-recall" });
-                              return;
-                            }
-                            navigate({
-                              to: "/test",
-                              search: {
-                                subject: r.subject,
-                                chapter: r.chapter,
-                                exercise: r.exercise,
-                                minutes: r.durationMinutes ?? undefined,
-                                start: r.startNumber,
-                                count: r.answers.length,
-                              },
-                            });
-                          }}
-                        >
-                          {isRecall ? "Practice again" : "Reattempt"}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 text-xs text-muted-foreground"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deleteRecord(r.id);
-                            setRecords(loadHistory());
-                          }}
-                        >
-                          {isReattempt ? "Delete latest" : "Delete"}
-                        </Button>
-                      </div>
+                      <dl className="mt-4 grid grid-cols-3 divide-x divide-white/10 border-y border-white/5 py-2.5">
+                        {[{label:"Correct",value:correct,color:"text-emerald-400"},{label:"Wrong",value:wrong,color:"text-rose-400"},{label:"Skipped",value:unattempted,color:"text-zinc-400"}].map(item=><div key={item.label} className="text-center">
+                          <dt className="text-[10px] text-zinc-500">{item.label}</dt>
+                          <dd className={`mt-0.5 text-sm font-semibold tabular-nums ${item.color}`}>{item.value}</dd>
+                        </div>)}
+                      </dl>
+
                     </article>
                   );
                 })}

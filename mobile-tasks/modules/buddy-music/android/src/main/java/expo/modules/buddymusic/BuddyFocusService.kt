@@ -62,11 +62,13 @@ class BuddyFocusService : Service(), SharedPreferences.OnSharedPreferenceChangeL
   private var renderedTime = ""
   private var foreground = ""
   private var protectionState = ""
+  private var wasRestricted = false
   private var motivation: ImageView? = null
   private var imageBusy = false
   private val imageWorker = java.util.concurrent.Executors.newSingleThreadExecutor()
   private lateinit var preferences: SharedPreferences
   private val essentials = mutableSetOf<String>()
+  private val settingsPackages = mutableSetOf("com.android.settings")
   private val foregroundTracker = FocusForegroundTracker()
   private var scannedUntil = 0L
   private var lastNotificationState = ""
@@ -76,13 +78,14 @@ class BuddyFocusService : Service(), SharedPreferences.OnSharedPreferenceChangeL
         hide(); stopSelf(); return
       }
       finishTimedBreak(this@BuddyFocusService)
+      val previousForeground = foreground
       scanForeground()
       val state = "${FocusProtection.active(this@BuddyFocusService)}:${preferences.getLong("endsAt", 0)}:${preferences.getBoolean("paused", false)}:${FocusProtection.enabled(this@BuddyFocusService)}"
       if (state != protectionState) {
         protectionState = state
         FocusProtection.reconcile(this@BuddyFocusService)
       }
-      enforce()
+      enforce(appSwitch = foreground != previousForeground)
       updateTimer()
       updateBreakButton()
       updateNotification()
@@ -93,9 +96,15 @@ class BuddyFocusService : Service(), SharedPreferences.OnSharedPreferenceChangeL
     super.onCreate()
     preferences = prefs(this)
     connected = true
+    FocusSchedules.tick(this)
+    FocusSchedules.arm(this)
     preferences.edit().remove("overlayError").apply()
     preferences.registerOnSharedPreferenceChangeListener(this)
-    essentials.addAll(setOf(packageName, "android", "com.android.systemui", "com.android.settings", "com.android.permissioncontroller", "com.google.android.permissioncontroller", "com.android.phone", "com.android.server.telecom", "com.android.emergency", "com.google.android.dialer", "com.android.dialer", "com.samsung.android.dialer", "com.android.contacts", "com.google.android.contacts", "com.samsung.android.app.contacts"))
+    essentials.addAll(setOf(packageName, "android", "com.android.systemui", "com.android.permissioncontroller", "com.google.android.permissioncontroller", "com.android.phone", "com.android.server.telecom", "com.android.emergency", "com.google.android.dialer", "com.android.dialer", "com.samsung.android.dialer", "com.android.contacts", "com.google.android.contacts", "com.samsung.android.app.contacts"))
+    // Resolve OEM Settings too, without treating permission controllers as the
+    // Settings app. They remain available for normal system permission dialogs.
+    runCatching { packageManager.resolveActivity(Intent(Settings.ACTION_SETTINGS), android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName }
+      .getOrNull()?.takeUnless { it == "android" }?.let(settingsPackages::add)
     essentials.addAll(setOf("com.android.incallui", "com.samsung.android.incallui"))
     runCatching { (getSystemService(TELECOM_SERVICE) as? TelecomManager)?.defaultDialerPackage?.let(essentials::add) }
     val intents = listOf(Intent(Intent.ACTION_DIAL, Uri.parse("tel:")), Intent(Intent.ACTION_VIEW).setType("vnd.android.cursor.dir/contact"))
@@ -168,7 +177,7 @@ class BuddyFocusService : Service(), SharedPreferences.OnSharedPreferenceChangeL
     if (appPicker != null) { enforce(); return@Runnable }
     if (rebuildOverlay) {
       rebuildOverlay = false
-      if (overlay != null && FocusAppPolicy.blocks(foreground, System.currentTimeMillis(), restrictionDeadline(), essentials, preferences.getStringSet("allowed", emptySet()).orEmpty(), isRinging())) show(foreground)
+      if (overlay != null && shouldBlockForeground()) show(foreground)
     }
     enforce()
     updateBreakButton()
@@ -182,13 +191,23 @@ class BuddyFocusService : Service(), SharedPreferences.OnSharedPreferenceChangeL
     handler.removeCallbacks(refreshOverlay)
     handler.post(refreshOverlay)
   }
-  private fun enforce() {
-    if (!shouldBlockForeground()) { hide(); return }
+  private fun enforce(appSwitch: Boolean = false) {
+    val now = System.currentTimeMillis()
+    // A ringing call temporarily hides the overlay; it must be eligible again
+    // when the call UI closes, even without a new application launch event.
+    val restricted = now < restrictionDeadline() && !isRinging()
+    val restrictionStarted = restricted && !wasRestricted
+    wasRestricted = restricted
+    val blocked = shouldBlockForeground()
+    if (!blocked) { hide(); return }
     if (overlay != null) return
+    if (!FocusWindowPolicy.mayShow(blocked, appSwitch, restrictionStarted)) return
     show(foreground)
   }
-  private fun shouldBlockForeground() = FocusAppPolicy.blocks(foreground, System.currentTimeMillis(), restrictionDeadline(), essentials, preferences.getStringSet("allowed", emptySet()).orEmpty(), isRinging())
+  private fun shouldBlockForeground() = FocusAppPolicy.blocks(foreground, System.currentTimeMillis(), restrictionDeadline(), essentials, preferences.getStringSet("allowed", emptySet()).orEmpty(), isRinging(), settingsPackages)
   private fun allowedAppLimit() = FocusAppPolicy.appLimit(preferences.getInt("appLimit", 2))
+  private fun allowedApps() = preferences.getStringSet("allowed", emptySet()).orEmpty()
+    .filterNot { FocusAppPolicy.isSettings(it, settingsPackages) }.toSet()
   private fun isRinging() = runCatching { (getSystemService(AUDIO_SERVICE) as AudioManager).mode == AudioManager.MODE_RINGTONE }.getOrDefault(false)
   private fun restrictionDeadline(): Long = FocusBreakPolicy.restrictionDeadline(System.currentTimeMillis(), preferences.getLong("endsAt", 0), preferences.getBoolean("paused", false), preferences.getLong("breakUntil", 0), !preferences.getString("session", "").isNullOrEmpty())
   private fun text(value: String, size: Float, tint: Int = Color.WHITE) = TextView(this).apply {
@@ -271,7 +290,7 @@ class BuddyFocusService : Service(), SharedPreferences.OnSharedPreferenceChangeL
     if (!FocusProtection.active(this)) return
     val sessionId = preferences.getString("session", "")
     val accent = runCatching { Color.parseColor(preferences.getString("accent", "#ffe000")) }.getOrDefault(Color.YELLOW)
-    val selected = preferences.getStringSet("allowed", emptySet()).orEmpty()
+    val selected = allowedApps()
     if (selected.size >= allowedAppLimit()) return
     val root = LinearLayout(this).apply {
       orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(32), dp(20), dp(24)); setBackgroundColor(Color.BLACK)
@@ -293,7 +312,7 @@ class BuddyFocusService : Service(), SharedPreferences.OnSharedPreferenceChangeL
     val launchers = packageManager.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), 0).map { it.activityInfo.packageName }.toSet()
     val installed = packageManager.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
       .distinctBy { it.activityInfo.packageName }
-      .filter { it.activityInfo.packageName !in essentials && it.activityInfo.packageName !in selected && it.activityInfo.packageName !in launchers }
+      .filter { it.activityInfo.packageName !in essentials && it.activityInfo.packageName !in selected && it.activityInfo.packageName !in launchers && !FocusAppPolicy.isSettings(it.activityInfo.packageName, settingsPackages) }
       .sortedBy { it.loadLabel(packageManager).toString().lowercase() }
     installed.forEach { app ->
       val appPackage = app.activityInfo.packageName
@@ -307,10 +326,10 @@ class BuddyFocusService : Service(), SharedPreferences.OnSharedPreferenceChangeL
       row.addView(text(label, 14f).apply { gravity = Gravity.START or Gravity.CENTER_VERTICAL; maxLines = 2 }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
       row.addView(text("+", 24f, Color.WHITE))
       row.setOnClickListener {
-        val current = preferences.getStringSet("allowed", emptySet()).orEmpty()
+        val current = allowedApps()
         if (!FocusProtection.active(this) || preferences.getString("session", "") != sessionId || current.size >= allowedAppLimit()) return@setOnClickListener
         if (packageManager.getLaunchIntentForPackage(appPackage) == null) return@setOnClickListener
-        val next = FocusAppPolicy.allow(appPackage, System.currentTimeMillis(), restrictionDeadline(), current, allowedAppLimit())
+        val next = FocusAppPolicy.allow(appPackage, System.currentTimeMillis(), restrictionDeadline(), current, allowedAppLimit(), settingsPackages)
         if (preferences.edit().putStringSet("allowed", next).commit()) closeAppPicker()
       }
       rows.addView(row, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
@@ -423,7 +442,7 @@ class BuddyFocusService : Service(), SharedPreferences.OnSharedPreferenceChangeL
         if (edit.commit()) { FocusProtection.reconcile(this@BuddyFocusService); enforce() }
       }
     })
-    val allowed = preferences.getStringSet("allowed", emptySet()).orEmpty()
+    val allowed = allowedApps()
     val apps = LinearLayout(this).apply { gravity = Gravity.CENTER; orientation = LinearLayout.HORIZONTAL }
     fun addShortcut(label: String, intent: Intent?, iconPackage: String? = null) {
       apps.addView(shortcut(label, intent, iconPackage), LinearLayout.LayoutParams(0, dp(98), 1f).apply { setMargins(dp(3), 0, dp(3), 0) })

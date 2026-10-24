@@ -32,11 +32,15 @@ import { AuthUserContext } from "@/lib/auth-context";
 import { loadDailyTasks, saveDailyTasks } from "@/lib/daily-tasks";
 import { migrateTasksIfEmpty, readTasks, watchTasks } from "@/lib/task-sync";
 import { loadTrackerData, saveTrackerData } from "@/lib/tracker-store";
-import { migrateTrackerIfEmpty, readTrackerSections, watchTrackerSections } from "@/lib/tracker-sync";
+import { initializeTrackerSections, watchTrackerSections } from "@/lib/tracker-sync";
 import { WEB_CLOUD_SYNC_ENABLED } from "@/lib/web-cloud-sync";
 import { prepareWebAccountCache } from "@/lib/account-cache";
 import { loadActiveTest } from "@/lib/active-test";
 import type { User } from "firebase/auth";
+import { FocusScheduleRunner } from "@/components/FocusScheduleRunner";
+import { ProfileFocusSync } from "../../shared/ProfileFocusSync";
+import * as profileFocusReader from "../../shared/study-lock";
+import { getFirebaseFirestore } from "@/lib/firebase-sync";
 
 const DEBUG_FREEZE = import.meta.env.DEV;
 const debugFreeze = (label: string, details?: Record<string, unknown>) => {
@@ -110,14 +114,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "CBT MCQ Practice for Government Exams" },
+      { title: "SSC Buddy — Study & Practice" },
       {
         name: "description",
         content:
           "Offline CBT-style answer marking app for SSC, UPSC, Banking and Railway aspirants.",
       },
       { name: "author", content: "Lovable" },
-      { property: "og:title", content: "CBT MCQ Practice for Government Exams" },
+      { property: "og:title", content: "SSC Buddy — Study & Practice" },
       {
         property: "og:description",
         content:
@@ -347,10 +351,7 @@ function RootComponent() {
           await migrateTasksIfEmpty(syncUser, localTasks);
           return readTasks(syncUser);
         })(),
-        (async () => {
-          await migrateTrackerIfEmpty(syncUser, localTracker);
-          return readTrackerSections(syncUser);
-        })(),
+        initializeTrackerSections(syncUser, localTracker),
       ]);
       if (disposed) {
         stop();
@@ -488,6 +489,8 @@ function RootComponent() {
 
   return (
     <AuthUserContext.Provider value={syncUser}>
+      <FocusScheduleRunner uid={syncUser?.uid} />
+      <ProfileFocusSync uid={syncUser?.uid} getDatabase={getFirebaseFirestore} reader={profileFocusReader} />
       <QueryClientProvider client={queryClient}>
         {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
         {authResolved && uiSettingsReady && <Outlet />}

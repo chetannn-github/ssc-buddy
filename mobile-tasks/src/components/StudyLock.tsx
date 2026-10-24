@@ -2,8 +2,6 @@ import { effectiveStudySession, maxStudyBreaks, onStudyBreak, studyBreakState, s
 import { useEffect, useRef, useState } from "react";
 import { AccessibilityInfo, Alert, Animated, Easing, ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { NumberFlow } from "number-flow-react-native";
-import Svg, { Circle, Line } from "react-native-svg";
 import * as Crypto from "expo-crypto";
 import { collection, doc, onSnapshot, runTransaction, serverTimestamp } from "firebase/firestore";
 import { createStudyController, type StudyControl } from "../../../shared/study-controller";
@@ -16,7 +14,11 @@ import { DeviceFocusSetup } from "./DeviceFocusSetup";
 import { AnimatedTimeChips } from "./AnimatedTimeChips";
 import { deviceFocusStatus, openDeviceFocusSettings, supportsDeviceFocus, syncDeviceFocusState } from "../lib/native-focus-lock";
 import { clockValueFromPoint } from "../domain/clock-hand";
-import { MAX_STUDY_WEBSITES } from "../../../shared/study-selection";
+import { MAX_STUDY_WEBSITES, splitSelection } from "../../../shared/study-selection";
+import { FocusSchedules } from "./FocusSchedules";
+import { ClockFaceMotion } from "./ClockFaceMotion";
+import { ClockDigitHighlight } from "./ClockDigitHighlight";
+import { ClockHand } from "./ClockHand";
 
 // Use the mobile app's SDK instance and native UUID source with the shared contract.
 export const controller = createStudyController({ collection, doc, onSnapshot, runTransaction, serverTimestamp }, () => Crypto.randomUUID());
@@ -26,6 +28,9 @@ const remaining = (end: number, now: number) => {
 export function StudyLock({ uid, taskButton = false, openRequest = 0, onRequestOpened }: { uid: string; taskButton?: boolean; openRequest?: number; onRequestOpened?: () => void }) {
   const accent = useAppAccent();
   const [open, setOpen] = useState(false), [picking, setPicking] = useState(false);
+  const [schedulesOpen, setSchedulesOpen] = useState(false);
+  const panelMotion = useRef(new Animated.Value(1)).current;
+  useEffect(() => { if (!open) setSchedulesOpen(false); }, [open]);
   useEffect(() => { if (openRequest) { setOpen(true); onRequestOpened?.(); } }, [openRequest, onRequestOpened]);
   const [control, setControl] = useState<StudyControl | null>(null);
   const [now, setNow] = useState(Date.now()), [minutes, setMinutes] = useState(25);
@@ -40,6 +45,13 @@ export function StudyLock({ uid, taskButton = false, openRequest = 0, onRequestO
     const listener = AccessibilityInfo.addEventListener("reduceMotionChanged", setReducedMotion);
     return () => { active = false; listener.remove(); };
   }, []);
+  useEffect(() => {
+    panelMotion.setValue(reducedMotion ? 1 : 0);
+    if (reducedMotion) return;
+    const animation = Animated.timing(panelMotion, { toValue: 1, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: true });
+    animation.start();
+    return () => animation.stop();
+  }, [schedulesOpen, reducedMotion, panelMotion]);
   const appLimitSlide = useRef(new Animated.Value(2 * 46)).current;
   useEffect(() => {
     if (reducedMotion) {
@@ -56,10 +68,13 @@ export function StudyLock({ uid, taskButton = false, openRequest = 0, onRequestO
     return () => animation.stop();
   }, [appLimit, appLimitSlide, reducedMotion]);
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const [website, setWebsite] = useState("");
+  const [websiteSelection, setWebsiteSelection] = useState<{ uid: string; domains: string[] } | null>(null);
+  useEffect(() => { setWebsite(""); setWebsiteSelection(null); }, [uid]);
   const [focusData, setFocusData] = useState<FocusDay>(emptyFocusDay);
   const date = focusDayKey(now, control?.session?.timeZone);
   useEffect(() => controller.watchStudyFocusDay(getFirebaseFirestore(), uid, date, setFocusData, () => setError("Could not load today's focus time.")), [uid, date]);
-  useEffect(() => { void controller.publishStudyFocusDay(getFirebaseFirestore(), uid, date, control?.session?.timeZone).catch(() => {}); }, [uid, date, focusData.totalMilliseconds, Math.floor(now / 60000)]);
+  useEffect(() => { void controller.publishStudyFocusDay(getFirebaseFirestore(), uid, date, control?.session?.timeZone, focusData.totalMilliseconds).catch(() => {}); }, [uid, date, focusData.totalMilliseconds]);
   const todayFocus = todayFocusMilliseconds(focusData, control?.session ?? null, now);
   const [ready, setReady] = useState(false);
   useEffect(() => {
@@ -78,18 +93,28 @@ export function StudyLock({ uid, taskButton = false, openRequest = 0, onRequestO
   const breakState = session ? studyBreakState(session, now) : null;
   const canBreak = !breaking && (!!breakState?.available || session?.breakLimit === undefined);
   const breakLabel = breaking ? "Break · auto-resumes" : session?.breakLimit === undefined && session?.paused ? "Resume focus" : breakState?.available ? "Take a break · 10 min" : !breakState?.left ? "No breaks remaining" : `Break in ${Math.ceil((breakState?.waitMs ?? 0) / 60000)} min`;
-  const domains = (session?.domains ?? control?.allowedDomains ?? []).slice(0, MAX_STUDY_WEBSITES);
+  const domains = (session?.domains ?? (websiteSelection?.uid === uid ? websiteSelection.domains : control?.allowedDomains) ?? []).slice(0, MAX_STUDY_WEBSITES);
+  const addWebsite = () => {
+    if (busy || !ready || session || !website.trim()) return;
+    try {
+      setWebsiteSelection({ uid, domains: splitSelection([...domains, website]).domains });
+      setWebsite(""); setError("");
+    } catch (e) { setError(e instanceof Error ? e.message : "Enter a website like parmar.com."); }
+  };
   const run = async (action: () => Promise<void>) => {
     if (busy) return;
     setBusy(true); setError("");
     try { await action(); } catch (e) { const message = e instanceof Error ? e.message : ""; setError(/firebase|googleapis/i.test(message) || !message ? "Could not update your focus session. Please try again." : message); }
     finally { setBusy(false); }
   };
-  const close = () => { if (picking) setPicking(false); else setOpen(false); };
+  const close = () => { if (picking) setPicking(false); else if (schedulesOpen) setSchedulesOpen(false); else setOpen(false); };
   const icon = (name: React.ComponentProps<typeof MaterialCommunityIcons>["name"], size = 17, tint = "#999") => <MaterialCommunityIcons name={name} size={size} color={tint} />;
   return <>
-    {taskButton ? <Pressable accessibilityRole="button" accessibilityLabel={session ? "Open focus timer" : "Start Focus"} style={s.taskStart} onPress={() => setOpen(true)}>
-      {icon("timer-outline", 19, "#111")}<Text style={s.taskStartText}>{session ? `${breaking ? "Break" : session.paused ? "Focus paused" : "Focus"} · ${remaining(now + studyTimerMilliseconds(session, now), now)}` : "Start Focus"}</Text>
+    {taskButton ? <Pressable accessibilityRole="button" accessibilityLabel={session ? "Open focus timer" : "Start Focus"} hitSlop={4} style={s.taskStart} onPress={() => setOpen(true)}>
+      {icon("timer-outline", 17, "#111")}{session ? <View style={s.taskTimer}>
+        <Text style={s.taskStartText}>{breaking ? "Break" : session.paused ? "Focus paused" : "Focus"} · </Text>
+        <SlotTime value={remaining(now + studyTimerMilliseconds(session, now), now)} color="#111" size={14} weight="700" compact />
+      </View> : <Text style={s.taskStartText}>Start Focus</Text>}
     </Pressable> : <Pressable accessibilityRole="button" accessibilityLabel="Focus Lock" style={s.profileTrigger} onPress={() => setOpen(true)}>
       <View style={s.profileLock}>{icon("lock-outline", 18, session ? accent : "#eee")}{session && <ActiveLockDot color={accent} />}</View><Text style={s.profileLabel}>Focus Lock</Text>
       <View style={s.profileFocus}><Text style={s.profileFocusTime}>Today · </Text><SlotTime value={formatFocusTime(todayFocus)} color="#ddd" size={12} weight="600" compact /></View>
@@ -98,8 +123,11 @@ export function StudyLock({ uid, taskButton = false, openRequest = 0, onRequestO
       <KeyboardAvoidingView style={s.overlay} behavior={Platform.OS === "ios" ? "padding" : "height"}>
         <Pressable style={StyleSheet.absoluteFill} accessibilityLabel="Close Focus Lock" onPress={close} />
         <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} style={s.dialog} contentContainerStyle={s.dialogContent}>
-          {picking && !session ? <StudyClock minutes={minutes} accent={accent} onCancel={() => setPicking(false)} onSave={value => { setMinutes(value); setPicking(false); }} /> : <>
-            <View style={s.heading}><Text accessibilityRole="header" style={s.title}>Focus Lock</Text><Pressable accessibilityRole="button" accessibilityLabel="Close Focus Lock dialog" hitSlop={10} onPress={close}>{icon("close", 19)}</Pressable></View>
+          <Animated.View style={{ opacity: panelMotion, transform: [{ translateY: panelMotion.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }] }}>
+          {schedulesOpen ? <>
+            {ready?<FocusSchedules onBack={()=>setSchedulesOpen(false)} onSaved={()=>setOpen(false)} items={control?.focusSchedules??[]} now={now} saveSchedule={(draft,id)=>controller.saveFocusSchedule(getFirebaseFirestore(),uid,draft,id)} renderClock={(value,onSave,onCancel,title)=><StudyClock minutes={value} accent={accent} onSave={onSave} onCancel={onCancel} timeOfDay title={title} />} />:<ActivityIndicator color="#f9fcf5"/>}
+          </> : picking && !session ? <StudyClock minutes={minutes} accent={accent} onCancel={() => setPicking(false)} onSave={value => { setMinutes(value); setPicking(false); }} /> : <>
+            <View style={s.heading}><Text accessibilityRole="header" style={s.title}>Focus Lock</Text><Pressable accessibilityRole="button" accessibilityLabel="Focus schedules" hitSlop={10} onPress={()=>setSchedulesOpen(true)}>{icon("calendar-clock-outline", 21)}</Pressable></View>
             {!ready && !error && <ActivityIndicator color={accent} />}
             <DeviceFocusSetup />
             {session ? <>
@@ -107,13 +135,22 @@ export function StudyLock({ uid, taskButton = false, openRequest = 0, onRequestO
               <SlotTime value={remaining(now + studyTimerMilliseconds(session, now), now)} color={accent} />
               <Pressable accessibilityRole="button" accessibilityLabel={breakLabel} disabled={busy || !canBreak} style={[s.secondary, (busy || !canBreak) && { opacity: 0.45 }]} onPress={() => void run(() => session.paused ? controller.resumeStudySession(getFirebaseFirestore(), uid, "mobile") : controller.pauseStudySession(getFirebaseFirestore(), uid, "mobile"))}><Text style={s.secondaryText}>{breakLabel}</Text></Pressable>
             </> : <>
+              <View style={s.websites}>
+                <View style={s.websiteHeading}><Text style={s.durationLabel}>Allowed websites</Text><Text style={s.websiteCount}>{domains.length}/{MAX_STUDY_WEBSITES}</Text></View>
+                {domains.length < MAX_STUDY_WEBSITES && <View style={s.websiteEntry}>
+                  {icon("web", 18)}
+                  <TextInput accessibilityLabel="Website domain" value={website} onChangeText={setWebsite} placeholder="parmar.com" placeholderTextColor="#888" editable={ready && !busy} autoCapitalize="none" autoCorrect={false} keyboardType="url" returnKeyType="done" onSubmitEditing={addWebsite} style={s.websiteInput} />
+                  <Pressable accessibilityRole="button" accessibilityLabel="Add website" disabled={busy || !ready || !website.trim()} hitSlop={8} onPress={addWebsite} style={(busy || !ready || !website.trim()) && { opacity: 0.4 }}>{icon("plus", 22, "#f9fcf5")}</Pressable>
+                </View>}
+                {!!domains.length && <View style={s.websiteChips}>{domains.map(domain => <Pressable key={domain} accessibilityRole="button" accessibilityLabel={`Remove ${domain}`} disabled={busy || !ready} onPress={() => { setWebsiteSelection({ uid, domains: domains.filter(value => value !== domain) }); setError(""); }} style={s.websiteChip}><Text style={s.websiteChipText} numberOfLines={1}>{domain}</Text>{icon("close", 14)}</Pressable>)}</View>}
+              </View>
               <Pressable accessibilityRole="button" accessibilityLabel="Focus time" style={s.duration} disabled={busy} onPress={() => setPicking(true)}>{icon("clock-outline", 17)}<Text style={s.durationLabel}>Focus time</Text><View style={s.durationValue}><SlotTime value={formatFocusMinutes(minutes)} color="#eee" size={12} weight="600" compact /></View></Pressable>
               <AnimatedTimeChips options={[15, 30, 60, 90]} labels={[15, 30, 60, 90].map(formatFocusMinutes)} value={minutes} onChange={setMinutes} disabled={busy} color={accent} ink={accentInk(accent)} style={s.quickTimes} />
               <View style={s.breakCard}>
                 <View style={s.breakCopy}><Text style={s.breakTitle}>Breaks</Text><Text style={s.breakHint}>10 min each · up to {maxBreaks}</Text></View>
                 <View style={s.breakControls}>
                   <Pressable accessibilityRole="button" accessibilityLabel="Fewer breaks" disabled={busy || breakLimit === 0} style={({ pressed }) => [s.breakButton, (busy || breakLimit === 0) && s.breakDisabled, pressed && s.breakPressed]} onPress={() => setBreakLimit(value => Math.max(0, value - 1))}><MaterialCommunityIcons name="minus" size={20} color="#f9fcf5" /></Pressable>
-                  <View accessible accessibilityLabel={`${breakLimit} breaks selected`} accessibilityLiveRegion="polite" style={s.breakCount}><NumberFlow value={breakLimit} style={s.breakNumber} /></View>
+                  <View accessibilityLiveRegion="polite" style={s.breakCount}><SlotTime value={String(breakLimit)} color="#f9fcf5" size={18} weight="700" compact /></View>
                   <Pressable accessibilityRole="button" accessibilityLabel="More breaks" disabled={busy || breakLimit >= maxBreaks} style={({ pressed }) => [s.breakButton, (busy || breakLimit >= maxBreaks) && s.breakDisabled, pressed && s.breakPressed]} onPress={() => setBreakLimit(value => Math.min(maxBreaks, value + 1))}><MaterialCommunityIcons name="plus" size={20} color="#f9fcf5" /></Pressable>
                 </View>
               </View>
@@ -136,6 +173,7 @@ export function StudyLock({ uid, taskButton = false, openRequest = 0, onRequestO
                 </View>
               </View>
               <Pressable accessibilityRole="button" accessibilityLabel="Start Focus Lock" disabled={busy || !ready} style={[s.primary, (busy || !ready) && { opacity: 0.4 }]} onPress={() => void run(async () => {
+                const selectedWebsites = splitSelection([...domains, ...(website.trim() ? [website] : [])]).domains;
                 if (Platform.OS === "android" && supportsDeviceFocus && !(await deviceFocusStatus()).enabled) {
                   Alert.alert("Enable app blocking", "Allow Usage access and Display over other apps, then return to start.", [
                     { text: "Not now", style: "cancel" },
@@ -143,32 +181,50 @@ export function StudyLock({ uid, taskButton = false, openRequest = 0, onRequestO
                   ]);
                   return;
                 }
-                const started = await controller.startStudySession(getFirebaseFirestore(), uid, minutes, domains, "mobile", appLimit, breakLimit);
+                const started = await controller.startStudySession(getFirebaseFirestore(), uid, minutes, selectedWebsites, "mobile", appLimit, breakLimit);
+                setWebsite(""); setWebsiteSelection(null);
                 await syncDeviceFocusState(started, accent, "");
               })}>{busy ? <ActivityIndicator color="#111" /> : <Text style={s.primaryText}>Start Focus Lock</Text>}</Pressable>
             </>}
             {!!error && <Text accessibilityRole="alert" style={s.error}>{error}</Text>}
           </>}
+          </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
     </Modal>
   </>;
 }
 
-function StudyClock({ minutes, accent, onCancel, onSave }: { minutes: number; accent: string; onCancel: () => void; onSave: (value: number) => void }) {
+function StudyClock({ minutes, accent, onCancel, onSave, timeOfDay=false, title="Focus time" }: { minutes: number; accent: string; onCancel: () => void; onSave: (value: number) => void; timeOfDay?:boolean; title?:string }) {
   const [hour, setHour] = useState(Math.floor(minutes / 60)), [minute, setMinute] = useState(minutes % 60);
   const [part, setPart] = useState<"hour" | "minute">(minutes < 60 ? "minute" : "hour"), [keyboard, setKeyboard] = useState(false);
-  const selected = part === "hour" ? hour : minute, angle = selected * (part === "hour" ? 30 : 6) * Math.PI / 180;
-  const total = hour * 60 + minute, valid = total >= 1 && total <= 720;
-  const choose = (value: number) => { if (part === "hour") setHour(value); else setMinute(value); };
+  const selected = part === "hour" ? (timeOfDay ? hour % 12 : hour) : minute, angle = selected * (part === "hour" ? 30 : 6);
+  const [dragging,setDragging]=useState(false);
+  const displayHour = timeOfDay ? hour % 12 || 12 : hour;
+  const total = hour * 60 + minute, valid = timeOfDay ? total>=0&&total<1440 : total >= 1 && total <= 720;
+  const choose = (value: number) => { if (part === "hour") setHour(timeOfDay?value%12+(hour>=12?12:0):value); else setMinute(value); };
   return <>
-    <Text accessibilityRole="header" style={s.title}>Focus time</Text>
-    <View style={s.digits}>{(["hour", "minute"] as const).map((field, index) => <View key={field} style={s.digitGroup}>{index === 1 && <Text style={s.colon}>:</Text>}<View>{keyboard ? <TextInput accessibilityLabel={field === "hour" ? "Hours" : "Minutes"} keyboardType="number-pad" value={String(field === "hour" ? hour : minute)} onFocus={() => setPart(field)} onChangeText={value => { const next = Math.max(0, Math.min(field === "hour" ? 12 : 59, Number(value.replace(/\D/g, "")) || 0)); if (field === "hour") setHour(next); else setMinute(next); }} style={[s.digit, { color: "#fff" }]} /> : <Pressable accessibilityRole="button" accessibilityLabel={field === "hour" ? "Select hours" : "Select minutes"} onPress={() => setPart(field)} style={[s.digit, part === field && { backgroundColor: accent }]}><Text style={[s.digitText, part === field && { color: accentInk(accent) }]}>{String(field === "hour" ? hour : minute).padStart(2, "0")}</Text></Pressable>}<Text style={s.digitLabel}>{field === "hour" ? "Hours" : "Minutes"}</Text></View></View>)}</View>
-    {!keyboard && <View style={s.clock}>
-      <Svg pointerEvents="none" width={220} height={220} style={StyleSheet.absoluteFill}><Line x1={110} y1={110} x2={110 + Math.sin(angle) * 82} y2={110 - Math.cos(angle) * 82} stroke={accent} strokeWidth={2} /><Circle cx={110} cy={110} r={4} fill={accent} /><Circle cx={110 + Math.sin(angle) * 82} cy={110 - Math.cos(angle) * 82} r={17} fill={accent} /></Svg>
-      <View style={StyleSheet.absoluteFill} onStartShouldSetResponder={() => true} onMoveShouldSetResponder={() => true} onResponderGrant={event => { const value = clockValueFromPoint(event.nativeEvent.locationX, event.nativeEvent.locationY, part); if (value !== null) choose(part === "hour" ? value % 12 : value); }} onResponderMove={event => { const value = clockValueFromPoint(event.nativeEvent.locationX, event.nativeEvent.locationY, part); if (value !== null) choose(part === "hour" ? value % 12 : value); }} onResponderRelease={() => { if (part === "hour") setPart("minute"); }} />
-      {Array.from({ length: 12 }, (_, index) => { const value = part === "hour" ? index : index * 5; return <Pressable key={value} accessibilityRole="button" accessibilityLabel={`${value} ${part === "hour" ? "hours" : "minutes"}`} style={[s.clockNumber, { left: 110 + Math.sin(index * Math.PI / 6) * 82 - 17, top: 110 - Math.cos(index * Math.PI / 6) * 82 - 17 }]} onPress={() => { choose(value); if (part === "hour") setPart("minute"); }}><Text style={{ fontSize: 15, color: selected === value ? accentInk(accent) : "#eee" }}>{value}</Text></Pressable>; })}
-    </View>}
+    <Text accessibilityRole="header" style={s.title}>{title}</Text>
+    <View style={[s.digits,timeOfDay&&{gap:7}]}>
+      <View style={{flexDirection:"row",gap:9,width:(timeOfDay?64:82)*2+30}}>
+      <ClockDigitHighlight part={part} color={accent}/>
+      {(["hour", "minute"] as const).map((field, index) => <View key={field} style={s.digitGroup}>
+        {index === 1 && <Text style={[s.colon,{width:12,textAlign:"center"}]}>:</Text>}
+        <View>{keyboard ? <TextInput accessibilityLabel={field === "hour" ? "Hours" : "Minutes"} keyboardType="number-pad" value={String(field === "hour" ? displayHour : minute)} onFocus={() => setPart(field)} onChangeText={value => {
+          const next=Math.max(0,Math.min(field==="hour"?12:59,Number(value.replace(/\D/g,""))||0));
+          if(field==="hour")setHour(timeOfDay?next%12+(hour>=12?12:0):next);else setMinute(next);
+        }} style={[s.digit,timeOfDay&&{width:64},{color:part===field?accentInk(accent):"#fff",backgroundColor:"transparent"}]} /> : <Pressable accessibilityRole="button" accessibilityLabel={field === "hour" ? "Select hours" : "Select minutes"} onPress={()=>setPart(field)} style={[s.digit,timeOfDay&&{width:64},{backgroundColor:"transparent"}]}><Text style={[s.digitText,part===field&&{color:accentInk(accent)}]}>{String(field==="hour"?displayHour:minute).padStart(2,"0")}</Text></Pressable>}
+          <Text style={s.digitLabel}>{field==="hour"?"Hours":"Minutes"}</Text>
+        </View>
+      </View>)}
+      </View>
+      {timeOfDay&&<AnimatedTimeChips vertical options={[0,12]} labels={["AM","PM"]} value={hour>=12?12:0} onChange={value=>setHour(hour%12+value)} color="#f9fcf5" ink="#111" height={33} radius={0} gap={0} style={{width:48,height:66,alignSelf:"flex-start",borderRadius:12,overflow:"hidden",backgroundColor:"#202020"}} />}
+    </View>
+    {!keyboard && <ClockFaceMotion mode={part} style={s.clock}>
+      <ClockHand angle={angle} color={accent} dragging={dragging}/>
+      <View style={StyleSheet.absoluteFill} onStartShouldSetResponder={() => true} onMoveShouldSetResponder={() => true} onResponderGrant={event => {setDragging(false); const value = clockValueFromPoint(event.nativeEvent.locationX, event.nativeEvent.locationY, part); if (value !== null) choose(part === "hour" ? value % 12 : value); }} onResponderMove={event => {setDragging(true); const value = clockValueFromPoint(event.nativeEvent.locationX, event.nativeEvent.locationY, part); if (value !== null) choose(part === "hour" ? value % 12 : value); }} onResponderTerminate={()=>setDragging(false)} onResponderRelease={() => {setDragging(false); if (part === "hour") setPart("minute"); }} />
+      {Array.from({ length: 12 }, (_, index) => { const value = part === "hour" ? index : index * 5, label=timeOfDay&&part==="hour"&&value===0?12:value; return <Pressable key={value} accessibilityRole="button" accessibilityLabel={`${label} ${part === "hour" ? "hours" : "minutes"}`} style={[s.clockNumber, { left: 110 + Math.sin(index * Math.PI / 6) * 82 - 17, top: 110 - Math.cos(index * Math.PI / 6) * 82 - 17 }]} onPress={() => { choose(value); if (part === "hour") setPart("minute"); }}><Text style={{ fontSize: 15, color: selected === value ? accentInk(accent) : "#eee" }}>{label}</Text></Pressable>; })}
+    </ClockFaceMotion>}
     {!valid && <Text style={s.error}>Choose 1 minute to 12 hours.</Text>}
     <View style={s.clockActions}><Pressable accessibilityRole="button" accessibilityLabel={keyboard ? "Use clock" : "Use keyboard"} onPress={() => setKeyboard(!keyboard)}><MaterialCommunityIcons name={keyboard ? "clock-outline" : "keyboard-outline"} size={21} color="#aaa" /></Pressable><View style={{ flex: 1 }} /><Pressable accessibilityRole="button" onPress={onCancel}><Text style={[s.clockAction, { color: accent }]}>Cancel</Text></Pressable><Pressable accessibilityRole="button" disabled={!valid} onPress={() => onSave(total)}><Text style={[s.clockAction, { color: accent, opacity: valid ? 1 : 0.4 }]}>Save</Text></Pressable></View>
   </>;
@@ -188,18 +244,26 @@ function ActiveLockDot({ color }: { color: string }) {
 }
 
 const s = StyleSheet.create({
-  breakCard: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, padding: 12, marginBottom: 18, borderRadius: 18, backgroundColor: "#191919" },
+  websites: { marginTop: 16, marginBottom: 14, gap: 8 },
+  websiteHeading: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  websiteCount: { color: "#999", fontSize: 11 },
+  websiteEntry: { flexDirection: "row", alignItems: "center", gap: 9, backgroundColor: "#252525", borderRadius: 16, paddingHorizontal: 13, minHeight: 48 },
+  websiteInput: { flex: 1, minWidth: 0, color: "#eee", fontSize: 13, paddingVertical: 12 },
+  websiteChips: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
+  websiteChip: { flexDirection: "row", alignItems: "center", gap: 8, maxWidth: "100%", backgroundColor: "#242424", borderRadius: 18, paddingHorizontal: 11, paddingVertical: 8 },
+  websiteChipText: { color: "#eee", fontSize: 12, flexShrink: 1 },
+  breakCard: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, paddingHorizontal: 10, paddingVertical: 6, marginBottom: 12, borderRadius: 14, backgroundColor: "#191919" },
   breakCopy: { flex: 1 },
-  breakTitle: { color: "#f9fcf5", fontSize: 13, fontWeight: "600" },
-  breakHint: { color: "#929292", fontSize: 10, marginTop: 4 },
+  breakTitle: { color: "#f9fcf5", fontSize: 12, fontWeight: "600" },
+  breakHint: { color: "#929292", fontSize: 10, marginTop: 2 },
   breakControls: { flexDirection: "row", alignItems: "center", gap: 2 },
-  breakButton: { width: 40, height: 44, borderRadius: 22, backgroundColor: "#292929", alignItems: "center", justifyContent: "center" },
+  breakButton: { width: 34, height: 34, borderRadius: 17, backgroundColor: "#292929", alignItems: "center", justifyContent: "center" },
   breakDisabled: { opacity: 0.25 },
   breakPressed: { backgroundColor: "#3b3b3b", transform: [{ scale: 0.94 }] },
-  breakCount: { minWidth: 36, alignItems: "center", justifyContent: "center", overflow: "hidden" },
-  breakNumber: { color: "#f9fcf5", fontSize: 22, fontWeight: "700", fontVariant: ["tabular-nums"] },
-  taskStart: { alignSelf: "center", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 48, minWidth: 180, paddingHorizontal: 28, borderRadius: 28, backgroundColor: "#f9fcf5" },
+  breakCount: { minWidth: 28, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  taskStart: { alignSelf: "center", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, minHeight: 40, minWidth: 156, paddingHorizontal: 20, borderRadius: 24, backgroundColor: "#f9fcf5" },
   taskStartText: { color: "#111", fontSize: 14, fontWeight: "700", fontVariant: ["tabular-nums"] },
+  taskTimer: { flexDirection: "row", alignItems: "center" },
   appLimitRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 18 },
   appLimitOptions: { flexDirection: "row", gap: 6, padding: 4, borderRadius: 24, backgroundColor: "#202020" },
   appLimitIndicator: { position: "absolute", left: 4, top: 4, width: 40, height: 36, borderRadius: 20, backgroundColor: colors.button },
@@ -213,7 +277,7 @@ const s = StyleSheet.create({
   profileFocusTime: { color: "#ddd", fontSize: 12, fontWeight: "600", fontVariant: ["tabular-nums"] },
   profileFocus: { marginLeft: "auto", flexDirection: "row", alignItems: "center" },
   profileTrigger: { flexDirection: "row", alignItems: "center", gap: 9, padding: 15, borderRadius: 18, backgroundColor: "#1b1b1b", marginTop: 12 }, profileLabel: { color: "#fafaf7", fontSize: 13, fontWeight: "600" }, profileHint: { marginLeft: "auto", color: "#888", fontSize: 11 },
-  overlay: { flex: 1, justifyContent: "center", alignItems: "center", padding: 12, backgroundColor: "#000b" }, dialog: { flexGrow: 0, width: "100%", maxWidth: 365, maxHeight: "92%", borderRadius: 24, backgroundColor: "#000" }, dialogContent: { padding: 18 }, heading: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }, title: { color: "#fafaf7", fontSize: 17, fontWeight: "700" },
+  overlay: { flex: 1, justifyContent: "center", alignItems: "center", padding: 12, backgroundColor: "#000b" }, dialog: { flexGrow: 0, width: "100%", maxWidth: 365, maxHeight: "92%", borderRadius: 24, backgroundColor: "#181818" }, dialogContent: { padding: 18 }, heading: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }, title: { color: "#fafaf7", fontSize: 17, fontWeight: "700" },
   connection: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 5, marginTop: 10, marginBottom: 18, paddingVertical: 5, paddingHorizontal: 8, borderRadius: 20, backgroundColor: "#ffffff08" }, connectionText: { color: "#999", fontSize: 10 }, dot: { width: 5, height: 5, borderRadius: 3 }, liveTime: { fontSize: 48, fontWeight: "700", textAlign: "center", marginVertical: 16, fontVariant: ["tabular-nums"] },
   duration: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#242424", borderRadius: 14, padding: 13, marginVertical: 12 }, durationLabel: { color: "#ddd", fontSize: 12 }, durationValue: { marginLeft: "auto", color: "#eee", fontSize: 12, fontWeight: "600" }, primary: { alignItems: "center", justifyContent: "center", minHeight: 40, borderRadius: 24, backgroundColor: "#f9fcf5", padding: 11, marginTop: 4 }, primaryText: { color: "#111", fontSize: 12, fontWeight: "700" }, secondary: { alignItems: "center", justifyContent: "center", minHeight: 40, borderRadius: 24, backgroundColor: "#242424", padding: 11, marginTop: 12 }, secondaryText: { color: "#fafaf7", fontSize: 12, fontWeight: "700" }, error: { color: "#ff8495", fontSize: 11, lineHeight: 17, marginTop: 9 },
   digits: { flexDirection: "row", justifyContent: "center", marginTop: 20, marginBottom: 18, gap: 9 }, digitGroup: { flexDirection: "row", alignItems: "flex-start", gap: 9 }, digit: { width: 82, height: 66, borderRadius: 12, backgroundColor: "#333", alignItems: "center", justifyContent: "center", textAlign: "center", fontSize: 36, fontWeight: "700" }, digitText: { color: "#fff", fontSize: 36, fontWeight: "700" }, digitLabel: { color: "#999", fontSize: 10, marginTop: 6, textAlign: "center" }, colon: { color: "#ccc", fontSize: 36, lineHeight: 66 }, clock: { width: 220, height: 220, borderRadius: 110, backgroundColor: "#333", alignSelf: "center" }, clockNumber: { position: "absolute", width: 34, height: 34, alignItems: "center", justifyContent: "center" }, clockActions: { flexDirection: "row", alignItems: "center", gap: 22, marginTop: 20, paddingVertical: 8 }, clockAction: { fontSize: 14, fontWeight: "600" },

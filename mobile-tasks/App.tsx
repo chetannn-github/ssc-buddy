@@ -8,8 +8,11 @@ import { UppercaseTextInput as TextInput } from "./src/components/UppercaseTextI
 import { setAppAccent, useAppAccent } from "./src/theme";
 import { createThemedStyles } from "./src/theme";
 import { TaskOverview } from "./src/components/TaskOverview";
+import { TaskEmptyState } from "./src/components/TaskEmptyState";
 import { DailyFocusReward } from "./src/components/DailyFocusReward";
-import { StudyLock } from "./src/components/StudyLock";
+import { StudyLock, controller as profileFocusReader } from "./src/components/StudyLock";
+import { ProfileFocusSync } from "../shared/ProfileFocusSync";
+import { getFirebaseFirestore } from "./src/lib/firebase";
 import { DailySectionHeader } from "./src/components/DailySectionHeader";
 import { colors, dailyTaskColors } from "./src/theme";
 import { DropdownChevron } from "./src/components/DropdownChevron";
@@ -58,6 +61,7 @@ import { TaskRow } from "./src/components/TaskRow";
 import { AnimatedTimeChips } from "./src/components/AnimatedTimeChips";
 import { canChangeTaskCompletion } from "./src/domain/tasks";
 import { WeeklyAwardCelebration } from "./src/components/WeeklyAwardCelebration";
+import { leaderboardWeek } from "./src/domain/weekly-results";
 import { CelebrationFireworks } from "./src/components/CelebrationFireworks";
 import { BottomNavigation } from "./src/components/BottomNavigation";
 import { type TabKey, tabs } from "./src/navigation/tabs";
@@ -342,7 +346,7 @@ export default function App() {
   useEffect(() => {
     if (!user) { setWidgetRank(null); return; }
     return watchWeeklyLeaderboardRank(user, (rank) => setWidgetRank(rank));
-  }, [calendarDay, user?.uid]);
+  }, [leaderboardWeek(new Date(`${calendarDay}T12:00:00`)), user?.uid]);
   useEffect(() => {
     void AsyncStorage.setItem(WIDGET_META_STORAGE_KEY, JSON.stringify({ rank: widgetRank }));
     if (tasksLoaded) refreshDailyTasksWidget(tasks);
@@ -974,12 +978,12 @@ export default function App() {
             <TaskOverview total={todaySummary.total} due={dueTasks.length} percent={todaySummary.percent}
               dueOnly={taskDueOnly} onFilterChange={setTaskDueOnly}
               studyTime={<RollingDuration minutes={todaySummary.minutes} fontSize={12} />} />
-            <DailyFocusReward uid={user?.uid} date={activeTaskDate} />
             </View>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.content, styles.tasksContent]}>
             <View style={styles.tasksList}>
+            <DailyFocusReward uid={user?.uid} date={activeTaskDate} />
             {visibleTasks.length === 0 ? (
-                taskDueOnly && todayTasks.length > 0 ? <View style={{padding:22}}><Text style={styles.muted}>All tasks complete for this day.</Text></View> : isTaskHistory ? <View style={{padding:22}}><Text style={styles.muted}>No tasks recorded for this day.</Text></View> : <Empty onPress={openNew} />
+                <TaskEmptyState mode={taskDueOnly && todayTasks.length > 0 ? "complete" : isTaskHistory ? "history" : "empty"} />
             ) : (
               visibleTasks.map((task, index) => (
                 <TaskRow
@@ -1093,6 +1097,7 @@ export default function App() {
       )}
       {!quickRecallOpen && <BottomNavigation activeTab={appTab === "progress" ? "track" : appTab === "habits" ? "tasks" : appTab} onChange={(tab) => { setLeaderboardOpen(false); setAppTab(tab === "tasks" && profileSettings?.habitsEnabled !== false ? taskSection.current : tab); }} practiceSessionEnabled={profileSettings?.practiceSessionEnabled !== false} trackProgressEnabled={profileSettings?.trackProgressEnabled !== false} timersEnabled={profileSettings?.timersEnabled !== false} habitsEnabled={profileSettings?.habitsEnabled !== false} profileAvatar={profileSettings?.avatar ? avatarAssets[profileSettings.avatar] : undefined} />}
       <MediaOverlay user={user} mode={mediaMode} musicOpenRequest={musicOpenRequest} onClose={() => setMediaMode(null)} />
+      <ProfileFocusSync uid={user?.uid} getDatabase={getFirebaseFirestore} reader={profileFocusReader} enabled={appTab === "profile"} />
       <DeviceFocusSync user={user} />
       <FocusWidgetSync user={user} />
       {celebratedStreak !== null && <StreakCelebration streak={celebratedStreak} onClose={() => setCelebratedStreak(null)} />}
@@ -1198,16 +1203,6 @@ function TaskDropdown({ label, open, onToggle, options, onSelect, compact = fals
   </View>;
 }
 
-function Empty({ onPress }: { onPress: () => void }) {
-  return (
-    <View style={styles.empty}>
-      <Text style={styles.muted}>Nothing planned for today.</Text>
-      <Pressable onPress={onPress}>
-        <Text style={styles.link}>Add your first task</Text>
-      </Pressable>
-    </View>
-  );
-}
 function Metric({ label, value, note }: { label: string; value: ReactNode; note: ReactNode }) {
   return (
     <View style={styles.metric}>
@@ -1360,15 +1355,6 @@ const styles = createThemedStyles({
   taskMeta: { color: "#a1a1aa", fontSize: 12, marginTop: 4 },
   strike: { textDecorationLine: "line-through", color: "#a1a1aa" },
   delete: { fontSize: 27, color: "#a1a1aa", paddingHorizontal: 4 },
-  empty: {
-    alignItems: "center",
-    borderRadius: 17,
-    padding: 30,
-    backgroundColor: "#1b1b1b",
-    borderWidth: 1,
-    borderColor: "#303030",
-  },
-  link: { color: dailyTaskColors.accent, fontWeight: "700", marginTop: 10 },
   metric: {
     width: "48.8%",
     minHeight: 92,

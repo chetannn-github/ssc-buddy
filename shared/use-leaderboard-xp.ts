@@ -1,46 +1,5 @@
-import { useEffect, useState } from "react";
-import { collection, doc, onSnapshot, type Firestore } from "firebase/firestore";
-import { getXpSummary } from "../mobile-tasks/src/domain/xp";
-import type { Task } from "../mobile-tasks/src/domain/tasks";
+import { collection, doc, onSnapshot } from "firebase/firestore";
+import { createUseLeaderboardXp } from "./create-use-leaderboard-xp";
 
-type Entry = { uid: unknown; username?: unknown; xp?: unknown; level?: unknown; focusDays?: unknown; focusXp?: unknown };
-type Xp = { xp: number; level: number };
-const meta = (entry: Entry): Xp => {
-  const xp = Number(entry.xp) || 0;
-  return { xp, level: Number.isFinite(Number(entry.level)) ? Number(entry.level) : xp < 0 ? 0 : 1 };
-};
-
-/** Match mobile's current XP fallback for legacy and historical leaderboard entries. */
-export function useLeaderboardXp(entries: Entry[], week: string, currentWeek: string, getDatabase: () => Firestore, viewerUid?: string, viewerTasks?: Task[]) {
-  const members = JSON.stringify(entries.map(entry => [String(entry.uid), String(entry.username ?? "")]).sort((a, b) => a[0]!.localeCompare(b[0]!)));
-  const [profiles, setProfiles] = useState<{ key: string; tasks: Record<string, Task[] | null> }>({ key: "", tasks: {} });
-  const [current, setCurrent] = useState<{ week: string; entries: Record<string, Entry> }>({ week: "", entries: {} });
-  useEffect(() => {
-    if (week === currentWeek) return;
-    return onSnapshot(collection(getDatabase(), "leaderboards", currentWeek, "entries"), snapshot => {
-      setCurrent({ week: currentWeek, entries: Object.fromEntries(snapshot.docs.map(item => [item.id, { ...item.data(), uid: item.id }])) });
-    }, () => setCurrent({ week: currentWeek, entries: {} }));
-  }, [week, currentWeek, getDatabase]);
-  useEffect(() => {
-    let active = true;
-    setProfiles({ key: members, tasks: {} });
-    const stops = (JSON.parse(members) as string[][]).filter(([uid, username]) => uid !== viewerUid && /^[a-z0-9._-]{3,24}$/.test(username!)).map(([uid, username]) => {
-      const update = (tasks: Task[] | null) => {
-        if (active) setProfiles(previous => ({ key: members, tasks: { ...(previous.key === members ? previous.tasks : {}), [uid!]: tasks } }));
-      };
-      return onSnapshot(doc(getDatabase(), "publicProfiles", username!), snapshot => {
-        const profile = snapshot.data();
-        update(profile?.["uid"] === uid && Array.isArray(profile?.["dashboard"]?.dailyTasks) ? profile["dashboard"].dailyTasks : null);
-      }, () => update(null));
-    });
-    return () => { active = false; stops.forEach(stop => stop()); };
-  }, [members, viewerUid, getDatabase]);
-  return Object.fromEntries(entries.map(entry => {
-    const uid = String(entry.uid);
-    if (entry.focusDays && typeof entry.xp === "number") return [uid, meta(entry)];
-    const tasks = uid === viewerUid ? viewerTasks : profiles.key === members ? profiles.tasks[uid] : null;
-    if (tasks) return [uid, getXpSummary(tasks, Number(entry.focusXp) || 0)];
-    const latest = week === currentWeek ? entry : current.week === currentWeek ? current.entries[uid] : null;
-    return [uid, latest && typeof latest.xp === "number" && Number.isFinite(latest.xp) ? meta(latest) : null];
-  })) as Record<string, Xp | null>;
-}
+// Web and desktop use their own Firebase SDK; mobile supplies its local SDK.
+export const useLeaderboardXp = createUseLeaderboardXp({ collection, doc, onSnapshot });

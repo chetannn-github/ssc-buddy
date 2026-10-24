@@ -531,6 +531,11 @@ const previewSource = await readFile(
   "utf8",
 );
 const previewExports = {};
+const liveSourceExports = {};
+vm.runInNewContext(ts.transpileModule(await readFile(
+  new URL("../mobile-tasks/src/domain/shared-live-source.ts", import.meta.url), "utf8",
+), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText,
+{ exports: liveSourceExports });
 vm.runInNewContext(
   ts.transpileModule(previewSource, {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
@@ -580,6 +585,7 @@ function optimisticHarness() {
         if (name === "react") return react;
         if (name === "react-native") return { AppState: {} };
         if (name.includes("optimistic-habits")) return previewExports;
+        if (name.includes("shared-live-source")) return liveSourceExports;
         if (name.includes("domain/habits")) return sharedDomain;
         if (name.includes("lib/firebase")) return { getFirebaseFirestore: () => ({}) };
         if (name === "firebase/firestore")

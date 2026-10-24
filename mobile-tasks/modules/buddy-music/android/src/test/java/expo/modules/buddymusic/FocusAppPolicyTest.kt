@@ -4,6 +4,26 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class FocusAppPolicyTest {
+  @Test fun settingsFromNotificationShadeBlocksDuringFocusEvenWithLegacyExemptions() {
+    val settings = "com.android.settings"
+    val essentials = setOf("buddy", "com.android.systemui", settings)
+    val allowed = setOf("study", settings)
+    assertTrue(FocusAppPolicy.blocks(settings, 10, 20, essentials, allowed))
+    assertFalse(FocusAppPolicy.blocks("study", 10, 20, essentials, allowed))
+    assertFalse(FocusAppPolicy.blocks(settings, 20, 20, essentials, allowed))
+    assertFalse(FocusAppPolicy.blocks(settings, 10, 0, essentials, allowed)) // Timed break.
+    assertFalse(FocusAppPolicy.blocks(settings, 10, 20, essentials, allowed, ringing = true))
+  }
+  @Test fun settingsCannotBeSelectedAndOemSettingsUseTheResolvedPackage() {
+    val allowed = setOf("study")
+    assertEquals(allowed, FocusAppPolicy.allow("com.android.settings", 10, 20, allowed))
+    val packages = setOf("com.android.settings", "vendor.settings")
+    assertEquals(allowed, FocusAppPolicy.allow("vendor.settings", 10, 20, allowed, settingsPackages = packages))
+    assertTrue(FocusAppPolicy.blocks("vendor.settings", 10, 20, setOf("vendor.settings"), emptySet(), settingsPackages = packages))
+    assertFalse(FocusAppPolicy.isSettings("com.android.permissioncontroller", packages))
+    assertFalse(FocusAppPolicy.blocks("com.android.permissioncontroller", 10, 20, setOf("com.android.permissioncontroller"), allowed))
+    assertFalse(FocusAppPolicy.blocks("phone", 10, 20, setOf("phone"), allowed))
+  }
   @Test fun selectedAppLimitSupportsZeroOneAndTwo() {
     assertTrue(FocusAppPolicy.allow("study", 10, 20, emptySet(), 0).isEmpty())
     val first = FocusAppPolicy.allow("study", 10, 20, emptySet(), 1)

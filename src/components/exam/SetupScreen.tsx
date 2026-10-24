@@ -22,7 +22,6 @@ import { PageLoader } from "@/components/ui/page-loader";
 import { consumeLightPageLoader } from "@/lib/navigation";
 import {
   upsertExercise,
-  deleteExercise,
   addChapter,
   getExercise,
   addSubject,
@@ -278,7 +277,7 @@ export function SetupScreen({
       setExercise(ALL_PRACTICE_EXERCISES);
       setCountMode("fixed");
       setStartNumber("1");
-      setQuestionCount(String(Math.min(50, combined?.questionCount ?? 1)));
+      setQuestionCount(String(Math.min(500, combined?.questionCount ?? 1)));
       return;
     }
     const ex = getExercise(subject, name, exerciseName ?? null);
@@ -516,7 +515,11 @@ export function SetupScreen({
             <Label htmlFor="practice-exercise" className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
               Exercise
             </Label>
-            <Select value={exercise} onValueChange={(value) => selectChapter(chapter, value)} disabled={!exercises.length}>
+            <Select value={exercise} onValueChange={(value) => {
+              if (value === "__add_question_exercise__") openJsonExercise();
+              else if (value === "__add_answer_key_exercise__") addExercise();
+              else selectChapter(chapter, value);
+            }}>
               <SelectTrigger id="practice-exercise">
                 <SelectValue placeholder="Select exercise" />
               </SelectTrigger>
@@ -546,16 +549,13 @@ export function SetupScreen({
                     ))}
                   </SelectGroup>
                 )}
+                <SelectGroup>
+                  <SelectLabel>Add exercise</SelectLabel>
+                  <SelectItem value="__add_question_exercise__">+ Add question exercise</SelectItem>
+                  <SelectItem value="__add_answer_key_exercise__">+ Add answer-key exercise</SelectItem>
+                </SelectGroup>
               </SelectContent>
             </Select>
-            <div className="flex flex-wrap gap-1.5">
-              <Button type="button" size="sm" variant="secondary" onClick={openJsonExercise}>
-                + Add question exercise
-              </Button>
-              <Button type="button" size="sm" variant="ghost" onClick={addExercise}>
-                + Add answer-key exercise
-              </Button>
-            </div>
             {!isAllExercises && (
               <button
                 type="button"
@@ -564,18 +564,6 @@ export function SetupScreen({
               >
                 {isJsonExercise ? "Edit questions of" : "Edit questions & answer key of"} “
                 {activeExerciseName || chapter}”
-              </button>
-            )}
-            {isJsonExercise && !isAllExercises && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSubjects(deleteExercise(subject, chapter, activeExerciseName));
-                  selectChapter(chapter);
-                }}
-                className="ml-3 text-xs font-medium text-destructive underline-offset-2 hover:underline"
-              >
-                Delete question exercise
               </button>
             )}
           </div>

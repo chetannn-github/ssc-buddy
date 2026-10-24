@@ -14,7 +14,7 @@ export const Route = createFileRoute("/track")({
   validateSearch: (search: Record<string, unknown>) => ({
     tab: TABS.includes(search["tab"] as Tab) ? (search["tab"] as Tab) : undefined,
   }),
-  head: () => ({ meta: [{ title: "Tracker" }] }),
+  head: () => ({ meta: [{ title: "Tracker · SSC Buddy" }, { property: "og:title", content: "Tracker · SSC Buddy" }] }),
   component: () => (
     <TrackerProvider>
       <TrackerDialogProvider>

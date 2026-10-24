@@ -2,6 +2,7 @@ import { ProfileStudyLock } from "@/components/profile/ProfileStudyLock";
 import { PublicFocusTime } from "@/components/profile/PublicFocusTime";
 import * as focusReader from "../../shared/study-lock";
 import { useProfileFocusData } from "../../shared/use-profile-focus";
+import { profileTrackerVisibility } from "../../shared/profile-tracker-visibility";
 import { getFirebaseFirestore } from "@/lib/firebase-sync";
 import { AccentPicker } from "@/components/profile/AccentPicker";
 import { applyWebAccent, normalizeAppAccent, type AppAccent } from "@/lib/app-accent";
@@ -98,7 +99,7 @@ function isInRange(dateValue: string, range: ActivityRange) {
 }
 
 export const Route = createFileRoute("/profile")({
-  head: () => ({ meta: [{ title }, { name: "description", content: description }] }),
+  head: () => ({ meta: [{ title: `${title} · SSC Buddy` }, { property: "og:title", content: `${title} · SSC Buddy` }, { name: "description", content: description }] }),
   component: Profile,
 });
 
@@ -834,7 +835,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
     setColorTheme(nextProfileColorTheme());
   }, []);
   const [records, setRecords] = useState<TestRecord[]>([]);
-  const [dailyTasks, setDailyTasks] = useState<DailyTask[]>([]);
+  const [dailyTasks, setDailyTasks] = useState<DailyTask[]>(() => readOnly ? publicProfile?.dashboard?.dailyTasks ?? [] : loadDailyTasks());
   const [tracker, setTracker] = useState<TrackerData | null>(null);
   const [range, setRange] = useState<ActivityRange>("week");
   const [profile, setProfile] = useState<PracticeProfile | null>(null);
@@ -867,10 +868,12 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
   const [importMessage, setImportMessage] = useState("");
   const [promptCopied, setPromptCopied] = useState(false);
   const [xpTimelineOpen, setXpTimelineOpen] = useState(false);
+  const [medalsOpen, setMedalsOpen] = useState(false);
   const importFileRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const authUser = useAuthUser();
   const focusData = useProfileFocusData(getFirebaseFirestore, focusReader, readOnly ? publicProfile?.uid : authUser?.uid, readOnly ? publicProfile?.username : undefined, readOnly, date => isInRange(date, range));
+  useEffect(() => { if (!focusData.canLogout) setLogoutConfirmOpen(false); }, [focusData.canLogout]);
   const resultUid = readOnly ? publicProfile?.uid : authUser?.uid;
   const medalCounts = useWeeklyMedalCounts(resultUid, dailyTasks.map((task) => task.date));
 
@@ -1113,6 +1116,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
     }
   };
   const displayName = profile?.name ?? "Your profile";
+  const trackerVisibility=profileTrackerVisibility(profile?.trackProgressEnabled!==false,profile?.showTrackerOnProfile!==false);
   const questionGoal = profile?.questionGoal ?? 100;
   const avatar = profile?.avatar && (!avatarFiles.length || avatarFiles.includes(profile.avatar)) ? profile.avatar : defaultAvatar(displayName, avatarFiles);
   const consistencyStreak = useMemo(
@@ -1165,6 +1169,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
     }
   };
   const logout = async () => {
+    if (!focusData.canLogout) return;
     setIsLoggingOut(true);
     try {
       localStorage.removeItem("ssc-buddy-firebase-sync-enabled");
@@ -1179,7 +1184,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
     <AppShell title={readOnly ? displayName : "Your Profile"}>
       <div className="profile-dark -mx-4 -my-6 min-h-[calc(100vh-4rem)] bg-[#121212] px-4 pt-5 pb-10 text-zinc-100 sm:-mx-6 sm:px-6 sm:pt-6 sm:pb-14">
         <div className="mx-auto max-w-4xl space-y-7">
-          <section className="relative flex flex-col items-center gap-4 text-center sm:flex-row sm:items-start sm:text-left">
+          <section aria-label="Profile header" className="web-sticky-section web-profile-header relative flex flex-col items-center gap-4 pb-3 text-center sm:flex-row sm:items-start sm:text-left">
             <div className="relative flex w-28 min-w-0 flex-col items-center">
               {avatar ? (
                 <button
@@ -1219,14 +1224,14 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
 
               <div className="mt-0.5 flex items-center justify-center gap-2 sm:justify-start">
                 <h2 className="truncate text-xl font-semibold text-zinc-50">{displayName}</h2>
-              <div className="inline-flex shrink-0 items-center gap-2 rounded-full border border-white/10 bg-white/5 px-2 py-1" aria-label="Weekly medals">
+              <button type="button" onClick={() => setMedalsOpen(true)} className="inline-flex shrink-0 cursor-pointer items-center gap-2 rounded-full border border-white/10 bg-white/5 px-2 py-1 transition-colors hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white/60" aria-label="View weekly medals">
                 {(["gold", "silver", "bronze"] as const).map((medal) => (
                   <span key={medal} title={`${medal}: ${medalCounts[medal]} weekly medals`} aria-label={`${medal} medals: ${medalCounts[medal]}`} className="inline-flex items-center gap-0.5 text-[10px] font-semibold tabular-nums text-zinc-200">
                     <img src={`/${medal}-medal.png`} alt="" className="h-4 w-4 object-contain" />
                     <RollingNumber value={medalCounts[medal]} prefix="×" />
                   </span>
                 ))}
-              </div>
+              </button>
                 {readOnly && (
                   <span
                     title={`${consistencyStreak}-day consistency streak`}
@@ -1247,9 +1252,11 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
                   <Settings className="h-4 w-4" />
                 </Button>}
               </div>
-              <button type="button" onClick={() => setXpTimelineOpen(true)} className="mt-1 w-full max-w-52 text-center outline-none sm:text-left">
+              <button type="button" disabled={!focusData.ready} onClick={() => setXpTimelineOpen(true)} className="mt-1 w-full max-w-52 text-center outline-none sm:text-left">
+                {focusData.ready ? <>
                 <span className={`text-xs font-semibold ${xpSummary.xp > 0 ? "text-emerald-300" : xpSummary.xp < 0 ? "text-red-300" : "text-zinc-400"}`}>Lv. <RollingNumber value={xpSummary.level} /> · {levelName(xpSummary.level)} · <RollingNumber value={xpSummary.xp} prefix={xpSummary.xp > 0 ? "+" : ""} suffix=" XP" /></span>
                 {xpSummary.level > 0 && <ProfileXpBar progress={xpSummary.progress} />}
+                </> : <span aria-label="Loading XP and level" className="text-xs text-zinc-500">—</span>}
               </button>
               {readOnly && publicProfile?.username && <div className="mt-0 flex flex-wrap items-center justify-center gap-1.5 sm:justify-start">
                 <Button type="button" variant="ghost" className="h-9 gap-1.5 px-2.5 text-sm text-zinc-300 hover:bg-white/10 hover:text-white" onClick={() => void navigate({ to: "/weekly-stats/$username", params: { username: publicProfile.username } })}>
@@ -1303,13 +1310,13 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
               range={range}
               onRangeChange={setRange}
               showPractice={profile?.practiceSessionEnabled !== false}
-              showTracker={profile?.trackProgressEnabled !== false && profile?.showTrackerOnProfile !== false}
+              showTracker={trackerVisibility.summary}
             />
 
             <ActivityHeatmap colorTheme={colorTheme} records={records} tracker={tracker} tasks={dailyTasks} range="year" activityEnabled={profile?.practiceSessionEnabled !== false || profile?.trackProgressEnabled !== false} publicActivity={readOnly && !publicProfile?.dashboard ? publicProfile?.activity : undefined} dataReady={readOnly || profile !== null} />
           </div>
 
-          {profile?.trackProgressEnabled !== false && profile?.showTrackerOnProfile !== false && <StudyTrackerOverview tracker={tracker} readOnly={readOnly} />}
+          {trackerVisibility.details && <StudyTrackerOverview tracker={tracker} readOnly={readOnly} />}
         </div>
       </div>
       {previewingAvatar && avatar && (
@@ -1326,7 +1333,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
           />
         </button>
       )}
-      <Dialog open={logoutConfirmOpen} onOpenChange={setLogoutConfirmOpen}>
+      <Dialog open={logoutConfirmOpen && focusData.canLogout} onOpenChange={setLogoutConfirmOpen}>
         <DialogContent onOpenAutoFocus={(event) => event.preventDefault()} className="border-white/10 bg-[#121212] p-5 text-zinc-100 sm:max-w-sm">
           <DialogHeader className="space-y-1">
             <DialogTitle className="text-base">Sign out?</DialogTitle>
@@ -1354,7 +1361,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
       {editingProfile && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-md" onMouseDown={(event) => { if (event.target === event.currentTarget) setEditingProfile(false); }}>
           <section className="profile-settings-scroll relative max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-2xl border border-white/10 bg-[#121212] p-4 text-zinc-100 shadow-2xl sm:p-5" onMouseDown={(event) => event.stopPropagation()}>
-            <div className="flex items-center justify-between gap-3"><h2 className="text-lg font-semibold tracking-tight text-zinc-50">{profile ? "Edit your profile" : "Setup your profile"}</h2><div className="flex items-center gap-1"><button type="button" aria-label="Profile settings" onClick={() => setProfileSettingsOpen((open) => !open)} className="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 transition hover:bg-white/10 hover:text-zinc-100"><Settings className="h-4 w-4" /></button><button type="button" aria-label="Log out" disabled={isLoggingOut} onClick={() => { setEditingProfile(false); setLogoutConfirmOpen(true); }} className="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 transition hover:bg-rose-500/10 hover:text-rose-300 disabled:opacity-50"><LogOut className="h-4 w-4" /></button></div></div>
+            <div className="flex items-center justify-between gap-3"><h2 className="text-lg font-semibold tracking-tight text-zinc-50">{profile ? "Edit your profile" : "Setup your profile"}</h2><div className="flex items-center gap-1"><button type="button" aria-label="Profile settings" onClick={() => setProfileSettingsOpen((open) => !open)} className="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 transition hover:bg-white/10 hover:text-zinc-100"><Settings className="h-4 w-4" /></button>{focusData.canLogout && <button type="button" aria-label="Log out" disabled={isLoggingOut} onClick={() => { setEditingProfile(false); setLogoutConfirmOpen(true); }} className="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 transition hover:bg-rose-500/10 hover:text-rose-300 disabled:opacity-50"><LogOut className="h-4 w-4" /></button>}</div></div>
             <div className="mt-4 space-y-3">
               <label className="block text-sm font-medium text-zinc-200">
                 Your name
@@ -1414,7 +1421,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
                 <span className={cn("relative h-5 w-9 rounded-full border transition-colors", practiceSessionEnabledDraft ? "border-primary bg-primary" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", practiceSessionEnabledDraft ? "translate-x-5 bg-primary-foreground" : "translate-x-1 bg-zinc-400")} /></span>
               </button>}
             </div>
-            {profileSettingsOpen && <div className="profile-settings-scroll absolute inset-0 z-10 overflow-y-auto rounded-2xl bg-[#121212] p-6 sm:p-8"><div className="flex items-center gap-2"><button type="button" aria-label="Back to profile form" onClick={() => setProfileSettingsOpen(false)} className="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 hover:bg-white/10 hover:text-white"><ArrowLeft className="h-4 w-4" /></button><h3 className="text-lg font-semibold">Settings</h3></div><div className="mt-6 space-y-4"><AccentPicker value={profile?.accentColor} onChange={(color) => void chooseAccent(color)} disabled={!profile || savingAccent || savingFeature !== null} saving={savingAccent} />{accentError && <p role="alert" className="text-xs text-red-300">{accentError}</p>}<div className="divide-y divide-white/10 overflow-hidden rounded-xl border border-white/10 bg-[#121212]"><button type="button" disabled={savingFeature !== null || savingAccent} onClick={() => void saveFeature("practice")} className="flex w-full items-center justify-between gap-3 border-0 bg-transparent px-3 py-3 text-left disabled:cursor-wait disabled:opacity-70"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Practice session</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Take practice tests, review answers and track your results.</span></span>{savingFeature === "practice" ? <LoaderCircle className="h-5 w-5 shrink-0 animate-spin text-primary" /> : <span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", practiceSessionEnabledDraft ? "border-primary bg-primary" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", practiceSessionEnabledDraft ? "translate-x-5 bg-primary-foreground" : "translate-x-1 bg-zinc-400")} /></span>}</button><button type="button" disabled={savingFeature !== null || savingAccent} onClick={() => void saveFeature("track")} className="flex w-full items-center justify-between gap-3 border-0 bg-transparent px-3 py-3 text-left disabled:cursor-wait disabled:opacity-70"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Track</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Track syllabus, revision and mock test progress.</span></span>{savingFeature === "track" ? <LoaderCircle className="h-5 w-5 shrink-0 animate-spin text-primary" /> : <span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", trackProgressEnabledDraft ? "border-primary bg-primary" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", trackProgressEnabledDraft ? "translate-x-5 bg-primary-foreground" : "translate-x-1 bg-zinc-400")} /></span>}</button><button type="button" role="switch" aria-checked={showTrackerOnProfileDraft} disabled={savingFeature !== null || savingAccent} onClick={() => void saveFeature("profileTracker")} className="flex w-full items-center justify-between gap-3 border-0 bg-transparent px-3 py-3 text-left disabled:cursor-wait disabled:opacity-70"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Show tracker on profile</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Display Study Tracker statistics and progress on your profile.</span></span>{savingFeature === "profileTracker" ? <LoaderCircle className="h-5 w-5 shrink-0 animate-spin text-primary" /> : <span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", showTrackerOnProfileDraft ? "border-primary bg-primary" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", showTrackerOnProfileDraft ? "translate-x-5 bg-primary-foreground" : "translate-x-1 bg-zinc-400")} /></span>}</button><button type="button" role="switch" aria-checked={timersEnabledDraft} disabled={savingFeature !== null || savingAccent} onClick={() => void saveFeature("timers")} className="flex w-full items-center justify-between gap-3 border-0 bg-transparent px-3 py-3 text-left disabled:cursor-wait disabled:opacity-70"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Timers</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Countdowns for important dates and deadlines.</span></span>{savingFeature === "timers" ? <LoaderCircle className="h-5 w-5 shrink-0 animate-spin text-primary" /> : <span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", timersEnabledDraft ? "border-primary bg-primary" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", timersEnabledDraft ? "translate-x-5 bg-primary-foreground" : "translate-x-1 bg-zinc-400")} /></span>}</button><button type="button" role="switch" aria-checked={habitsEnabledDraft} disabled={savingFeature !== null || savingAccent} onClick={() => void saveFeature("habits")} className="flex w-full items-center justify-between gap-3 border-0 bg-transparent px-3 py-3 text-left disabled:cursor-wait disabled:opacity-70"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Habits</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Daily heatmaps, streaks and personal challenges.</span></span>{savingFeature === "habits" ? <LoaderCircle className="h-5 w-5 shrink-0 animate-spin text-primary" /> : <span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", habitsEnabledDraft ? "border-primary bg-primary" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", habitsEnabledDraft ? "translate-x-5 bg-primary-foreground" : "translate-x-1 bg-zinc-400")} /></span>}</button><button type="button" role="switch" aria-checked={randomQuotesEnabledDraft} disabled={savingFeature !== null || savingAccent} onClick={() => void saveFeature("quotes")} className="flex w-full items-center justify-between gap-3 border-0 bg-transparent px-3 py-3 text-left disabled:cursor-wait disabled:opacity-70"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Random quotes</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Show a random motivational image when opening the app.</span></span>{savingFeature === "quotes" ? <LoaderCircle className="h-5 w-5 shrink-0 animate-spin text-primary" /> : <span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", randomQuotesEnabledDraft ? "border-primary bg-primary" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", randomQuotesEnabledDraft ? "translate-x-5 bg-primary-foreground" : "translate-x-1 bg-zinc-400")} /></span>}</button></div></div></div>}
+            {profileSettingsOpen && <div className="profile-settings-scroll absolute inset-0 z-10 overflow-y-auto rounded-2xl bg-[#121212] p-6 sm:p-8"><div className="flex items-center gap-2"><button type="button" aria-label="Back to profile form" onClick={() => setProfileSettingsOpen(false)} className="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 hover:bg-white/10 hover:text-white"><ArrowLeft className="h-4 w-4" /></button><h3 className="text-lg font-semibold">Settings</h3></div><div className="mt-6 space-y-4"><AccentPicker value={profile?.accentColor} onChange={(color) => void chooseAccent(color)} disabled={!profile || savingAccent || savingFeature !== null} saving={savingAccent} />{accentError && <p role="alert" className="text-xs text-red-300">{accentError}</p>}<div className="divide-y divide-white/10 overflow-hidden rounded-xl border border-white/10 bg-[#121212]"><button type="button" disabled={savingFeature !== null || savingAccent} onClick={() => void saveFeature("practice")} className="flex w-full items-center justify-between gap-3 border-0 bg-transparent px-3 py-3 text-left disabled:cursor-wait disabled:opacity-70"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Practice session</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Take practice tests, review answers and track your results.</span></span>{savingFeature === "practice" ? <LoaderCircle className="h-5 w-5 shrink-0 animate-spin text-primary" /> : <span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", practiceSessionEnabledDraft ? "border-primary bg-primary" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", practiceSessionEnabledDraft ? "translate-x-5 bg-primary-foreground" : "translate-x-1 bg-zinc-400")} /></span>}</button><button type="button" disabled={savingFeature !== null || savingAccent} onClick={() => void saveFeature("track")} className="flex w-full items-center justify-between gap-3 border-0 bg-transparent px-3 py-3 text-left disabled:cursor-wait disabled:opacity-70"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Track</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Track syllabus, revision and mock test progress.</span></span>{savingFeature === "track" ? <LoaderCircle className="h-5 w-5 shrink-0 animate-spin text-primary" /> : <span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", trackProgressEnabledDraft ? "border-primary bg-primary" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", trackProgressEnabledDraft ? "translate-x-5 bg-primary-foreground" : "translate-x-1 bg-zinc-400")} /></span>}</button><button type="button" role="switch" aria-checked={showTrackerOnProfileDraft} disabled={savingFeature !== null || savingAccent} onClick={() => void saveFeature("profileTracker")} className="flex w-full items-center justify-between gap-3 border-0 bg-transparent px-3 py-3 text-left disabled:cursor-wait disabled:opacity-70"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Show tracker on profile</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Show detailed syllabus, revision and mock progress cards below.</span></span>{savingFeature === "profileTracker" ? <LoaderCircle className="h-5 w-5 shrink-0 animate-spin text-primary" /> : <span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", showTrackerOnProfileDraft ? "border-primary bg-primary" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", showTrackerOnProfileDraft ? "translate-x-5 bg-primary-foreground" : "translate-x-1 bg-zinc-400")} /></span>}</button><button type="button" role="switch" aria-checked={timersEnabledDraft} disabled={savingFeature !== null || savingAccent} onClick={() => void saveFeature("timers")} className="flex w-full items-center justify-between gap-3 border-0 bg-transparent px-3 py-3 text-left disabled:cursor-wait disabled:opacity-70"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Timers</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Countdowns for important dates and deadlines.</span></span>{savingFeature === "timers" ? <LoaderCircle className="h-5 w-5 shrink-0 animate-spin text-primary" /> : <span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", timersEnabledDraft ? "border-primary bg-primary" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", timersEnabledDraft ? "translate-x-5 bg-primary-foreground" : "translate-x-1 bg-zinc-400")} /></span>}</button><button type="button" role="switch" aria-checked={habitsEnabledDraft} disabled={savingFeature !== null || savingAccent} onClick={() => void saveFeature("habits")} className="flex w-full items-center justify-between gap-3 border-0 bg-transparent px-3 py-3 text-left disabled:cursor-wait disabled:opacity-70"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Habits</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Daily heatmaps, streaks and personal challenges.</span></span>{savingFeature === "habits" ? <LoaderCircle className="h-5 w-5 shrink-0 animate-spin text-primary" /> : <span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", habitsEnabledDraft ? "border-primary bg-primary" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", habitsEnabledDraft ? "translate-x-5 bg-primary-foreground" : "translate-x-1 bg-zinc-400")} /></span>}</button><button type="button" role="switch" aria-checked={randomQuotesEnabledDraft} disabled={savingFeature !== null || savingAccent} onClick={() => void saveFeature("quotes")} className="flex w-full items-center justify-between gap-3 border-0 bg-transparent px-3 py-3 text-left disabled:cursor-wait disabled:opacity-70"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Random quotes</span><span className="mt-0.5 block text-xs leading-4 text-zinc-500">Show a random motivational image when opening the app.</span></span>{savingFeature === "quotes" ? <LoaderCircle className="h-5 w-5 shrink-0 animate-spin text-primary" /> : <span className={cn("relative h-5 w-9 shrink-0 rounded-full border transition-colors", randomQuotesEnabledDraft ? "border-primary bg-primary" : "border-zinc-500 bg-transparent")}><span className={cn("absolute top-1 h-3 w-3 rounded-full transition-transform", randomQuotesEnabledDraft ? "translate-x-5 bg-primary-foreground" : "translate-x-1 bg-zinc-400")} /></span>}</button></div></div></div>}
             <div className="mt-4 flex justify-end gap-2">
               <Button
                 variant="outline"
@@ -1510,7 +1517,23 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
           </div>
         </div>
       )}
-      <Dialog open={xpTimelineOpen} onOpenChange={setXpTimelineOpen}>
+      <Dialog open={medalsOpen} onOpenChange={setMedalsOpen}>
+        <DialogContent className="w-[calc(100%-3rem)] rounded-3xl border-0 bg-[#181818] p-6 text-zinc-100 sm:max-w-sm [&>button]:hidden">
+          <DialogHeader>
+            <DialogTitle className="text-center text-xl">Weekly medals</DialogTitle>
+            <DialogDescription className="sr-only">Medals earned from completed leaderboard weeks.</DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-3 gap-2">
+            {(["gold", "silver", "bronze"] as const).map((medal) => <div key={medal} className="flex flex-col items-center gap-2 py-4">
+              <img src={`/${medal}-medal.png`} alt="" className="h-14 w-12 object-contain" />
+              <span className="text-2xl font-bold tabular-nums">{medalCounts[medal]}</span>
+              <span className="text-xs capitalize text-zinc-200">{medal}</span>
+            </div>)}
+          </div>
+          <p className="text-center text-xs text-zinc-400">Earned from completed leaderboard weeks.</p>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={xpTimelineOpen && focusData.ready} onOpenChange={setXpTimelineOpen}>
         <DialogContent className="border-white/10 bg-[#121212] p-5 text-zinc-100 sm:max-w-sm">
           <DialogHeader><DialogTitle>Level {xpSummary.level} · {levelName(xpSummary.level)}</DialogTitle><DialogDescription className="text-zinc-400">Your all-time XP path</DialogDescription></DialogHeader>
           <div className="relative space-y-2 pt-2">{xpTimelineLevels.map((level) => { const current = level === xpSummary.level; const reached = level <= xpSummary.level; const detail = current ? `${xpSummary.xp > 0 ? "+" : ""}${xpSummary.xp} XP · ${Math.max(0, xpSummary.nextLevelXp - xpSummary.xp)} XP to Level ${xpSummary.level + 1}` : level === 0 ? "Below 0 XP" : `${xpForLevel(level)} XP`; return <div key={level} className="relative flex items-start gap-3">{level < xpTimelineStart + 5 && <div className="absolute left-[2px] top-[13px] w-1.5" style={{ height: "calc(100% + 8px)" }}><LiquidProgressBar vertical height={6} progress={xpSegmentProgress(xpSummary.xp, level)} color="#a78bfa" label={`Level ${level} to ${level + 1} progress`} /></div>}<span className={`z-10 mt-2 h-2.5 w-2.5 shrink-0 rounded-full border-2 border-[#1b1b1b] ${current ? "bg-violet-300 ring-4 ring-violet-400/15" : reached ? "bg-violet-400" : "bg-zinc-700"}`} /><div className={`min-w-0 flex-1 rounded-lg px-3 py-2 ${current ? "border border-violet-300/20 bg-violet-400/[0.09]" : "bg-white/[0.025]"}`}><p className={`text-sm font-semibold ${current ? "text-white" : "text-zinc-300"}`}>Lv. {level} · {levelName(level)}</p><p className="text-xs text-zinc-500">{detail}</p></div></div>; })}</div>

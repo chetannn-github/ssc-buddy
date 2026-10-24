@@ -1,0 +1,27 @@
+.focus-schedules{margin-top:18px;border-top:1px solid #ffffff14;padding-top:14px;color:#f4f4f5;font-size:12px}.focus-schedule-heading,.focus-schedule-item,.focus-schedule-actions,.focus-schedule-apps{display:flex;align-items:center;gap:8px;justify-content:space-between}.focus-schedules button{border:0;border-radius:18px;background:#262626;color:#eee;padding:8px 11px;font:inherit;cursor:pointer}.focus-schedules button:disabled{opacity:.4;cursor:default}.focus-schedule-item{margin-top:8px;padding:12px;background:#1d1d1d;border-radius:14px}.focus-schedule-item small,.focus-schedule-form>small{display:block;color:#999;font-size:10px;margin-top:4px}.focus-schedule-form{margin-top:12px;display:grid;gap:12px}.focus-schedule-presets,.focus-schedule-days{display:flex;flex-wrap:wrap;gap:5px}.focus-schedule-times{display:grid;grid-template-columns:1fr 1fr;gap:10px}.focus-schedules label{display:grid;gap:5px;color:#aaa}.focus-schedules input{box-sizing:border-box;width:100%;min-width:0;background:#252525;color:#f5f5f5;color-scheme:dark;border:0;border-radius:12px;padding:12px;font:inherit}.focus-schedule-days button[aria-pressed=true],.focus-schedule-apps button[aria-pressed=true],.focus-schedule-actions .focus-schedule-save{background:#f9fcf5;color:#111}.focus-schedules p[role=alert]{color:#ff8a95;font-size:11px}.focus-schedule-apps>span{margin-right:auto}.focus-schedules button:focus-visible,.focus-schedules input:focus-visible{outline:2px solid #ddd;outline-offset:2px}
+.focus-schedule-panel{animation:focus-schedule-enter 220ms cubic-bezier(.2,.7,.2,1)}
+.focus-schedule-panel>.browser-study-heading:has([aria-label="Back to Focus Lock"]){justify-content:flex-start}
+.focus-schedules{border-top:0;padding-top:0;margin-top:16px}
+.focus-schedules{display:flex;flex-direction:column}.focus-schedule-heading{order:0}.focus-schedule-form{order:1}.focus-schedule-list{order:2}.focus-schedules>p[role=alert]{order:3}
+.focus-schedule-toolbar{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:8px;min-width:0}
+.focus-schedule-toolbar h2{grid-column:2;grid-row:1}.focus-schedule-toolbar>.focus-schedule-icon:last-child{grid-column:3;grid-row:1}
+.focus-schedule-toolbar h2{flex-shrink:0;margin:0;font-size:13px;color:#f4f4f5}
+.focus-schedule-toolbar .focus-schedule-list{position:relative;isolation:isolate;display:flex;grid-column:1/-1;grid-row:2;gap:6px;min-width:0;overflow:auto;scrollbar-width:none;order:0}
+.focus-schedule-list::-webkit-scrollbar{display:none}
+.focus-schedule-toolbar .focus-schedule-list:empty{display:none}
+.focus-schedules .focus-schedule-item{display:flex;flex-direction:row;align-items:center;justify-content:center;flex-shrink:0;gap:5px;margin:0;padding:9px 10px;white-space:nowrap;border-radius:16px;text-align:left}
+.focus-schedule-item b{font-size:11px}.focus-schedule-item small{margin:0;font-size:9px}
+.focus-schedules .focus-schedule-item{position:relative;background:transparent;transition:color 240ms ease}.focus-schedule-item::before{content:"";position:absolute;inset:0;border-radius:inherit;background:#262626;z-index:-2}
+.focus-schedule-item[aria-pressed=true]{color:#111}.focus-schedule-item[aria-pressed=true] small{color:#555}
+.focus-schedules .focus-schedule-icon{display:grid;place-items:center;flex-shrink:0;width:28px;height:34px;padding:0;background:transparent}
+.focus-schedule-choice{--choice-color:#f9fcf5;--choice-ink:#111;--choice-radius:18px;--choice-gap:5px}
+.focus-schedules .animated-choices>button{background:transparent;color:#aaa;padding:8px 5px;font-size:11px}
+.focus-schedules .animated-choices>button[aria-pressed=true]{background:transparent;color:#111}
+.focus-schedules .animated-choices>button::before{border:0}
+.focus-schedule-app-choice{width:132px;flex-shrink:0}
+.focus-schedule-times>button{display:grid;gap:5px;justify-items:start;padding:12px;border-radius:12px;background:#252525}.focus-schedule-times>button small{margin:0;color:#999}.focus-schedule-times>button strong{font-size:16px;font-variant-numeric:tabular-nums}
+@keyframes focus-schedule-enter{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.focus-schedule-days button{box-sizing:border-box;min-width:36px;white-space:nowrap;line-height:16px;text-align:center;transition:background-color 190ms ease,color 190ms ease,transform 190ms cubic-bezier(.2,.7,.2,1)}
+.focus-schedule-days button[aria-pressed=true]{transform:scale(1.04)}
+.focus-schedule-days button:active:not(:disabled){transform:scale(.94)}
+@media(prefers-reduced-motion:reduce){.focus-schedule-panel,.focus-schedule-form{animation:none}.focus-schedule-days button{transition:none;transform:none}}
