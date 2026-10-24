@@ -1,4 +1,5 @@
 import { initializeApp, type FirebaseApp } from "firebase/app";
+import { profileDataSource } from "../../shared/profile-data-source";
 import { appendRecallQuestionSnapshots, type RecallQuestionInput } from "../../mobile-tasks/src/domain/quick-recall-solutions";
 import { createInFlightLoader, createOrderedPublisher, learningPatchUnchanged, mergePatchUnchanged } from "../../mobile-tasks/src/domain/practice-sync-policy";
 import { practiceSnapshots, type PracticeCollectionSnapshot } from "../../mobile-tasks/src/domain/practice-live-source";
@@ -387,7 +388,7 @@ export function watchCloudPreferences(user: User, callback: (value: Record<strin
 
 export async function readCloudProfile(user: User) {
   const { db: dbValue } = services();
-  const data = (await getDoc(profileDoc(dbValue, user.uid))).data();
+  const data = (await profileDataSource({ collection, doc, onSnapshot }).readDocument(dbValue, ["users", user.uid, "profile", "current"], getDoc)).data();
   return data ?? null;
 }
 
@@ -399,7 +400,7 @@ export async function patchCloudProfile(user: User, fields: Record<string, unkno
 
 export function watchCloudProfile(user: User, callback: (profile: Record<string, unknown> | null) => void) {
   const { db: dbValue } = services();
-  return onSnapshot(profileDoc(dbValue, user.uid), (snapshot) => callback(snapshot.data() ?? null));
+  return profileDataSource({ collection, doc, onSnapshot }).watchDocument(dbValue, ["users", user.uid, "profile", "current"], (snapshot) => callback(snapshot.data() ?? null));
 }
 
 const USERNAME_PATTERN = /^[a-z0-9._]{3,24}$/;
@@ -460,7 +461,7 @@ export async function readPublicProfile(value: string): Promise<PublicProfile | 
   const username = normalizeUsername(value.replace(/^@/, ""));
   if (usernameValidationMessage(username)) return null;
   const { db: dbValue } = services();
-  const data = (await getDoc(publicProfileDoc(dbValue, username))).data();
+  const data = (await profileDataSource({ collection, doc, onSnapshot }).readDocument(dbValue, ["publicProfiles", username], getDoc)).data();
   if (!data || typeof data["uid"] !== "string" || typeof data["name"] !== "string") return null;
   return {
     uid: data["uid"], username,
@@ -548,8 +549,10 @@ export async function saveProfileWithUsername(user: User, fields: Record<string,
     ]);
     const claimedBy = typeof claimed.data()?.["uid"] === "string" ? claimed.data()!["uid"] : "";
     if (claimed.exists() && claimedBy !== user.uid) throw new Error("This username is already taken.");
-    transaction.set(nextUsernameRef, { uid: user.uid, username, updatedAt: serverTimestamp() }, { merge: true });
-    transaction.set(profileRef, { ...fields, username, updatedAt: serverTimestamp() }, { merge: true });
+    if (!claimed.exists() || claimed.data()?.["username"] !== username)
+      transaction.set(nextUsernameRef, { uid: user.uid, username, updatedAt: serverTimestamp() }, { merge: true });
+    if (Object.entries({ ...fields, username }).some(([key, value]) => currentProfile.data()?.[key] !== value))
+      transaction.set(profileRef, { ...fields, username, updatedAt: serverTimestamp() }, { merge: true });
     transaction.set(nextPublicProfileRef, { ...publicProfileFields(user, username, fields), updatedAt: serverTimestamp() }, { merge: true });
     if (previousUsernameRef && previousClaim?.data()?.["uid"] === user.uid) transaction.delete(previousUsernameRef);
     if (previousPublicProfileRef) transaction.delete(previousPublicProfileRef);

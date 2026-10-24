@@ -59,6 +59,7 @@ import { TaskRow } from "./src/components/TaskRow";
 import { AnimatedTimeChips } from "./src/components/AnimatedTimeChips";
 import { canChangeTaskCompletion } from "./src/domain/tasks";
 import { WeeklyAwardCelebration } from "./src/components/WeeklyAwardCelebration";
+import { leaderboardWeek } from "./src/domain/weekly-results";
 import { CelebrationFireworks } from "./src/components/CelebrationFireworks";
 import { BottomNavigation } from "./src/components/BottomNavigation";
 import { type TabKey, tabs } from "./src/navigation/tabs";
@@ -343,7 +344,7 @@ export default function App() {
   useEffect(() => {
     if (!user) { setWidgetRank(null); return; }
     return watchWeeklyLeaderboardRank(user, (rank) => setWidgetRank(rank));
-  }, [calendarDay, user?.uid]);
+  }, [leaderboardWeek(new Date(`${calendarDay}T12:00:00`)), user?.uid]);
   useEffect(() => {
     void AsyncStorage.setItem(WIDGET_META_STORAGE_KEY, JSON.stringify({ rank: widgetRank }));
     if (tasksLoaded) refreshDailyTasksWidget(tasks);

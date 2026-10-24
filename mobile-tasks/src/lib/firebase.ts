@@ -1,5 +1,6 @@
 import { canReopenDailyWidgetTask } from "../domain/daily-task-widget";
 import { hasActiveTrackerSource, hasConfirmedTracker, watchTrackerSource } from "../domain/tracker-live-source";
+import { profileDataSource } from "../../../shared/profile-data-source";
 import { mergeQuestionDeletions } from "../domain/question-deletion";
 import { appendRecallQuestionSnapshots, type RecallQuestionInput } from "../domain/quick-recall-solutions";
 import { createInFlightLoader, createOrderedPublisher, learningPatchUnchanged, mergePatchUnchanged } from "../domain/practice-sync-policy";
@@ -136,7 +137,7 @@ export function watchWeeklyLeaderboardRank(user: User, callback: (rank: number |
   now.setHours(0, 0, 0, 0);
   now.setDate(now.getDate() - ((now.getDay() + 6) % 7));
   const week = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-  return onSnapshot(collection(getFirebaseFirestore(), "leaderboards", week, "entries"), (snapshot) => {
+  return profileDataSource({ collection, doc, onSnapshot }).watchWeek(getFirebaseFirestore(), week, (snapshot) => {
     const entries = rankWeeklyEntries(snapshot.docs.map((item) => ({ ...item.data(), uid: item.id })));
     const index = entries.findIndex((entry: any) => entry.uid === user.uid);
     callback(index < 0 ? null : index + 1);
@@ -146,7 +147,7 @@ export function watchWeeklyLeaderboardRank(user: User, callback: (rank: number |
 const cloudProfileDoc = (user: User) => doc(getFirebaseFirestore(), "users", user.uid, "profile", "current");
 
 export async function readCloudProfile(user: User) {
-  return (await getDoc(cloudProfileDoc(user))).data() ?? null;
+  return (await profileDataSource({ collection, doc, onSnapshot }).readDocument(getFirebaseFirestore(), ["users", user.uid, "profile", "current"], getDoc)).data() ?? null;
 }
 
 /** Field-level merge: an edit never replaces unrelated profile fields. */
@@ -155,7 +156,7 @@ export async function patchCloudProfile(user: User, fields: Record<string, unkno
 }
 
 export function watchCloudProfile(user: User, callback: (profile: Record<string, unknown> | null) => void) {
-  return onSnapshot(cloudProfileDoc(user), (snapshot) => callback(snapshot.data() ?? null));
+  return profileDataSource({ collection, doc, onSnapshot }).watchDocument(getFirebaseFirestore(), ["users", user.uid, "profile", "current"], (snapshot) => callback(snapshot.data() ?? null));
 }
 
 const USERNAME_PATTERN = /^[a-z0-9._]{3,24}$/;
@@ -179,7 +180,7 @@ export type PublicProfile = { uid: string; username: string; name: string; quest
 export async function readPublicProfile(value: string): Promise<PublicProfile | null> {
   const username = normalizeUsername(value.replace(/^@/, ""));
   if (usernameValidationMessage(username)) return null;
-  const data = (await getDoc(publicProfileDoc(username))).data();
+  const data = (await profileDataSource({ collection, doc, onSnapshot }).readDocument(getFirebaseFirestore(), ["publicProfiles", username], getDoc)).data();
   if (!data || typeof data.uid !== "string" || typeof data.name !== "string") return null;
   return {
     uid: data.uid,
@@ -273,8 +274,10 @@ export async function saveProfileWithUsername(user: User, fields: Record<string,
     ]);
     const claimedBy = typeof claimedUsername.data()?.uid === "string" ? claimedUsername.data()!.uid : "";
     if (claimedUsername.exists() && claimedBy !== user.uid) throw new Error("This username is already taken.");
-    transaction.set(nextUsernameRef, { uid: user.uid, username, updatedAt: serverTimestamp() }, { merge: true });
-    transaction.set(profileRef, { ...fields, username, updatedAt: serverTimestamp() }, { merge: true });
+    if (!claimedUsername.exists() || claimedUsername.data()?.username !== username)
+      transaction.set(nextUsernameRef, { uid: user.uid, username, updatedAt: serverTimestamp() }, { merge: true });
+    if (Object.entries({ ...fields, username }).some(([key, value]) => currentProfile.data()?.[key] !== value))
+      transaction.set(profileRef, { ...fields, username, updatedAt: serverTimestamp() }, { merge: true });
     transaction.set(nextPublicProfileRef, { ...publicProfileFields(user, username, fields), updatedAt: serverTimestamp() }, { merge: true });
     if (currentUsernameRef && previousClaim?.data()?.uid === user.uid) transaction.delete(currentUsernameRef);
     if (previousPublicProfileRef) transaction.delete(previousPublicProfileRef);

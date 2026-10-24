@@ -15,7 +15,8 @@ import {
   Text,
   View,
 } from "react-native";
-import { collection, onSnapshot } from "firebase/firestore";
+import { collection, doc, onSnapshot } from "firebase/firestore";
+import { profileDataSource } from "../../../shared/profile-data-source";
 import type { User } from "firebase/auth";
 import { getFirebaseFirestore, readPublicProfile, type PublicProfile } from "../lib/firebase";
 import { colors, dailyTaskColors } from "../theme";
@@ -194,7 +195,8 @@ export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { 
   const currentWeek = useLeaderboardWeek();
   const [historyWeek, setHistoryWeek] = useState<string | null>(null);
   const selectedWeek = historyWeek ?? currentWeek;
-  const xpByUser = useLeaderboardXp(rows, selectedWeek, currentWeek, getFirebaseFirestore, user?.uid, viewerTasks);
+  const xpTarget = publicEntry ?? selected;
+  const xpByUser = useLeaderboardXp(xpTarget ? [xpTarget] : rows, selectedWeek, currentWeek, getFirebaseFirestore, user?.uid, viewerTasks);
   const currentXpFor = (row: any) => row ? xpByUser[String(row.uid)] ?? null : null;
   const selectedXp = currentXpFor(selected);
   const changeWeek = (next: string) => { setSelected(null); setPublicEntry(null); setRows([]); setHistoryWeek(next === currentWeek ? null : next); setSelectedDate(next === currentWeek ? dayKey() : ALL_LEADERBOARD_DAYS); };
@@ -206,8 +208,8 @@ export function LeaderboardScreen({ onClose, user, tasks: viewerTasks = [] }: { 
   useEffect(() => {
     setIsSyncing(true);
     setRows([]);
-    return onSnapshot(
-      collection(getFirebaseFirestore(), "leaderboards", selectedWeek, "entries"),
+    return profileDataSource({ collection, doc, onSnapshot }).watchWeek(
+      getFirebaseFirestore(), selectedWeek,
       (snapshot) => {
         setRows(
           resolveWeeklyResults(snapshot.docs.map((doc) => ({ ...doc.data(), uid: doc.id })), selectedWeek),

@@ -7,7 +7,7 @@ Combined branches:
 - `codex/tasks-habits-db-audit` at `b4565b5`, based on main `eb96ec5`.
 - `codex/focus-db-load` at `088f67d`, with separately synchronized UI history.
 
-This is a normal merge on a new integration branch, without rewriting either source branch or main. Practice and Syllabus were subsequently added as described below. The Profile/Leaderboard optimization branch is not included.
+This is a normal merge on a new integration branch, without rewriting either source branch or main. Practice, Syllabus and Profile/Leaderboard were subsequently added as described below. All five optimization branches are now included.
 
 ## Conflict resolution
 
@@ -50,3 +50,13 @@ The resulting branch contains Focus, Tasks/Habits, Practice/Quick Recall and Syl
 Verification for this four-feature combination: 296 automated tests pass, including the full prior combined suite and Tracker initialization/source/isolation/fallback diagnostics. Five browser regression scripts cover native chapter drag/reorder, Mock Analysis filters, seven-hour Focus lifecycle, historical weekly-board current live XP, and Practice history/results/viewer/solutions. Web and Android TypeScript checks and web production/Android Metro builds pass. Windows/extension runtime files are unchanged by the Syllabus merge; their previous integration build checks remain applicable, and their tests run in the combined suite. Device timing and production billing remain unmeasured.
 
 This Syllabus merge is committed locally until the user separately requests a push.
+
+## Profile/Leaderboard integration
+
+Syllabus was committed as `737ebb9` and pushed separately on user request before finalizing Profile/Leaderboard. Merged `codex/profile-leaderboard-db-audit` at `ade4c7c` into the same combined branch. The only textual conflict was the Android Firebase import block: retained both Tracker source imports and the Profile shared-data source import. Git automatically preserved Practice's public activity publication deduplication, Profile's shared reads/listeners and verified claim/private no-op saves, and existing Task/Habit/Tracker changes.
+
+Updated the isolated profile audit harness for the integrated implementations: supplied React useRef for Focus's optimized hook and loaded the real ordered-publication helpers with an SDK transaction store. Its duplicate-publication assertion now verifies one write across two identical publications rather than the old main baseline's two writes. These are test-fixture changes; neither runtime optimization was disabled.
+
+Verification for the full five-branch tree: 319 automated tests pass, along with current-live-XP/medal browser tests (including historical-week XP, 20-to-1 detail/list source scope, failed-history retry, focus refresh, account switching and cleanup), Focus seven-hour lifecycle/logout regressions, and Practice history/results/viewer/solutions. Web, Android and Windows TypeScript checks and web/Windows frontend builds plus Android Metro export pass. Extension runtime did not change in this merge; its tests are included in the full suite and its previous integration bundle check remains applicable. Physical devices and production Firebase billing have not been tested.
+
+All five feature optimizations are included without merging into main or modifying individual source branches. This Profile/Leaderboard merge remains local until a separate push request.
