@@ -80,6 +80,7 @@ class BuddyFocusService : Service(), SharedPreferences.OnSharedPreferenceChangeL
   private val ticker = object : Runnable {
     override fun run() {
       finishTimedBreak(this@BuddyFocusService)
+      FocusProtection.reconcileAdmin(this@BuddyFocusService)
       FocusNotifications.reconcile(this@BuddyFocusService)
       FocusCompletionStore.observe(this@BuddyFocusService)
       if (!enabled(this@BuddyFocusService) || !FocusProtection.active(this@BuddyFocusService)) {
@@ -227,7 +228,8 @@ class BuddyFocusService : Service(), SharedPreferences.OnSharedPreferenceChangeL
     // explicitly selected payment/study apps still open normally.
     val needsReturn = FocusSettingsGuard.needsActivityReturn(foreground, blocked,
       blocked && foreground !in FocusPaymentPolicy.packages && declaresOverlayProtection(foreground))
-    if (settingsGuard.shouldReturn(foreground, now, restrictionDeadline(), isRinging(), settingsPackages, needsReturn)) {
+    val returnDeadline = if (FocusAppPolicy.isSettings(foreground, settingsPackages)) settingsDeadline() else restrictionDeadline()
+    if (settingsGuard.shouldReturn(foreground, now, returnDeadline, isRinging(), settingsPackages, needsReturn)) {
       runCatching {
         val launch = packageManager.getLaunchIntentForPackage(packageName) ?: error("Main activity unavailable")
         startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
@@ -246,7 +248,11 @@ class BuddyFocusService : Service(), SharedPreferences.OnSharedPreferenceChangeL
         .requestedPermissions.orEmpty().contains("android.permission.HIDE_OVERLAY_WINDOWS")
     }.getOrDefault(false)
   }
-  private fun shouldBlockForeground() = FocusAppPolicy.blocks(foreground, System.currentTimeMillis(), restrictionDeadline(), essentials, allowedApps() + paymentApps(), isRinging(), settingsPackages)
+  private fun shouldBlockForeground() = FocusAppPolicy.blocks(foreground, System.currentTimeMillis(),
+    if (FocusAppPolicy.isSettings(foreground, settingsPackages)) settingsDeadline() else restrictionDeadline(),
+    essentials, allowedApps() + paymentApps(), isRinging(), settingsPackages)
+  private fun settingsDeadline(): Long = FocusAdminPolicy.settingsDeadline(preferences.getString("session", "").orEmpty(),
+    preferences.getBoolean("paused", false), preferences.getLong("endsAt", 0), System.currentTimeMillis())
   private fun allowedAppLimit() = FocusAppPolicy.appLimit(preferences.getInt("appLimit", 2))
   private fun allowedApps() = preferences.getStringSet("allowed", emptySet()).orEmpty()
     .filterNot { FocusAppPolicy.isSettings(it, settingsPackages) }.toSet()

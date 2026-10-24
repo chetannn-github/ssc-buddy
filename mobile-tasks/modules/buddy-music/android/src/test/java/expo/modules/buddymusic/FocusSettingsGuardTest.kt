@@ -34,7 +34,7 @@ class FocusSettingsGuardTest {
   @Test fun systemUiAndPermissionDialogsAreNotMisclassifiedAsSettings() {
     assertEquals(setOf("com.android.settings", "vendor.settings"), FocusSettingsGuard.packages(listOf("vendor.settings", "android", "com.android.systemui", "com.android.permissioncontroller", "com.google.android.permissioncontroller", "")))
   }
-  @Test fun breakExpiryAndCallsReleaseSettingsOverlay() {
+  @Test fun zeroDeadlineExpiryAndCallsReleaseSettingsOverlay() {
     val settings = FocusSettingsGuard.packages(emptyList())
     assertFalse(FocusAppPolicy.blocks("com.android.settings", 10, 0, emptySet(), emptySet(), settingsPackages = settings))
     assertFalse(FocusAppPolicy.blocks("com.android.settings", 20, 20, emptySet(), emptySet(), settingsPackages = settings))

@@ -9,7 +9,8 @@ type FocusModule = {
   readScheduledFocus?: ()=>Promise<string>;
   acknowledgeScheduledFocus?: (id:string,uid:string)=>Promise<void>;
   syncFocusStateWithBreaks?: (state: string, accent: string, image: string) => Promise<void>;
-  getFocusLockStatus?: () => Promise<{ enabled: boolean; allowedCount: number; usageAccess?: boolean; overlayAccess?: boolean; serviceConnected?: boolean; sessionActive?: boolean; unlockAt?: number; error?: string; scheduleAlarmAccess?: boolean; notificationSilenceSupported?: boolean; notificationAccess?: boolean; notificationError?: string }>;
+  getFocusLockStatus?: () => Promise<{ enabled: boolean; allowedCount: number; usageAccess?: boolean; overlayAccess?: boolean; serviceConnected?: boolean; sessionActive?: boolean; unlockAt?: number; error?: string; scheduleAlarmAccess?: boolean; notificationSilenceSupported?: boolean; notificationAccess?: boolean; notificationError?: string; adminSupported?: boolean; adminAccess?: boolean; adminError?: string }>;
+  openFocusAdminSettings?: () => Promise<void>;
   openFocusNotificationSettings?: () => Promise<void>;
   openFocusUsageSettings?: () => Promise<void>;
   openFocusOverlaySettings?: () => Promise<void>;
@@ -36,6 +37,7 @@ export const openDeviceFocusSettings = () => native?.openFocusLockSettings?.() ?
 export const openDeviceUsageSettings = () => native?.openFocusUsageSettings?.() ?? openDeviceFocusSettings();
 export const openDeviceOverlaySettings = () => native?.openFocusOverlaySettings?.() ?? openDeviceFocusSettings();
 export const openDeviceNotificationSettings = () => native?.openFocusNotificationSettings?.() ?? Promise.resolve();
+export const openDeviceAdminSettings = () => native?.openFocusAdminSettings?.() ?? Promise.resolve();
 export const consumeFocusRecall = () => native?.consumeFocusRecall?.() ?? Promise.resolve(false);
 export const readFocusBreaks = async (): Promise<OverlayBreak[]> => JSON.parse(await native?.readFocusBreaks?.() ?? "[]");
 export const acknowledgeFocusBreak = (id: string) => native?.acknowledgeFocusBreak?.(id) ?? Promise.resolve();
