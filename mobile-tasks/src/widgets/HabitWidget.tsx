@@ -31,7 +31,7 @@ export function renderHabitWidget(habit?: Habit, error = "", size: HabitWidgetSi
   const action = checklist || !scheduled ? "OPEN_URI" : count ? "HABIT_PLUS" : "HABIT_TOGGLE";
   const label = checklist ? "Open checklist" : !scheduled ? "Open habit" : count ? `Add ${settings.step}`
     : settings.type === "quit" ? done ? "Mark slip" : "Undo slip" : done ? "Undo completion" : "Mark done";
-  const targetProgress = habit.targetDays ? `${stats.streak}/${habit.targetDays} days` : "";
+  const targetProgress = habit.targetDays ? `${stats.total}/${habit.targetDays} days` : "";
   const progressLabel = count ? `${entry.count}/${settings.dailyGoal}` : checklist ? `${checks.length}/${settings.checklist.length}` : "";
   const streakUnit = settings.frequency === "period" ? settings.period === "week" ? "WEEKS" : "MONTHS" : stats.streak === 1 ? "DAY" : "DAYS";
   const streakCaption = `${streakUnit}${progressLabel ? ` · ${progressLabel}` : ""}`;

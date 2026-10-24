@@ -40,6 +40,14 @@ const habit = (id, complete = false, settings = {}) => ({ id, name: id, color: "
 const api = habits => ({ habits, loading: false, error: "", retry() {}, updateDay() { return Promise.resolve(); } });
 const render = (Component, props) => renderToStaticMarkup(React.createElement(Component, props));
 
+test("Windows challenge label and meter retain active-day progress after missed days", () => {
+  const value = { ...habit("READ"), completedDates: ["2026-10-01", "2026-10-03"], targetDays: 5 };
+  assert.equal(domain.habitStats(value, today).streak, 0);
+  const markup = render(HabitDashboard, { api: api([value]), selected: today, today, dueOnly: false });
+  assert.match(markup, /2\/5 days/);
+  assert.match(markup, /width:40%/);
+});
+
 test("Windows habits show heatmaps, streaks and challenge progress; Due hides completed habits", () => {
   const props = { api: api([habit("READ"), habit("WALK", true)]), selected: today, today, dueOnly: false };
   const all = render(HabitDashboard, props);

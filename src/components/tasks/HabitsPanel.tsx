@@ -263,8 +263,8 @@ export function HabitsPanel({
                               />
                             </div>
                             <p className="mt-2 text-xs" style={{ color: tint }}>
-                              {stats.streak}/{habit.targetDays} days
-                              {stats.streak >= habit.targetDays ? " · Challenge complete!" : ""}
+                              {stats.total}/{habit.targetDays} days
+                              {stats.total >= habit.targetDays ? " · Challenge complete!" : ""}
                             </p>
                           </>
                         )}
