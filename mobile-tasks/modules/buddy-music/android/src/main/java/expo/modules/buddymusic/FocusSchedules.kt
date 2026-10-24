@@ -42,7 +42,7 @@ internal object FocusSchedules {
     pending.put(JSONObject().put("uid", owner).put("session", session))
     check(prefs.edit().putString("lastScheduledOccurrence", occurrence.id).putString("scheduledFocusJournal", pending.toString())
       .putString("session", occurrence.id).putLong("endsAt", occurrence.endsAt).putLong("phaseStartedAt", start).putInt("appLimit", occurrence.schedule.appLimit)
-      .putBoolean("paused", false).putLong("remainingMs", 0).putInt("breakLimit", 0).putInt("breaksTaken", 0).remove("breakUntil").putStringSet("allowed", emptySet()).commit())
+      .putBoolean("paused", false).putLong("remainingMs", 0).putInt("breakLimit", 0).putInt("breaksTaken", 0).remove("breakUntil").putStringSet("allowed", emptySet()).putStringSet("paymentAllowed", emptySet()).commit())
   }
   fun arm(context: Context, now: Long = System.currentTimeMillis()) {
     val manager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager

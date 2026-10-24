@@ -75,6 +75,10 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
   }
   override fun onServiceConnected() {
     preferences = prefs(this)
+    // Existing selections survive an APK upgrade but now occupy payment slots.
+    val session = preferences.getString("session", "").orEmpty()
+    val selections = FocusPaymentPolicy.forSession(session, session, preferences.getStringSet("allowed", emptySet()).orEmpty(), preferences.getStringSet("paymentAllowed", emptySet()).orEmpty())
+    check(preferences.edit().putStringSet("allowed", selections.apps).putStringSet("paymentAllowed", selections.payments).commit())
     connected = true
     FocusSchedules.tick(this)
     FocusSchedules.arm(this)
@@ -129,8 +133,8 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
   override fun onSharedPreferenceChanged(shared: SharedPreferences?, key: String?) {
     // Break journals, image-cache and admin metadata do not change the visible screen.
     // Batch one preference transaction and preserve the overlay window on pause/resume.
-    if (key !in setOf("session", "allowed", "accent", "paused", "endsAt", "remainingMs", "appLimit", "breakUntil", "breakLimit", "breaksTaken", "phaseStartedAt")) return
-    if (key in setOf("session", "allowed", "accent", "appLimit")) rebuildOverlay = true
+    if (key !in setOf("session", "allowed", "paymentAllowed", "accent", "paused", "endsAt", "remainingMs", "appLimit", "breakUntil", "breakLimit", "breaksTaken", "phaseStartedAt")) return
+    if (key in setOf("session", "allowed", "paymentAllowed", "accent", "appLimit")) rebuildOverlay = true
     handler.removeCallbacks(refreshOverlay)
     handler.post(refreshOverlay)
   }
@@ -147,10 +151,11 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
     if (!FocusWindowPolicy.mayShow(blocked, appSwitch, restrictionStarted)) return
     show(foreground)
   }
-  private fun shouldBlockForeground() = FocusAppPolicy.blocks(foreground, System.currentTimeMillis(), restrictionDeadline(), essentials, preferences.getStringSet("allowed", emptySet()).orEmpty(), isRinging(), settingsPackages)
+  private fun shouldBlockForeground() = FocusAppPolicy.blocks(foreground, System.currentTimeMillis(), restrictionDeadline(), essentials, allowedApps() + paymentApps(), isRinging(), settingsPackages)
   private fun allowedAppLimit() = FocusAppPolicy.appLimit(preferences.getInt("appLimit", 2))
   private fun allowedApps() = preferences.getStringSet("allowed", emptySet()).orEmpty()
     .filterNot { FocusAppPolicy.isSettings(it, settingsPackages) }.toSet()
+  private fun paymentApps() = FocusPaymentPolicy.selected(preferences.getStringSet("paymentAllowed", emptySet()).orEmpty(), settingsPackages)
   private fun isRinging() = runCatching { (getSystemService(AUDIO_SERVICE) as AudioManager).mode == AudioManager.MODE_RINGTONE }.getOrDefault(false)
   private fun restrictionDeadline(): Long = FocusBreakPolicy.restrictionDeadline(System.currentTimeMillis(), preferences.getLong("endsAt", 0), preferences.getBoolean("paused", false), preferences.getLong("breakUntil", 0), !preferences.getString("session", "").isNullOrEmpty())
   private fun text(value: String, size: Float, tint: Int = Color.WHITE) = TextView(this).apply {
@@ -224,14 +229,14 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
       ?: packageManager.queryIntentActivities(intent, 0).firstOrNull { it.activityInfo.packageName != "android" }?.activityInfo
     return activity?.let { Intent(intent).setComponent(ComponentName(it.packageName, it.name)) }
   }
-  private fun showAppPicker() {
+  private fun showAppPicker(payments: Boolean = false) {
     val host = overlay as? FrameLayout ?: return
     if (appPicker != null) return
     if (!FocusProtection.active(this)) return
     val sessionId = preferences.getString("session", "")
-    val accent = runCatching { Color.parseColor(preferences.getString("accent", "#ffe000")) }.getOrDefault(Color.YELLOW)
-    val selected = allowedApps()
-    if (selected.size >= allowedAppLimit()) return
+    val selected = if (payments) paymentApps() else allowedApps()
+    val limit = if (payments) FocusPaymentPolicy.LIMIT else allowedAppLimit()
+    if (selected.size >= limit) return
     val root = LinearLayout(this).apply {
       orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(32), dp(20), dp(24)); setBackgroundColor(Color.BLACK)
     }
@@ -245,14 +250,18 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
         canvas.drawLine(x - dp(3), y, x + dp(11), y, paint)
       }
     }.apply { contentDescription = "Back to Focus Lock"; isFocusable = true; setOnClickListener { closeAppPicker() } }, LinearLayout.LayoutParams(dp(48), dp(48)))
-    heading.addView(text("Allowed apps", 18f).apply { gravity = Gravity.START or Gravity.CENTER_VERTICAL; setPadding(dp(4), 0, 0, 0) }, LinearLayout.LayoutParams(0, dp(48), 1f))
-    heading.addView(text("${selected.size}/${allowedAppLimit()}", 13f, Color.LTGRAY))
+    heading.addView(text(if (payments) "Payment apps" else "Allowed apps", 18f).apply { gravity = Gravity.START or Gravity.CENTER_VERTICAL; setPadding(dp(4), 0, 0, 0) }, LinearLayout.LayoutParams(0, dp(48), 1f))
+    heading.addView(text("${selected.size}/$limit", 13f, Color.LTGRAY))
     root.addView(heading, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(56)))
     val rows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
     val launchers = packageManager.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), 0).map { it.activityInfo.packageName }.toSet()
     val installed = packageManager.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
       .distinctBy { it.activityInfo.packageName }
-      .filter { it.activityInfo.packageName !in essentials && it.activityInfo.packageName !in selected && it.activityInfo.packageName !in launchers && !FocusAppPolicy.isSettings(it.activityInfo.packageName, settingsPackages) }
+      .filter {
+        val target = it.activityInfo.packageName
+        target !in essentials && target !in allowedApps() && target !in paymentApps() && target !in launchers &&
+          !FocusAppPolicy.isSettings(target, settingsPackages) && ((target in FocusPaymentPolicy.packages) == payments)
+      }
       .sortedBy { it.loadLabel(packageManager).toString().lowercase() }
     installed.forEach { app ->
       val appPackage = app.activityInfo.packageName
@@ -266,15 +275,16 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
       row.addView(text(label, 14f).apply { gravity = Gravity.START or Gravity.CENTER_VERTICAL; maxLines = 2 }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
       row.addView(text("+", 24f, Color.WHITE))
       row.setOnClickListener {
-        val current = allowedApps()
-        if (!FocusProtection.active(this) || preferences.getString("session", "") != sessionId || current.size >= allowedAppLimit()) return@setOnClickListener
+        val current = if (payments) paymentApps() else allowedApps()
+        if (!FocusProtection.active(this) || preferences.getString("session", "") != sessionId || current.size >= limit) return@setOnClickListener
         if (packageManager.getLaunchIntentForPackage(appPackage) == null) return@setOnClickListener
-        val next = FocusAppPolicy.allow(appPackage, System.currentTimeMillis(), restrictionDeadline(), current, allowedAppLimit(), settingsPackages)
-        if (preferences.edit().putStringSet("allowed", next).commit()) closeAppPicker()
+        val next = if (payments) FocusPaymentPolicy.allow(appPackage, System.currentTimeMillis(), restrictionDeadline(), current, settingsPackages)
+          else FocusAppPolicy.allow(appPackage, System.currentTimeMillis(), restrictionDeadline(), current, limit, settingsPackages)
+        if (preferences.edit().putStringSet(if (payments) "paymentAllowed" else "allowed", next).commit()) closeAppPicker()
       }
       rows.addView(row, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
     }
-    if (installed.isEmpty()) rows.addView(text("No more apps available", 14f, Color.GRAY))
+    if (installed.isEmpty()) rows.addView(text(if (payments) "No supported payment apps installed" else "No more apps available", 14f, Color.GRAY))
     root.addView(ScrollView(this).apply { addView(rows); isVerticalScrollBarEnabled = false }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
     val panel = object : FrameLayout(this) {
       private var downX = 0f
@@ -401,6 +411,20 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
       setOnClickListener { showAppPicker() }
     }, LinearLayout.LayoutParams(0, dp(98), 1f))
     root.addView(apps, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(16) })
+    val payments = paymentApps()
+    root.addView(text("Payment apps · ${payments.size}/${FocusPaymentPolicy.LIMIT}", 11f, Color.LTGRAY))
+    val paymentRow = LinearLayout(this).apply { gravity = Gravity.CENTER; orientation = LinearLayout.HORIZONTAL }
+    payments.sorted().forEach { app ->
+      val name = runCatching { packageManager.getApplicationLabel(packageManager.getApplicationInfo(app, 0)).toString() }.getOrDefault("Payment app")
+      paymentRow.addView(shortcut(name, packageManager.getLaunchIntentForPackage(app), app), LinearLayout.LayoutParams(0, dp(82), 1f))
+    }
+    if (payments.size < FocusPaymentPolicy.LIMIT) paymentRow.addView(LinearLayout(this).apply {
+      orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; isFocusable = true; contentDescription = "Add payment app"
+      addView(text("+", 30f, Color.WHITE), LinearLayout.LayoutParams(dp(40), dp(42)))
+      addView(text("Add payment app", 10f, Color.LTGRAY))
+      setOnClickListener { showAppPicker(payments = true) }
+    }, LinearLayout.LayoutParams(0, dp(82), 1f))
+    root.addView(paymentRow, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
     for (index in 0 until root.childCount) (root.getChildAt(index) as? Button)?.apply {
       isAllCaps = false; textSize = 14f; setTextColor(Color.rgb(17, 17, 17))
       background = GradientDrawable().apply { setColor(Color.rgb(249, 252, 245)); cornerRadius = dp(26).toFloat() }
@@ -521,7 +545,8 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
       } else if (p.getString("session", "") != id) editor.remove("breakLimit").remove("breaksTaken").remove("breakUntil").remove("phaseStartedAt")
       editor.putBoolean("paused", paused).putLong("remainingMs", remainingMs.toLong())
       if (image.isNotEmpty() || id.isEmpty()) editor.putString("image", image)
-      editor.putStringSet("allowed", FocusAppPolicy.forSession(p.getString("session", "").orEmpty(), id, p.getStringSet("allowed", emptySet()).orEmpty()))
+      val selections = FocusPaymentPolicy.forSession(p.getString("session", "").orEmpty(), id, p.getStringSet("allowed", emptySet()).orEmpty(), p.getStringSet("paymentAllowed", emptySet()).orEmpty())
+      editor.putStringSet("allowed", selections.apps).putStringSet("paymentAllowed", selections.payments)
       check(editor.commit()) { "Could not save the focus unlock deadline on this phone." }
       FocusProtection.reconcile(context)
     }
