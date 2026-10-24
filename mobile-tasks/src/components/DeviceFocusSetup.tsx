@@ -12,7 +12,6 @@ export function DeviceFocusSetup() {
   const [notificationError, setNotificationError] = useState("");
   const [adminSupported, setAdminSupported] = useState(false);
   const [adminAccess, setAdminAccess] = useState(false);
-  const [adminError, setAdminError] = useState("");
   const [sessionActive, setSessionActive] = useState(false);
   const [opening, setOpening] = useState<"usage" | "overlay" | "notifications" | "admin" | null>(null);
   const [error, setError] = useState("");
@@ -29,7 +28,6 @@ export function DeviceFocusSetup() {
       setNotificationError("notificationError" in value ? value.notificationError || "" : "");
       setAdminSupported("adminSupported" in value && value.adminSupported === true);
       setAdminAccess("adminAccess" in value && value.adminAccess === true);
-      setAdminError("adminError" in value ? value.adminError || "" : "");
       setSessionActive("sessionActive" in value && value.sessionActive === true);
       setError("error" in value && value.error ? "App blocking needs attention." : "");
     }).catch(() => { if (!disposed) setError("Could not check app blocking access."); }); };
@@ -39,7 +37,7 @@ export function DeviceFocusSetup() {
     return () => { disposed = true; listener.remove(); clearInterval(timer); };
   }, []);
   const showAdmin = adminSupported && !adminAccess && !sessionActive;
-  if (!supportsDeviceFocus || (enabled && !error && (!notificationSupported || notificationAccess) && !notificationError && !showAdmin && !adminError)) return null;
+  if (!supportsDeviceFocus || (enabled && !error && (!notificationSupported || notificationAccess) && !notificationError && !showAdmin)) return null;
   const checking = enabled === null && !error;
   return <View style={styles.card}>
     {[
@@ -53,12 +51,11 @@ export function DeviceFocusSetup() {
         void item.open().catch(() => setError("Could not open permission settings.")).finally(() => setOpening(current => current === item.id ? null : current));
       }}>
         <MaterialCommunityIcons name={item.icon} size={23} color="#f5f5f5" />
-        <View style={styles.copy}><Text style={styles.title}>{item.label}</Text>{item.id === "admin" && <Text style={styles.subtitle}>Optional · released after focus</Text>}</View>
+        <View style={styles.copy}><Text style={styles.title}>{item.label}</Text>{item.id === "admin" && <Text style={styles.subtitle}>Optional · stays enabled until you turn it off</Text>}</View>
         {opening === item.id || checking ? <ActivityIndicator size="small" color="#f5f5f5" /> : item.granted ? <MaterialCommunityIcons name="check" size={20} color="#86efac" /> : <Text style={[styles.action, { color: "#f5f5f5" }]}>Allow</Text>}
       </Pressable>)}
     {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
     {!!notificationError && <Text accessibilityRole="alert" style={styles.error}>{notificationError}</Text>}
-    {!!adminError && <Text accessibilityRole="alert" style={styles.error}>{adminError}</Text>}
   </View>;
 }
 

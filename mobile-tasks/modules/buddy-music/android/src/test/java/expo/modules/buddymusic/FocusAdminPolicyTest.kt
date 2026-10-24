@@ -4,17 +4,11 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class FocusAdminPolicyTest {
-  @Test fun grantDuringSetupIsRetainedUntilItHasProtectedASession() {
-    assertFalse(FocusAdminPolicy.release(false, ""))
-    assertFalse(FocusAdminPolicy.release(true, "lock"))
-    assertTrue(FocusAdminPolicy.release(false, "lock"))
-  }
-  @Test fun breakRetainsAdminAndSettingsBlockButReleasesOrdinaryApps() {
+  @Test fun breakBlocksSettingsButReleasesOrdinaryApps() {
     val now = 100L
     val end = 200L
     val normalDeadline = FocusBreakPolicy.restrictionDeadline(now, end, true, 150, true)
     val settingsDeadline = FocusAdminPolicy.settingsDeadline("lock", true, end, now)
-    assertFalse(FocusAdminPolicy.release(FocusAppPolicy.lockActive("lock", true, end, now), "lock"))
     assertFalse(FocusAppPolicy.blocks("social", now, normalDeadline, emptySet(), emptySet()))
     assertTrue(FocusAppPolicy.blocks("com.android.settings", now, settingsDeadline, emptySet(), emptySet()))
     assertTrue(FocusSettingsGuard().shouldReturn("com.android.settings", now, settingsDeadline, false, setOf("com.android.settings")))
@@ -23,7 +17,6 @@ class FocusAdminPolicyTest {
     assertEquals(Long.MAX_VALUE, FocusAdminPolicy.settingsDeadline("lock", true, 100, 150))
     assertEquals(250L, FocusAdminPolicy.settingsDeadline("lock", false, 250, 150))
     assertEquals(0L, FocusAdminPolicy.settingsDeadline("lock", false, 250, 250))
-    assertTrue(FocusAdminPolicy.release(false, "lock"))
   }
   @Test fun settingsAccessibleWithoutSessionAndAfterExpiryAndIncomingCallsRemainAllowed() {
     assertEquals(0L, FocusAdminPolicy.settingsDeadline("", true, 200, 100))

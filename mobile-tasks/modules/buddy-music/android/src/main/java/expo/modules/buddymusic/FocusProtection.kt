@@ -29,7 +29,6 @@ class FocusRestoreReceiver : BroadcastReceiver() {
 }
 
 internal object FocusProtection {
-  private var lastRemovalAttempt = 0L
   private fun manager(context: Context) = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
   private fun admin(context: Context) = ComponentName(context, FocusAdminReceiver::class.java)
   fun enabled(context: Context) = manager(context).isAdminActive(admin(context))
@@ -39,34 +38,8 @@ internal object FocusProtection {
     context.startActivity(Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)
       .putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, admin(context))
       .putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION,
-        "Adds an administrator deactivation step before uninstalling SSC Buddy. Access is released after your focus session.")
+        "Adds an administrator deactivation step before uninstalling SSC Buddy. Stays enabled until you deactivate it in Android Settings.")
       .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-  }
-  fun reconcileAdmin(context: Context) {
-    val p = BuddyFocusService.prefs(context)
-    val active = active(context)
-    val granted = enabled(context)
-    if (active && granted) {
-      val id = p.getString("session", "").orEmpty()
-      if (p.getString("adminSession", "") != id) p.edit().putString("adminSession", id).remove("protectionError").apply()
-    } else if (FocusAdminPolicy.release(active, p.getString("adminSession", "").orEmpty())) {
-      if (!granted) {
-        p.edit().remove("adminSession").remove("protectionError").apply()
-        return
-      }
-      val now = android.os.SystemClock.elapsedRealtime()
-      if (lastRemovalAttempt != 0L && now - lastRemovalAttempt < 2000) return
-      lastRemovalAttempt = now
-      runCatching {
-        if (owner(context)) {
-          // Do not deprovision an existing managed device. Only release our legacy uninstall flag.
-          manager(context).setUninstallBlocked(admin(context), context.packageName, false)
-          p.edit().remove("adminSession").apply()
-        } else manager(context).removeActiveAdmin(admin(context))
-      }.onFailure {
-        if (!p.contains("protectionError")) p.edit().putString("protectionError", "Could not release uninstall protection.").apply()
-      }
-    }
   }
   fun active(context: Context): Boolean {
     val p = BuddyFocusService.prefs(context)
@@ -75,8 +48,10 @@ internal object FocusProtection {
   fun reconcile(context: Context) {
     BuddyFocusService.finishTimedBreak(context)
     FocusNotifications.reconcile(context)
-    reconcileAdmin(context)
     val p = BuddyFocusService.prefs(context)
+    // Remove obsolete auto-release bookkeeping, never the user's admin grant.
+    if (p.contains("adminSession") || p.contains("protectionError"))
+      p.edit().remove("adminSession").remove("protectionError").apply()
     val active = active(context)
     val alarm = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
     val pending = PendingIntent.getBroadcast(context, 7319,
@@ -87,10 +62,6 @@ internal object FocusProtection {
     if (active && (!p.getBoolean("paused", false) || breakUntil > 0)) {
       // No exact-alarm permission needed; service also reconciles every second.
       alarm.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, if (p.getBoolean("paused", false)) breakUntil else p.getLong("endsAt", 0), pending)
-    }
-    if (!active && p.contains("adminSession")) {
-      // removeActiveAdmin is asynchronous; retain recovery until Android confirms removal.
-      alarm.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + 5000, pending)
     }
   }
 }

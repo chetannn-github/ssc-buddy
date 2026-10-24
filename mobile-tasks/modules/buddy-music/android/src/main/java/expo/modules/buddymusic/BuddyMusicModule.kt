@@ -44,7 +44,6 @@ class BuddyMusicModule : Module() {
       val prefs = BuddyFocusService.prefs(context)
       BuddyFocusService.ensureRunning(context)
       FocusNotifications.reconcile(context)
-      FocusProtection.reconcileAdmin(context)
       mapOf("enabled" to BuddyFocusService.enabled(context), "allowedCount" to prefs.getStringSet("allowed", emptySet()).orEmpty().size,
         "usageAccess" to BuddyFocusService.usageEnabled(context), "overlayAccess" to android.provider.Settings.canDrawOverlays(context),
         "scheduleAlarmAccess" to FocusSchedules.exactAccess(context),
@@ -53,7 +52,6 @@ class BuddyMusicModule : Module() {
         "notificationError" to prefs.getString("notificationError", "").orEmpty(),
         "adminSupported" to !FocusProtection.owner(context),
         "adminAccess" to FocusProtection.enabled(context),
-        "adminError" to prefs.getString("protectionError", "").orEmpty(),
         "serviceConnected" to BuddyFocusService.connected, "lastEventAt" to BuddyFocusService.lastEventAt,
         "sessionActive" to (prefs.getLong("endsAt", 0) > System.currentTimeMillis() || prefs.getBoolean("paused", false)),
         "unlockAt" to prefs.getLong("endsAt", 0),
