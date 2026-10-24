@@ -13,7 +13,8 @@ import { SlotTime } from "./SlotTime";
 import { FocusPulse } from "./FocusPulse";
 import { DeviceFocusSetup } from "./DeviceFocusSetup";
 import { AnimatedTimeChips } from "./AnimatedTimeChips";
-import { deviceFocusStatus, openDeviceFocusSettings, supportsDeviceFocus, syncDeviceFocusState } from "../lib/native-focus-lock";
+import { deviceFocusStatus, openDeviceUsageSettings, openDeviceOverlaySettings, openDeviceNotificationSettings, openDeviceAdminSettings, supportsDeviceFocus, syncDeviceFocusState } from "../lib/native-focus-lock";
+import { FocusPermissionsRequired, withManualFocusAccess } from "../domain/focus-permissions";
 import { clockValueFromPoint } from "../domain/clock-hand";
 import { MAX_STUDY_WEBSITES, splitSelection } from "../../../shared/study-selection";
 import { FocusSchedules } from "./FocusSchedules";
@@ -176,14 +177,27 @@ export function StudyLock({ uid, taskButton = false, openRequest = 0, onRequestO
               </View>
               <Pressable accessibilityRole="button" accessibilityLabel="Start Focus Lock" disabled={busy || !ready} style={[s.primary, (busy || !ready) && { opacity: 0.4 }]} onPress={() => void run(async () => {
                 const selectedWebsites = splitSelection([...domains, ...(website.trim() ? [website] : [])]).domains;
-                if (Platform.OS === "android" && supportsDeviceFocus && !(await deviceFocusStatus()).enabled) {
-                  Alert.alert("Enable app blocking", "Allow Usage access and Display over other apps, then return to start.", [
-                    { text: "Not now", style: "cancel" },
-                    { text: "Enable", onPress: () => { void openDeviceFocusSettings().catch(() => setError("Could not open app blocking settings.")); } },
-                  ]);
-                  return;
-                }
-                const started = await controller.startStudySession(getFirebaseFirestore(), uid, minutes, selectedWebsites, "mobile", appLimit, breakLimit);
+                const start = () => controller.startStudySession(getFirebaseFirestore(), uid, minutes, selectedWebsites, "mobile", appLimit, breakLimit);
+                let started;
+                if (Platform.OS === "android") {
+                  if (!supportsDeviceFocus) throw new Error("Install the updated Android app to complete Focus setup.");
+                  try { started = await withManualFocusAccess(deviceFocusStatus, start); }
+                  catch (e) {
+                    if (!(e instanceof FocusPermissionsRequired)) throw e;
+                    const permissions = {
+                      usage: { label: "Usage access", open: openDeviceUsageSettings },
+                      overlay: { label: "Display over other apps", open: openDeviceOverlaySettings },
+                      notifications: { label: "Silent notifications", open: openDeviceNotificationSettings },
+                      admin: { label: "Uninstall protection", open: openDeviceAdminSettings },
+                    };
+                    const next = permissions[e.missing[0]!];
+                    Alert.alert("Complete Focus setup", e.missing.map(id => permissions[id].label).join("\n"), [
+                      { text: "Not now", style: "cancel" },
+                      { text: "Allow", onPress: () => { void next.open().catch(() => setError("Could not open permission settings.")); } },
+                    ]);
+                    return;
+                  }
+                } else started = await start();
                 setWebsite(""); setWebsiteSelection(null);
                 await syncDeviceFocusState(started, accent, "");
               })}>{busy ? <ActivityIndicator color="#111" /> : <Text style={s.primaryText}>Start Focus Lock</Text>}</Pressable>

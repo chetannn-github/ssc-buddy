@@ -1,6 +1,6 @@
-# Optional Device Admin and Settings protection
+# Device Admin and Settings protection
 
-Normal Android users may choose **Uninstall protection** in Focus setup. It opens
+Normal Android users activate **Uninstall protection** in Focus setup. It opens
 Android's standard Device Administrator activation UI; this is not Device Owner
 or kiosk provisioning and needs neither Accessibility nor a device reset.
 The receiver requests no wipe, password, camera or force-lock policies.
@@ -8,7 +8,24 @@ The receiver requests no wipe, password, camera or force-lock policies.
 An active administrator must normally be deactivated before its app can be
 uninstalled. Users still control deactivation; this is an extra uninstall step,
 not an unbreakable lock. Android/OEM policy and background-launch restrictions
-still apply. Denying this optional access doesn't prevent a focus session.
+still apply. Manual Android Focus starts require Usage access, Overlay access,
+notification-policy access when supported, and Device Admin. Every start checks
+fresh native status before creating the session; denied, revoked or unreadable
+permissions cannot start it. Scheduled activation remains exempt from this new
+manual-start check; its existing alarm/setup behavior is unchanged. A timer
+starting does not grant missing Android permissions or guarantee app blocking.
+
+After Android sign-in, a required-permission screen blocks entry to the app until
+the same four supported permissions are granted. Status is checked on return
+from Settings and locally while the app is active. Permission revocation brings
+the screen back. Existing app screens remain mounted after the first successful
+setup so their state isn't reset by rechecking access. Initial setup delays
+mounting them. Focus/schedule and widget synchronization remain outside the UI
+gate. No extra database subscriptions are created by permission checking.
+If a previously scheduled focus session is already restricted, permission setup
+may have to wait until its Settings guard releases at session end. No setup
+exception to that guard is introduced. Older builds without the native access
+checks show an update-build message instead of silently granting access.
 
 Admin activation is offered before a session, not during it. Once activated,
 the grant stays enabled through focus, breaks, session completion and restart.

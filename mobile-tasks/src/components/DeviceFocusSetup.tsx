@@ -3,7 +3,7 @@ import { ActivityIndicator, AppState, Pressable, StyleSheet, Text, View } from "
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { deviceFocusStatus, openDeviceUsageSettings, openDeviceOverlaySettings, openDeviceNotificationSettings, openDeviceAdminSettings, supportsDeviceFocus } from "../lib/native-focus-lock";
 
-export function DeviceFocusSetup() {
+export function DeviceFocusSetup({ required = false }: { required?: boolean } = {}) {
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [usageAccess, setUsageAccess] = useState(false);
   const [overlayAccess, setOverlayAccess] = useState(false);
@@ -36,7 +36,7 @@ export function DeviceFocusSetup() {
     const timer = setInterval(refresh, 3000);
     return () => { disposed = true; listener.remove(); clearInterval(timer); };
   }, []);
-  const showAdmin = adminSupported && !adminAccess && !sessionActive;
+  const showAdmin = adminSupported && !adminAccess && (required || !sessionActive);
   if (!supportsDeviceFocus || (enabled && !error && (!notificationSupported || notificationAccess) && !notificationError && !showAdmin)) return null;
   const checking = enabled === null && !error;
   return <View style={styles.card}>
@@ -51,7 +51,7 @@ export function DeviceFocusSetup() {
         void item.open().catch(() => setError("Could not open permission settings.")).finally(() => setOpening(current => current === item.id ? null : current));
       }}>
         <MaterialCommunityIcons name={item.icon} size={23} color="#f5f5f5" />
-        <View style={styles.copy}><Text style={styles.title}>{item.label}</Text>{item.id === "admin" && <Text style={styles.subtitle}>Optional · stays enabled until you turn it off</Text>}</View>
+        <View style={styles.copy}><Text style={styles.title}>{item.label}</Text>{item.id === "admin" && <Text style={styles.subtitle}>Stays enabled until you turn it off</Text>}</View>
         {opening === item.id || checking ? <ActivityIndicator size="small" color="#f5f5f5" /> : item.granted ? <MaterialCommunityIcons name="check" size={20} color="#86efac" /> : <Text style={[styles.action, { color: "#f5f5f5" }]}>Allow</Text>}
       </Pressable>)}
     {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}

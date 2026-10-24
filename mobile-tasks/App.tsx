@@ -1,5 +1,6 @@
 import { DestructiveDialog } from "./src/components/DestructiveDialog";
 import { DeviceFocusSync } from "./src/components/DeviceFocusSync";
+import { DevicePermissionGate } from "./src/components/DevicePermissionGate";
 import { FocusWidgetSync } from "./src/components/FocusWidgetSync";
 import { AccentBackdrop } from "./src/components/AccentBackdrop";
 import { launchImages } from "./src/lib/launch-images";
@@ -935,6 +936,9 @@ export default function App() {
   const dailyRankAction = widgetRank !== null && <Pressable accessibilityRole="button" accessibilityLabel="Open weekly leaderboard" onPress={() => setLeaderboardOpen(true)} style={styles.taskRank}>{widgetRank <= 3 ? <Image source={rankMedals[widgetRank - 1]} style={styles.taskRankMedal} /> : <MaterialCommunityIcons name="trophy" size={15} color="#fcd34d" />}<RollingMetric value={widgetRank} prefix="#" color="#e4e4e7" fontSize={12} /></Pressable>;
   return (
     <SafeAreaProvider>
+      <DeviceFocusSync user={user} />
+      <FocusWidgetSync user={user} />
+      <DevicePermissionGate key={user?.uid}>
       <View style={{ flex: 1, backgroundColor: colors.background }}><AccentBackdrop />
       <SafeAreaView style={[styles.safe, { backgroundColor: "transparent" }]} edges={["top", "left", "right"]} onTouchStart={() => resetBottomNavigation()}>
       <StatusBar hidden style="light" />
@@ -1105,8 +1109,6 @@ export default function App() {
       )}
       {!quickRecallOpen && <BottomNavigation activeTab={appTab === "progress" ? "track" : appTab === "habits" ? "tasks" : appTab} onChange={(tab) => { setLeaderboardOpen(false); setAppTab(tab === "tasks" && profileSettings?.habitsEnabled !== false ? taskSection.current : tab); }} practiceSessionEnabled={profileSettings?.practiceSessionEnabled !== false} trackProgressEnabled={profileSettings?.trackProgressEnabled !== false} timersEnabled={profileSettings?.timersEnabled !== false} habitsEnabled={profileSettings?.habitsEnabled !== false} profileAvatar={profileSettings?.avatar ? avatarAssets[profileSettings.avatar] : undefined} />}
       <MediaOverlay user={user} mode={mediaMode} musicOpenRequest={musicOpenRequest} onClose={() => setMediaMode(null)} />
-      <DeviceFocusSync user={user} />
-      <FocusWidgetSync user={user} />
       {celebratedStreak !== null && <StreakCelebration streak={celebratedStreak} onClose={() => setCelebratedStreak(null)} />}
       {celebratedLevel !== null && <LevelCelebration level={celebratedLevel} onClose={() => setCelebratedLevel(null)} />}
       {user && <WeeklyAwardCelebration uid={user.uid} enabled={(!showLaunchMotivation || profileSettings?.randomQuotesEnabled === false) && !dailyManifestation && celebratedStreak === null && celebratedLevel === null} />}
@@ -1132,6 +1134,7 @@ export default function App() {
       />
       </SafeAreaView>
       </View>
+      </DevicePermissionGate>
     </SafeAreaProvider>
   );
 }

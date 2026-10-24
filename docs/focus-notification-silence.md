@@ -1,8 +1,9 @@
 # Android Focus notification silence
 
 Focus Lock uses one app-owned Android automatic Do Not Disturb rule on Android 10+.
-Grant **Silent notifications** access once in Focus setup. This is optional; app
-blocking still works without it. It needs a new native Android build, not just an
+Grant **Silent notifications** access once in Focus setup. This is required for
+manual Android Focus starts on supported versions; scheduled starts do not use
+the manual permission gate. It needs a new native Android build, not just an
 OTA JavaScript update. Web, extensions and Windows cannot silence Android notifications.
 
 While the local Focus Lock is restricted, the rule silences ordinary notification
