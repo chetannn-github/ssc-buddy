@@ -32,12 +32,15 @@ import { AuthUserContext } from "@/lib/auth-context";
 import { loadDailyTasks, saveDailyTasks } from "@/lib/daily-tasks";
 import { migrateTasksIfEmpty, readTasks, watchTasks } from "@/lib/task-sync";
 import { loadTrackerData, saveTrackerData } from "@/lib/tracker-store";
-import { migrateTrackerIfEmpty, readTrackerSections, watchTrackerSections } from "@/lib/tracker-sync";
+import { initializeTrackerSections, watchTrackerSections } from "@/lib/tracker-sync";
 import { WEB_CLOUD_SYNC_ENABLED } from "@/lib/web-cloud-sync";
 import { prepareWebAccountCache } from "@/lib/account-cache";
 import { loadActiveTest } from "@/lib/active-test";
 import type { User } from "firebase/auth";
 import { FocusScheduleRunner } from "@/components/FocusScheduleRunner";
+import { useStartupProfileFocus, useStartupReadiness } from "../../shared/use-startup-readiness";
+import * as profileFocusReader from "../../shared/study-lock";
+import { getFirebaseFirestore } from "@/lib/firebase-sync";
 
 const DEBUG_FREEZE = import.meta.env.DEV;
 const debugFreeze = (label: string, details?: Record<string, unknown>) => {
@@ -171,6 +174,9 @@ function RootComponent() {
   const [authResolved, setAuthResolved] = useState(!isFirebaseConfigured);
   const [workspaceReady, setWorkspaceReady] = useState(!isFirebaseConfigured);
   const [uiSettingsReady, setUiSettingsReady] = useState(false);
+  const [startupProfileUid, setStartupProfileUid] = useState<string>();
+  const startupFocusReady = useStartupProfileFocus(syncUser?.uid, getFirebaseFirestore, profileFocusReader);
+  const startup = useStartupReadiness(syncUser?.uid, { profile: !WEB_CLOUD_SYNC_ENABLED || startupProfileUid === syncUser?.uid, tasks: workspaceReady, focus: startupFocusReady, activity: workspaceReady });
   useEffect(() => {
     if (!isFirebaseConfigured) {
       applyWebAccent(loadPracticeProfile()?.accentColor);
@@ -186,6 +192,7 @@ function RootComponent() {
       applyWebAccent(cached?.accentColor);
       setUiSettingsReady(!user || !!cached || !WEB_CLOUD_SYNC_ENABLED);
       setSyncUser(user);
+      setStartupProfileUid(undefined);
       setWorkspaceReady(!user);
       setAuthResolved(true);
     });
@@ -348,10 +355,7 @@ function RootComponent() {
           await migrateTasksIfEmpty(syncUser, localTasks);
           return readTasks(syncUser);
         })(),
-        (async () => {
-          await migrateTrackerIfEmpty(syncUser, localTracker);
-          return readTrackerSections(syncUser);
-        })(),
+        initializeTrackerSections(syncUser, localTracker),
       ]);
       if (disposed) {
         stop();
@@ -467,7 +471,7 @@ function RootComponent() {
       });
     };
     void start().catch(() => undefined).finally(() => {
-      if (!disposed) { applyWebAccent(loadPracticeProfile()?.accentColor); setUiSettingsReady(true); }
+      if (!disposed) { applyWebAccent(loadPracticeProfile()?.accentColor); setUiSettingsReady(true); setStartupProfileUid(syncUser.uid); }
     });
     return () => {
       disposed = true;
@@ -492,12 +496,12 @@ function RootComponent() {
       <FocusScheduleRunner uid={syncUser?.uid} />
       <QueryClientProvider client={queryClient}>
         {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-        {authResolved && uiSettingsReady && <Outlet />}
-        {(!authResolved || !uiSettingsReady || (syncUser && !workspaceReady && path !== "/auth")) && (
+        {authResolved && (syncUser ? startup.ready || path === "/auth" : uiSettingsReady) && <Outlet />}
+        {(!authResolved || (syncUser ? !startup.ready && path !== "/auth" : !uiSettingsReady)) && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#121212] text-zinc-300 backdrop-blur-xl">
             <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-[#121212] px-4 py-3 shadow-2xl">
               <LoaderCircle className="h-4 w-4 animate-spin text-primary" />
-              <span className="text-sm font-medium">Syncing your workspace</span>
+              <span key={!authResolved ? "auth" : startup.message} role="status" className="animate-in fade-in duration-300 text-sm font-medium">{!authResolved ? "Opening your workspace…" : syncUser ? startup.message : "Getting things ready…"}</span>
             </div>
           </div>
         )}

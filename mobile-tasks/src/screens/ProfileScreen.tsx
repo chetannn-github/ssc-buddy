@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { StudyLock, controller as focusReader } from "../components/StudyLock";
+import { FocusPulse } from "../components/FocusPulse";
 import { PublicFocusTime } from "../components/PublicFocusTime";
 import { useProfileFocusData } from "../../../shared/use-profile-focus";
 import { profileTrackerVisibility } from "../../../shared/profile-tracker-visibility";
@@ -617,6 +618,7 @@ export function ProfileScreen({
             <Pressable style={{ width: 67, height: 67, margin: 0.5 }} onPress={() => setViewingAvatar(true)}>
               <Image source={avatarImage} style={[styles.avatarImage, { borderRadius: 33.5 }]} />
             </Pressable>
+            {focusData.focusing && <FocusPulse label="Focusing" style={[styles.avatarFocusDot, { backgroundColor: appAccent }]} />}
             {!readOnly && <Pressable
               style={[styles.avatarBadge, { width: 25, height: 25, borderRadius: 13 }]}
               accessibilityLabel="Change profile image"
@@ -644,9 +646,11 @@ export function ProfileScreen({
                 </View>
               ))}
             </Pressable>
-            <Pressable accessibilityRole="button" accessibilityLabel="View XP level roadmap" style={styles.xpBlock} onPress={() => setXpTimelineOpen(true)}>
+            <Pressable accessibilityRole="button" accessibilityLabel="View XP level roadmap" disabled={!focusData.ready} style={styles.xpBlock} onPress={() => setXpTimelineOpen(true)}>
+              {focusData.ready ? <>
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", flexWrap: "wrap", gap: 3 }}><Text style={styles.xpText}>Lv.</Text><ProfileNumber value={xpSummary.level} style={styles.xpText} /><Text style={styles.xpText}>· {levelName(xpSummary.level)} ·</Text><ProfileNumber value={xpSummary.xp} prefix={xpSummary.xp > 0 ? "+" : ""} suffix=" XP" style={[styles.xpText, xpSummary.xp < 0 && styles.xpNegative]} /></View>
               {xpSummary.level > 0 && <ProfileXpBar progress={xpSummary.progress} />}
+              </> : <Text accessibilityLabel="Loading XP and level" style={styles.xpText}>—</Text>}
             </Pressable>
           </View>
         </View>
@@ -1034,7 +1038,7 @@ export function ProfileScreen({
           </KeyboardAvoidingView>
         </Modal>
       </ScrollView>
-      <Modal transparent visible={xpTimelineOpen} animationType="fade" statusBarTranslucent onRequestClose={() => setXpTimelineOpen(false)}>
+      <Modal transparent visible={xpTimelineOpen && focusData.ready} animationType="fade" statusBarTranslucent onRequestClose={() => setXpTimelineOpen(false)}>
         <Pressable style={styles.xpDialogBackdrop} onPress={() => setXpTimelineOpen(false)}>
           <Pressable style={styles.xpDialog} onPress={() => undefined}>
             <View style={styles.xpDialogHeader}><View><Text style={styles.xpDialogEyebrow}>YOUR XP PATH</Text><Text style={styles.xpDialogTitle}>Level {xpSummary.level} · {levelName(xpSummary.level)}</Text></View><Pressable hitSlop={10} onPress={() => setXpTimelineOpen(false)}><MaterialCommunityIcons name="close" size={20} color={colors.muted} /></Pressable></View>
@@ -1751,6 +1755,7 @@ const styles: Record<string, any> = createThemedStyles({
     borderColor: colors.border,
   },
   avatarImage: { width: "100%", height: "100%", borderRadius: 42 },
+  avatarFocusDot: { position: "absolute", top: 0, right: 0, zIndex: 2, width: 9, height: 9, borderRadius: 5, borderWidth: 1.5, borderColor: colors.background },
   avatarBadge: {
     position: "absolute",
     right: -2,

@@ -321,8 +321,8 @@ export function HabitsScreen({ user, widgetRequest, onWidgetRequestHandled, onSw
                         <HabitProgressFill progress={stats.progress} color={tint} />
                       </View>
                       <Text style={[s.copy, { color: tint }]}>
-                        {stats.streak}/{habit.targetDays} days
-                        {stats.streak >= habit.targetDays ? " · Challenge complete!" : ""}
+                        {stats.total}/{habit.targetDays} days
+                        {stats.total >= habit.targetDays ? " · Challenge complete!" : ""}
                       </Text>
                     </>
                   )}

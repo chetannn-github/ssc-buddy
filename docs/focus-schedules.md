@@ -1,6 +1,6 @@
 # Focus schedules
 
-Implemented on `main`; the separate Focus Lock database optimization branch is not merged.
+Implemented on `main` and integrated into `codex/focus-db-load`. This branch retains event-based focus settlement, grouped history repair, and the extension control listener without periodic control GETs or presence heartbeats.
 
 ## Setup and behavior
 
@@ -19,7 +19,7 @@ Scheduled sessions keep their original end time when a client wakes late. Fully 
 - Android caches schedules locally and uses AlarmManager, boot/time-change receivers, and the existing Accessibility enforcement service. Setup requires the updated native build, Focus Lock accessibility permission, and Alarms & reminders permission. Completed native sessions remain in a local journal until focus credit uploads successfully. Network access is not required for a previously cached alarm. Cached devices cannot receive remote schedule edits while offline. Power-off and force-stop are not execution guarantees; recovery within a still-active window retains its original end.
 - Android exact-alarm permission revocation falls back to an inexact alarm and is shown in setup; punctual starts require the permission. OEM battery restrictions and real-device behavior still need APK testing.
 
-Schedules are embedded in `users/{uid}/studyLock/current.focusSchedules`. There is no new scheduler polling collection or per-second database write. Existing main-branch Focus Lock credit/polling behavior is unchanged.
+Schedules are embedded in `users/{uid}/studyLock/current.focusSchedules`. There is no new scheduler polling collection or per-second database write. On this branch scheduled focus is settled at lifecycle boundaries, just like manual focus. The extension publishes a locally started schedule once through the existing conditional control write; unsuccessful activation retries with backoff, while running timers do not poll the control document.
 
 ## Validation
 

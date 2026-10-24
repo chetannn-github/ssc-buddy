@@ -4,6 +4,16 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class FocusWindowPolicyTest {
+  @Test fun shadeThenSettingsCannotRetainThePreviouslyAllowedApp() {
+    val study = "study"
+    val shade = FocusWindowPolicy.foreground(study, "com.android.systemui", "buddy", false, false)
+    assertEquals(study, shade)
+    val settings = FocusWindowPolicy.foreground(shade, "com.android.settings", "buddy", false, false, fullScreenSettings = true)
+    assertEquals("com.android.settings", settings)
+    assertTrue(FocusWindowPolicy.mayShow(FocusAppPolicy.blocks(settings, 10, 20, setOf("buddy"), setOf(study)), true, false))
+    assertEquals(study, FocusWindowPolicy.foreground(settings, study, "buddy", true, true))
+    assertEquals(study, FocusWindowPolicy.foreground(study, "background.app", "buddy", false, false))
+  }
   @Test fun refreshAndBackgroundDialogCannotReplaceTheAllowedForegroundApp() {
     for (allowed in listOf("pdf.reader", "com.android.chrome", "com.openai.chatgpt", "com.google.android.youtube")) {
       var foreground = allowed

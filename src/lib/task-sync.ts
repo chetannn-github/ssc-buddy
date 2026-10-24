@@ -1,4 +1,4 @@
-import { collection, deleteDoc, doc, getDocs, onSnapshot, setDoc, writeBatch } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDocs, limit, onSnapshot, query, setDoc, writeBatch } from "firebase/firestore";
 import type { User } from "firebase/auth";
 import { getFirebaseFirestore } from "@/lib/firebase-sync";
 import type { DailyTask } from "@/lib/daily-tasks";
@@ -8,14 +8,15 @@ const collectionFor = (user: User) => collection(getFirebaseFirestore(), "users"
 const same = (left: DailyTask, right: DailyTask) => JSON.stringify(left) === JSON.stringify(right);
 
 export async function migrateTasksIfEmpty(user: User, localTasks: DailyTask[]) {
-  const remote = await getDocs(collectionFor(user));
-  if (remote.size || !localTasks.length) return;
+  if (!localTasks.length) return;
+  const remote = await getDocs(query(collectionFor(user), limit(1)));
+  if (remote.size) return;
   const batch = writeBatch(getFirebaseFirestore());
   localTasks.forEach((task) => batch.set(doc(collectionFor(user), task.id), task));
   await batch.commit();
 }
 
-/** One-time hydration on page load. The website intentionally has no live listener. */
+/** One-time hydration; the root also attaches a listener for subsequent changes. */
 export async function readTasks(user: User): Promise<DailyTask[]> {
   const snapshot = await getDocs(collectionFor(user));
   return snapshot.docs

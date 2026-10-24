@@ -68,7 +68,7 @@ export function HabitDashboard({ uid, api, selected, today, dueOnly }: {
             }}>{settings.type === "quit" && !done ? <X size={19} /> : done ? <Check size={19} /> : settings.tracking === "count" ? <Plus size={19} /> : settings.tracking === "checklist" ? <ListChecks size={19} /> : <Check size={19} />}</button>
           </div>
           <HabitHeatmap habit={habit} today={today} />
-          {habit.targetDays && <div className="habit-challenge"><span>{stats.streak}/{habit.targetDays} days</span><div><i style={{ width: `${stats.progress * 100}%` }} /></div></div>}
+          {habit.targetDays && <div className="habit-challenge"><span>{stats.total}/{habit.targetDays} days</span><div><i style={{ width: `${stats.progress * 100}%` }} /></div></div>}
         </article>;
       })}
     </section>

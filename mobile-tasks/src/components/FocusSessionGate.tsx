@@ -44,7 +44,7 @@ export function FocusSessionGate({ user }: { user: User | null }) {
   useEffect(() => { if (!active) setRecall(false); }, [active]);
   useEffect(() => {
     if (!user || !session) return;
-    void controller.recordStudyFocus(getFirebaseFirestore(), user.uid, session).catch(() => {});
+    void controller.settleStudyFocus(getFirebaseFirestore(), user.uid, session).catch(() => {});
   }, [user?.uid, session?.id, Math.floor(now / 60000), active]);
   const seconds = session ? Math.max(0, Math.ceil((session.endsAt - now) / 1000)) : 0;
   const time = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;

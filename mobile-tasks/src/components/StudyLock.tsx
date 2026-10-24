@@ -10,11 +10,12 @@ import { getFirebaseFirestore } from "../lib/firebase";
 import { colors, useAppAccent } from "../theme";
 import { accentInk } from "../domain/app-accent";
 import { SlotTime } from "./SlotTime";
+import { FocusPulse } from "./FocusPulse";
 import { DeviceFocusSetup } from "./DeviceFocusSetup";
 import { AnimatedTimeChips } from "./AnimatedTimeChips";
 import { deviceFocusStatus, openDeviceFocusSettings, supportsDeviceFocus, syncDeviceFocusState } from "../lib/native-focus-lock";
 import { clockValueFromPoint } from "../domain/clock-hand";
-import { MAX_STUDY_WEBSITES } from "../../../shared/study-selection";
+import { MAX_STUDY_WEBSITES, splitSelection } from "../../../shared/study-selection";
 import { FocusSchedules } from "./FocusSchedules";
 import { ClockFaceMotion } from "./ClockFaceMotion";
 import { ClockDigitHighlight } from "./ClockDigitHighlight";
@@ -68,10 +69,13 @@ export function StudyLock({ uid, taskButton = false, openRequest = 0, onRequestO
     return () => animation.stop();
   }, [appLimit, appLimitSlide, reducedMotion]);
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const [website, setWebsite] = useState("");
+  const [websiteSelection, setWebsiteSelection] = useState<{ uid: string; domains: string[] } | null>(null);
+  useEffect(() => { setWebsite(""); setWebsiteSelection(null); }, [uid]);
   const [focusData, setFocusData] = useState<FocusDay>(emptyFocusDay);
   const date = focusDayKey(now, control?.session?.timeZone);
   useEffect(() => controller.watchStudyFocusDay(getFirebaseFirestore(), uid, date, setFocusData, () => setError("Could not load today's focus time.")), [uid, date]);
-  useEffect(() => { void controller.publishStudyFocusDay(getFirebaseFirestore(), uid, date, control?.session?.timeZone).catch(() => {}); }, [uid, date, focusData.totalMilliseconds, Math.floor(now / 60000)]);
+  useEffect(() => { void controller.publishStudyFocusDay(getFirebaseFirestore(), uid, date, control?.session?.timeZone, focusData.totalMilliseconds).catch(() => {}); }, [uid, date, focusData.totalMilliseconds]);
   const todayFocus = todayFocusMilliseconds(focusData, control?.session ?? null, now);
   const [ready, setReady] = useState(false);
   useEffect(() => {
@@ -87,10 +91,18 @@ export function StudyLock({ uid, taskButton = false, openRequest = 0, onRequestO
   const candidate = control?.session ? effectiveStudySession(control.session, now) : null;
   const session = candidate && (candidate.paused || candidate.endsAt > now) ? candidate : null;
   const breaking = onStudyBreak(session, now);
+  const focusing = !!session && !session.paused && session.startedAt <= now;
   const breakState = session ? studyBreakState(session, now) : null;
   const canBreak = !breaking && (!!breakState?.available || session?.breakLimit === undefined);
   const breakLabel = breaking ? "Break · auto-resumes" : session?.breakLimit === undefined && session?.paused ? "Resume focus" : breakState?.available ? "Take a break · 10 min" : !breakState?.left ? "No breaks remaining" : `Break in ${Math.ceil((breakState?.waitMs ?? 0) / 60000)} min`;
-  const domains = (session?.domains ?? control?.allowedDomains ?? []).slice(0, MAX_STUDY_WEBSITES);
+  const domains = (session?.domains ?? (websiteSelection?.uid === uid ? websiteSelection.domains : control?.allowedDomains) ?? []).slice(0, MAX_STUDY_WEBSITES);
+  const addWebsite = () => {
+    if (busy || !ready || session || !website.trim()) return;
+    try {
+      setWebsiteSelection({ uid, domains: splitSelection([...domains, website]).domains });
+      setWebsite(""); setError("");
+    } catch (e) { setError(e instanceof Error ? e.message : "Enter a website like parmar.com."); }
+  };
   const run = async (action: () => Promise<void>) => {
     if (busy) return;
     setBusy(true); setError("");
@@ -105,8 +117,8 @@ export function StudyLock({ uid, taskButton = false, openRequest = 0, onRequestO
         <Text style={s.taskStartText}>{breaking ? "Break" : session.paused ? "Focus paused" : "Focus"} · </Text>
         <SlotTime value={remaining(now + studyTimerMilliseconds(session, now), now)} color="#111" size={14} weight="700" compact />
       </View> : <Text style={s.taskStartText}>Start Focus</Text>}
-    </Pressable> : <Pressable accessibilityRole="button" accessibilityLabel="Focus Lock" style={s.profileTrigger} onPress={() => setOpen(true)}>
-      <View style={s.profileLock}>{icon("lock-outline", 18, session ? accent : "#eee")}{session && <ActiveLockDot color={accent} />}</View><Text style={s.profileLabel}>Focus Lock</Text>
+    </Pressable> : <Pressable accessibilityRole="button" accessibilityLabel={focusing ? "Focusing" : "Focus Lock"} style={s.profileTrigger} onPress={() => setOpen(true)}>
+      <View style={s.profileLock}>{icon("lock-outline", 18, focusing ? accent : "#eee")}{focusing && <FocusPulse style={[s.activeLockDot, { backgroundColor: accent }]} />}</View><Text style={s.profileLabel}>{focusing ? "Focusing" : "Focus Lock"}</Text>
       <View style={s.profileFocus}><Text style={s.profileFocusTime}>Today · </Text><SlotTime value={formatFocusTime(todayFocus)} color="#ddd" size={12} weight="600" compact /></View>
     </Pressable>}
     <Modal transparent visible={open} animationType="fade" statusBarTranslucent onRequestClose={close}>
@@ -125,6 +137,15 @@ export function StudyLock({ uid, taskButton = false, openRequest = 0, onRequestO
               <SlotTime value={remaining(now + studyTimerMilliseconds(session, now), now)} color={accent} />
               <Pressable accessibilityRole="button" accessibilityLabel={breakLabel} disabled={busy || !canBreak} style={[s.secondary, (busy || !canBreak) && { opacity: 0.45 }]} onPress={() => void run(() => session.paused ? controller.resumeStudySession(getFirebaseFirestore(), uid, "mobile") : controller.pauseStudySession(getFirebaseFirestore(), uid, "mobile"))}><Text style={s.secondaryText}>{breakLabel}</Text></Pressable>
             </> : <>
+              <View style={s.websites}>
+                <View style={s.websiteHeading}><Text style={s.durationLabel}>Allowed websites</Text><Text style={s.websiteCount}>{domains.length}/{MAX_STUDY_WEBSITES}</Text></View>
+                {domains.length < MAX_STUDY_WEBSITES && <View style={s.websiteEntry}>
+                  {icon("web", 18)}
+                  <TextInput accessibilityLabel="Website domain" value={website} onChangeText={setWebsite} placeholder="parmar.com" placeholderTextColor="#888" editable={ready && !busy} autoCapitalize="none" autoCorrect={false} keyboardType="url" returnKeyType="done" onSubmitEditing={addWebsite} style={s.websiteInput} />
+                  <Pressable accessibilityRole="button" accessibilityLabel="Add website" disabled={busy || !ready || !website.trim()} hitSlop={8} onPress={addWebsite} style={(busy || !ready || !website.trim()) && { opacity: 0.4 }}>{icon("plus", 22, "#f9fcf5")}</Pressable>
+                </View>}
+                {!!domains.length && <View style={s.websiteChips}>{domains.map(domain => <Pressable key={domain} accessibilityRole="button" accessibilityLabel={`Remove ${domain}`} disabled={busy || !ready} onPress={() => { setWebsiteSelection({ uid, domains: domains.filter(value => value !== domain) }); setError(""); }} style={s.websiteChip}><Text style={s.websiteChipText} numberOfLines={1}>{domain}</Text>{icon("close", 14)}</Pressable>)}</View>}
+              </View>
               <Pressable accessibilityRole="button" accessibilityLabel="Focus time" style={s.duration} disabled={busy} onPress={() => setPicking(true)}>{icon("clock-outline", 17)}<Text style={s.durationLabel}>Focus time</Text><View style={s.durationValue}><SlotTime value={formatFocusMinutes(minutes)} color="#eee" size={12} weight="600" compact /></View></Pressable>
               <AnimatedTimeChips options={[15, 30, 60, 90]} labels={[15, 30, 60, 90].map(formatFocusMinutes)} value={minutes} onChange={setMinutes} disabled={busy} color={accent} ink={accentInk(accent)} style={s.quickTimes} />
               <View style={s.breakCard}>
@@ -154,14 +175,16 @@ export function StudyLock({ uid, taskButton = false, openRequest = 0, onRequestO
                 </View>
               </View>
               <Pressable accessibilityRole="button" accessibilityLabel="Start Focus Lock" disabled={busy || !ready} style={[s.primary, (busy || !ready) && { opacity: 0.4 }]} onPress={() => void run(async () => {
+                const selectedWebsites = splitSelection([...domains, ...(website.trim() ? [website] : [])]).domains;
                 if (Platform.OS === "android" && supportsDeviceFocus && !(await deviceFocusStatus()).enabled) {
-                  Alert.alert("Enable app blocking", "Turn on SSC Buddy Focus Lock in Accessibility settings, then return to start.", [
+                  Alert.alert("Enable app blocking", "Allow Usage access and Display over other apps, then return to start.", [
                     { text: "Not now", style: "cancel" },
-                    { text: "Enable", onPress: () => { void openDeviceFocusSettings().catch(() => setError("Could not open Accessibility settings.")); } },
+                    { text: "Enable", onPress: () => { void openDeviceFocusSettings().catch(() => setError("Could not open app blocking settings.")); } },
                   ]);
                   return;
                 }
-                const started = await controller.startStudySession(getFirebaseFirestore(), uid, minutes, domains, "mobile", appLimit, breakLimit);
+                const started = await controller.startStudySession(getFirebaseFirestore(), uid, minutes, selectedWebsites, "mobile", appLimit, breakLimit);
+                setWebsite(""); setWebsiteSelection(null);
                 await syncDeviceFocusState(started, accent, "");
               })}>{busy ? <ActivityIndicator color="#111" /> : <Text style={s.primaryText}>Start Focus Lock</Text>}</Pressable>
             </>}
@@ -209,20 +232,15 @@ function StudyClock({ minutes, accent, onCancel, onSave, timeOfDay=false, title=
   </>;
 }
 
-function ActiveLockDot({ color }: { color: string }) {
-  const phase = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    const animation = Animated.loop(Animated.sequence([
-      Animated.timing(phase, { toValue: 1, duration: 800, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-      Animated.timing(phase, { toValue: 0, duration: 800, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-    ]));
-    animation.start();
-    return () => animation.stop();
-  }, [phase]);
-  return <Animated.View accessible={false} pointerEvents="none" style={[s.activeLockDot, { backgroundColor: color, transform: [{ translateY: phase.interpolate({ inputRange: [0, 1], outputRange: [-3, 3] }) }] }]} />;
-}
-
 const s = StyleSheet.create({
+  websites: { marginTop: 16, marginBottom: 14, gap: 8 },
+  websiteHeading: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  websiteCount: { color: "#999", fontSize: 11 },
+  websiteEntry: { flexDirection: "row", alignItems: "center", gap: 9, backgroundColor: "#252525", borderRadius: 16, paddingHorizontal: 13, minHeight: 48 },
+  websiteInput: { flex: 1, minWidth: 0, color: "#eee", fontSize: 13, paddingVertical: 12 },
+  websiteChips: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
+  websiteChip: { flexDirection: "row", alignItems: "center", gap: 8, maxWidth: "100%", backgroundColor: "#242424", borderRadius: 18, paddingHorizontal: 11, paddingVertical: 8 },
+  websiteChipText: { color: "#eee", fontSize: 12, flexShrink: 1 },
   breakCard: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, paddingHorizontal: 10, paddingVertical: 6, marginBottom: 12, borderRadius: 14, backgroundColor: "#191919" },
   breakCopy: { flex: 1 },
   breakTitle: { color: "#f9fcf5", fontSize: 12, fontWeight: "600" },

@@ -18,6 +18,7 @@ class FocusRestoreReceiver : BroadcastReceiver() {
       FocusSchedules.tick(context)
       FocusSchedules.arm(context)
       FocusProtection.reconcile(context)
+      BuddyFocusService.ensureRunning(context)
     }
   }
 }

@@ -20,10 +20,14 @@ function load(filename) {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
   }).outputText;
   vm.runInNewContext(code, { exports, Date, Map, console, require(name) {
+    if (name.endsWith(".css")) return {};
     if (name === "@number-flow/react") return { __esModule: true, default: ({ value, suffix = "" }) => React.createElement("span", null, value + suffix) };
     if (!name.startsWith(".")) return requireDesktop(name);
     const base = path.resolve(path.dirname(filename), name);
-    return load([base + ".ts", base + ".tsx"].find(existsSync));
+    if (base === path.join(root, "src/lib/firebase")) return { getFirebaseFirestore: () => ({}) };
+    const resolved = [base, base + ".ts", base + ".tsx"].find(existsSync);
+    assert.ok(resolved, `Cannot resolve ${name} from ${filename}`);
+    return load(resolved);
   } });
   return exports;
 }
@@ -35,6 +39,14 @@ const habit = (id, complete = false, settings = {}) => ({ id, name: id, color: "
   completedDates: complete ? [today] : [], entries: {}, settings: domain.normalizeHabitSettings(settings) });
 const api = habits => ({ habits, loading: false, error: "", retry() {}, updateDay() { return Promise.resolve(); } });
 const render = (Component, props) => renderToStaticMarkup(React.createElement(Component, props));
+
+test("Windows challenge label and meter retain active-day progress after missed days", () => {
+  const value = { ...habit("READ"), completedDates: ["2026-10-01", "2026-10-03"], targetDays: 5 };
+  assert.equal(domain.habitStats(value, today).streak, 0);
+  const markup = render(HabitDashboard, { api: api([value]), selected: today, today, dueOnly: false });
+  assert.match(markup, /2\/5 days/);
+  assert.match(markup, /width:40%/);
+});
 
 test("Windows habits show heatmaps, streaks and challenge progress; Due hides completed habits", () => {
   const props = { api: api([habit("READ"), habit("WALK", true)]), selected: today, today, dueOnly: false };
@@ -69,10 +81,10 @@ const androidTask = (id, date = today, completed = false) => ({ id, name: id, su
   createdAt: "2026-10-21T08:00:00Z", completed, completedAt: null, minutesSpent: completed ? 30 : null });
 const androidProps = { tasks: [androidTask("FIRST", today, true), androidTask("SECOND")], today, selectedDate: today, dueOnly: false,
   rank: 1, medals: ["gold.png", "silver.png", "bronze.png"], points: new Map([["FIRST", 13]]), onSelectDate() {}, onFilterChange() {}, onNew() {}, onComplete() {}, onReopen() {} };
-test("Windows Tasks widget mirrors Android rank, seven dates, meter, time, points and stable order", () => {
+test("Windows Tasks widget retains seven dates, meter, time, points and stable order", () => {
   const html = render(AndroidTasksWidget, androidProps);
-  assert.match(html, /gold.png/);
-  assert.match(html, /#1/);
+  // The current content panel does not render its own medal/rank.
+  assert.doesNotMatch(html, /gold.png/);
   assert.match(html, /aria-label="Add task"/);
   assert.equal((html.match(/aria-label="2026-/g) ?? []).length, 7);
   assert.match(html, /All \(2\)/);
@@ -88,7 +100,7 @@ test("Android-style Due filter retains full-day meter and selected history is re
   assert.match(html, /SECOND/);
   assert.match(html, /50%/);
   const old = render(AndroidTasksWidget, { ...androidProps, selectedDate: "2026-10-20", tasks: [androidTask("OLD", "2026-10-20")] });
-  assert.match(old, /disabled=""/);
+  assert.match(old, /aria-disabled="true"/);
   assert.match(old, /Missed: OLD/);
   assert.match(old, /class="android-task-row missed"/);
 });

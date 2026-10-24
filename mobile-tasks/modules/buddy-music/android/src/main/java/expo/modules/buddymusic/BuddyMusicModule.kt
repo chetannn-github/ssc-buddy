@@ -42,7 +42,9 @@ class BuddyMusicModule : Module() {
     AsyncFunction("getFocusLockStatus") {
       val context = requireNotNull(appContext.reactContext)
       val prefs = BuddyFocusService.prefs(context)
+      BuddyFocusService.ensureRunning(context)
       mapOf("enabled" to BuddyFocusService.enabled(context), "allowedCount" to prefs.getStringSet("allowed", emptySet()).orEmpty().size,
+        "usageAccess" to BuddyFocusService.usageEnabled(context), "overlayAccess" to android.provider.Settings.canDrawOverlays(context),
         "scheduleAlarmAccess" to FocusSchedules.exactAccess(context),
         "serviceConnected" to BuddyFocusService.connected, "lastEventAt" to BuddyFocusService.lastEventAt,
         "sessionActive" to (prefs.getLong("endsAt", 0) > System.currentTimeMillis() || prefs.getBoolean("paused", false)),
@@ -64,7 +66,16 @@ class BuddyMusicModule : Module() {
     }.runOnQueue(Queues.MAIN)
     AsyncFunction("openFocusLockSettings") {
       val context = requireNotNull(appContext.reactContext)
-      context.startActivity(android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+      val action = if (!BuddyFocusService.usageEnabled(context)) android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS else android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION
+      openFocusPermission(context, action)
+    }.runOnQueue(Queues.MAIN)
+    AsyncFunction("openFocusUsageSettings") {
+      val context = requireNotNull(appContext.reactContext)
+      openFocusPermission(context, android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS)
+    }.runOnQueue(Queues.MAIN)
+    AsyncFunction("openFocusOverlaySettings") {
+      val context = requireNotNull(appContext.reactContext)
+      openFocusPermission(context, android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
     }.runOnQueue(Queues.MAIN)
     AsyncFunction("configureFocusSchedules") { uid: String, json: String ->
       FocusSchedules.configure(requireNotNull(appContext.reactContext), uid, json)
@@ -150,6 +161,13 @@ class BuddyMusicModule : Module() {
     OnDestroy {
       destroyed = true
       handler.post { observing = false; handler.removeCallbacks(ticker); controller?.removeListener(listener); controller?.release(); controller = null }
+    }
+  }
+  private fun openFocusPermission(context: android.content.Context, action: String) {
+    val intent = android.content.Intent(action, Uri.parse("package:${context.packageName}")).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+    try { context.startActivity(intent) }
+    catch (_: android.content.ActivityNotFoundException) {
+      context.startActivity(android.content.Intent(action).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
     }
   }
   private fun status(): Map<String, Any?> {

@@ -1,9 +1,13 @@
 import { canReopenDailyWidgetTask } from "../domain/daily-task-widget";
+import { hasActiveTrackerSource, hasConfirmedTracker, watchTrackerSource } from "../domain/tracker-live-source";
+import { profileDataSource } from "../../../shared/profile-data-source";
 import { mergeQuestionDeletions } from "../domain/question-deletion";
 import { appendRecallQuestionSnapshots, type RecallQuestionInput } from "../domain/quick-recall-solutions";
+import { createInFlightLoader, createOrderedPublisher, learningPatchUnchanged, mergePatchUnchanged } from "../domain/practice-sync-policy";
+import { practiceSnapshots } from "../domain/practice-live-source";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getApp, getApps, initializeApp } from "firebase/app";
-import { collection, deleteDoc, doc, getDoc, getDocs, getFirestore, initializeFirestore, onSnapshot, runTransaction, serverTimestamp, setDoc, writeBatch, type Firestore } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDoc, getDocs, getFirestore, initializeFirestore, limit, onSnapshot, query, runTransaction, serverTimestamp, setDoc, writeBatch, type Firestore } from "firebase/firestore";
 import * as FirebaseAuth from "firebase/auth";
 import {
   createUserWithEmailAndPassword,
@@ -133,7 +137,7 @@ export function watchWeeklyLeaderboardRank(user: User, callback: (rank: number |
   now.setHours(0, 0, 0, 0);
   now.setDate(now.getDate() - ((now.getDay() + 6) % 7));
   const week = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-  return onSnapshot(collection(getFirebaseFirestore(), "leaderboards", week, "entries"), (snapshot) => {
+  return profileDataSource({ collection, doc, onSnapshot }).watchWeek(getFirebaseFirestore(), week, (snapshot) => {
     const entries = rankWeeklyEntries(snapshot.docs.map((item) => ({ ...item.data(), uid: item.id })));
     const index = entries.findIndex((entry: any) => entry.uid === user.uid);
     callback(index < 0 ? null : index + 1);
@@ -143,7 +147,7 @@ export function watchWeeklyLeaderboardRank(user: User, callback: (rank: number |
 const cloudProfileDoc = (user: User) => doc(getFirebaseFirestore(), "users", user.uid, "profile", "current");
 
 export async function readCloudProfile(user: User) {
-  return (await getDoc(cloudProfileDoc(user))).data() ?? null;
+  return (await profileDataSource({ collection, doc, onSnapshot }).readDocument(getFirebaseFirestore(), ["users", user.uid, "profile", "current"], getDoc)).data() ?? null;
 }
 
 /** Field-level merge: an edit never replaces unrelated profile fields. */
@@ -152,7 +156,7 @@ export async function patchCloudProfile(user: User, fields: Record<string, unkno
 }
 
 export function watchCloudProfile(user: User, callback: (profile: Record<string, unknown> | null) => void) {
-  return onSnapshot(cloudProfileDoc(user), (snapshot) => callback(snapshot.data() ?? null));
+  return profileDataSource({ collection, doc, onSnapshot }).watchDocument(getFirebaseFirestore(), ["users", user.uid, "profile", "current"], (snapshot) => callback(snapshot.data() ?? null));
 }
 
 const USERNAME_PATTERN = /^[a-z0-9._]{3,24}$/;
@@ -176,7 +180,7 @@ export type PublicProfile = { uid: string; username: string; name: string; quest
 export async function readPublicProfile(value: string): Promise<PublicProfile | null> {
   const username = normalizeUsername(value.replace(/^@/, ""));
   if (usernameValidationMessage(username)) return null;
-  const data = (await getDoc(publicProfileDoc(username))).data();
+  const data = (await profileDataSource({ collection, doc, onSnapshot }).readDocument(getFirebaseFirestore(), ["publicProfiles", username], getDoc)).data();
   if (!data || typeof data.uid !== "string" || typeof data.name !== "string") return null;
   return {
     uid: data.uid,
@@ -194,6 +198,7 @@ export async function readPublicProfile(value: string): Promise<PublicProfile | 
 }
 
 /** Publishes the read-only dashboard used by public profiles and streaks. */
+const publicActivitySaves = createOrderedPublisher();
 export async function savePublicProfileActivity(
   user: User,
   profile: Record<string, unknown>,
@@ -207,11 +212,21 @@ export async function savePublicProfileActivity(
       .filter(([date, count]) => /^\d{4}-\d{2}-\d{2}$/.test(date) && Number(count) > 0)
       .map(([date, count]) => [date, Math.max(1, Math.round(Number(count)))]),
   );
-  await setDoc(
-    publicProfileDoc(username),
-    { ...publicProfileFields(user, username, profile), activity: sanitizedActivity, dashboard, updatedAt: serverTimestamp() },
-    { merge: true },
-  );
+  const reference = publicProfileDoc(username);
+  const payload = { ...publicProfileFields(user, username, profile), activity: sanitizedActivity, dashboard };
+  return publicActivitySaves(JSON.stringify([user.uid, username]), JSON.stringify(payload), async () => {
+    try {
+      await runTransaction(getFirebaseFirestore(), async transaction => {
+        const current = await transaction.get(reference);
+        if (!mergePatchUnchanged(current.data() ?? {}, payload))
+          transaction.set(reference, { ...payload, updatedAt: serverTimestamp() }, { merge: true });
+      });
+    } catch {
+      // Transactions cannot queue offline. Retain the original setDoc delivery
+      // path on failure, so an offline update can still be replayed by the SDK.
+      await setDoc(reference, { ...payload, updatedAt: serverTimestamp() }, { merge: true });
+    }
+  });
 }
 
 function publicProfileFields(user: User, username: string, fields: Record<string, unknown>) {
@@ -259,8 +274,10 @@ export async function saveProfileWithUsername(user: User, fields: Record<string,
     ]);
     const claimedBy = typeof claimedUsername.data()?.uid === "string" ? claimedUsername.data()!.uid : "";
     if (claimedUsername.exists() && claimedBy !== user.uid) throw new Error("This username is already taken.");
-    transaction.set(nextUsernameRef, { uid: user.uid, username, updatedAt: serverTimestamp() }, { merge: true });
-    transaction.set(profileRef, { ...fields, username, updatedAt: serverTimestamp() }, { merge: true });
+    if (!claimedUsername.exists() || claimedUsername.data()?.username !== username)
+      transaction.set(nextUsernameRef, { uid: user.uid, username, updatedAt: serverTimestamp() }, { merge: true });
+    if (Object.entries({ ...fields, username }).some(([key, value]) => currentProfile.data()?.[key] !== value))
+      transaction.set(profileRef, { ...fields, username, updatedAt: serverTimestamp() }, { merge: true });
     transaction.set(nextPublicProfileRef, { ...publicProfileFields(user, username, fields), updatedAt: serverTimestamp() }, { merge: true });
     if (currentUsernameRef && previousClaim?.data()?.uid === user.uid) transaction.delete(currentUsernameRef);
     if (previousPublicProfileRef) transaction.delete(previousPublicProfileRef);
@@ -279,8 +296,9 @@ type CloudTask = { id: string; [key: string]: unknown };
 const taskCollection = (user: User) => collection(getFirebaseFirestore(), "users", user.uid, "tasks");
 
 export async function migrateTasksIfEmpty(user: User, tasks: CloudTask[]) {
-  const remote = await getDocs(taskCollection(user));
-  if (remote.size || !tasks.length) return;
+  if (!tasks.length) return;
+  const remote = await getDocs(query(taskCollection(user), limit(1)));
+  if (remote.size) return;
   const batch = writeBatch(getFirebaseFirestore());
   tasks.forEach((task) => batch.set(doc(taskCollection(user), task.id), task));
   await batch.commit();
@@ -346,8 +364,9 @@ function withoutUndefined<T>(value: T): T {
 }
 
 export async function migratePracticeEntities(user: User, name: string, entities: PracticeEntity[]) {
-  const remote = await getDocs(practiceCollection(user, name));
-  if (remote.size || !entities.length) return;
+  if (!entities.length) return;
+  const remote = await getDocs(query(practiceCollection(user, name), limit(1)));
+  if (remote.size) return;
   const batch = writeBatch(getFirebaseFirestore());
   entities.forEach((entity) => batch.set(doc(practiceCollection(user, name), entity.id), entity));
   await batch.commit();
@@ -397,7 +416,10 @@ export async function deletePracticeEntity(user: User, name: string, id: string)
 }
 
 export function watchPracticeEntities(user: User, name: string, callback: (entities: PracticeEntity[]) => void) {
-  return onSnapshot(practiceCollection(user, name), { includeMetadataChanges: name === "practiceSubjects" }, (snapshot) => callback(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as PracticeEntity))));
+  return practiceSnapshots(getFirebaseFirestore(), JSON.stringify([user.uid, name]),
+    (next, error) => onSnapshot(practiceCollection(user, name), { includeMetadataChanges: name === "practiceSubjects" }, next, error),
+    snapshot => callback(snapshot.docs.map(item => ({ id: item.id, ...item.data() } as PracticeEntity))),
+    () => console.warn("Could not load practice data."));
 }
 
 export async function readPracticeSettings(user: User) {
@@ -414,7 +436,8 @@ export function watchPracticeSettings(user: User, callback: (value: Record<strin
 
 const trackerCollection = (user: User) => collection(getFirebaseFirestore(), "users", user.uid, "tracker");
 export async function migrateTrackerSections(user: User, sections: Record<string, unknown>) {
-  const remote = await getDocs(trackerCollection(user));
+  if (hasConfirmedTracker(getFirebaseFirestore(), user.uid)) return;
+  const remote = await getDocs(query(trackerCollection(user), limit(1)));
   if (remote.size) return;
   const batch = writeBatch(getFirebaseFirestore());
   Object.entries(sections).forEach(([key, value]) => batch.set(doc(trackerCollection(user), key), { value }));
@@ -424,7 +447,16 @@ export async function syncTrackerSections(user: User, before: Record<string, unk
   await Promise.all(Object.keys(next).filter((key) => JSON.stringify(before[key]) !== JSON.stringify(next[key])).map((key) => setDoc(doc(trackerCollection(user), key), { value: next[key] }, { merge: true })));
 }
 export function watchTrackerSections(user: User, callback: (sections: Record<string, unknown>) => void) {
-  return onSnapshot(trackerCollection(user), (snapshot) => callback(Object.fromEntries(snapshot.docs.map((item) => [item.id, item.data().value]))));
+  let previous: string | undefined;
+  return watchTrackerSource(getFirebaseFirestore(), user.uid,
+    (value, error) => onSnapshot(trackerCollection(user), { includeMetadataChanges: true }, value, error),
+    (snapshot) => {
+      const sections = Object.fromEntries(snapshot.docs.map((item) => [item.id, item.data().value]));
+      const signature = JSON.stringify(sections);
+      if (signature === previous) return;
+      previous = signature;
+      callback(sections);
+    });
 }
 
 /** Canonical web tracker test-log API: users/{uid}/tracker/tests.value.log. */
@@ -436,10 +468,20 @@ const normaliseTrackerTest = (value: unknown): TrackerTestLog | null => {
   return { id: String(test.id), date: String(test.date), createdAt: String(test.createdAt ?? test.date), subjectId: String(test.subjectId ?? ""), type: String(test.type ?? ""), score: test.score == null ? null : Number(test.score), total: test.total == null ? null : Number(test.total), accuracy: test.accuracy == null ? null : Number(test.accuracy), notes: String(test.notes ?? "") };
 };
 export function watchTrackerTests(user: User, callback: (tests: TrackerTestLog[]) => void) {
-  return onSnapshot(trackerTestsDoc(user), (snapshot) => {
-    const raw = snapshot.data()?.value as { log?: unknown[] } | undefined;
-    callback((Array.isArray(raw?.log) ? raw.log : []).map(normaliseTrackerTest).filter((item): item is TrackerTestLog => item !== null));
-  });
+  let previous: string | undefined;
+  const apply = (raw: { log?: unknown[] } | undefined) => {
+    const tests = (Array.isArray(raw?.log) ? raw.log : []).map(normaliseTrackerTest).filter((item): item is TrackerTestLog => item !== null);
+    const signature = JSON.stringify(tests);
+    if (signature === previous) return;
+    previous = signature;
+    callback(tests);
+  };
+  // Root registers the collection first. Standalone test-only consumers retain
+  // their one-document target instead of loading an entire tracker.
+  if (!hasActiveTrackerSource(getFirebaseFirestore(), user.uid)) {
+    return onSnapshot(trackerTestsDoc(user), snapshot => apply(snapshot.data()?.value));
+  }
+  return watchTrackerSections(user, sections => apply(sections.tests as { log?: unknown[] } | undefined));
 }
 export async function appendTrackerTest(user: User, test: TrackerTestLog, subjectName?: string) {
   const reference = trackerTestsDoc(user); const current = (await getDoc(reference)).data()?.value as Record<string, unknown> | undefined;
@@ -510,12 +552,17 @@ export async function writeQuestionLearning(user: User, value: Record<string, un
         lastOutcome: localIsNewer ? local.lastOutcome : cloud.lastOutcome,
       };
     });
-    transaction.set(reference, { ...remote, ...value, stats, updatedAt: serverTimestamp() }, { merge: true });
+    if (!learningPatchUnchanged(remote, value, stats))
+      transaction.set(reference, { ...remote, ...value, stats, updatedAt: serverTimestamp() }, { merge: true });
   });
 }
 
 /** Canonical Quick Recall seed shared with the web and Windows widget. */
-export async function loadQuickRecallSeed(user: User) {
+const seedLoads = createInFlightLoader<Awaited<ReturnType<typeof readQuickRecallSeed>>>();
+export function loadQuickRecallSeed(user: User) {
+  return seedLoads(user.uid, () => readQuickRecallSeed(user));
+}
+async function readQuickRecallSeed(user: User) {
   const [subjects, attempts, favourites, learning] = await Promise.all([
     getDocs(practiceCollection(user, "practiceSubjects")),
     getDocs(practiceCollection(user, "practiceAttempts")),

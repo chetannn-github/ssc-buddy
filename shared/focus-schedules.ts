@@ -13,7 +13,10 @@ export const SCHEDULE_PRESETS = [
   { name: "Custom", startMinute: 9 * 60, endMinute: 10 * 60 },
 ];
 export const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-export const scheduleTime = (minute: number) => `${String(Math.floor(minute / 60)).padStart(2,"0")}:${String(minute % 60).padStart(2,"0")}`;
+export const scheduleTime = (minute: number) => {
+  const hour = Math.floor(minute / 60);
+  return `${hour % 12 || 12}:${String(minute % 60).padStart(2,"0")} ${hour >= 12 ? "PM" : "AM"}`;
+};
 export function normalizeFocusSchedule(value: FocusSchedule): FocusSchedule {
   const duration = (value.endMinute - value.startMinute + 1440) % 1440;
   if (typeof value.id!=="string" || !/^[a-zA-Z0-9_-]{1,80}$/.test(value.id) || typeof value.name!=="string" || !value.name.trim() || value.name.trim().length > 40) throw Error("Choose a schedule name.");

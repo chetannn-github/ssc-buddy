@@ -1,8 +1,20 @@
 package expo.modules.buddymusic
 
-import android.accessibilityservice.AccessibilityService
-import android.content.ComponentName
+import android.app.Service
+import android.app.AppOpsManager
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.Notification
+import android.app.PendingIntent
+import android.app.KeyguardManager
+import android.app.usage.UsageStatsManager
+import android.app.usage.UsageEvents
+import android.content.pm.ServiceInfo
+import android.os.IBinder
+import android.os.PowerManager
+import android.os.Process
 import android.content.Context
+import android.content.ComponentName
 import android.content.Intent
 import android.content.SharedPreferences
 import android.graphics.Color
@@ -23,7 +35,6 @@ import android.view.View
 import android.view.WindowManager
 import android.view.WindowInsets
 import android.view.WindowInsetsController
-import android.view.accessibility.AccessibilityEvent
 import android.view.animation.DecelerateInterpolator
 import android.view.animation.TranslateAnimation
 import android.widget.Button
@@ -39,8 +50,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
 
-/** Only observes foreground package names; never requests screen/view contents. */
-class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPreferenceChangeListener {
+/** Usage Access + application overlay; this build does not register Accessibility. */
+class BuddyFocusService : Service(), SharedPreferences.OnSharedPreferenceChangeListener {
   private val handler = Handler(Looper.getMainLooper())
   private var overlay: View? = null
   private var appPicker: View? = null
@@ -57,62 +68,123 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
   private val imageWorker = java.util.concurrent.Executors.newSingleThreadExecutor()
   private lateinit var preferences: SharedPreferences
   private val essentials = mutableSetOf<String>()
+  private val settingsPackages = mutableSetOf("com.android.settings")
+  private val settingsGuard = FocusSettingsGuard()
+  private val foregroundTracker = FocusForegroundTracker()
+  private var scannedUntil = 0L
+  private var lastNotificationState = ""
   private val ticker = object : Runnable {
     override fun run() {
-      FocusSchedules.tick(this@BuddyFocusService)
+      if (!enabled(this@BuddyFocusService) || !FocusProtection.active(this@BuddyFocusService)) {
+        hide(); stopSelf(); return
+      }
       finishTimedBreak(this@BuddyFocusService)
+      val previousForeground = foreground
+      scanForeground()
       val state = "${FocusProtection.active(this@BuddyFocusService)}:${preferences.getLong("endsAt", 0)}:${preferences.getBoolean("paused", false)}:${FocusProtection.enabled(this@BuddyFocusService)}"
       if (state != protectionState) {
         protectionState = state
         FocusProtection.reconcile(this@BuddyFocusService)
       }
-      enforce()
+      enforce(appSwitch = foreground != previousForeground)
       updateTimer()
       updateBreakButton()
-      handler.postDelayed(this, if (overlay == null) 1000 else 250)
+      updateNotification()
+      handler.postDelayed(this, 400)
     }
   }
-  override fun onServiceConnected() {
+  override fun onCreate() {
+    super.onCreate()
     preferences = prefs(this)
+    // Existing selections survive an APK upgrade but now occupy payment slots.
+    val session = preferences.getString("session", "").orEmpty()
+    val selections = FocusPaymentPolicy.forSession(session, session, preferences.getStringSet("allowed", emptySet()).orEmpty(), preferences.getStringSet("paymentAllowed", emptySet()).orEmpty())
+    check(preferences.edit().putStringSet("allowed", selections.apps).putStringSet("paymentAllowed", selections.payments).commit())
     connected = true
     FocusSchedules.tick(this)
     FocusSchedules.arm(this)
     preferences.edit().remove("overlayError").apply()
     preferences.registerOnSharedPreferenceChangeListener(this)
-    essentials.addAll(setOf(packageName, "android", "com.android.systemui", "com.android.settings", "com.android.permissioncontroller", "com.google.android.permissioncontroller", "com.android.phone", "com.android.server.telecom", "com.android.emergency", "com.google.android.dialer", "com.android.dialer", "com.samsung.android.dialer", "com.android.contacts", "com.google.android.contacts", "com.samsung.android.app.contacts"))
+    essentials.addAll(setOf(packageName, "android", "com.android.systemui", "com.android.permissioncontroller", "com.google.android.permissioncontroller", "com.android.phone", "com.android.server.telecom", "com.android.emergency", "com.google.android.dialer", "com.android.dialer", "com.samsung.android.dialer", "com.android.contacts", "com.google.android.contacts", "com.samsung.android.app.contacts"))
+    // Resolve OEM Settings too, without treating permission controllers as the
+    // Settings app. They remain available for normal system permission dialogs.
+    val resolvedSettings = runCatching {
+      packageManager.queryIntentActivities(Intent(Settings.ACTION_SETTINGS), android.content.pm.PackageManager.MATCH_DEFAULT_ONLY).map { it.activityInfo.packageName }
+    }.getOrDefault(emptyList())
+    settingsPackages.addAll(FocusSettingsGuard.packages(resolvedSettings))
     essentials.addAll(setOf("com.android.incallui", "com.samsung.android.incallui"))
     runCatching { (getSystemService(TELECOM_SERVICE) as? TelecomManager)?.defaultDialerPackage?.let(essentials::add) }
     val intents = listOf(Intent(Intent.ACTION_DIAL, Uri.parse("tel:")), Intent(Intent.ACTION_VIEW).setType("vnd.android.cursor.dir/contact"))
     intents.forEach { intent -> packageManager.queryIntentActivities(intent, 0).forEach { essentials.add(it.activityInfo.packageName) } }
     (getSystemService(INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager)?.enabledInputMethodList?.forEach { essentials.add(it.packageName) }
-    handler.post(ticker)
   }
-  override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-    if (!::preferences.isInitialized) return
-    if (event?.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
-    val target = event.packageName?.toString() ?: return
-    lastEventAt = System.currentTimeMillis()
-    // Ignore events emitted by our own accessibility overlay.
-    if (target == packageName && overlay != null) return
-    // Keep the focus screen in place while Android displays transient system UI.
-    if (target == "com.android.systemui") {
-      if (isRinging()) hide()
-      return // Preserve the underlying app so its lock returns after ringing stops.
+  override fun onBind(intent: Intent?): IBinder? = null
+  override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    try {
+      startFocusNotification()
+      if (!enabled(this) || !FocusProtection.active(this)) { stopSelf(); return START_NOT_STICKY }
+      handler.removeCallbacks(ticker)
+      handler.post(ticker)
+    } catch (error: Exception) {
+      preferences.edit().putString("overlayError", "Could not start app blocking: ${error.javaClass.simpleName}").apply()
+      stopSelf()
+      return START_NOT_STICKY
     }
-    val className = event.className?.toString().orEmpty()
-    val appActivity = className.isNotBlank() && (
-      runCatching { packageManager.getActivityInfo(ComponentName(target, className), 0) }.isSuccess ||
-        (event.isFullScreen && className in setOf("android.app.Activity", "android.app.NativeActivity")))
-    val next = FocusWindowPolicy.foreground(foreground, target, packageName, overlay != null, appActivity)
-    if (next == foreground) return
-    foreground = next
-    enforce(appSwitch = true)
+    return START_STICKY
+  }
+  private fun scanForeground() {
+    val now = System.currentTimeMillis()
+    if (scannedUntil > now) { scannedUntil = 0; foregroundTracker.reset() }
+    val from = FocusForegroundTracker.queryStart(scannedUntil, now)
+    runCatching {
+      val unlocked = (getSystemService(POWER_SERVICE) as PowerManager).isInteractive && !(getSystemService(KEYGUARD_SERVICE) as KeyguardManager).isKeyguardLocked
+      if (!unlocked) { foreground = ""; return@runCatching }
+      val events = (getSystemService(USAGE_STATS_SERVICE) as UsageStatsManager).queryEvents(from, now)
+        ?: throw IllegalStateException("Usage events unavailable")
+      val event = UsageEvents.Event()
+      while (events.hasNextEvent()) {
+        events.getNextEvent(event)
+        // A focusable application overlay may pause its underlying activity on
+        // some phones. Wait for a new resumed app rather than hide/re-show in a loop.
+        val overlayPausedApp = overlay != null && event.packageName == foregroundTracker.current &&
+          event.eventType in setOf(UsageEvents.Event.ACTIVITY_PAUSED, UsageEvents.Event.ACTIVITY_STOPPED)
+        if (!overlayPausedApp && foregroundTracker.event(event.packageName.orEmpty(), event.eventType, event.timeStamp)) lastEventAt = event.timeStamp
+      }
+      scannedUntil = now
+      foreground = foregroundTracker.current
+      if (preferences.getString("overlayError", "") == "Could not read app usage events.") preferences.edit().remove("overlayError").apply()
+    }.onFailure {
+      // A transient query failure cannot remove a currently visible block.
+      // Keep the last confirmed foreground and retry the same overlap next tick.
+      preferences.edit().putString("overlayError", "Could not read app usage events.").apply()
+    }
+  }
+  private fun notification() = (if (Build.VERSION.SDK_INT >= 26) Notification.Builder(this, "focus-lock") else Notification.Builder(this))
+    .setSmallIcon(android.R.drawable.ic_lock_idle_lock)
+    .setContentTitle("Focus Lock")
+    .setContentText(if (preferences.getBoolean("paused", false)) "Break in progress" else "Focus session in progress")
+    .setContentIntent(PendingIntent.getActivity(this, 7320,
+      packageManager.getLaunchIntentForPackage(packageName)!!.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
+    .setOngoing(true).setOnlyAlertOnce(true).setCategory(Notification.CATEGORY_SERVICE).build()
+  private fun startFocusNotification() {
+    val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+    if (Build.VERSION.SDK_INT >= 26) manager.createNotificationChannel(NotificationChannel("focus-lock", "Focus Lock", NotificationManager.IMPORTANCE_LOW))
+    if (Build.VERSION.SDK_INT >= 34) startForeground(7320, notification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+    else startForeground(7320, notification())
+    lastNotificationState = preferences.getBoolean("paused", false).toString()
+  }
+  private fun updateNotification() {
+    val state = preferences.getBoolean("paused", false).toString()
+    if (state == lastNotificationState) return
+    lastNotificationState = state
+    (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).notify(7320, notification())
   }
   private val refreshOverlay = Runnable {
     if (appPicker != null) { enforce(); return@Runnable }
     if (rebuildOverlay) {
       rebuildOverlay = false
-      if (overlay != null && FocusAppPolicy.blocks(foreground, System.currentTimeMillis(), restrictionDeadline(), essentials, preferences.getStringSet("allowed", emptySet()).orEmpty(), isRinging())) show(foreground)
+      if (overlay != null && shouldBlockForeground()) show(foreground)
     }
     enforce()
     updateBreakButton()
@@ -121,8 +193,8 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
   override fun onSharedPreferenceChanged(shared: SharedPreferences?, key: String?) {
     // Break journals, image-cache and admin metadata do not change the visible screen.
     // Batch one preference transaction and preserve the overlay window on pause/resume.
-    if (key !in setOf("session", "allowed", "accent", "paused", "endsAt", "remainingMs", "appLimit", "breakUntil", "breakLimit", "breaksTaken", "phaseStartedAt")) return
-    if (key in setOf("session", "allowed", "accent", "appLimit")) rebuildOverlay = true
+    if (key !in setOf("session", "allowed", "paymentAllowed", "accent", "paused", "endsAt", "remainingMs", "appLimit", "breakUntil", "breakLimit", "breaksTaken", "phaseStartedAt")) return
+    if (key in setOf("session", "allowed", "paymentAllowed", "accent", "appLimit")) rebuildOverlay = true
     handler.removeCallbacks(refreshOverlay)
     handler.post(refreshOverlay)
   }
@@ -133,14 +205,29 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
     val restricted = now < restrictionDeadline() && !isRinging()
     val restrictionStarted = restricted && !wasRestricted
     wasRestricted = restricted
+    // Some system Settings screens suppress TYPE_APPLICATION_OVERLAY entirely.
+    // Merely retaining an attached overlay does not cover those screens. Return
+    // to our own app only after Usage Access actually identifies Settings; keep
+    // the overlay in place until Android confirms the real foreground change.
+    if (settingsGuard.shouldReturn(foreground, now, restrictionDeadline(), isRinging(), settingsPackages)) {
+      runCatching {
+        val launch = packageManager.getLaunchIntentForPackage(packageName) ?: error("Main activity unavailable")
+        startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
+      }.onFailure {
+        preferences.edit().putString("overlayError", "Could not return from Settings. Open SSC Buddy to resume blocking.").apply()
+      }
+    }
     val blocked = shouldBlockForeground()
     if (!blocked) { hide(); return }
     if (overlay != null) return
     if (!FocusWindowPolicy.mayShow(blocked, appSwitch, restrictionStarted)) return
     show(foreground)
   }
-  private fun shouldBlockForeground() = FocusAppPolicy.blocks(foreground, System.currentTimeMillis(), restrictionDeadline(), essentials, preferences.getStringSet("allowed", emptySet()).orEmpty(), isRinging())
+  private fun shouldBlockForeground() = FocusAppPolicy.blocks(foreground, System.currentTimeMillis(), restrictionDeadline(), essentials, allowedApps() + paymentApps(), isRinging(), settingsPackages)
   private fun allowedAppLimit() = FocusAppPolicy.appLimit(preferences.getInt("appLimit", 2))
+  private fun allowedApps() = preferences.getStringSet("allowed", emptySet()).orEmpty()
+    .filterNot { FocusAppPolicy.isSettings(it, settingsPackages) }.toSet()
+  private fun paymentApps() = FocusPaymentPolicy.selected(preferences.getStringSet("paymentAllowed", emptySet()).orEmpty(), settingsPackages)
   private fun isRinging() = runCatching { (getSystemService(AUDIO_SERVICE) as AudioManager).mode == AudioManager.MODE_RINGTONE }.getOrDefault(false)
   private fun restrictionDeadline(): Long = FocusBreakPolicy.restrictionDeadline(System.currentTimeMillis(), preferences.getLong("endsAt", 0), preferences.getBoolean("paused", false), preferences.getLong("breakUntil", 0), !preferences.getString("session", "").isNullOrEmpty())
   private fun text(value: String, size: Float, tint: Int = Color.WHITE) = TextView(this).apply {
@@ -203,6 +290,9 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
         // Start first so a missing/disabled app never exposes the blocked app.
         startActivity(Intent(intent).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
         this@BuddyFocusService.foreground = iconPackage ?: intent.`package` ?: packageName
+        // Usage events can arrive a poll later; do not briefly reopen the old
+        // app's overlay after the user explicitly launches an allowed app here.
+        foregroundTracker.event(this@BuddyFocusService.foreground, 1, System.currentTimeMillis())
         hide()
       }.onFailure { android.widget.Toast.makeText(this, "Could not open $label", android.widget.Toast.LENGTH_SHORT).show() }
     }
@@ -214,14 +304,14 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
       ?: packageManager.queryIntentActivities(intent, 0).firstOrNull { it.activityInfo.packageName != "android" }?.activityInfo
     return activity?.let { Intent(intent).setComponent(ComponentName(it.packageName, it.name)) }
   }
-  private fun showAppPicker() {
+  private fun showAppPicker(payments: Boolean = false) {
     val host = overlay as? FrameLayout ?: return
     if (appPicker != null) return
     if (!FocusProtection.active(this)) return
     val sessionId = preferences.getString("session", "")
-    val accent = runCatching { Color.parseColor(preferences.getString("accent", "#ffe000")) }.getOrDefault(Color.YELLOW)
-    val selected = preferences.getStringSet("allowed", emptySet()).orEmpty()
-    if (selected.size >= allowedAppLimit()) return
+    val selected = if (payments) paymentApps() else allowedApps()
+    val limit = if (payments) FocusPaymentPolicy.LIMIT else allowedAppLimit()
+    if (selected.size >= limit) return
     val root = LinearLayout(this).apply {
       orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(32), dp(20), dp(24)); setBackgroundColor(Color.BLACK)
     }
@@ -235,14 +325,18 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
         canvas.drawLine(x - dp(3), y, x + dp(11), y, paint)
       }
     }.apply { contentDescription = "Back to Focus Lock"; isFocusable = true; setOnClickListener { closeAppPicker() } }, LinearLayout.LayoutParams(dp(48), dp(48)))
-    heading.addView(text("Allowed apps", 18f).apply { gravity = Gravity.START or Gravity.CENTER_VERTICAL; setPadding(dp(4), 0, 0, 0) }, LinearLayout.LayoutParams(0, dp(48), 1f))
-    heading.addView(text("${selected.size}/${allowedAppLimit()}", 13f, Color.LTGRAY))
+    heading.addView(text(if (payments) "Payment apps" else "Allowed apps", 18f).apply { gravity = Gravity.START or Gravity.CENTER_VERTICAL; setPadding(dp(4), 0, 0, 0) }, LinearLayout.LayoutParams(0, dp(48), 1f))
+    heading.addView(text("${selected.size}/$limit", 13f, Color.LTGRAY))
     root.addView(heading, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(56)))
     val rows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
     val launchers = packageManager.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), 0).map { it.activityInfo.packageName }.toSet()
     val installed = packageManager.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
       .distinctBy { it.activityInfo.packageName }
-      .filter { it.activityInfo.packageName !in essentials && it.activityInfo.packageName !in selected && it.activityInfo.packageName !in launchers }
+      .filter {
+        val target = it.activityInfo.packageName
+        target !in essentials && target !in allowedApps() && target !in paymentApps() && target !in launchers &&
+          !FocusAppPolicy.isSettings(target, settingsPackages) && ((target in FocusPaymentPolicy.packages) == payments)
+      }
       .sortedBy { it.loadLabel(packageManager).toString().lowercase() }
     installed.forEach { app ->
       val appPackage = app.activityInfo.packageName
@@ -256,15 +350,16 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
       row.addView(text(label, 14f).apply { gravity = Gravity.START or Gravity.CENTER_VERTICAL; maxLines = 2 }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
       row.addView(text("+", 24f, Color.WHITE))
       row.setOnClickListener {
-        val current = preferences.getStringSet("allowed", emptySet()).orEmpty()
-        if (!FocusProtection.active(this) || preferences.getString("session", "") != sessionId || current.size >= allowedAppLimit()) return@setOnClickListener
+        val current = if (payments) paymentApps() else allowedApps()
+        if (!FocusProtection.active(this) || preferences.getString("session", "") != sessionId || current.size >= limit) return@setOnClickListener
         if (packageManager.getLaunchIntentForPackage(appPackage) == null) return@setOnClickListener
-        val next = FocusAppPolicy.allow(appPackage, System.currentTimeMillis(), restrictionDeadline(), current, allowedAppLimit())
-        if (preferences.edit().putStringSet("allowed", next).commit()) closeAppPicker()
+        val next = if (payments) FocusPaymentPolicy.allow(appPackage, System.currentTimeMillis(), restrictionDeadline(), current, settingsPackages)
+          else FocusAppPolicy.allow(appPackage, System.currentTimeMillis(), restrictionDeadline(), current, limit, settingsPackages)
+        if (preferences.edit().putStringSet(if (payments) "paymentAllowed" else "allowed", next).commit()) closeAppPicker()
       }
       rows.addView(row, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
     }
-    if (installed.isEmpty()) rows.addView(text("No more apps available", 14f, Color.GRAY))
+    if (installed.isEmpty()) rows.addView(text(if (payments) "No supported payment apps installed" else "No more apps available", 14f, Color.GRAY))
     root.addView(ScrollView(this).apply { addView(rows); isVerticalScrollBarEnabled = false }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
     val panel = object : FrameLayout(this) {
       private var downX = 0f
@@ -352,7 +447,7 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
     root.addView(text("Your goals deserve this time.", 24f))
     timer = LinearLayout(this).apply { gravity = Gravity.CENTER }
     root.addView(timer)
-    root.addView(Button(this).apply {
+    val breakControl = Button(this).apply {
       breakButton = this
       text = if (preferences.getBoolean("paused", false)) "Resume focus" else "Take a break"
       setOnClickListener {
@@ -371,8 +466,8 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
         if (!paused) edit.putLong("endsAt", now + remaining).putLong("phaseStartedAt", now)
         if (edit.commit()) { FocusProtection.reconcile(this@BuddyFocusService); enforce() }
       }
-    })
-    val allowed = preferences.getStringSet("allowed", emptySet()).orEmpty()
+    }
+    val allowed = allowedApps()
     val apps = LinearLayout(this).apply { gravity = Gravity.CENTER; orientation = LinearLayout.HORIZONTAL }
     fun addShortcut(label: String, intent: Intent?, iconPackage: String? = null) {
       apps.addView(shortcut(label, intent, iconPackage), LinearLayout.LayoutParams(0, dp(98), 1f).apply { setMargins(dp(3), 0, dp(3), 0) })
@@ -390,7 +485,19 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
       addView(text("Add app", 10f, Color.LTGRAY))
       setOnClickListener { showAppPicker() }
     }, LinearLayout.LayoutParams(0, dp(98), 1f))
+    val payments = paymentApps()
+    payments.sorted().forEach { app ->
+      val name = runCatching { packageManager.getApplicationLabel(packageManager.getApplicationInfo(app, 0)).toString() }.getOrDefault("Payment app")
+      addShortcut(name, packageManager.getLaunchIntentForPackage(app), app)
+    }
+    if (payments.size < FocusPaymentPolicy.LIMIT) apps.addView(LinearLayout(this).apply {
+      orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; isFocusable = true; contentDescription = "Add payment app"
+      addView(text("+", 36f, accent), LinearLayout.LayoutParams(dp(40), dp(48)))
+      addView(text("Payment app", 10f, Color.LTGRAY).apply { maxLines = 2; setPadding(dp(2), 0, dp(2), 0) })
+      setOnClickListener { showAppPicker(payments = true) }
+    }, LinearLayout.LayoutParams(0, dp(98), 1f).apply { setMargins(dp(3), 0, dp(3), 0) })
     root.addView(apps, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(16) })
+    root.addView(breakControl)
     for (index in 0 until root.childCount) (root.getChildAt(index) as? Button)?.apply {
       isAllCaps = false; textSize = 14f; setTextColor(Color.rgb(17, 17, 17))
       background = GradientDrawable().apply { setColor(Color.rgb(249, 252, 245)); cornerRadius = dp(26).toFloat() }
@@ -405,7 +512,7 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
     }
     val host = FrameLayout(this).apply { setBackgroundColor(Color.BLACK); addView(root, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)) }
     val params = WindowManager.LayoutParams(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT,
-      WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+      WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
       WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_FULLSCREEN or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
       PixelFormat.OPAQUE)
     params.gravity = Gravity.TOP or Gravity.START
@@ -469,13 +576,12 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
     overlay?.let { runCatching { (getSystemService(WINDOW_SERVICE) as WindowManager).removeView(it) } }
     overlay = null; timer = null; breakButton = null; motivation = null; renderedTime = ""
   }
-  override fun onInterrupt() { hide() }
   override fun onDestroy() {
     connected = false
     imageWorker.shutdownNow()
     handler.removeCallbacksAndMessages(null)
     if (::preferences.isInitialized) preferences.unregisterOnSharedPreferenceChangeListener(this)
-    hide(); super.onDestroy()
+    hide(); stopForeground(STOP_FOREGROUND_REMOVE); super.onDestroy()
   }
   companion object {
     @Volatile var connected = false
@@ -493,8 +599,19 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
     }
     fun prefs(context: Context) = context.getSharedPreferences("buddy-focus-lock", Context.MODE_PRIVATE)
     fun enabled(context: Context): Boolean {
-      val expected = ComponentName(context, BuddyFocusService::class.java)
-      return Settings.Secure.getString(context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty().split(':').any { ComponentName.unflattenFromString(it) == expected }
+      return usageEnabled(context) && Settings.canDrawOverlays(context)
+    }
+    fun usageEnabled(context: Context): Boolean {
+      val ops = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+      return runCatching { ops.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), context.packageName) == AppOpsManager.MODE_ALLOWED }.getOrDefault(false)
+    }
+    fun ensureRunning(context: Context) {
+      if (!enabled(context) || !FocusProtection.active(context) || connected) return
+      runCatching {
+        val intent = Intent(context, BuddyFocusService::class.java)
+        if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(intent) else context.startService(intent)
+      }
+        .onFailure { prefs(context).edit().putString("overlayError", "Open SSC Buddy to resume app blocking.").apply() }
     }
     fun sync(context: Context, id: String, endsAt: Double, accent: String, paused: Boolean = false, remainingMs: Double = 0.0, image: String = "", appLimit: Int = 2, breakState: String = "") {
       val p = prefs(context)
@@ -511,9 +628,11 @@ class BuddyFocusService : AccessibilityService(), SharedPreferences.OnSharedPref
       } else if (p.getString("session", "") != id) editor.remove("breakLimit").remove("breaksTaken").remove("breakUntil").remove("phaseStartedAt")
       editor.putBoolean("paused", paused).putLong("remainingMs", remainingMs.toLong())
       if (image.isNotEmpty() || id.isEmpty()) editor.putString("image", image)
-      editor.putStringSet("allowed", FocusAppPolicy.forSession(p.getString("session", "").orEmpty(), id, p.getStringSet("allowed", emptySet()).orEmpty()))
+      val selections = FocusPaymentPolicy.forSession(p.getString("session", "").orEmpty(), id, p.getStringSet("allowed", emptySet()).orEmpty(), p.getStringSet("paymentAllowed", emptySet()).orEmpty())
+      editor.putStringSet("allowed", selections.apps).putStringSet("paymentAllowed", selections.payments)
       check(editor.commit()) { "Could not save the focus unlock deadline on this phone." }
       FocusProtection.reconcile(context)
+      ensureRunning(context)
     }
   }
 }

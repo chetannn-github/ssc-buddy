@@ -109,7 +109,7 @@ export function habitStats(habit: Habit, today = habitDay()) {
     streak,
     total: days.size,
     markedToday: days.has(today),
-    progress: habit.targetDays ? Math.min(1, streak / habit.targetDays) : 0,
+    progress: habit.targetDays ? Math.min(1, days.size / habit.targetDays) : 0,
   };
 }
 /** A continuous calendar: Sunday is row 0, each following Sunday starts a column. */
@@ -371,6 +371,14 @@ export function applyHabitAction(
             ? s.checklist.length > 0 && s.checklist.every((item) => entry.checks.includes(item.id))
             : entry.count > 0;
   return { entry, completed };
+}
+/** Compare the transaction's latest document, not a potentially stale UI count. */
+export function habitDayNeedsUpdate(habit: Habit, day: string, result: ReturnType<typeof applyHabitAction>) {
+  const previous = habitEntry(habit, day);
+  return previous.count !== result.entry.count || previous.note !== result.entry.note ||
+    previous.checks.length !== result.entry.checks.length ||
+    previous.checks.some((id, index) => id !== result.entry.checks[index]) ||
+    habit.completedDates.includes(day) !== result.completed;
 }
 export function habitIntensity(habit: Habit, day: string) {
   if (habitIsComplete(habit, day)) return 1;

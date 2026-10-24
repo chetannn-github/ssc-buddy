@@ -3,7 +3,7 @@ import "./study-breaks.css";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Firestore } from "firebase/firestore";
-import { watchStudyControl, watchStudyDevices, watchStudyFocusDay, recordStudyFocus, type StudySession, startStudySession, type StudyControl, type StudyDevice, normalizeStudyDomain, saveStudyWebsites, pauseStudySession, resumeStudySession } from "./study-lock";
+import { watchStudyControl, watchStudyDevices, watchStudyFocusDay, settleStudyFocus, type StudySession, startStudySession, type StudyControl, type StudyDevice, normalizeStudyDomain, saveStudyWebsites, pauseStudySession, resumeStudySession } from "./study-lock";
 import { emptyFocusDay, focusDayKey, todayFocusMilliseconds, formatFocusCountdown, formatFocusMinutes, formatFocusTime, type FocusDay } from "./study-focus";
 import { SlotTime } from "./SlotTime";
 import { AnimatedChoices } from "./AnimatedChoices";
@@ -38,10 +38,10 @@ export function StudyLockControl({ uid, desktop = false, profile = false, getDat
   }, [uid, date, getDatabase]);
   useEffect(() => {
     if (!focusSession || (ended && lastFinalCredit.current === focusSession.id)) return;
-    void recordStudyFocus(getDatabase(), uid, focusSession).then(() => { if (ended) lastFinalCredit.current = focusSession.id; }).catch(() => { /* Retry the next checkpoint, including after reconnect. */ });
+    void settleStudyFocus(getDatabase(), uid, focusSession).then(() => { if (ended) lastFinalCredit.current = focusSession.id; }).catch(() => { /* Retry failed settlement, including after reconnect. */ });
   }, [uid, focusSession?.id, checkpoint, ended, getDatabase]);
   const todayFocus = todayFocusMilliseconds(focusData, focusSession, now);
-  useEffect(() => { void publishStudyFocusDay(getDatabase(), uid, date, focusSession?.timeZone).catch(() => {}); }, [uid, date, focusData.totalMilliseconds, checkpoint, getDatabase]);
+  useEffect(() => { void publishStudyFocusDay(getDatabase(), uid, date, focusSession?.timeZone, focusData.totalMilliseconds).catch(() => {}); }, [uid, date, focusData.totalMilliseconds, getDatabase]);
   const resizeSequence = useRef(Promise.resolve());
   useEffect(() => {
     if (!desktop || !onResize) return;
@@ -60,10 +60,11 @@ export function StudyLockControl({ uid, desktop = false, profile = false, getDat
     };
     const failed = (e: Error) => setError(/firebase/i.test(e.message) ? "Could not load your focus session. Please try again." : e.message);
     const stopControl = watchStudyControl(db, uid, value => { control = value; setFocusSession(value?.session ?? null); if (Array.isArray(value?.allowedDomains)) setDomains(value.allowedDomains.slice(0, MAX_STUDY_WEBSITES).join("\n")); refresh(); }, failed);
-    const stopDevices = watchStudyDevices(db, uid, value => { devices = value; refresh(); }, failed);
+    // Browser presence isn't displayed in web/Windows; don't subscribe to it.
+    const stopDevices = source !== "windows" && source !== "web" ? watchStudyDevices(db, uid, value => { devices = value; refresh(); }, failed) : () => {};
     const timer = setInterval(refresh, 1000);
     return () => { stopControl(); stopDevices(); clearInterval(timer); };
-  }, [uid, getDatabase]);
+  }, [uid, getDatabase, source]);
   useEffect(() => {
     if (!open) return;
     dialog.current?.querySelector<HTMLButtonElement>("button")?.focus();
@@ -96,6 +97,7 @@ export function StudyLockControl({ uid, desktop = false, profile = false, getDat
   }, [focusSession?.breakUntil, Math.floor(now / 5000), uid, getDatabase]);
   const session = status?.session;
   const breaking = onStudyBreak(session, now);
+  const focusing = !!session && !session.paused && session.startedAt <= now;
   const breakState = session ? studyBreakState(session, now) : null;
   const breakLabel = breaking ? "Break · auto-resumes" : session?.breakLimit === undefined && session?.paused ? "Resume focus" : breakState?.available ? "Take a break · 10 min" : !breakState?.left ? "No breaks remaining" : `Break in ${Math.ceil((breakState?.waitMs ?? 0) / 60000)} min`;
   const canBreak = !breaking && (!!breakState?.available || session?.breakLimit === undefined);
@@ -106,7 +108,7 @@ export function StudyLockControl({ uid, desktop = false, profile = false, getDat
     {desktop ? <section ref={desktopTrigger} className="study-desktop-content" {...(!session ? { role: "button", tabIndex: 0, "aria-label": "Set up Focus Lock", onClick: () => setOpen(true), onKeyDown: (event: React.KeyboardEvent<HTMLElement>) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setOpen(true); } } } : {})}>
       <div className="study-desktop-heading"><span data-tauri-drag-region><LockKeyhole size={14} />Focus Lock</span>{session && <button className={`study-desktop-toggle ${session.paused ? "is-paused" : "is-running"}`} type="button" aria-label={breakLabel} title={breakLabel} disabled={busy || !canBreak} onClick={event => { event.stopPropagation(); void run(() => session.paused ? resumeStudySession(getDatabase(), uid, source) : pauseStudySession(getDatabase(), uid, source)); }}>{session.paused ? <Play size={14} fill="currentColor" /> : <Pause size={14} fill="currentColor" />}</button>}</div>
       <div className="study-desktop-summary"><span className="study-desktop-daily">Today's focus time <b><SlotTime value={formatFocusTime(todayFocus)} /></b></span><strong className={`study-desktop-time ${session ? "is-running" : ""}`}>{session ? <SlotTime value={remaining(session)} /> : "Ready to focus"}</strong></div>
-    </section> : <button ref={trigger} className={`browser-study-trigger ${profile ? "study-profile-trigger" : "icon-button"} ${session ? "active" : ""}`} aria-label="Focus Lock" title={session ? `Focus Lock - ${remaining(session)}` : "Focus Lock"} onClick={() => setOpen(true)}><LockKeyhole size={17} />{profile && <><span>Focus Lock</span><small>Today · <SlotTime value={formatFocusTime(todayFocus)} /></small></>}{session && !profile && <i aria-hidden="true" />}</button>}
+    </section> : <button ref={trigger} className={`browser-study-trigger ${profile ? "study-profile-trigger" : "icon-button"} ${session ? "active" : ""}`} aria-label={profile && focusing ? "Focusing" : "Focus Lock"} title={session ? `Focus Lock - ${remaining(session)}` : "Focus Lock"} onClick={() => setOpen(true)}><LockKeyhole size={17} />{profile && <>{focusing && <span aria-hidden="true" className="focus-status-pulse" style={{ width: 5, height: 5, borderRadius: "50%", backgroundColor: "var(--accent)", flexShrink: 0 }} />}<span>{focusing ? "Focusing" : "Focus Lock"}</span><small>Today · <SlotTime value={formatFocusTime(todayFocus)} /></small></>}{session && !profile && <i aria-hidden="true" />}</button>}
 
     {open && createPortal(<div className="browser-study-overlay" onPointerDown={event => { event.stopPropagation(); if (event.target === event.currentTarget) setOpen(false); }} onContextMenu={e => e.stopPropagation()}>
       <section ref={dialog} className={`browser-study-dialog ${desktop ? "study-desktop-dialog" : ""} ${source === "web" ? "web-focus-lock" : ""} ${session && !pickingTime && !schedulesOpen ? "is-running" : ""} ${session && lockedImage && !schedulesOpen ? "focus-lock-visual" : ""}`} role="dialog" aria-modal="true" aria-labelledby="browser-study-title">

@@ -21,7 +21,7 @@ export function DeviceFocusSync({ user }: { user: User | null }) {
     const sync = () => { if (!disposed && ready) void syncDeviceFocusState(session, accent, image).catch(() => {}); };
     if (!user) { sync(); void configureDeviceFocusSchedules("",[]).catch(()=>{}); return; }
     let schedules:FocusSchedule[]=[],scheduleRetryAt=0;
-    let creditedCheckpoint = "";
+    let reconciledBreak = "", lastReconcileAttempt = 0;
     const syncBreaks = async () => {
       if (disposed || syncingBreaks || !ready) return;
       syncingBreaks = true;
@@ -44,15 +44,14 @@ export function DeviceFocusSync({ user }: { user: User | null }) {
           await acknowledgeFocusBreak(action.id);
           actions = await readFocusBreaks();
         }
-        if (session?.breakUntil && Date.now() >= session.breakUntil) await controller.reconcileStudySession(getFirebaseFirestore(), user.uid);
-        sync();
-        if (!disposed && session && !session.paused) {
-          const checkpoint = `${session.id}:${Math.floor(Math.min(Date.now(), session.endsAt) / 60000)}`;
-          if (checkpoint !== creditedCheckpoint) {
-            await controller.recordStudyFocus(getFirebaseFirestore(), user.uid, session);
-            creditedCheckpoint = checkpoint;
-          }
+        if (session?.breakUntil && Date.now() >= session.breakUntil && reconciledBreak !== `${session.id}:${session.breakUntil}` && Date.now() - lastReconcileAttempt >= 30000) {
+          lastReconcileAttempt = Date.now();
+          const key = `${session.id}:${session.breakUntil}`;
+          await controller.reconcileStudySession(getFirebaseFirestore(), user.uid);
+          reconciledBreak = key;
         }
+        sync();
+        if (!disposed && session) await controller.settleStudyFocus(getFirebaseFirestore(), user.uid, session);
       } catch { /* Durable local breaks retry when the app/network is available. */ }
       finally { syncingBreaks = false; }
     };

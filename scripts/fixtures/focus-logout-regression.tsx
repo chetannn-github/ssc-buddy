@@ -47,7 +47,9 @@ export async function run() {
     await act(async () => old.forEach(item => item.next(null))); check(false, "late old account callback ignored");
     await emit("bob", null); check(true, "idle new account can logout");
     await act(async () => listeners.filter(item => item.active && item.kind === "control").forEach(item => item.failed())); check(false, "unknown control after error cannot show logout");
-    await emit("bob", null); check(true, "recovery restores logout");
+    await act(async () => root.render(null));
+    await act(async () => root.render(<Profile uid="bob" />));
+    await emit("bob", null); check(true, "fresh subscription after terminal error restores logout");
     await act(async () => root.render(<Profile uid="bob" readOnly />)); check(false, "public profile cannot expose logout");
     await act(async () => root.unmount());
     if (listeners.some(item => item.active) || timers.size) throw Error("leaked subscriptions or timers");
