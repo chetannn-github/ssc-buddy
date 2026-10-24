@@ -447,7 +447,7 @@ class BuddyFocusService : Service(), SharedPreferences.OnSharedPreferenceChangeL
     root.addView(text("Your goals deserve this time.", 24f))
     timer = LinearLayout(this).apply { gravity = Gravity.CENTER }
     root.addView(timer)
-    root.addView(Button(this).apply {
+    val breakControl = Button(this).apply {
       breakButton = this
       text = if (preferences.getBoolean("paused", false)) "Resume focus" else "Take a break"
       setOnClickListener {
@@ -466,7 +466,7 @@ class BuddyFocusService : Service(), SharedPreferences.OnSharedPreferenceChangeL
         if (!paused) edit.putLong("endsAt", now + remaining).putLong("phaseStartedAt", now)
         if (edit.commit()) { FocusProtection.reconcile(this@BuddyFocusService); enforce() }
       }
-    })
+    }
     val allowed = allowedApps()
     val apps = LinearLayout(this).apply { gravity = Gravity.CENTER; orientation = LinearLayout.HORIZONTAL }
     fun addShortcut(label: String, intent: Intent?, iconPackage: String? = null) {
@@ -497,6 +497,7 @@ class BuddyFocusService : Service(), SharedPreferences.OnSharedPreferenceChangeL
       setOnClickListener { showAppPicker(payments = true) }
     }, LinearLayout.LayoutParams(0, dp(98), 1f).apply { setMargins(dp(3), 0, dp(3), 0) })
     root.addView(apps, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(16) })
+    root.addView(breakControl)
     for (index in 0 until root.childCount) (root.getChildAt(index) as? Button)?.apply {
       isAllCaps = false; textSize = 14f; setTextColor(Color.rgb(17, 17, 17))
       background = GradientDrawable().apply { setColor(Color.rgb(249, 252, 245)); cornerRadius = dp(26).toFloat() }
