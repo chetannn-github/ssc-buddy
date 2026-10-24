@@ -32,7 +32,7 @@ import { AuthUserContext } from "@/lib/auth-context";
 import { loadDailyTasks, saveDailyTasks } from "@/lib/daily-tasks";
 import { migrateTasksIfEmpty, readTasks, watchTasks } from "@/lib/task-sync";
 import { loadTrackerData, saveTrackerData } from "@/lib/tracker-store";
-import { migrateTrackerIfEmpty, readTrackerSections, watchTrackerSections } from "@/lib/tracker-sync";
+import { initializeTrackerSections, watchTrackerSections } from "@/lib/tracker-sync";
 import { WEB_CLOUD_SYNC_ENABLED } from "@/lib/web-cloud-sync";
 import { prepareWebAccountCache } from "@/lib/account-cache";
 import { loadActiveTest } from "@/lib/active-test";
@@ -348,10 +348,7 @@ function RootComponent() {
           await migrateTasksIfEmpty(syncUser, localTasks);
           return readTasks(syncUser);
         })(),
-        (async () => {
-          await migrateTrackerIfEmpty(syncUser, localTracker);
-          return readTrackerSections(syncUser);
-        })(),
+        initializeTrackerSections(syncUser, localTracker),
       ]);
       if (disposed) {
         stop();
