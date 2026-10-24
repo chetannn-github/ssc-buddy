@@ -25,6 +25,8 @@ import {
   serverTimestamp,
   setDoc,
   type Unsubscribe,
+  type QuerySnapshot,
+  type DocumentData,
 } from "firebase/firestore";
 
 export const TASK_TYPES = ["Lecture", "Revision", "Mock", "Practice Session", "Learn", "Other"] as const;
@@ -64,6 +66,22 @@ const tasksFor = (user: User) => collection(db!, "users", user.uid, "tasks");
 const taskRef = (user: User, id: string) => doc(db!, "users", user.uid, "tasks", id);
 const profileRef = (user: User) => doc(db!, "users", user.uid, "profile", "current");
 
+// Reuse only an active listener's server-confirmed snapshot, never an offline
+// cache or the sorted UI array. Keep Firestore's query order for score bonuses.
+const liveTaskSnapshots = new Map<string, { owner: symbol; snapshot: QuerySnapshot<DocumentData> }>();
+type CommittedTaskChange = { task: DailyTask } | { removedId: string };
+
+function confirmedTasksAfterChange(user: User, change: CommittedTaskChange) {
+  const snapshot = liveTaskSnapshots.get(user.uid)?.snapshot;
+  if (!snapshot || snapshot.metadata.fromCache || snapshot.metadata.hasPendingWrites) return null;
+  if ("removedId" in change) {
+    return snapshot.docs.some(item => item.id === change.removedId) ? null : snapshot;
+  }
+  const item = snapshot.docs.find(item => item.id === change.task.id);
+  const data = item?.data();
+  return data && Object.entries(change.task).every(([key, value]) => data[key] === value) ? snapshot : null;
+}
+
 const dayKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 const currentWeekKey = () => {
   const start = new Date();
@@ -91,8 +109,11 @@ const overallXpSummary = (tasks: DailyTask[]) => {
 };
 
 /** Rebuilds the same weekly leaderboard entry used by the web and mobile apps. */
-async function publishLeaderboardAfterTaskChange(user: User) {
-  const [profileSnapshot, taskSnapshot] = await Promise.all([getDoc(profileRef(user)), getDocs(tasksFor(user))]);
+async function publishLeaderboardAfterTaskChange(user: User, change: CommittedTaskChange) {
+  const [profileSnapshot, taskSnapshot] = await Promise.all([
+    getDoc(profileRef(user)),
+    confirmedTasksAfterChange(user, change) ?? getDocs(tasksFor(user)),
+  ]);
   const profile = profileSnapshot.data() ?? {};
   const username = typeof profile.username === "string" ? profile.username.trim().toLowerCase() : "";
   if (!username) return;
@@ -164,12 +185,16 @@ export async function signInGoogle() {
 export async function logout() { if (auth) await signOut(auth); }
 
 export function watchTasks(user: User, onChange: (tasks: DailyTask[], source: "cache" | "server") => void) {
-  return onSnapshot(tasksFor(user), { includeMetadataChanges: true }, (snapshot) => {
+  const owner = Symbol(user.uid);
+  const clear = () => { if (liveTaskSnapshots.get(user.uid)?.owner === owner) liveTaskSnapshots.delete(user.uid); };
+  const stop = onSnapshot(tasksFor(user), { includeMetadataChanges: true }, (snapshot) => {
+    liveTaskSnapshots.set(user.uid, { owner, snapshot });
     const unique = new Map<string, DailyTask>();
     snapshot.docs.forEach((entry) => unique.set(entry.id, { id: entry.id, ...entry.data() } as DailyTask));
     const tasks = [...unique.values()].sort((left, right) => right.createdAt.localeCompare(left.createdAt));
     onChange(tasks, snapshot.metadata.fromCache ? "cache" : "server");
-  });
+  }, clear);
+  return () => { clear(); stop(); };
 }
 
 /** Live weekly leaderboard rank for the desktop task widget header. */
@@ -284,11 +309,11 @@ export async function recordQuickRecallPractice(user: User, input: QuickRecallPr
 /** One document per task, matching the existing web's document-level CRUD. */
 export async function saveTask(user: User, task: DailyTask) {
   await setDoc(taskRef(user, task.id), task);
-  await publishLeaderboardAfterTaskChange(user);
+  await publishLeaderboardAfterTaskChange(user, { task });
 }
 export async function removeTask(user: User, id: string) {
   await deleteDoc(taskRef(user, id));
-  await publishLeaderboardAfterTaskChange(user);
+  await publishLeaderboardAfterTaskChange(user, { removedId: id });
 }
 export const makeTaskId = () => `${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
 export const todayKey = () => {

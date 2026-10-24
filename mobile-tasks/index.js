@@ -29,6 +29,13 @@ if (supportsAndroidWidgets) {
   const { answerUnlockQuiz, advanceUnlockQuiz, getUnlockQuiz, releaseUnlockQuizReview, startUnlockQuiz } = require("./src/domain/unlock-quiz");
   const { getFirebaseAuth, publishLeaderboardAfterWidgetTask, recordQuickRecallPractice, toggleTaskFromWidget, writeQuestionLearning } = require("./src/lib/firebase");
   const { onAuthStateChanged } = require("firebase/auth");
+  const { createDailyWidgetScoreSync } = require("./src/domain/daily-widget-score-sync");
+  const syncDailyWidgetScore = createDailyWidgetScoreSync({
+    storage: AsyncStorage,
+    today: dateKey,
+    isCurrentUser: (user) => getFirebaseAuth().currentUser?.uid === user.uid,
+    publish: publishLeaderboardAfterWidgetTask,
+  });
   const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
   // Widget layouts are static snapshots. Refresh the correction UI while its
@@ -76,12 +83,12 @@ if (supportsAndroidWidgets) {
     }
     if (["HabitWidget", "HabitMonthWidget", "HabitCompactWidget"].includes(widgetInfo.widgetName)) {
       if (widgetAction === "WIDGET_DELETED") { await removeHabitWidget(widgetInfo.widgetId); return; }
-      const user = await getWidgetUser(); let error = "";
+      const user = await getWidgetUser(); let error = "", committedHabit;
       if (widgetAction === "WIDGET_ADDED") await bindPendingHabitWidget(widgetInfo.widgetId, user?.uid, widgetInfo.widgetName);
       if (widgetAction === "WIDGET_CLICK" && user && clickAction?.startsWith("HABIT_")) {
-        try { await actOnHabitWidget(widgetInfo.widgetId, user.uid, clickAction); } catch { error = "Could not save. Tap to retry."; }
+        try { committedHabit = await actOnHabitWidget(widgetInfo.widgetId, user.uid, clickAction); } catch { error = "Could not save. Tap to retry."; }
       }
-      renderWidget(await habitWidgetView(widgetInfo.widgetId, user?.uid, error, true, widgetInfo)); return;
+      renderWidget(await habitWidgetView(widgetInfo.widgetId, user?.uid, error, !committedHabit, widgetInfo, committedHabit)); return;
     }
     if (widgetInfo.widgetName === "TimerWidget") {
       if (widgetAction === "WIDGET_DELETED") { await removeTimerWidget(widgetInfo.widgetId); return; }
@@ -116,8 +123,9 @@ if (supportsAndroidWidgets) {
             const updated = user ? await toggleTaskFromWidget(user, taskId) : null;
             if (updated) {
               tasks = tasks.map((task) => task.id === taskId ? updated : task);
-              await AsyncStorage.setItem("ssc-buddy:tasks:v2", JSON.stringify(tasks));
-              await publishLeaderboardAfterWidgetTask(user).catch(() => undefined);
+              // A cache failure must not prevent publishing the committed task.
+              try { await AsyncStorage.setItem("ssc-buddy:tasks:v2", JSON.stringify(tasks)); } catch {}
+              await syncDailyWidgetScore(user, "mutation").catch(() => undefined);
             }
           } catch {}
         }
@@ -130,12 +138,12 @@ if (supportsAndroidWidgets) {
       } catch {}
       const profile = await loadProfile();
       renderWidget(renderDailyTasksWidget(owner ? tasks : [], widgetRank, profile.accentColor, { ...view, height: widgetInfo.height }));
-      // Android may deliver the scheduled widget refresh after midnight while
-      // the app UI is closed. Rebuild the cloud score from the same task data
-      // so overdue-task penalties are not delayed until a manual task action.
-      void getWidgetUser()
-        .then((user) => user ? publishLeaderboardAfterWidgetTask(user) : undefined)
-        .catch(() => undefined);
+      // Check the calendar only on lifecycle refreshes, never local date/filter
+      // clicks or resize. Await it so Android's headless task can finish the
+      // midnight update. A failed publish remains pending for the next update.
+      if (owner && (widgetAction === "WIDGET_ADDED" || widgetAction === "WIDGET_UPDATE")) {
+        await syncDailyWidgetScore(owner, "refresh").catch(() => undefined);
+      }
       return;
     }
     let quiz = await getUnlockQuiz();

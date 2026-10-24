@@ -372,6 +372,14 @@ export function applyHabitAction(
             : entry.count > 0;
   return { entry, completed };
 }
+/** Compare the transaction's latest document, not a potentially stale UI count. */
+export function habitDayNeedsUpdate(habit: Habit, day: string, result: ReturnType<typeof applyHabitAction>) {
+  const previous = habitEntry(habit, day);
+  return previous.count !== result.entry.count || previous.note !== result.entry.note ||
+    previous.checks.length !== result.entry.checks.length ||
+    previous.checks.some((id, index) => id !== result.entry.checks[index]) ||
+    habit.completedDates.includes(day) !== result.completed;
+}
 export function habitIntensity(habit: Habit, day: string) {
   if (habitIsComplete(habit, day)) return 1;
   if (normalizeHabitSettings(habit.settings).type === "quit") return 0;

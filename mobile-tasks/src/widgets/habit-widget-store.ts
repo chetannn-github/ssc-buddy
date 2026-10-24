@@ -7,6 +7,7 @@ import { arrayRemove, arrayUnion, doc, getDoc, runTransaction } from "firebase/f
 import { getFirebaseAuth, getFirebaseFirestore } from "../lib/firebase";
 import {
   applyHabitAction,
+  habitDayNeedsUpdate,
   habitDay,
   normalizeHabit,
   normalizeHabitSettings,
@@ -83,13 +84,14 @@ export async function refreshHabitWidgets(uid?: string) {
     renderWidget: (info: { widgetId: number; width: number; height: number }) => habitWidgetView(info.widgetId, uid, "", false, { ...info, widgetName }),
   })));
 }
-export async function habitWidgetView(id: number, uid?: string, error = "", fetchCloud = true, size?: HabitWidgetSize & { widgetName?: string }) {
+export async function habitWidgetView(id: number, uid?: string, error = "", fetchCloud = true, size?: HabitWidgetSize & { widgetName?: string }, committedHabit?: Habit) {
   const { renderHabitWidget } = require("./HabitWidget"),
     binding = await readJSON(key(id));
   if (!uid || binding?.uid !== uid || getFirebaseAuth().currentUser?.uid !== uid)
     return renderHabitWidget();
-  let habit = (await readWidgetHabits(uid)).find((h) => h.id === binding.habitId);
-  if (fetchCloud) {
+  const committedMatches = committedHabit?.id === binding.habitId;
+  let habit = committedMatches ? committedHabit : (await readWidgetHabits(uid)).find((h) => h.id === binding.habitId);
+  if (fetchCloud || (committedHabit && !committedMatches)) {
     try {
       const snapshot = await getDoc(
         doc(getFirebaseFirestore(), "users", uid, "habits", binding.habitId),
@@ -108,8 +110,7 @@ export async function actOnHabitWidget(id: number, uid: string, action: string) 
   if (binding?.uid !== uid || getFirebaseAuth().currentUser?.uid !== uid)
     throw new Error("Sign in again");
   const ref = doc(getFirebaseFirestore(), "users", uid, "habits", binding.habitId);
-  let updated: Habit | null = null;
-  await runTransaction(getFirebaseFirestore(), async (transaction) => {
+  const updated = await runTransaction(getFirebaseFirestore(), async (transaction) => {
     const snap = await transaction.get(ref),
       habit = snap.exists() ? normalizeHabit(snap.id, snap.data()) : null;
     if (!habit) throw new Error("Habit removed");
@@ -121,13 +122,13 @@ export async function actOnHabitWidget(id: number, uid: string, action: string) 
     else if (action === "HABIT_PLUS" || action === "HABIT_MINUS")
       change = { type: "increment", amount: settings.step * (action === "HABIT_MINUS" ? -1 : 1) };
     else if (action === "HABIT_TOGGLE") change = { type: "toggle" };
-    else return;
+    else return null;
     const result = applyHabitAction(habit, day, change);
-    transaction.update(ref, {
+    if (habitDayNeedsUpdate(habit, day, result)) transaction.update(ref, {
       ["entries." + day]: result.entry,
       completedDates: result.completed ? arrayUnion(day) : arrayRemove(day),
     });
-    updated = {
+    return {
       ...habit,
       entries: { ...habit.entries, [day]: result.entry },
       completedDates: result.completed
@@ -135,8 +136,13 @@ export async function actOnHabitWidget(id: number, uid: string, action: string) 
         : habit.completedDates.filter((d) => d !== day),
     };
   });
-  if (updated) {
-    const items = await readWidgetHabits(uid);
-    await cacheWidgetHabits(uid, [...items.filter((h) => h.id !== binding.habitId), updated]);
+  if (updated && getFirebaseAuth().currentUser?.uid === uid) {
+    // Cache/render failures cannot undo a committed transaction. The caller can
+    // still render its exact result without reading the same document again.
+    try {
+      const items = await readWidgetHabits(uid);
+      await cacheWidgetHabits(uid, [...items.filter((h) => h.id !== binding.habitId), updated]);
+    } catch {}
   }
+  return updated;
 }

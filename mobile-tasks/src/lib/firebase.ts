@@ -3,7 +3,7 @@ import { mergeQuestionDeletions } from "../domain/question-deletion";
 import { appendRecallQuestionSnapshots, type RecallQuestionInput } from "../domain/quick-recall-solutions";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getApp, getApps, initializeApp } from "firebase/app";
-import { collection, deleteDoc, doc, getDoc, getDocs, getFirestore, initializeFirestore, onSnapshot, runTransaction, serverTimestamp, setDoc, writeBatch, type Firestore } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDoc, getDocs, getFirestore, initializeFirestore, limit, onSnapshot, query, runTransaction, serverTimestamp, setDoc, writeBatch, type Firestore } from "firebase/firestore";
 import * as FirebaseAuth from "firebase/auth";
 import {
   createUserWithEmailAndPassword,
@@ -279,8 +279,9 @@ type CloudTask = { id: string; [key: string]: unknown };
 const taskCollection = (user: User) => collection(getFirebaseFirestore(), "users", user.uid, "tasks");
 
 export async function migrateTasksIfEmpty(user: User, tasks: CloudTask[]) {
-  const remote = await getDocs(taskCollection(user));
-  if (remote.size || !tasks.length) return;
+  if (!tasks.length) return;
+  const remote = await getDocs(query(taskCollection(user), limit(1)));
+  if (remote.size) return;
   const batch = writeBatch(getFirebaseFirestore());
   tasks.forEach((task) => batch.set(doc(taskCollection(user), task.id), task));
   await batch.commit();
