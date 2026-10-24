@@ -55,23 +55,24 @@ test("an unmarked today keeps yesterday's streak; a missed full day breaks it", 
   assert.equal(habitStats(value, "2026-03-01").streak, 2);
   assert.equal(habitStats(value, "2026-03-02").streak, 0);
 });
-test("challenge progress follows the current streak while total keeps distinct completed days", () => {
+test("challenge progress counts distinct active days despite gaps and ignores future dates", () => {
   const value = habit(["2026-01-01", "2026-01-01", "2026-01-03", "2027-01-01"], 2);
   assert.deepEqual(habitStats(value, "2026-01-03"), {
     streak: 1,
     total: 2,
     markedToday: true,
-    progress: 1 / 2,
+    progress: 1,
   });
   assert.equal(habitStats(habit(["2026-01-01"], null), "2026-01-01").progress, 0);
 });
 
-test("challenge progress resets with a broken streak and caps at the target", () => {
+test("challenge progress survives a broken streak and caps at the target", () => {
   const value = habit(["2026-01-01", "2026-01-02"], 2);
   assert.equal(habitStats(value, "2026-01-02").progress, 1);
   assert.equal(habitStats(value, "2026-01-03").progress, 1);
-  assert.equal(habitStats(value, "2026-01-04").progress, 0);
-  assert.equal(habitStats({ ...value, completedDates: [...value.completedDates, "2026-01-04"] }, "2026-01-04").progress, 1 / 2);
+  assert.equal(habitStats(value, "2026-01-04").streak, 0);
+  assert.equal(habitStats(value, "2026-01-04").progress, 1);
+  assert.equal(habitStats({ ...value, completedDates: [...value.completedDates, "2026-01-04"] }, "2026-01-04").progress, 1);
   assert.equal(habitStats(habit(["2026-01-01", "2026-01-02", "2026-01-03"], 2), "2026-01-03").progress, 1);
 });
 test("unmarking today reverses progress and restores yesterday's consecutive streak", () => {
@@ -208,6 +209,7 @@ test("weekly quota controls Due and consecutive successful periods", () => {
   assert.equal(habitStats(value, "2026-01-14").streak, 2);
   assert.equal(habitStats(value, "2026-01-19").streak, 2);
   assert.equal(habitStats(value, "2026-01-26").streak, 0);
+  assert.equal(habitStats({ ...value, targetDays: 10 }, "2026-01-26").progress, 4 / 10);
 });
 test("future, pre-creation and rest-day tracking are rejected", () => {
   const value = configured({ frequency: "weekdays", weekdays: [1] });

@@ -10,6 +10,7 @@ import { getFirebaseFirestore } from "../lib/firebase";
 import { colors, useAppAccent } from "../theme";
 import { accentInk } from "../domain/app-accent";
 import { SlotTime } from "./SlotTime";
+import { FocusPulse } from "./FocusPulse";
 import { DeviceFocusSetup } from "./DeviceFocusSetup";
 import { AnimatedTimeChips } from "./AnimatedTimeChips";
 import { deviceFocusStatus, openDeviceFocusSettings, supportsDeviceFocus, syncDeviceFocusState } from "../lib/native-focus-lock";
@@ -90,6 +91,7 @@ export function StudyLock({ uid, taskButton = false, openRequest = 0, onRequestO
   const candidate = control?.session ? effectiveStudySession(control.session, now) : null;
   const session = candidate && (candidate.paused || candidate.endsAt > now) ? candidate : null;
   const breaking = onStudyBreak(session, now);
+  const focusing = !!session && !session.paused && session.startedAt <= now;
   const breakState = session ? studyBreakState(session, now) : null;
   const canBreak = !breaking && (!!breakState?.available || session?.breakLimit === undefined);
   const breakLabel = breaking ? "Break · auto-resumes" : session?.breakLimit === undefined && session?.paused ? "Resume focus" : breakState?.available ? "Take a break · 10 min" : !breakState?.left ? "No breaks remaining" : `Break in ${Math.ceil((breakState?.waitMs ?? 0) / 60000)} min`;
@@ -115,8 +117,8 @@ export function StudyLock({ uid, taskButton = false, openRequest = 0, onRequestO
         <Text style={s.taskStartText}>{breaking ? "Break" : session.paused ? "Focus paused" : "Focus"} · </Text>
         <SlotTime value={remaining(now + studyTimerMilliseconds(session, now), now)} color="#111" size={14} weight="700" compact />
       </View> : <Text style={s.taskStartText}>Start Focus</Text>}
-    </Pressable> : <Pressable accessibilityRole="button" accessibilityLabel="Focus Lock" style={s.profileTrigger} onPress={() => setOpen(true)}>
-      <View style={s.profileLock}>{icon("lock-outline", 18, session ? accent : "#eee")}{session && <ActiveLockDot color={accent} />}</View><Text style={s.profileLabel}>Focus Lock</Text>
+    </Pressable> : <Pressable accessibilityRole="button" accessibilityLabel={focusing ? "Focusing" : "Focus Lock"} style={s.profileTrigger} onPress={() => setOpen(true)}>
+      <View style={s.profileLock}>{icon("lock-outline", 18, focusing ? accent : "#eee")}{focusing && <FocusPulse style={[s.activeLockDot, { backgroundColor: accent }]} />}</View><Text style={s.profileLabel}>{focusing ? "Focusing" : "Focus Lock"}</Text>
       <View style={s.profileFocus}><Text style={s.profileFocusTime}>Today · </Text><SlotTime value={formatFocusTime(todayFocus)} color="#ddd" size={12} weight="600" compact /></View>
     </Pressable>}
     <Modal transparent visible={open} animationType="fade" statusBarTranslucent onRequestClose={close}>
@@ -228,19 +230,6 @@ function StudyClock({ minutes, accent, onCancel, onSave, timeOfDay=false, title=
     {!valid && <Text style={s.error}>Choose 1 minute to 12 hours.</Text>}
     <View style={s.clockActions}><Pressable accessibilityRole="button" accessibilityLabel={keyboard ? "Use clock" : "Use keyboard"} onPress={() => setKeyboard(!keyboard)}><MaterialCommunityIcons name={keyboard ? "clock-outline" : "keyboard-outline"} size={21} color="#aaa" /></Pressable><View style={{ flex: 1 }} /><Pressable accessibilityRole="button" onPress={onCancel}><Text style={[s.clockAction, { color: accent }]}>Cancel</Text></Pressable><Pressable accessibilityRole="button" disabled={!valid} onPress={() => onSave(total)}><Text style={[s.clockAction, { color: accent, opacity: valid ? 1 : 0.4 }]}>Save</Text></Pressable></View>
   </>;
-}
-
-function ActiveLockDot({ color }: { color: string }) {
-  const phase = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    const animation = Animated.loop(Animated.sequence([
-      Animated.timing(phase, { toValue: 1, duration: 800, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-      Animated.timing(phase, { toValue: 0, duration: 800, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-    ]));
-    animation.start();
-    return () => animation.stop();
-  }, [phase]);
-  return <Animated.View accessible={false} pointerEvents="none" style={[s.activeLockDot, { backgroundColor: color, transform: [{ translateY: phase.interpolate({ inputRange: [0, 1], outputRange: [-3, 3] }) }] }]} />;
 }
 
 const s = StyleSheet.create({

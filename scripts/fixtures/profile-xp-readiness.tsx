@@ -23,7 +23,7 @@ export async function run() {
     const xp = getXpSummary([], focus.totalPoints);
     const text = focus.ready ? `${xp.xp}:${xp.level}` : "Loading";
     seen.push(text);
-    return <span>{text}</span>;
+    return <span data-focusing={focus.focusing}>{text}</span>;
   }
   function App({ uid = "alice", visible = true, publicView = false }: any) {
     return <><ProfileFocusSync uid={uid} reader={reader} getDatabase={getDb} enabled={visible} />{visible && <Profile uid={uid} publicView={publicView} />}</>;
@@ -53,6 +53,17 @@ export async function run() {
     await render({ uid: "bob" }); check("Loading");
     await act(async () => old.forEach(item => item.next(item.kind === "days" ? days(999999) : null))); check("Loading");
     await emit("bob", "days", days(0)); await emit("bob", "control", null); check("0:1");
+    const focusState = (expected: boolean) => { if (container.querySelector("span")?.getAttribute("data-focusing") !== String(expected)) throw Error(`Wrong Focusing indicator: expected ${expected}`); };
+    focusState(false);
+    const beforeStatus = listeners.length;
+    const now = Date.now();
+    const session = { id: "badge", startedAt: now - 1_000, endsAt: now + 60_000, domains: [] };
+    await emit("bob", "control", { session }); focusState(true);
+    await emit("bob", "control", { session: { ...session, paused: true, remainingMs: 60_000, breakUntil: now + 10_000 } }); focusState(false);
+    await emit("bob", "control", { session: { ...session, paused: true, remainingMs: 60_000, breakUntil: now - 1_000 } }); focusState(true);
+    await emit("bob", "control", { session: { ...session, startedAt: now - 20_000, endsAt: now - 10_000 } }); focusState(false);
+    await emit("bob", "control", null); focusState(false);
+    if (listeners.length !== beforeStatus) throw Error("Focusing indicator added/refetched listeners");
     await act(async () => listeners.find(item => item.active && item.uid === "bob" && item.kind === "days").error(Error("permission"))); check("Loading");
     await render({ uid: "bob", visible: false }); await render({ uid: "bob" });
     await emit("bob", "days", days(50)); await emit("bob", "control", null); check("50:1");

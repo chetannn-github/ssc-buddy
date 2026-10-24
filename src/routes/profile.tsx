@@ -1203,6 +1203,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
               ) : (
                 <div className="h-24 w-24 rounded-full bg-white/10" />
               )}
+              {focusData.focusing && <span role="status" aria-label="Focusing" className="focus-status-pulse pointer-events-none absolute top-0 right-2 z-20 h-[9px] w-[9px] rounded-full border-[1.5px] border-[#121212] bg-[var(--app-accent,#ffe000)]" />}
               {!readOnly && <Button
                 type="button"
                 size="icon"

@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { StudyLock, controller as focusReader } from "../components/StudyLock";
+import { FocusPulse } from "../components/FocusPulse";
 import { PublicFocusTime } from "../components/PublicFocusTime";
 import { useProfileFocusData } from "../../../shared/use-profile-focus";
 import { profileTrackerVisibility } from "../../../shared/profile-tracker-visibility";
@@ -617,6 +618,7 @@ export function ProfileScreen({
             <Pressable style={{ width: 67, height: 67, margin: 0.5 }} onPress={() => setViewingAvatar(true)}>
               <Image source={avatarImage} style={[styles.avatarImage, { borderRadius: 33.5 }]} />
             </Pressable>
+            {focusData.focusing && <FocusPulse label="Focusing" style={[styles.avatarFocusDot, { backgroundColor: appAccent }]} />}
             {!readOnly && <Pressable
               style={[styles.avatarBadge, { width: 25, height: 25, borderRadius: 13 }]}
               accessibilityLabel="Change profile image"
@@ -1753,6 +1755,7 @@ const styles: Record<string, any> = createThemedStyles({
     borderColor: colors.border,
   },
   avatarImage: { width: "100%", height: "100%", borderRadius: 42 },
+  avatarFocusDot: { position: "absolute", top: 0, right: 0, zIndex: 2, width: 9, height: 9, borderRadius: 5, borderWidth: 1.5, borderColor: colors.background },
   avatarBadge: {
     position: "absolute",
     right: -2,

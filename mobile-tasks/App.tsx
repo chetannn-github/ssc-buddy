@@ -11,7 +11,7 @@ import { TaskOverview } from "./src/components/TaskOverview";
 import { TaskEmptyState } from "./src/components/TaskEmptyState";
 import { DailyFocusReward } from "./src/components/DailyFocusReward";
 import { StudyLock, controller as profileFocusReader } from "./src/components/StudyLock";
-import { ProfileFocusSync } from "../shared/ProfileFocusSync";
+import { useStartupProfileFocus, useStartupReadiness } from "../shared/use-startup-readiness";
 import { getFirebaseFirestore } from "./src/lib/firebase";
 import { DailySectionHeader } from "./src/components/DailySectionHeader";
 import { colors, dailyTaskColors } from "./src/theme";
@@ -230,6 +230,9 @@ export default function App() {
   const nativeSplashHidden = useRef(false);
   const [authenticated, setAuthenticated] = useState(false);
   const [user, setUser] = useState<User | null>(null);
+  const [startupProfileUid, setStartupProfileUid] = useState<string>();
+  const [startupTasksUid, setStartupTasksUid] = useState<string>();
+  const startupFocusReady = useStartupProfileFocus(user?.uid, getFirebaseFirestore, profileFocusReader);
   const [focusSetupRequest, setFocusSetupRequest] = useState(0);
   const [mediaMode, setMediaMode] = useState<MediaMode>(null);
   const [quickRecallOpen, setQuickRecallOpen] = useState(false);
@@ -247,6 +250,7 @@ export default function App() {
   const [publicTracker, setPublicTracker] = useState<Record<string, any>>({ subjects: [], revision: {}, activity: [], tests: { log: [] } });
   const [profileMockTests, setProfileMockTests] = useState<any[]>([]);
   const [profileActivityReady, setProfileActivityReady] = useState(false);
+  const startup = useStartupReadiness(user?.uid, { profile: startupProfileUid === user?.uid, tasks: tasksLoaded && startupTasksUid === user?.uid, focus: startupFocusReady, activity: profileActivityReady });
   const [celebratedStreak, setCelebratedStreak] = useState<number | null>(null);
   const [celebratedLevel, setCelebratedLevel] = useState<number | null>(null);
   const [profileSettings, setProfileSettings] = useState<PracticeProfile | null>(null);
@@ -356,6 +360,7 @@ export default function App() {
     return observeSession((nextUser) => {
       const version = ++authChangeVersion.current;
       if (!nextUser) {
+        setStartupProfileUid(undefined); setStartupTasksUid(undefined);
         setAuthenticated(false);
         setUiSettingsReady(true);
         setUser(null);
@@ -364,6 +369,7 @@ export default function App() {
       }
       setAuthReady(false);
       setUiSettingsReady(false);
+      setStartupProfileUid(undefined); setStartupTasksUid(undefined);
       profileCacheVersion.current += 1;
       void prepareMobileAccountCache(nextUser.uid).then(async (switchedAccount) => {
         const activeTest = await loadActiveTest().catch(() => null);
@@ -467,7 +473,7 @@ export default function App() {
           if (value && !applyingRemote) void apply(value);
         });
       } catch {}
-      finally { if (!cancelled) setUiSettingsReady(true); }
+      finally { if (!cancelled) { setUiSettingsReady(true); setStartupProfileUid(user.uid); } }
     };
     void start();
     return () => { cancelled = true; unsubscribe?.(); };
@@ -624,12 +630,14 @@ export default function App() {
         await migrateTasksIfEmpty(user, tasks);
         if (cancelled) return;
         unsubscribe = watchTasks(user, (remote) => {
+          if (cancelled) return;
           const next = remote as Task[];
           setTasks(next);
+          setStartupTasksUid(user.uid);
           void AsyncStorage.setItem(TASK_STORAGE_KEY, JSON.stringify(next));
           refreshDailyTasksWidget(next);
         });
-      } catch {}
+      } catch { if (!cancelled) setStartupTasksUid(user.uid); }
     })();
     return () => { cancelled = true; unsubscribe?.(); };
   // Initial migration must only run once per authenticated account.
@@ -890,7 +898,7 @@ export default function App() {
     setDeletingTask(null); setTaskActionLoading(false);
   };
 
-  if (showSplash || !authReady || !uiSettingsReady) {
+  if (showSplash || !authReady || (user ? !startup.ready : !uiSettingsReady)) {
     return (
       <SafeAreaProvider
         onLayout={() => {
@@ -900,7 +908,7 @@ export default function App() {
         }}
       >
         <StatusBar hidden style="light" />
-        <SplashScreen />
+        <SplashScreen message={!authReady ? "Opening your workspace…" : user ? startup.message : "Getting things ready…"} />
       </SafeAreaProvider>
     );
   }
@@ -1097,7 +1105,6 @@ export default function App() {
       )}
       {!quickRecallOpen && <BottomNavigation activeTab={appTab === "progress" ? "track" : appTab === "habits" ? "tasks" : appTab} onChange={(tab) => { setLeaderboardOpen(false); setAppTab(tab === "tasks" && profileSettings?.habitsEnabled !== false ? taskSection.current : tab); }} practiceSessionEnabled={profileSettings?.practiceSessionEnabled !== false} trackProgressEnabled={profileSettings?.trackProgressEnabled !== false} timersEnabled={profileSettings?.timersEnabled !== false} habitsEnabled={profileSettings?.habitsEnabled !== false} profileAvatar={profileSettings?.avatar ? avatarAssets[profileSettings.avatar] : undefined} />}
       <MediaOverlay user={user} mode={mediaMode} musicOpenRequest={musicOpenRequest} onClose={() => setMediaMode(null)} />
-      <ProfileFocusSync uid={user?.uid} getDatabase={getFirebaseFirestore} reader={profileFocusReader} enabled={appTab === "profile"} />
       <DeviceFocusSync user={user} />
       <FocusWidgetSync user={user} />
       {celebratedStreak !== null && <StreakCelebration streak={celebratedStreak} onClose={() => setCelebratedStreak(null)} />}
@@ -1129,8 +1136,15 @@ export default function App() {
   );
 }
 
-function SplashScreen() {
-  return <ImageBackground source={require("./assets/auth.jpg")} style={styles.splash} imageStyle={styles.splashImage}><View style={styles.splashOverlay}><Image source={require("./assets/auth.jpg")} style={styles.splashMark} /><Text style={styles.splashTitle}>SSC Buddy</Text><Text style={styles.splashCopy}>Focused preparation workspace</Text></View></ImageBackground>;
+function SplashScreen({ message }: { message: string }) {
+  const fade = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    fade.setValue(0);
+    const animation = Animated.timing(fade, { toValue: 1, duration: 300, useNativeDriver: true });
+    animation.start();
+    return () => animation.stop();
+  }, [message, fade]);
+  return <ImageBackground source={require("./assets/auth.jpg")} style={styles.splash} imageStyle={styles.splashImage}><View style={styles.splashOverlay}><Image source={require("./assets/auth.jpg")} style={styles.splashMark} /><Text style={styles.splashTitle}>SSC Buddy</Text><Animated.Text accessibilityLiveRegion="polite" style={[styles.splashCopy, { opacity: fade, textAlign: "center", minHeight: 36, paddingHorizontal: 28 }]}>{message}</Animated.Text><ActivityIndicator size="small" color="#a1a1aa" /></View></ImageBackground>;
 }
 
 function DailyManifestationDialog({ phrase, entry, repeats, error, onChange, onContinue }: { phrase: string; entry: string; repeats: number; error: string; onChange: (value: string) => void; onContinue: () => void }) {

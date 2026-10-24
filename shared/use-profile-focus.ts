@@ -57,7 +57,8 @@ export function useProfileFocusData(getDatabase: () => Firestore, reader: FocusR
   if (!readOnly && current) for (const slice of focusSlices(current, now)) totals[slice.date] = (totals[slice.date] ?? 0) + Math.max(0, slice.milliseconds - (days?.[slice.date]?.sessionCredits[current.id] ?? 0));
   const milliseconds = rangeFocusMilliseconds(days ?? {}, readOnly ? null : session, includesDay, now);
   const canLogout = !!uid && !readOnly && controlOwner === uid && !(current && (current.paused || current.endsAt > now));
-  return { ready, canLogout, days: totals, text: ready ? formatFocusTime(milliseconds) : "—", milliseconds, points: Object.entries(totals).reduce((sum, [date, value]) => sum + (includesDay(date) ? focusPoints(value) : 0), 0), totalPoints: focusRewardTotal(totals) };
+  const focusing = !!uid && !readOnly && controlOwner === uid && !!current && !current.paused && current.startedAt <= now && now < current.endsAt;
+  return { ready, canLogout, focusing, days: totals, text: ready ? formatFocusTime(milliseconds) : "—", milliseconds, points: Object.entries(totals).reduce((sum, [date, value]) => sum + (includesDay(date) ? focusPoints(value) : 0), 0), totalPoints: focusRewardTotal(totals) };
 }
 
 export function useProfileFocus(...args: Parameters<typeof useProfileFocusData>) { return useProfileFocusData(...args).text; }

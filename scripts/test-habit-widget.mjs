@@ -37,6 +37,15 @@ const habit = (settings = {}, completedDates = []) => ({ id: "one", name: "Read 
 const flatten = (node) => !node ? [] : Array.isArray(node) ? node.flatMap(flatten)
   : typeof node === "object" ? [node, ...flatten(node.props?.children)] : [];
 
+test("Android habit target uses active days while its headline remains a streak", () => {
+  const value = { ...habit({}, ["2026-01-01", "2026-01-03"]), targetDays: 5 };
+  for (const style of ["compact", "heatmap", "month"]) {
+    const nodes = flatten(renderHabitWidget(value, "", { width: 180, height: 240 }, style));
+    assert.ok(nodes.some(node => node.props?.text === "2/5 days"), style);
+    assert.ok(!nodes.some(node => node.props?.text === "0/5 days"), style);
+  }
+});
+
 test("wide heatmap has exactly 20 aligned Sunday-first weeks, including future padding", () => {
   const cells = habitWidgetCalendar("2026-10-21", true);
   assert.equal(cells.length, 140);
