@@ -7,7 +7,7 @@ Combined branches:
 - `codex/tasks-habits-db-audit` at `b4565b5`, based on main `eb96ec5`.
 - `codex/focus-db-load` at `088f67d`, with separately synchronized UI history.
 
-This is a normal merge on a new integration branch, without rewriting either source branch or main. Practice, Syllabus and Profile/Leaderboard optimization branches are not included.
+This is a normal merge on a new integration branch, without rewriting either source branch or main. Practice was subsequently added as described below. Syllabus and Profile/Leaderboard optimization branches are not included.
 
 ## Conflict resolution
 
@@ -25,4 +25,18 @@ Resolved Focus paths to their exact tested Focus-branch blobs, preserving Tasks/
 
 Tests mock Firebase/native boundaries. No production billing measurement, physical-device APK test or installable Windows installer build was performed. Builds alone do not establish device/network timing guarantees.
 
-The merge is committed locally. This integration branch has not been pushed or deployed. Existing source branches and main remain unchanged.
+The initial merge was committed as `18c9788` and later pushed on explicit user request. Existing source branches and main remain unchanged.
+
+## Practice/Quick Recall integration
+
+Subsequently merged `codex/practice-session-db-audit` at `d15107f` into this same integration branch, starting from `18c9788`, with a normal merge. No runtime merge conflicts occurred. Git automatically combined Tasks/Habits and Practice changes in Windows Firebase helpers, Android Firebase helpers and the Android widget entry point. The shared-live-source helper was already identical and remained shared.
+
+The combined suite initially exposed a test fixture compatibility issue: the isolated Windows task mock loader returned an empty module for Practice's newly imported createInFlightLoader helper. Updated that fixture to evaluate the real dependency instead of bypassing its implementation. No application logic was altered to satisfy the fixture.
+
+Final verification for the three-feature combination:
+
+- 285 automated tests pass across Focus/extension, Tasks/Habits, Practice/Recall, question deletion, immutable snapshots, active-session recovery, exercises, public-profile publication ordering/failure, weekly scoring and XP suites.
+- Five browser regression scripts pass: Focus lifecycle, logout, historical-board current XP, Practice pre-submit confirmation, and Practice history/results/viewer/solutions. Practice viewport coverage includes 390/1024/1280/1920px as applicable.
+- Web, Android and Windows TypeScript checks pass. Web production, Windows frontend and Android Metro export pass. Extension runtime sources were unchanged by this second merge; its tests pass in the combined suite and its previous integration bundle verification remains applicable.
+
+No native-device/production-billing test was performed. This additional merge is local until separately pushed on user request. No Syllabus or Profile/Leaderboard branch has been merged.

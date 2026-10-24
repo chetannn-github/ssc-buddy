@@ -1,6 +1,8 @@
 import { canReopenDailyWidgetTask } from "../domain/daily-task-widget";
 import { mergeQuestionDeletions } from "../domain/question-deletion";
 import { appendRecallQuestionSnapshots, type RecallQuestionInput } from "../domain/quick-recall-solutions";
+import { createInFlightLoader, createOrderedPublisher, learningPatchUnchanged, mergePatchUnchanged } from "../domain/practice-sync-policy";
+import { practiceSnapshots } from "../domain/practice-live-source";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getApp, getApps, initializeApp } from "firebase/app";
 import { collection, deleteDoc, doc, getDoc, getDocs, getFirestore, initializeFirestore, limit, onSnapshot, query, runTransaction, serverTimestamp, setDoc, writeBatch, type Firestore } from "firebase/firestore";
@@ -194,6 +196,7 @@ export async function readPublicProfile(value: string): Promise<PublicProfile | 
 }
 
 /** Publishes the read-only dashboard used by public profiles and streaks. */
+const publicActivitySaves = createOrderedPublisher();
 export async function savePublicProfileActivity(
   user: User,
   profile: Record<string, unknown>,
@@ -207,11 +210,21 @@ export async function savePublicProfileActivity(
       .filter(([date, count]) => /^\d{4}-\d{2}-\d{2}$/.test(date) && Number(count) > 0)
       .map(([date, count]) => [date, Math.max(1, Math.round(Number(count)))]),
   );
-  await setDoc(
-    publicProfileDoc(username),
-    { ...publicProfileFields(user, username, profile), activity: sanitizedActivity, dashboard, updatedAt: serverTimestamp() },
-    { merge: true },
-  );
+  const reference = publicProfileDoc(username);
+  const payload = { ...publicProfileFields(user, username, profile), activity: sanitizedActivity, dashboard };
+  return publicActivitySaves(JSON.stringify([user.uid, username]), JSON.stringify(payload), async () => {
+    try {
+      await runTransaction(getFirebaseFirestore(), async transaction => {
+        const current = await transaction.get(reference);
+        if (!mergePatchUnchanged(current.data() ?? {}, payload))
+          transaction.set(reference, { ...payload, updatedAt: serverTimestamp() }, { merge: true });
+      });
+    } catch {
+      // Transactions cannot queue offline. Retain the original setDoc delivery
+      // path on failure, so an offline update can still be replayed by the SDK.
+      await setDoc(reference, { ...payload, updatedAt: serverTimestamp() }, { merge: true });
+    }
+  });
 }
 
 function publicProfileFields(user: User, username: string, fields: Record<string, unknown>) {
@@ -347,8 +360,9 @@ function withoutUndefined<T>(value: T): T {
 }
 
 export async function migratePracticeEntities(user: User, name: string, entities: PracticeEntity[]) {
-  const remote = await getDocs(practiceCollection(user, name));
-  if (remote.size || !entities.length) return;
+  if (!entities.length) return;
+  const remote = await getDocs(query(practiceCollection(user, name), limit(1)));
+  if (remote.size) return;
   const batch = writeBatch(getFirebaseFirestore());
   entities.forEach((entity) => batch.set(doc(practiceCollection(user, name), entity.id), entity));
   await batch.commit();
@@ -398,7 +412,10 @@ export async function deletePracticeEntity(user: User, name: string, id: string)
 }
 
 export function watchPracticeEntities(user: User, name: string, callback: (entities: PracticeEntity[]) => void) {
-  return onSnapshot(practiceCollection(user, name), { includeMetadataChanges: name === "practiceSubjects" }, (snapshot) => callback(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as PracticeEntity))));
+  return practiceSnapshots(getFirebaseFirestore(), JSON.stringify([user.uid, name]),
+    (next, error) => onSnapshot(practiceCollection(user, name), { includeMetadataChanges: name === "practiceSubjects" }, next, error),
+    snapshot => callback(snapshot.docs.map(item => ({ id: item.id, ...item.data() } as PracticeEntity))),
+    () => console.warn("Could not load practice data."));
 }
 
 export async function readPracticeSettings(user: User) {
@@ -511,12 +528,17 @@ export async function writeQuestionLearning(user: User, value: Record<string, un
         lastOutcome: localIsNewer ? local.lastOutcome : cloud.lastOutcome,
       };
     });
-    transaction.set(reference, { ...remote, ...value, stats, updatedAt: serverTimestamp() }, { merge: true });
+    if (!learningPatchUnchanged(remote, value, stats))
+      transaction.set(reference, { ...remote, ...value, stats, updatedAt: serverTimestamp() }, { merge: true });
   });
 }
 
 /** Canonical Quick Recall seed shared with the web and Windows widget. */
-export async function loadQuickRecallSeed(user: User) {
+const seedLoads = createInFlightLoader<Awaited<ReturnType<typeof readQuickRecallSeed>>>();
+export function loadQuickRecallSeed(user: User) {
+  return seedLoads(user.uid, () => readQuickRecallSeed(user));
+}
+async function readQuickRecallSeed(user: User) {
   const [subjects, attempts, favourites, learning] = await Promise.all([
     getDocs(practiceCollection(user, "practiceSubjects")),
     getDocs(practiceCollection(user, "practiceAttempts")),

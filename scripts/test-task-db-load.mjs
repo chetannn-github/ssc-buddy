@@ -7,6 +7,8 @@ import ts from 'typescript';
 const read = path => readFile(new URL(path, import.meta.url), 'utf8');
 const compile = source => ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText;
 const desktop = compile((await read('../desktop-widget/src/lib/firebase.ts')).replaceAll('import.meta.env.', 'testEnv.'));
+const practicePolicy = {};
+vm.runInNewContext(compile(await read('../mobile-tasks/src/domain/practice-sync-policy.ts')), { exports: practicePolicy });
 const task = (id, extra = {}) => ({ id, name: id, subject: 'Maths', type: 'Learn', createdAt: `2026-10-19T${id === 'a' ? '10' : '11'}:00:00`, date: '2026-10-19', completed: false, completedAt: null, minutesSpent: null, ...extra });
 
 function desktopFixture() {
@@ -43,7 +45,7 @@ function desktopFixture() {
   vm.runInNewContext(desktop, {
     module, exports: module.exports, console,
     testEnv: new Proxy({}, { get: () => 'configured' }),
-    require: name => name === 'firebase/firestore' ? firestore : name === 'firebase/app' ? { initializeApp: () => ({}) } : name === 'firebase/auth' ? { getAuth: () => ({}) } : {},
+    require: name => name.endsWith('/practice-sync-policy') ? practicePolicy : name === 'firebase/firestore' ? firestore : name === 'firebase/app' ? { initializeApp: () => ({}) } : name === 'firebase/auth' ? { getAuth: () => ({}) } : {},
   });
   return {
     api: module.exports, tasks, scores, views, emit,
