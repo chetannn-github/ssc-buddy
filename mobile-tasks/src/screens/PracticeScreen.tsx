@@ -2135,9 +2135,6 @@ function QuestionBank({
           </View>
           <View style={s.bankViewerActions}>
             <ReattemptModeButton active={attemptMode} onChange={setAttemptMode} />
-            <Pressable accessibilityRole="button" accessibilityLabel="Back to question bank" hitSlop={8} onPress={() => onView(null)}>
-              <MaterialCommunityIcons name="arrow-left" size={22} color={colors.text} />
-            </Pressable>
           </View>
         </View>
         <ScrollView contentContainerStyle={s.content}>
