@@ -69,6 +69,7 @@ class BuddyFocusService : Service(), SharedPreferences.OnSharedPreferenceChangeL
   private lateinit var preferences: SharedPreferences
   private val essentials = mutableSetOf<String>()
   private val settingsPackages = mutableSetOf("com.android.settings")
+  private val settingsGuard = FocusSettingsGuard()
   private val foregroundTracker = FocusForegroundTracker()
   private var scannedUntil = 0L
   private var lastNotificationState = ""
@@ -107,8 +108,10 @@ class BuddyFocusService : Service(), SharedPreferences.OnSharedPreferenceChangeL
     essentials.addAll(setOf(packageName, "android", "com.android.systemui", "com.android.permissioncontroller", "com.google.android.permissioncontroller", "com.android.phone", "com.android.server.telecom", "com.android.emergency", "com.google.android.dialer", "com.android.dialer", "com.samsung.android.dialer", "com.android.contacts", "com.google.android.contacts", "com.samsung.android.app.contacts"))
     // Resolve OEM Settings too, without treating permission controllers as the
     // Settings app. They remain available for normal system permission dialogs.
-    runCatching { packageManager.resolveActivity(Intent(Settings.ACTION_SETTINGS), android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName }
-      .getOrNull()?.takeUnless { it == "android" }?.let(settingsPackages::add)
+    val resolvedSettings = runCatching {
+      packageManager.queryIntentActivities(Intent(Settings.ACTION_SETTINGS), android.content.pm.PackageManager.MATCH_DEFAULT_ONLY).map { it.activityInfo.packageName }
+    }.getOrDefault(emptyList())
+    settingsPackages.addAll(FocusSettingsGuard.packages(resolvedSettings))
     essentials.addAll(setOf("com.android.incallui", "com.samsung.android.incallui"))
     runCatching { (getSystemService(TELECOM_SERVICE) as? TelecomManager)?.defaultDialerPackage?.let(essentials::add) }
     val intents = listOf(Intent(Intent.ACTION_DIAL, Uri.parse("tel:")), Intent(Intent.ACTION_VIEW).setType("vnd.android.cursor.dir/contact"))
@@ -202,6 +205,18 @@ class BuddyFocusService : Service(), SharedPreferences.OnSharedPreferenceChangeL
     val restricted = now < restrictionDeadline() && !isRinging()
     val restrictionStarted = restricted && !wasRestricted
     wasRestricted = restricted
+    // Some system Settings screens suppress TYPE_APPLICATION_OVERLAY entirely.
+    // Merely retaining an attached overlay does not cover those screens. Return
+    // to our own app only after Usage Access actually identifies Settings; keep
+    // the overlay in place until Android confirms the real foreground change.
+    if (settingsGuard.shouldReturn(foreground, now, restrictionDeadline(), isRinging(), settingsPackages)) {
+      runCatching {
+        val launch = packageManager.getLaunchIntentForPackage(packageName) ?: error("Main activity unavailable")
+        startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
+      }.onFailure {
+        preferences.edit().putString("overlayError", "Could not return from Settings. Open SSC Buddy to resume blocking.").apply()
+      }
+    }
     val blocked = shouldBlockForeground()
     if (!blocked) { hide(); return }
     if (overlay != null) return

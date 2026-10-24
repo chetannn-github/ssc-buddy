@@ -4,17 +4,32 @@ package expo.modules.buddymusic
 internal class FocusForegroundTracker {
   var current = ""
     private set
-  private var latest = Long.MIN_VALUE
-  fun reset() { current = ""; latest = Long.MIN_VALUE }
+  private var latestResume = Long.MIN_VALUE
+  private var screenBlockedAt = Long.MIN_VALUE
+  private val ended = mutableMapOf<String, Long>()
+  fun reset() { current = ""; latestResume = Long.MIN_VALUE; screenBlockedAt = Long.MIN_VALUE; ended.clear() }
   fun event(packageName: String, type: Int, at: Long): Boolean {
     // Notification/foreground-service/interaction events do not establish which
     // activity is visible. They must not discard a delayed activity transition.
-    if (type !in setOf(1, 2, 23, 16, 17) || at < latest) return false
-    latest = at
+    if (type !in setOf(1, 2, 23, 16, 17)) return false
     when (type) {
-      1 -> current = packageName // ACTIVITY_RESUMED / MOVE_TO_FOREGROUND
-      2, 23 -> if (current == packageName) current = "" // PAUSED / STOPPED
-      16, 17 -> current = "" // SCREEN_NON_INTERACTIVE / KEYGUARD_SHOWN
+      1 -> {
+        // A late resume can precede the previous app's already-delivered pause.
+        // Only a newer RESUME, this package's own end, or screen lock invalidates
+        // it. A global timestamp watermark loses this transition permanently.
+        if (packageName.isBlank() || at < latestResume || at <= screenBlockedAt || at <= (ended[packageName] ?: Long.MIN_VALUE)) return false
+        latestResume = at; current = packageName
+      }
+      2, 23 -> {
+        if (at <= (ended[packageName] ?: Long.MIN_VALUE)) return false
+        ended[packageName] = at
+        if (current == packageName && at >= latestResume) current = ""
+      }
+      16, 17 -> {
+        if (at <= screenBlockedAt) return false
+        screenBlockedAt = at
+        if (at >= latestResume) current = ""
+      }
     }
     return true
   }

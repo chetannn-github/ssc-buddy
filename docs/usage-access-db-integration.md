@@ -1,5 +1,17 @@
 # Combined DB optimizations on the Usage Access branch
 
+## Settings return fallback (2026-10-24)
+
+An overlay-only Settings block is insufficient on system screens that hide third-party application overlays. The user reported notification shade → Settings remaining open on a Vivo phone. Without device logs/physical testing, overlay suppression is a plausible cause, not a confirmed Vivo-specific diagnosis.
+
+The Usage Access service now uses its existing foreground result to bring SSC Buddy's own activity forward when a recognized Settings package is foreground during a restricted session. Resolved OEM Settings handlers are included. The fallback does not clear the foreground or remove the existing overlay on an attempted launch: only actual Usage Events confirm the transition. Attempts are limited to once per two seconds while Settings remains foreground. Returning to another app resets the throttle, so a new Settings attempt is checked immediately. Breaks, expiry, calls and non-Settings apps do not trigger it. No Firestore operations or new permissions were added.
+
+The foreground reducer also had a reproducible event-order bug: a previous app's PAUSED/STOPPED event advanced one global timestamp, permanently rejecting a delayed Settings RESUMED event with an earlier timestamp. Resume ordering, per-package end times and screen-lock ordering are now tracked separately. Replay cannot resurrect an ended Settings activity or replace a more recently resumed allowed app.
+
+This is a best-effort fallback, not a notification-shade lock or bypass-proof kiosk. Android/OEMs can delay Usage Events, suppress overlays, reject background activity starts, kill the service or let the user revoke access. A new APK and a test on the affected Vivo device are required. No hidden status-bar APIs, reflection, or Device Owner/Admin requirements were introduced.
+
+Platform references: [application overlays are below the status bar](https://developer.android.com/reference/android/view/WindowManager.LayoutParams#TYPE_APPLICATION_OVERLAY), [background activity start rules](https://developer.android.com/guide/components/activities/background-starts), [status bar disabling requires managed-device authority](https://developer.android.com/reference/android/app/admin/DevicePolicyManager#setStatusBarDisabled(android.content.ComponentName,%20boolean)).
+
 2026-10-24. Target: `codex/focus-usage-access`, previously `44c818e` (Usage Access migration plus delayed usage-event fix). Source: `codex/combined-db-optimizations` at `619642e`.
 
 Combined branch `619642e` was pushed separately on the user's explicit request before finishing this merge. This target merge is local until separately requested. Main and the combined branch's Accessibility implementation are unchanged by target-specific resolution.

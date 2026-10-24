@@ -7,7 +7,7 @@ export function DeviceFocusSetup() {
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [usageAccess, setUsageAccess] = useState(false);
   const [overlayAccess, setOverlayAccess] = useState(false);
-  const [opening, setOpening] = useState(false);
+  const [opening, setOpening] = useState<"usage" | "overlay" | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
     if (!supportsDeviceFocus) return;
@@ -28,15 +28,16 @@ export function DeviceFocusSetup() {
   const checking = enabled === null && !error;
   return <View style={styles.card}>
     {[
-      { label: "Usage access", granted: usageAccess, icon: "cellphone-check" as const, open: openDeviceUsageSettings },
-      { label: "Display over other apps", granted: overlayAccess, icon: "layers-outline" as const, open: openDeviceOverlaySettings },
-    ].map(item => <Pressable key={item.label} accessibilityRole="button" accessibilityLabel={item.label} disabled={opening || checking || item.granted} style={styles.row} onPress={() => {
-        setOpening(true); setError("");
-        void item.open().catch(() => setError("Could not open permission settings.")).finally(() => setOpening(false));
+      { id: "usage" as const, label: "Usage access", granted: usageAccess, icon: "cellphone-check" as const, open: openDeviceUsageSettings },
+      { id: "overlay" as const, label: "Display over other apps", granted: overlayAccess, icon: "layers-outline" as const, open: openDeviceOverlaySettings },
+    ].map(item => <Pressable key={item.id} accessibilityRole="button" accessibilityLabel={item.label} accessibilityState={{ disabled: opening !== null || checking || item.granted, busy: opening === item.id || checking }} disabled={opening !== null || checking || item.granted} style={styles.row} onPress={() => {
+        if (opening !== null) return;
+        setOpening(item.id); setError("");
+        void item.open().catch(() => setError("Could not open permission settings.")).finally(() => setOpening(current => current === item.id ? null : current));
       }}>
         <MaterialCommunityIcons name={item.icon} size={23} color="#f5f5f5" />
         <View style={styles.copy}><Text style={styles.title}>{item.label}</Text></View>
-        {opening || checking ? <ActivityIndicator size="small" color="#f5f5f5" /> : item.granted ? <MaterialCommunityIcons name="check" size={20} color="#86efac" /> : <Text style={[styles.action, { color: "#f5f5f5" }]}>Allow</Text>}
+        {opening === item.id || checking ? <ActivityIndicator size="small" color="#f5f5f5" /> : item.granted ? <MaterialCommunityIcons name="check" size={20} color="#86efac" /> : <Text style={[styles.action, { color: "#f5f5f5" }]}>Allow</Text>}
       </Pressable>)}
     {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
   </View>;

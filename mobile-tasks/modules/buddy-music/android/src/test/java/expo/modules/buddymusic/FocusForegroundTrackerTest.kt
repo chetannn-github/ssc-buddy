@@ -4,6 +4,38 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class FocusForegroundTrackerTest {
+  @Test fun delayedSettingsResumeIsNotLostBehindThePreviousAppsLaterPause() {
+    val tracker = FocusForegroundTracker()
+    tracker.event("allowed", 1, 100)
+    tracker.event("com.android.systemui", 1, 200)
+    tracker.event("com.android.systemui", 2, 400)
+    assertEquals("", tracker.current)
+    // A later overlapping query exposes the Settings resume from timestamp 300.
+    assertTrue(tracker.event("com.android.settings", 1, 300))
+    tracker.event("com.android.systemui", 2, 400)
+    assertEquals("com.android.settings", tracker.current)
+    assertTrue(FocusSettingsGuard().shouldReturn(tracker.current, 500, 2_000, false, setOf("com.android.settings")))
+  }
+  @Test fun replayCannotResurrectAnEndedSettingsActivityOrOneOlderThanTheActualAllowedApp() {
+    val tracker = FocusForegroundTracker()
+    tracker.event("com.android.settings", 1, 100)
+    tracker.event("com.android.settings", 2, 300)
+    assertFalse(tracker.event("com.android.settings", 1, 200))
+    tracker.event("allowed", 1, 400)
+    assertFalse(tracker.event("com.android.settings", 1, 350))
+    tracker.event("com.android.settings", 23, 500)
+    assertEquals("allowed", tracker.current)
+  }
+  @Test fun delayedScreenLockDoesNotClearANewerResumedAppButRejectsOlderReplay() {
+    val tracker = FocusForegroundTracker()
+    tracker.event("allowed", 1, 400)
+    tracker.event("", 17, 300)
+    assertEquals("allowed", tracker.current)
+    tracker.event("", 16, 500)
+    assertFalse(tracker.event("com.android.settings", 1, 450))
+    assertEquals("", tracker.current)
+    assertTrue(tracker.event("allowed", 1, 600))
+  }
   @Test fun delayedResumeIsRecoveredByTheNextOverlappingScan() {
     val tracker = FocusForegroundTracker()
     val firstScan = 100_000L
