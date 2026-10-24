@@ -10,7 +10,9 @@ import { createThemedStyles } from "./src/theme";
 import { TaskOverview } from "./src/components/TaskOverview";
 import { TaskEmptyState } from "./src/components/TaskEmptyState";
 import { DailyFocusReward } from "./src/components/DailyFocusReward";
-import { StudyLock } from "./src/components/StudyLock";
+import { StudyLock, controller as profileFocusReader } from "./src/components/StudyLock";
+import { ProfileFocusSync } from "../shared/ProfileFocusSync";
+import { getFirebaseFirestore } from "./src/lib/firebase";
 import { DailySectionHeader } from "./src/components/DailySectionHeader";
 import { colors, dailyTaskColors } from "./src/theme";
 import { DropdownChevron } from "./src/components/DropdownChevron";
@@ -1095,6 +1097,7 @@ export default function App() {
       )}
       {!quickRecallOpen && <BottomNavigation activeTab={appTab === "progress" ? "track" : appTab === "habits" ? "tasks" : appTab} onChange={(tab) => { setLeaderboardOpen(false); setAppTab(tab === "tasks" && profileSettings?.habitsEnabled !== false ? taskSection.current : tab); }} practiceSessionEnabled={profileSettings?.practiceSessionEnabled !== false} trackProgressEnabled={profileSettings?.trackProgressEnabled !== false} timersEnabled={profileSettings?.timersEnabled !== false} habitsEnabled={profileSettings?.habitsEnabled !== false} profileAvatar={profileSettings?.avatar ? avatarAssets[profileSettings.avatar] : undefined} />}
       <MediaOverlay user={user} mode={mediaMode} musicOpenRequest={musicOpenRequest} onClose={() => setMediaMode(null)} />
+      <ProfileFocusSync uid={user?.uid} getDatabase={getFirebaseFirestore} reader={profileFocusReader} enabled={appTab === "profile"} />
       <DeviceFocusSync user={user} />
       <FocusWidgetSync user={user} />
       {celebratedStreak !== null && <StreakCelebration streak={celebratedStreak} onClose={() => setCelebratedStreak(null)} />}

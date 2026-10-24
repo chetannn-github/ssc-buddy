@@ -835,7 +835,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
     setColorTheme(nextProfileColorTheme());
   }, []);
   const [records, setRecords] = useState<TestRecord[]>([]);
-  const [dailyTasks, setDailyTasks] = useState<DailyTask[]>([]);
+  const [dailyTasks, setDailyTasks] = useState<DailyTask[]>(() => readOnly ? publicProfile?.dashboard?.dailyTasks ?? [] : loadDailyTasks());
   const [tracker, setTracker] = useState<TrackerData | null>(null);
   const [range, setRange] = useState<ActivityRange>("week");
   const [profile, setProfile] = useState<PracticeProfile | null>(null);
@@ -1252,9 +1252,11 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
                   <Settings className="h-4 w-4" />
                 </Button>}
               </div>
-              <button type="button" onClick={() => setXpTimelineOpen(true)} className="mt-1 w-full max-w-52 text-center outline-none sm:text-left">
+              <button type="button" disabled={!focusData.ready} onClick={() => setXpTimelineOpen(true)} className="mt-1 w-full max-w-52 text-center outline-none sm:text-left">
+                {focusData.ready ? <>
                 <span className={`text-xs font-semibold ${xpSummary.xp > 0 ? "text-emerald-300" : xpSummary.xp < 0 ? "text-red-300" : "text-zinc-400"}`}>Lv. <RollingNumber value={xpSummary.level} /> · {levelName(xpSummary.level)} · <RollingNumber value={xpSummary.xp} prefix={xpSummary.xp > 0 ? "+" : ""} suffix=" XP" /></span>
                 {xpSummary.level > 0 && <ProfileXpBar progress={xpSummary.progress} />}
+                </> : <span aria-label="Loading XP and level" className="text-xs text-zinc-500">—</span>}
               </button>
               {readOnly && publicProfile?.username && <div className="mt-0 flex flex-wrap items-center justify-center gap-1.5 sm:justify-start">
                 <Button type="button" variant="ghost" className="h-9 gap-1.5 px-2.5 text-sm text-zinc-300 hover:bg-white/10 hover:text-white" onClick={() => void navigate({ to: "/weekly-stats/$username", params: { username: publicProfile.username } })}>
@@ -1531,7 +1533,7 @@ export function Profile({ readOnly = false, publicProfile }: ProfileProps) {
           <p className="text-center text-xs text-zinc-400">Earned from completed leaderboard weeks.</p>
         </DialogContent>
       </Dialog>
-      <Dialog open={xpTimelineOpen} onOpenChange={setXpTimelineOpen}>
+      <Dialog open={xpTimelineOpen && focusData.ready} onOpenChange={setXpTimelineOpen}>
         <DialogContent className="border-white/10 bg-[#121212] p-5 text-zinc-100 sm:max-w-sm">
           <DialogHeader><DialogTitle>Level {xpSummary.level} · {levelName(xpSummary.level)}</DialogTitle><DialogDescription className="text-zinc-400">Your all-time XP path</DialogDescription></DialogHeader>
           <div className="relative space-y-2 pt-2">{xpTimelineLevels.map((level) => { const current = level === xpSummary.level; const reached = level <= xpSummary.level; const detail = current ? `${xpSummary.xp > 0 ? "+" : ""}${xpSummary.xp} XP · ${Math.max(0, xpSummary.nextLevelXp - xpSummary.xp)} XP to Level ${xpSummary.level + 1}` : level === 0 ? "Below 0 XP" : `${xpForLevel(level)} XP`; return <div key={level} className="relative flex items-start gap-3">{level < xpTimelineStart + 5 && <div className="absolute left-[2px] top-[13px] w-1.5" style={{ height: "calc(100% + 8px)" }}><LiquidProgressBar vertical height={6} progress={xpSegmentProgress(xpSummary.xp, level)} color="#a78bfa" label={`Level ${level} to ${level + 1} progress`} /></div>}<span className={`z-10 mt-2 h-2.5 w-2.5 shrink-0 rounded-full border-2 border-[#1b1b1b] ${current ? "bg-violet-300 ring-4 ring-violet-400/15" : reached ? "bg-violet-400" : "bg-zinc-700"}`} /><div className={`min-w-0 flex-1 rounded-lg px-3 py-2 ${current ? "border border-violet-300/20 bg-violet-400/[0.09]" : "bg-white/[0.025]"}`}><p className={`text-sm font-semibold ${current ? "text-white" : "text-zinc-300"}`}>Lv. {level} · {levelName(level)}</p><p className="text-xs text-zinc-500">{detail}</p></div></div>; })}</div>

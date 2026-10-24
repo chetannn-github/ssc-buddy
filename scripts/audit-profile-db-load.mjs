@@ -14,7 +14,7 @@ function harness(firstState){
   const targets=[], cleanups=[], timers=[], writes=[], reads=[];
   const database={};
   let stateIndex=0;
-  const react={useRef:current=>({current}),useState:initial=>[stateIndex++===0&&firstState!==undefined?firstState:typeof initial==='function'?initial():initial,()=>{}],useEffect:effect=>{const stop=effect();if(stop)cleanups.push(stop);}};
+  const react={useMemo:factory=>factory(),useSyncExternalStore:(subscribe,getSnapshot)=>{cleanups.push(subscribe(()=>{}));return getSnapshot();},useRef:current=>({current}),useState:initial=>[stateIndex++===0&&firstState!==undefined?firstState:typeof initial==='function'?initial():initial,()=>{}],useEffect:effect=>{const stop=effect();if(stop)cleanups.push(stop);}};
   const sdk={collection:(_db,...parts)=>parts.join('/'),doc:(_db,...parts)=>parts.join('/'),
     getDocs:async path=>{reads.push(path);return {docs:[]};},getDoc:async path=>{reads.push(path);return {data:()=>undefined};},
     onSnapshot:(path,callback,error)=>{const target={path,active:true,callback,error};targets.push(target);callback({docs:[],data:()=>undefined});return()=>{target.active=false;};},
@@ -92,9 +92,9 @@ test('normal username-preserving profile Save verifies ownership and skips uncha
 });
 test('profile focus hook republishes every positive historical day when the days effect runs',async()=>{
   const days=Object.fromEntries(Array.from({length:30},(_,i)=>[`2026-09-${String(i+1).padStart(2,'0')}`,{totalMilliseconds:60_000,sessionCredits:{}}]));
-  const h=harness(days),api=h.load('shared/use-profile-focus.ts'),published=[],stops=[];
+  const h=harness(),api=h.load('shared/use-profile-focus.ts'),published=[],stops=[];
   const watch=()=>{const stop={active:true};stops.push(stop);return()=>{stop.active=false;};};
-  api.useProfileFocusData(()=>({}),{watchStudyFocusDays:watch,watchStudyControl:watch,watchPublicStudyFocus:watch,publishStudyFocusDay:async(_db,_uid,date)=>published.push(date)},'viewer',undefined,false,()=>true);
+  api.useProfileFocusData(()=>({}),{watchStudyFocusDays:(_db,_uid,callback)=>{const stop=watch();callback(days);return stop;},watchStudyControl:watch,watchPublicStudyFocus:watch,publishStudyFocusDay:async(_db,_uid,date)=>published.push(date)},'viewer',undefined,false,()=>true);
   await new Promise(resolve=>setImmediate(resolve));
   assert.equal(published.length,30); assert.equal(stops.length,2); assert.deepEqual(h.timers,[1000]);
   h.cleanup();assert.ok(stops.every(stop=>!stop.active));

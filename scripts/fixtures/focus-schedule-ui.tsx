@@ -45,7 +45,7 @@ export async function run() {
     if(!container.querySelector('.study-duration-clock')||container.querySelector<HTMLButtonElement>('[aria-label="PM"]')?.getAttribute('aria-pressed')!=='true')throw Error('schedule start did not open a clock with PM');
     if(container.querySelector<HTMLButtonElement>('[aria-label="Select hours"]')?.textContent!=='10')throw Error('schedule clock did not display 12-hour time');
     await act(async()=>button('Cancel').click());
-    if(container.querySelector<HTMLButtonElement>('[aria-label="Schedule start"]')?.textContent!=='Start22:00')throw Error('clock cancellation changed schedule start');
+    if(container.querySelector<HTMLButtonElement>('[aria-label="Schedule start"]')?.textContent!=='Start10:00 PM')throw Error('clock cancellation changed schedule start');
     const previewCards=[...container.querySelectorAll<HTMLButtonElement>('[data-schedule-preview]')];
     if(previewCards.length)throw Error("temporary preview schedules remain visible");
     const savedRow=container.querySelector<HTMLElement>('[aria-label="Saved schedules"]')!,addButton=container.querySelector<HTMLElement>('[aria-label="Add focus schedule"]')!;

@@ -644,9 +644,11 @@ export function ProfileScreen({
                 </View>
               ))}
             </Pressable>
-            <Pressable accessibilityRole="button" accessibilityLabel="View XP level roadmap" style={styles.xpBlock} onPress={() => setXpTimelineOpen(true)}>
+            <Pressable accessibilityRole="button" accessibilityLabel="View XP level roadmap" disabled={!focusData.ready} style={styles.xpBlock} onPress={() => setXpTimelineOpen(true)}>
+              {focusData.ready ? <>
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", flexWrap: "wrap", gap: 3 }}><Text style={styles.xpText}>Lv.</Text><ProfileNumber value={xpSummary.level} style={styles.xpText} /><Text style={styles.xpText}>· {levelName(xpSummary.level)} ·</Text><ProfileNumber value={xpSummary.xp} prefix={xpSummary.xp > 0 ? "+" : ""} suffix=" XP" style={[styles.xpText, xpSummary.xp < 0 && styles.xpNegative]} /></View>
               {xpSummary.level > 0 && <ProfileXpBar progress={xpSummary.progress} />}
+              </> : <Text accessibilityLabel="Loading XP and level" style={styles.xpText}>—</Text>}
             </Pressable>
           </View>
         </View>
@@ -1034,7 +1036,7 @@ export function ProfileScreen({
           </KeyboardAvoidingView>
         </Modal>
       </ScrollView>
-      <Modal transparent visible={xpTimelineOpen} animationType="fade" statusBarTranslucent onRequestClose={() => setXpTimelineOpen(false)}>
+      <Modal transparent visible={xpTimelineOpen && focusData.ready} animationType="fade" statusBarTranslucent onRequestClose={() => setXpTimelineOpen(false)}>
         <Pressable style={styles.xpDialogBackdrop} onPress={() => setXpTimelineOpen(false)}>
           <Pressable style={styles.xpDialog} onPress={() => undefined}>
             <View style={styles.xpDialogHeader}><View><Text style={styles.xpDialogEyebrow}>YOUR XP PATH</Text><Text style={styles.xpDialogTitle}>Level {xpSummary.level} · {levelName(xpSummary.level)}</Text></View><Pressable hitSlop={10} onPress={() => setXpTimelineOpen(false)}><MaterialCommunityIcons name="close" size={20} color={colors.muted} /></Pressable></View>

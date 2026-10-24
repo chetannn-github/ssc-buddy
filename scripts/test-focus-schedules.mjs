@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { normalizeFocusSchedule, focusScheduleFrozen, nextFocusOccurrence, dueFocusOccurrence, scheduledFocusSession, assertScheduleChange } from '../shared/focus-schedules.ts';
+import { normalizeFocusSchedule, focusScheduleFrozen, nextFocusOccurrence, dueFocusOccurrence, scheduledFocusSession, assertScheduleChange, scheduleTime } from '../shared/focus-schedules.ts';
 import { createStudyController } from '../shared/study-controller.ts';
 import { validSession, startControl } from '../browser-extension/policy.js';
 
 const at=value=>Date.parse(value);
+test('schedule display includes AM/PM and distinguishes midnight from noon',()=>{
+  for(const [minute,label] of [[0,'12:00 AM'],[5,'12:05 AM'],[360,'6:00 AM'],[719,'11:59 AM'],[720,'12:00 PM'],[725,'12:05 PM'],[1320,'10:00 PM'],[1439,'11:59 PM']]) assert.equal(scheduleTime(minute),label);
+});
 const sleep=()=>normalizeFocusSchedule({id:'sleep',name:'Sleep',weekdays:[1,3,5],startMinute:1320,endMinute:360,timeZone:'Asia/Kolkata',appLimit:0,domains:[],enabled:true,createdAt:0});
 
 test('weekday belongs to start day; overnight window keeps the scheduled timezone and exact deadline',()=>{

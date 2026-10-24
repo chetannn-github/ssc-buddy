@@ -41,7 +41,8 @@ import { trackerActiveDates } from "@/lib/tracker";
 import { loadTrackerData, saveTrackerData } from "@/lib/tracker-store";
 import { loadDailyTasks } from "@/lib/daily-tasks";
 import { getXpSummary } from "@/lib/xp";
-import { watchStudyFocusDays } from "../../../shared/study-lock";
+import * as profileFocusReader from "../../../shared/study-lock";
+import { profileFocusSnapshot, watchProfileFocus } from "../../../shared/profile-focus-source";
 import { focusRewardTotal } from "../../../shared/focus-rewards";
 import { getFirebaseFirestore } from "@/lib/firebase-sync";
 import { loadPracticeProfile, savePracticeProfile, type PracticeProfile } from "@/lib/profile";
@@ -1179,15 +1180,16 @@ export function AppShell({ title, subtitle, actions, children }: Props) {
     setFocusXpReady(false);
     setXpLevelReady(false);
     if (!authUser) { setFocusXpReady(true); return; }
-    return watchStudyFocusDays(
-      getFirebaseFirestore(),
-      authUser.uid,
-      days => {
-        setFocusXp(focusRewardTotal(Object.fromEntries(Object.entries(days).map(([date, value]) => [date, value.totalMilliseconds]))));
-        setFocusXpReady(true);
-      },
-      () => setFocusXpReady(true),
-    );
+    const database = getFirebaseFirestore(), uid = authUser.uid;
+    const apply = () => {
+      const value = profileFocusSnapshot(database, profileFocusReader, uid);
+      if (!value.days) { setFocusXpReady(false); return; }
+      setFocusXp(focusRewardTotal(Object.fromEntries(Object.entries(value.days).map(([date, day]) => [date, day.totalMilliseconds]))));
+      setFocusXpReady(true);
+    };
+    const stop = watchProfileFocus(database, profileFocusReader, uid, undefined, false, apply);
+    apply();
+    return stop;
   }, [authUser?.uid]);
   useEffect(() => {
     if (!profileHydrated || !profile?.avatar || !authUser) return;
