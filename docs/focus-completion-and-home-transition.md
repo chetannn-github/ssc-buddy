@@ -2,9 +2,9 @@
 
 Main now includes the tested `codex/focus-usage-access` branch and combined DB optimizations. No Accessibility service is registered. The Usage Access branch remains separately available. Main's merge was local; no push was requested for this work.
 
-## Overlay-only blocking
+## Settings-only activity return
 
-At the user's subsequent request, Main removes the earlier Usage branch's automatic Settings→SSC Buddy activity redirect. Settings and every other unauthorized package now use the same existing overlay enforcement. Settings package matching and the delayed-event reducer fixes remain. Explicit user shortcuts can still open SSC Buddy/allowed apps. OEM Settings screens that suppress application overlays remain a limitation; Main does not silently launch the app to work around that restriction.
+At the user's latest request, confirmed Settings packages automatically return to SSC Buddy during restricted focus. This is throttled to one attempt per two seconds while Settings stays foreground. All other unauthorized apps use the existing overlay without launching SSC Buddy. Breaks, expiry and ringing disable the automatic Settings return. Settings package matching and the delayed-event reducer fixes remain. Actual Android/OEM activity-launch restrictions and Usage Event delivery still need device testing.
 
 ## Completion
 

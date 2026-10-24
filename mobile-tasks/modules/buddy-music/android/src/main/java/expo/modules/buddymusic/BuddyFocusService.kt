@@ -69,6 +69,7 @@ class BuddyFocusService : Service(), SharedPreferences.OnSharedPreferenceChangeL
   private lateinit var preferences: SharedPreferences
   private val essentials = mutableSetOf<String>()
   private val settingsPackages = mutableSetOf("com.android.settings")
+  private val settingsGuard = FocusSettingsGuard()
   private val foregroundTracker = FocusForegroundTracker()
   private var scannedUntil = 0L
   private var lastNotificationState = ""
@@ -218,8 +219,16 @@ class BuddyFocusService : Service(), SharedPreferences.OnSharedPreferenceChangeL
     // PAUSED can precede the launcher's delayed RESUMED event. An unknown
     // foreground is not evidence that the underlying screen is allowed.
     if (FocusWindowPolicy.retainDuringTransition(overlay != null, foreground, restricted, unlocked)) return
-    // Settings follows the same overlay-only block as any unauthorized app.
-    // Never bring SSC Buddy's activity forward as an enforcement fallback.
+    // Only Settings gets an activity return: OEM Settings may suppress overlays.
+    // Other unauthorized packages keep the existing overlay-only path.
+    if (settingsGuard.shouldReturn(foreground, now, restrictionDeadline(), isRinging(), settingsPackages)) {
+      runCatching {
+        val launch = packageManager.getLaunchIntentForPackage(packageName) ?: error("Main activity unavailable")
+        startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
+      }.onFailure {
+        preferences.edit().putString("overlayError", "Could not return from Settings. Open SSC Buddy to resume blocking.").apply()
+      }
+    }
     val blocked = shouldBlockForeground()
     if (!blocked) { hide(); return }
     if (overlay != null) return
