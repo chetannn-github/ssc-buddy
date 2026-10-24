@@ -10,4 +10,7 @@ internal object FocusWindowPolicy {
 
   /** Passive refreshes may update/hide an existing overlay, never summon one. */
   fun mayShow(blocked: Boolean, appSwitch: Boolean, restrictionStarted: Boolean) = blocked && (appSwitch || restrictionStarted)
+  fun retainDuringTransition(overlayVisible: Boolean, target: String, restricted: Boolean, unlocked: Boolean) =
+    overlayVisible && (target.isBlank() || target == "com.android.systemui") && restricted && unlocked
+  fun pollDelay(target: String, overlayVisible: Boolean) = if (target.isBlank() || overlayVisible) 150L else 250L
 }

@@ -14,7 +14,7 @@ class FocusForegroundTrackerTest {
     assertTrue(tracker.event("com.android.settings", 1, 300))
     tracker.event("com.android.systemui", 2, 400)
     assertEquals("com.android.settings", tracker.current)
-    assertTrue(FocusSettingsGuard().shouldReturn(tracker.current, 500, 2_000, false, setOf("com.android.settings")))
+    assertTrue(FocusAppPolicy.blocks(tracker.current, 500, 2_000, emptySet(), emptySet()))
   }
   @Test fun replayCannotResurrectAnEndedSettingsActivityOrOneOlderThanTheActualAllowedApp() {
     val tracker = FocusForegroundTracker()

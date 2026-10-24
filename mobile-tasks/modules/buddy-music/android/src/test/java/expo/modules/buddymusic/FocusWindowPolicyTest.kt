@@ -4,6 +4,17 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class FocusWindowPolicyTest {
+  @Test fun appToHomeTransitionKeepsExistingCoverUntilTheNextForegroundIsKnown() {
+    assertTrue(FocusWindowPolicy.retainDuringTransition(true, "", true, true))
+    assertTrue(FocusWindowPolicy.retainDuringTransition(true, "com.android.systemui", true, true))
+    assertFalse(FocusWindowPolicy.retainDuringTransition(false, "", true, true)) // Never summon over an allowed app.
+    assertFalse(FocusWindowPolicy.retainDuringTransition(true, "study", true, true)) // Confirmed allowed app can hide.
+    assertFalse(FocusWindowPolicy.retainDuringTransition(true, "", false, true)) // Break/expiry/call.
+    assertFalse(FocusWindowPolicy.retainDuringTransition(true, "", true, false)) // Screen off/keyguard.
+    assertEquals(150L, FocusWindowPolicy.pollDelay("", false))
+    assertEquals(150L, FocusWindowPolicy.pollDelay("home", true))
+    assertEquals(250L, FocusWindowPolicy.pollDelay("study", false))
+  }
   @Test fun shadeThenSettingsCannotRetainThePreviouslyAllowedApp() {
     val study = "study"
     val shade = FocusWindowPolicy.foreground(study, "com.android.systemui", "buddy", false, false)

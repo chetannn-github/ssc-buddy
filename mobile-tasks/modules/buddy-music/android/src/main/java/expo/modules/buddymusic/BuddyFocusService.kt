@@ -69,16 +69,24 @@ class BuddyFocusService : Service(), SharedPreferences.OnSharedPreferenceChangeL
   private lateinit var preferences: SharedPreferences
   private val essentials = mutableSetOf<String>()
   private val settingsPackages = mutableSetOf("com.android.settings")
-  private val settingsGuard = FocusSettingsGuard()
   private val foregroundTracker = FocusForegroundTracker()
   private var scannedUntil = 0L
   private var lastNotificationState = ""
+  private var celebrating = false
+  private var confettiAnimator: android.animation.ValueAnimator? = null
+  private var completionFirework: android.graphics.drawable.Animatable? = null
   private val ticker = object : Runnable {
     override fun run() {
+      finishTimedBreak(this@BuddyFocusService)
+      FocusCompletionStore.observe(this@BuddyFocusService)
       if (!enabled(this@BuddyFocusService) || !FocusProtection.active(this@BuddyFocusService)) {
+        if (enabled(this@BuddyFocusService) && FocusCompletionStore.pending(this@BuddyFocusService)) {
+          if (isRinging()) hide() else if (!celebrating) showCompletion()
+          handler.postDelayed(this, 1000); return
+        }
         hide(); stopSelf(); return
       }
-      finishTimedBreak(this@BuddyFocusService)
+      if (celebrating) { FocusCompletionStore.dismiss(this@BuddyFocusService); hide() }
       val previousForeground = foreground
       scanForeground()
       val state = "${FocusProtection.active(this@BuddyFocusService)}:${preferences.getLong("endsAt", 0)}:${preferences.getBoolean("paused", false)}:${FocusProtection.enabled(this@BuddyFocusService)}"
@@ -90,7 +98,7 @@ class BuddyFocusService : Service(), SharedPreferences.OnSharedPreferenceChangeL
       updateTimer()
       updateBreakButton()
       updateNotification()
-      handler.postDelayed(this, 400)
+      handler.postDelayed(this, FocusWindowPolicy.pollDelay(foreground, overlay != null))
     }
   }
   override fun onCreate() {
@@ -122,7 +130,7 @@ class BuddyFocusService : Service(), SharedPreferences.OnSharedPreferenceChangeL
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     try {
       startFocusNotification()
-      if (!enabled(this) || !FocusProtection.active(this)) { stopSelf(); return START_NOT_STICKY }
+      if (!enabled(this) || (!FocusProtection.active(this) && !FocusCompletionStore.pending(this))) { stopSelf(); return START_NOT_STICKY }
       handler.removeCallbacks(ticker)
       handler.post(ticker)
     } catch (error: Exception) {
@@ -162,7 +170,7 @@ class BuddyFocusService : Service(), SharedPreferences.OnSharedPreferenceChangeL
   private fun notification() = (if (Build.VERSION.SDK_INT >= 26) Notification.Builder(this, "focus-lock") else Notification.Builder(this))
     .setSmallIcon(android.R.drawable.ic_lock_idle_lock)
     .setContentTitle("Focus Lock")
-    .setContentText(if (preferences.getBoolean("paused", false)) "Break in progress" else "Focus session in progress")
+    .setContentText(if (FocusCompletionStore.pending(this) && !FocusProtection.active(this)) "Session complete" else if (preferences.getBoolean("paused", false)) "Break in progress" else "Focus session in progress")
     .setContentIntent(PendingIntent.getActivity(this, 7320,
       packageManager.getLaunchIntentForPackage(packageName)!!.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
       PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
@@ -199,24 +207,19 @@ class BuddyFocusService : Service(), SharedPreferences.OnSharedPreferenceChangeL
     handler.post(refreshOverlay)
   }
   private fun enforce(appSwitch: Boolean = false) {
+    if (celebrating && !FocusProtection.active(this)) return
     val now = System.currentTimeMillis()
     // A ringing call temporarily hides the overlay; it must be eligible again
     // when the call UI closes, even without a new application launch event.
     val restricted = now < restrictionDeadline() && !isRinging()
     val restrictionStarted = restricted && !wasRestricted
     wasRestricted = restricted
-    // Some system Settings screens suppress TYPE_APPLICATION_OVERLAY entirely.
-    // Merely retaining an attached overlay does not cover those screens. Return
-    // to our own app only after Usage Access actually identifies Settings; keep
-    // the overlay in place until Android confirms the real foreground change.
-    if (settingsGuard.shouldReturn(foreground, now, restrictionDeadline(), isRinging(), settingsPackages)) {
-      runCatching {
-        val launch = packageManager.getLaunchIntentForPackage(packageName) ?: error("Main activity unavailable")
-        startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
-      }.onFailure {
-        preferences.edit().putString("overlayError", "Could not return from Settings. Open SSC Buddy to resume blocking.").apply()
-      }
-    }
+    val unlocked = (getSystemService(POWER_SERVICE) as PowerManager).isInteractive && !(getSystemService(KEYGUARD_SERVICE) as KeyguardManager).isKeyguardLocked
+    // PAUSED can precede the launcher's delayed RESUMED event. An unknown
+    // foreground is not evidence that the underlying screen is allowed.
+    if (FocusWindowPolicy.retainDuringTransition(overlay != null, foreground, restricted, unlocked)) return
+    // Settings follows the same overlay-only block as any unauthorized app.
+    // Never bring SSC Buddy's activity forward as an enforcement fallback.
     val blocked = shouldBlockForeground()
     if (!blocked) { hide(); return }
     if (overlay != null) return
@@ -461,10 +464,10 @@ class BuddyFocusService : Service(), SharedPreferences.OnSharedPreferenceChangeL
         if (remaining <= 0) return@setOnClickListener
         val actions = JSONArray(preferences.getString("breakActions", "[]"))
         actions.put(JSONObject().put("id", UUID.randomUUID().toString()).put("lockId", preferences.getString("session", "")).put("at", now).put("paused", paused))
-        val edit = preferences.edit().putBoolean("paused", paused).putLong("remainingMs", remaining).putString("breakActions", actions.toString())
+        val edit = preferences.edit().putBoolean("paused", paused).putLong("pausedAt", now).putLong("remainingMs", remaining).putString("breakActions", actions.toString())
         if (limit >= 0) edit.putLong("breakUntil", now + FocusBreakPolicy.DURATION_MS).putInt("breaksTaken", preferences.getInt("breaksTaken", 0) + 1)
         if (!paused) edit.putLong("endsAt", now + remaining).putLong("phaseStartedAt", now)
-        if (edit.commit()) { FocusProtection.reconcile(this@BuddyFocusService); enforce() }
+        if (edit.commit()) { FocusCompletionStore.observe(this@BuddyFocusService); FocusProtection.reconcile(this@BuddyFocusService); enforce() }
       }
     }
     val allowed = allowedApps()
@@ -537,6 +540,64 @@ class BuddyFocusService : Service(), SharedPreferences.OnSharedPreferenceChangeL
         android.util.Log.e("BuddyFocus", "Could not display Focus Lock overlay", error)
       }
   }
+  private fun showCompletion() {
+    // Reuse the existing WindowManager cover: removing it first flashes Home.
+    appPicker?.animate()?.cancel(); appPicker = null; pickerClosing = false
+    timer = null; breakButton = null; motivation = null; renderedTime = ""
+    confettiAnimator?.cancel(); confettiAnimator = null
+    completionFirework?.stop(); completionFirework = null
+    val accent = runCatching { Color.parseColor(preferences.getString("accent", "#ffe000")) }.getOrDefault(Color.YELLOW)
+    val content = LinearLayout(this).apply {
+      orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; setPadding(dp(28), dp(32), dp(28), dp(32)); setBackgroundColor(Color.rgb(20, 20, 20))
+    }
+    val fireworkId = resources.getIdentifier("buddy_focus_firework", "drawable", packageName)
+    content.addView(ImageView(this).apply {
+      contentDescription = "Celebration firework"; scaleType = ImageView.ScaleType.FIT_CENTER
+      if (fireworkId != 0) {
+        val drawable = if (Build.VERSION.SDK_INT >= 28) android.graphics.ImageDecoder.decodeDrawable(android.graphics.ImageDecoder.createSource(resources, fireworkId)) else resources.getDrawable(fireworkId, theme)
+        setImageDrawable(drawable); setColorFilter(accent, android.graphics.PorterDuff.Mode.SRC_IN)
+        if (drawable is android.graphics.drawable.Animatable && android.animation.ValueAnimator.areAnimatorsEnabled()) { completionFirework = drawable; drawable.start() }
+      }
+    }, LinearLayout.LayoutParams(dp(112), dp(112)))
+    content.addView(text("Session complete", 28f).apply { typeface = Typeface.DEFAULT_BOLD })
+    content.addView(text("You made time for your goals.", 14f, Color.LTGRAY))
+    content.addView(text(FocusCompletionPolicy.duration(preferences.getLong("completionDuration", 0)), 44f).apply { typeface = Typeface.DEFAULT_BOLD; setPadding(0, dp(28), 0, dp(4)) })
+    content.addView(text("Focused time", 13f, Color.LTGRAY))
+    content.addView(Button(this).apply {
+      text = "Continue"; isAllCaps = false; textSize = 15f; setTextColor(Color.rgb(17, 17, 17))
+      background = GradientDrawable().apply { setColor(Color.rgb(249, 252, 245)); cornerRadius = dp(26).toFloat() }
+      setOnClickListener { FocusCompletionStore.dismiss(this@BuddyFocusService); hide(); stopSelf() }
+    }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(50)).apply { topMargin = dp(32) })
+    val scene = FrameLayout(this).apply { addView(content, FrameLayout.LayoutParams(-1, -1)) }
+    var progress = 0f
+    val confetti = object : View(this) {
+      private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+      override fun onDraw(canvas: android.graphics.Canvas) {
+        super.onDraw(canvas)
+        for (index in 0 until 26) {
+          val x = width * ((index * 37 % 101) / 100f) + dp(12) * kotlin.math.sin(progress * 5 + index)
+          val y = -dp(50) + (height * 0.82f + dp(50)) * progress + (index % 5) * dp(14)
+          paint.color = if (index % 3 == 0) Color.WHITE else accent
+          paint.alpha = ((1 - progress) * 130).toInt().coerceIn(0, 130)
+          canvas.save(); canvas.rotate(index * 23 + progress * 180, x, y)
+          canvas.drawRoundRect(x, y, x + dp(4), y + dp(8), dp(1).toFloat(), dp(1).toFloat(), paint); canvas.restore()
+        }
+      }
+    }.apply { importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO; isClickable = false }
+    scene.addView(confetti, FrameLayout.LayoutParams(-1, -1))
+    attachOverlay(scene)
+    celebrating = overlay != null
+    if (celebrating && android.animation.ValueAnimator.areAnimatorsEnabled()) {
+      content.alpha = 0f
+      content.animate().alpha(1f).setDuration(300).start()
+      confettiAnimator = android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
+        duration = 2400; interpolator = DecelerateInterpolator()
+        addUpdateListener { progress = it.animatedValue as Float; confetti.invalidate() }
+        start()
+      }
+    } else confetti.visibility = View.GONE
+    (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).notify(7320, notification())
+  }
   private fun updateTimer() {
     val row = timer ?: return
     val milliseconds = if (preferences.getBoolean("paused", false)) preferences.getLong("remainingMs", 0) else preferences.getLong("endsAt", 0) - System.currentTimeMillis()
@@ -572,6 +633,9 @@ class BuddyFocusService : Service(), SharedPreferences.OnSharedPreferenceChangeL
     button.alpha = if (button.isEnabled) 1f else 0.45f
   }
   private fun hide() {
+    celebrating = false
+    confettiAnimator?.cancel(); confettiAnimator = null
+    completionFirework?.stop(); completionFirework = null
     appPicker?.animate()?.cancel(); appPicker = null; pickerClosing = false
     overlay?.let { runCatching { (getSystemService(WINDOW_SERVICE) as WindowManager).removeView(it) } }
     overlay = null; timer = null; breakButton = null; motivation = null; renderedTime = ""
@@ -606,7 +670,8 @@ class BuddyFocusService : Service(), SharedPreferences.OnSharedPreferenceChangeL
       return runCatching { ops.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), context.packageName) == AppOpsManager.MODE_ALLOWED }.getOrDefault(false)
     }
     fun ensureRunning(context: Context) {
-      if (!enabled(context) || !FocusProtection.active(context) || connected) return
+      FocusCompletionStore.observe(context)
+      if (!enabled(context) || (!FocusProtection.active(context) && !FocusCompletionStore.pending(context)) || connected) return
       runCatching {
         val intent = Intent(context, BuddyFocusService::class.java)
         if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(intent) else context.startService(intent)
@@ -615,6 +680,7 @@ class BuddyFocusService : Service(), SharedPreferences.OnSharedPreferenceChangeL
     }
     fun sync(context: Context, id: String, endsAt: Double, accent: String, paused: Boolean = false, remainingMs: Double = 0.0, image: String = "", appLimit: Int = 2, breakState: String = "") {
       val p = prefs(context)
+      FocusCompletionStore.observe(context)
       // Local overlay breaks must reach the shared timer before cloud snapshots can replace them.
       if (JSONArray(p.getString("breakActions", "[]")).length() > 0) return
       // Cached empty/sign-out packets cannot clear a still-active offline lock.
@@ -624,13 +690,14 @@ class BuddyFocusService : Service(), SharedPreferences.OnSharedPreferenceChangeL
       if (breakState.isNotEmpty()) {
         val state = JSONObject(breakState)
         editor.putInt("breakLimit", state.optInt("breakLimit", -1)).putInt("breaksTaken", state.optInt("breaksTaken", 0))
-          .putLong("breakUntil", state.optLong("breakUntil", 0)).putLong("phaseStartedAt", state.optLong("startedAt", System.currentTimeMillis()))
-      } else if (p.getString("session", "") != id) editor.remove("breakLimit").remove("breaksTaken").remove("breakUntil").remove("phaseStartedAt")
+          .putLong("breakUntil", state.optLong("breakUntil", 0)).putLong("phaseStartedAt", state.optLong("startedAt", System.currentTimeMillis())).putLong("pausedAt", state.optLong("pausedAt", state.optLong("startedAt", p.getLong("phaseStartedAt", System.currentTimeMillis()))))
+      } else if (p.getString("session", "") != id) editor.remove("breakLimit").remove("breaksTaken").remove("breakUntil").putLong("phaseStartedAt", System.currentTimeMillis()).putLong("pausedAt", System.currentTimeMillis())
       editor.putBoolean("paused", paused).putLong("remainingMs", remainingMs.toLong())
       if (image.isNotEmpty() || id.isEmpty()) editor.putString("image", image)
       val selections = FocusPaymentPolicy.forSession(p.getString("session", "").orEmpty(), id, p.getStringSet("allowed", emptySet()).orEmpty(), p.getStringSet("paymentAllowed", emptySet()).orEmpty())
       editor.putStringSet("allowed", selections.apps).putStringSet("paymentAllowed", selections.payments)
       check(editor.commit()) { "Could not save the focus unlock deadline on this phone." }
+      FocusCompletionStore.observe(context)
       FocusProtection.reconcile(context)
       ensureRunning(context)
     }
