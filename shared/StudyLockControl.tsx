@@ -3,7 +3,7 @@ import "./study-breaks.css";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Firestore } from "firebase/firestore";
-import { watchStudyControl, watchStudyDevices, watchStudyFocusDay, recordStudyFocus, type StudySession, startStudySession, type StudyControl, type StudyDevice, normalizeStudyDomain, saveStudyWebsites, pauseStudySession, resumeStudySession } from "./study-lock";
+import { watchStudyControl, watchStudyDevices, watchStudyFocusDay, settleStudyFocus, type StudySession, startStudySession, type StudyControl, type StudyDevice, normalizeStudyDomain, saveStudyWebsites, pauseStudySession, resumeStudySession } from "./study-lock";
 import { emptyFocusDay, focusDayKey, todayFocusMilliseconds, formatFocusCountdown, formatFocusMinutes, formatFocusTime, type FocusDay } from "./study-focus";
 import { SlotTime } from "./SlotTime";
 import { AnimatedChoices } from "./AnimatedChoices";
@@ -38,10 +38,10 @@ export function StudyLockControl({ uid, desktop = false, profile = false, getDat
   }, [uid, date, getDatabase]);
   useEffect(() => {
     if (!focusSession || (ended && lastFinalCredit.current === focusSession.id)) return;
-    void recordStudyFocus(getDatabase(), uid, focusSession).then(() => { if (ended) lastFinalCredit.current = focusSession.id; }).catch(() => { /* Retry the next checkpoint, including after reconnect. */ });
+    void settleStudyFocus(getDatabase(), uid, focusSession).then(() => { if (ended) lastFinalCredit.current = focusSession.id; }).catch(() => { /* Retry failed settlement, including after reconnect. */ });
   }, [uid, focusSession?.id, checkpoint, ended, getDatabase]);
   const todayFocus = todayFocusMilliseconds(focusData, focusSession, now);
-  useEffect(() => { void publishStudyFocusDay(getDatabase(), uid, date, focusSession?.timeZone).catch(() => {}); }, [uid, date, focusData.totalMilliseconds, checkpoint, getDatabase]);
+  useEffect(() => { void publishStudyFocusDay(getDatabase(), uid, date, focusSession?.timeZone, focusData.totalMilliseconds).catch(() => {}); }, [uid, date, focusData.totalMilliseconds, getDatabase]);
   const resizeSequence = useRef(Promise.resolve());
   useEffect(() => {
     if (!desktop || !onResize) return;
@@ -60,10 +60,11 @@ export function StudyLockControl({ uid, desktop = false, profile = false, getDat
     };
     const failed = (e: Error) => setError(/firebase/i.test(e.message) ? "Could not load your focus session. Please try again." : e.message);
     const stopControl = watchStudyControl(db, uid, value => { control = value; setFocusSession(value?.session ?? null); if (Array.isArray(value?.allowedDomains)) setDomains(value.allowedDomains.slice(0, MAX_STUDY_WEBSITES).join("\n")); refresh(); }, failed);
-    const stopDevices = watchStudyDevices(db, uid, value => { devices = value; refresh(); }, failed);
+    // Browser presence isn't displayed in web/Windows; don't subscribe to it.
+    const stopDevices = source !== "windows" && source !== "web" ? watchStudyDevices(db, uid, value => { devices = value; refresh(); }, failed) : () => {};
     const timer = setInterval(refresh, 1000);
     return () => { stopControl(); stopDevices(); clearInterval(timer); };
-  }, [uid, getDatabase]);
+  }, [uid, getDatabase, source]);
   useEffect(() => {
     if (!open) return;
     dialog.current?.querySelector<HTMLButtonElement>("button")?.focus();

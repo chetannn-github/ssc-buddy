@@ -71,7 +71,7 @@ export function StudyLock({ uid, taskButton = false, openRequest = 0, onRequestO
   const [focusData, setFocusData] = useState<FocusDay>(emptyFocusDay);
   const date = focusDayKey(now, control?.session?.timeZone);
   useEffect(() => controller.watchStudyFocusDay(getFirebaseFirestore(), uid, date, setFocusData, () => setError("Could not load today's focus time.")), [uid, date]);
-  useEffect(() => { void controller.publishStudyFocusDay(getFirebaseFirestore(), uid, date, control?.session?.timeZone).catch(() => {}); }, [uid, date, focusData.totalMilliseconds, Math.floor(now / 60000)]);
+  useEffect(() => { void controller.publishStudyFocusDay(getFirebaseFirestore(), uid, date, control?.session?.timeZone, focusData.totalMilliseconds).catch(() => {}); }, [uid, date, focusData.totalMilliseconds]);
   const todayFocus = todayFocusMilliseconds(focusData, control?.session ?? null, now);
   const [ready, setReady] = useState(false);
   useEffect(() => {
