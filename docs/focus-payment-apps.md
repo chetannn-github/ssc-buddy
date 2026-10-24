@@ -5,6 +5,7 @@ Catalog checked against developer Play listings and payment-provider documentati
 ## Behavior
 
 - The existing overlay's Add payment app picker lists installed, launchable catalog apps, using their device labels and icons. Nothing is allowed automatically.
+- Payment selection uses a plus shortcut in the existing app icon row. The chosen app replaces that shortcut; there is no separate payment heading, count or row.
 - Maximum one payment selection, independent of the existing 0–2 regular app slots. One shared native constant controls the payment cap.
 - The same animated picker, Settings exclusions, expiry, incoming-call handling and break restrictions are reused. No new Firestore documents, reads or writes.
 - Selections are stored in local SharedPreferences for the lock ID. Restart, offline use, image updates and break/resume preserve them. They cannot be removed/replaced in an active session. A new manual lock or scheduled occurrence clears both selections.

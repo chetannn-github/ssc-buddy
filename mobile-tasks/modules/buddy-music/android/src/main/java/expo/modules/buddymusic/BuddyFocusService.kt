@@ -470,21 +470,18 @@ class BuddyFocusService : Service(), SharedPreferences.OnSharedPreferenceChangeL
       addView(text("Add app", 10f, Color.LTGRAY))
       setOnClickListener { showAppPicker() }
     }, LinearLayout.LayoutParams(0, dp(98), 1f))
-    root.addView(apps, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(16) })
     val payments = paymentApps()
-    root.addView(text("Payment apps · ${payments.size}/${FocusPaymentPolicy.LIMIT}", 11f, Color.LTGRAY))
-    val paymentRow = LinearLayout(this).apply { gravity = Gravity.CENTER; orientation = LinearLayout.HORIZONTAL }
     payments.sorted().forEach { app ->
       val name = runCatching { packageManager.getApplicationLabel(packageManager.getApplicationInfo(app, 0)).toString() }.getOrDefault("Payment app")
-      paymentRow.addView(shortcut(name, packageManager.getLaunchIntentForPackage(app), app), LinearLayout.LayoutParams(0, dp(82), 1f))
+      addShortcut(name, packageManager.getLaunchIntentForPackage(app), app)
     }
-    if (payments.size < FocusPaymentPolicy.LIMIT) paymentRow.addView(LinearLayout(this).apply {
+    if (payments.size < FocusPaymentPolicy.LIMIT) apps.addView(LinearLayout(this).apply {
       orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; isFocusable = true; contentDescription = "Add payment app"
-      addView(text("+", 30f, Color.WHITE), LinearLayout.LayoutParams(dp(40), dp(42)))
-      addView(text("Add payment app", 10f, Color.LTGRAY))
+      addView(text("+", 36f, accent), LinearLayout.LayoutParams(dp(40), dp(48)))
+      addView(text("Payment app", 10f, Color.LTGRAY).apply { maxLines = 2; setPadding(dp(2), 0, dp(2), 0) })
       setOnClickListener { showAppPicker(payments = true) }
-    }, LinearLayout.LayoutParams(0, dp(82), 1f))
-    root.addView(paymentRow, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+    }, LinearLayout.LayoutParams(0, dp(98), 1f).apply { setMargins(dp(3), 0, dp(3), 0) })
+    root.addView(apps, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(16) })
     for (index in 0 until root.childCount) (root.getChildAt(index) as? Button)?.apply {
       isAllCaps = false; textSize = 14f; setTextColor(Color.rgb(17, 17, 17))
       background = GradientDrawable().apply { setColor(Color.rgb(249, 252, 245)); cornerRadius = dp(26).toFloat() }
