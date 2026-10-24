@@ -4,8 +4,11 @@ internal object FocusAppPolicy {
   fun isSettings(target: String, settingsPackages: Set<String> = setOf("com.android.settings")) = target in settingsPackages
   fun lockActive(id: String, paused: Boolean, endsAt: Long, now: Long): Boolean =
     id.isNotBlank() && (paused || now < endsAt)
+  // Resolving a dial/contact intent is not approval for a payment app.
+  // Financial apps always require the session's explicit payment selection.
   fun blocks(target: String, now: Long, endsAt: Long, essentials: Set<String>, allowed: Set<String>, ringing: Boolean = false, settingsPackages: Set<String> = setOf("com.android.settings")): Boolean =
-    !ringing && target.isNotBlank() && now < endsAt && (isSettings(target, settingsPackages) || (target !in essentials && target !in allowed))
+    !ringing && target.isNotBlank() && now < endsAt && (isSettings(target, settingsPackages) ||
+      ((target !in essentials || target in FocusPaymentPolicy.packages) && target !in allowed))
 
   fun appLimit(value: Int) = value.coerceIn(0, 2)
   fun allow(target: String, now: Long, endsAt: Long, allowed: Set<String>, limit: Int = 2, settingsPackages: Set<String> = setOf("com.android.settings")): Set<String> =

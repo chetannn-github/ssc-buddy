@@ -70,6 +70,7 @@ class BuddyFocusService : Service(), SharedPreferences.OnSharedPreferenceChangeL
   private val essentials = mutableSetOf<String>()
   private val settingsPackages = mutableSetOf("com.android.settings")
   private val settingsGuard = FocusSettingsGuard()
+  private val overlayProtectedPackages = mutableMapOf<String, Boolean>()
   private val foregroundTracker = FocusForegroundTracker()
   private var scannedUntil = 0L
   private var lastNotificationState = ""
@@ -220,21 +221,30 @@ class BuddyFocusService : Service(), SharedPreferences.OnSharedPreferenceChangeL
     // PAUSED can precede the launcher's delayed RESUMED event. An unknown
     // foreground is not evidence that the underlying screen is allowed.
     if (FocusWindowPolicy.retainDuringTransition(overlay != null, foreground, restricted, unlocked)) return
-    // Only Settings gets an activity return: OEM Settings may suppress overlays.
-    // Other unauthorized packages keep the existing overlay-only path.
-    if (settingsGuard.shouldReturn(foreground, now, restrictionDeadline(), isRinging(), settingsPackages)) {
+    val blocked = shouldBlockForeground()
+    // Notification taps/deep links can open banking windows which hide overlays.
+    // Reuse the Settings activity fallback only for blocked sensitive packages;
+    // explicitly selected payment/study apps still open normally.
+    val needsReturn = FocusSettingsGuard.needsActivityReturn(foreground, blocked,
+      blocked && foreground !in FocusPaymentPolicy.packages && declaresOverlayProtection(foreground))
+    if (settingsGuard.shouldReturn(foreground, now, restrictionDeadline(), isRinging(), settingsPackages, needsReturn)) {
       runCatching {
         val launch = packageManager.getLaunchIntentForPackage(packageName) ?: error("Main activity unavailable")
         startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
       }.onFailure {
-        preferences.edit().putString("overlayError", "Could not return from Settings. Open SSC Buddy to resume blocking.").apply()
+        preferences.edit().putString("overlayError", "Could not return from a protected app. Open SSC Buddy to resume blocking.").apply()
       }
     }
-    val blocked = shouldBlockForeground()
     if (!blocked) { hide(); return }
     if (overlay != null) return
     if (!FocusWindowPolicy.mayShow(blocked, appSwitch, restrictionStarted)) return
     show(foreground)
+  }
+  private fun declaresOverlayProtection(target: String): Boolean = overlayProtectedPackages.getOrPut(target) {
+    Build.VERSION.SDK_INT >= 31 && runCatching {
+      packageManager.getPackageInfo(target, android.content.pm.PackageManager.GET_PERMISSIONS)
+        .requestedPermissions.orEmpty().contains("android.permission.HIDE_OVERLAY_WINDOWS")
+    }.getOrDefault(false)
   }
   private fun shouldBlockForeground() = FocusAppPolicy.blocks(foreground, System.currentTimeMillis(), restrictionDeadline(), essentials, allowedApps() + paymentApps(), isRinging(), settingsPackages)
   private fun allowedAppLimit() = FocusAppPolicy.appLimit(preferences.getInt("appLimit", 2))
