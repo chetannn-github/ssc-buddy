@@ -4,25 +4,27 @@ import { currentLeaderboardXp, type CurrentProfileXp } from "./current-leaderboa
 import { focusRewardTotal } from "./focus-rewards";
 import { rankWeeklyEntries } from "../mobile-tasks/src/domain/weekly-results";
 import type { Task } from "../mobile-tasks/src/domain/tasks";
+import { profileDataSource } from "./profile-data-source";
 
 type Entry = { uid: unknown; username?: unknown; xp?: unknown; level?: unknown; focusDays?: unknown; focusXp?: unknown };
 type Xp = { xp: number; level: number };
 
 type FirestoreReader = { collection: typeof collection; doc: typeof doc; onSnapshot: typeof onSnapshot };
 export function createUseLeaderboardXp({ collection, doc, onSnapshot }: FirestoreReader) {
+const source = profileDataSource({ collection, doc, onSnapshot });
 return function useLeaderboardXp(entries: Entry[], week: string, currentWeek: string, getDatabase: () => Firestore, viewerUid?: string, viewerTasks?: Task[]) {
   const members = JSON.stringify(entries.map(entry => [String(entry.uid), String(entry.username ?? "")]).sort((a, b) => a[0]!.localeCompare(b[0]!)));
   const [profiles, setProfiles] = useState<{ key: string; values: Record<string, CurrentProfileXp> }>({ key: "", values: {} });
   const [current, setCurrent] = useState<{ week: string; entries: Record<string, Entry> }>({ week: "", entries: {} });
   useEffect(() => {
-    if (week === currentWeek) return;
+    if (week === currentWeek || !entries.length) return;
     let active = true;
-    const stop = onSnapshot(collection(getDatabase(), "leaderboards", currentWeek, "entries"), snapshot => {
+    const stop = source.watchWeek(getDatabase(), currentWeek, snapshot => {
       const latest = rankWeeklyEntries(snapshot.docs.map(item => ({ ...item.data(), uid: item.id, week: currentWeek })));
       if (active) setCurrent({ week: currentWeek, entries: Object.fromEntries(latest.map(item => [item.uid, item])) });
     }, () => { if (active) setCurrent({ week: currentWeek, entries: {} }); });
     return () => { active = false; stop(); };
-  }, [week, currentWeek, getDatabase]);
+  }, [week, currentWeek, getDatabase, entries.length > 0]);
   useEffect(() => {
     let active = true;
     setProfiles({ key: members, values: {} });
@@ -30,7 +32,7 @@ return function useLeaderboardXp(entries: Entry[], week: string, currentWeek: st
       const update = (value: CurrentProfileXp) => {
         if (active) setProfiles(previous => ({ key: members, values: { ...(previous.key === members ? previous.values : {}), [uid!]: value } }));
       };
-      return onSnapshot(doc(getDatabase(), "publicProfiles", username!), snapshot => {
+      return source.watchDocument(getDatabase(), ["publicProfiles", username!], snapshot => {
         const profile = snapshot.data();
         const owned = profile?.["uid"] === uid;
         update({ tasks: owned && Array.isArray(profile?.["dashboard"]?.dailyTasks) ? profile["dashboard"].dailyTasks : null,

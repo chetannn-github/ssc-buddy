@@ -1,4 +1,5 @@
 import { initializeApp } from "firebase/app";
+import { profileDataSource } from "../../../shared/profile-data-source";
 import { rankWeeklyEntries, resolveWeeklyResults } from "../../../mobile-tasks/src/domain/weekly-results";
 import { appendRecallQuestionSnapshots, type RecallQuestionInput } from "../../../mobile-tasks/src/domain/quick-recall-solutions";
 import {
@@ -182,7 +183,7 @@ export function watchLeaderboardRank(user: User, callback: (rank: number | null)
 }
 
 export function watchWeeklyLeaderboard(callback: (entries: Record<string, unknown>[]) => void, week = currentWeekKey()): Unsubscribe {
-  return onSnapshot(collection(db!, "leaderboards", week, "entries"), (snapshot) => {
+  return profileDataSource({ collection, doc, onSnapshot }).watchWeek(db!, week, (snapshot) => {
     callback(resolveWeeklyResults(snapshot.docs.map((entry) => ({ ...entry.data(), uid: entry.id })), week));
   }, () => callback([]));
 }

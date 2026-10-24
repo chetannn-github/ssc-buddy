@@ -42,7 +42,8 @@ function WeeklyStats() {
   const currentWeek = useLeaderboardWeek();
   const week = Route.useSearch().week ?? currentWeek;
   const user = useAuthUser();
-  const xpByUser = useLeaderboardXp(entries, week, currentWeek, getFirebaseFirestore, user?.uid, loadDailyTasks());
+  const xpEntry = entries.find((item) => item.username.toLowerCase() === username.toLowerCase());
+  const xpByUser = useLeaderboardXp(xpEntry ? [xpEntry] : [], week, currentWeek, getFirebaseFirestore, user?.uid, loadDailyTasks());
   useEffect(() => { setLoading(true); return watchLeaderboard(week, (next) => { setEntries(next); setLoading(false); }); }, [week, currentWeek]);
   const entry = entries.find((item) => item.username.toLowerCase() === username.toLowerCase());
   const tasks = useMemo(() => entry?.leaderboardTasks ?? (entry?.completedTasks ?? []).map((task) => ({ ...task, completed: true, date: week === currentWeek ? todayKey() : week, points: 10 })), [entry, week, currentWeek]);

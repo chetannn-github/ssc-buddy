@@ -304,7 +304,7 @@ function LeaderboardPanel({ rows, currentUserId, viewerTasks, week, currentWeek,
   const selected = rows.find((row) => row.uid === selectedEntry?.uid) ?? selectedEntry;
   const [selectedDate, setSelectedDate] = useState(todayKey());
   useEffect(() => { setSelected(null); setSelectedDate(week === currentWeek ? todayKey() : ALL_LEADERBOARD_DAYS); }, [week, currentWeek]);
-  const xpByUser = useLeaderboardXp(rows.map(row => ({ ...row, uid: String(row.uid ?? "") })), week, currentWeek, getFirebaseFirestore, currentUserId, viewerTasks);
+  const xpByUser = useLeaderboardXp((selected ? [selected] : rows).map(row => ({ ...row, uid: String(row.uid ?? "") })), week, currentWeek, getFirebaseFirestore, currentUserId, viewerTasks);
   const weekControls = <div className="leaderboard-week-controls"><button type="button" aria-label="Previous week" onClick={() => onWeekChange(shiftLeaderboardWeek(week, -1))}>‹</button><div><strong>{week === currentWeek ? "This week · Live" : "Weekly results"}</strong><small>{leaderboardWeekLabel(week)}</small>{week !== currentWeek && <button type="button" onClick={() => onWeekChange(currentWeek)}>Back to this week</button>}</div><button type="button" aria-label="Next week" disabled={week >= currentWeek} onClick={() => onWeekChange(shiftLeaderboardWeek(week, 1))}>›</button></div>;
   const position = selected ? rows.findIndex((row) => row.uid === selected.uid) + 1 : 0;
   const displayName = (row: Record<string, unknown>) => String(row.uid ?? "") === currentUserId ? "You" : String(row.name ?? "Student");

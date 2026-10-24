@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { AppState } from "react-native";
-import { collection, onSnapshot } from "firebase/firestore";
+import { collection, doc, getDocs, onSnapshot } from "firebase/firestore";
+import { profileDataSource } from "../../../shared/profile-data-source";
+import { loadMedalHistory } from "../../../shared/load-medal-history";
 import { getFirebaseFirestore } from "../lib/firebase";
 import { completedLeaderboardWeeks, countWeeklyMedals, leaderboardWeek, shiftLeaderboardWeek, weeklyAward, type WeeklyAward } from "../domain/weekly-results";
 
@@ -22,7 +24,7 @@ export function usePreviousWeeklyAward(uid?: string) {
   useEffect(() => {
     setResult({ uid: uid ?? "", award: null });
     if (!uid) return;
-    return onSnapshot(collection(getFirebaseFirestore(), "leaderboards", week, "entries"), (snapshot) => {
+    return profileDataSource({ collection, doc, onSnapshot }).watchWeek(getFirebaseFirestore(), week, (snapshot) => {
       const entries = snapshot.docs.map((doc) => ({ ...doc.data(), uid: doc.id }));
       setResult({ uid, award: weeklyAward(entries, uid, week) });
     }, () => setResult({ uid, award: null }));
@@ -31,19 +33,25 @@ export function usePreviousWeeklyAward(uid?: string) {
 }
 
 export function useWeeklyMedalCounts(uid: string | undefined, dates: string[]) {
+  const [refresh, setRefresh] = useState(0);
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", state => { if (state === "active") setRefresh(value => value + 1); });
+    return () => subscription.remove();
+  }, []);
   const current = useLeaderboardWeek();
   const first = completedLeaderboardWeeks(dates, current)[0]!;
   const scope = `${uid ?? ""}:${first}:${current}`;
   const [result, setResult] = useState<{ scope: string; awards: Record<string, WeeklyAward | null> }>({ scope: "", awards: {} });
   useEffect(() => {
-    setResult({ scope, awards: {} });
+    setResult(previous => previous.scope === scope ? previous : { scope, awards: {} });
     if (!uid) return;
     let active = true;
-    const stops = completedLeaderboardWeeks([first], current).map((week) => onSnapshot(collection(getFirebaseFirestore(), "leaderboards", week, "entries"), (snapshot) => {
-      const entries = snapshot.docs.map((doc) => ({ ...doc.data(), uid: doc.id }));
-      if (active) setResult((previous) => ({ scope, awards: { ...previous.awards, [week]: weeklyAward(entries, uid, week) } }));
-    }, () => { if (active) setResult((previous) => ({ scope, awards: { ...previous.awards, [week]: null } })); }));
-    return () => { active = false; stops.forEach((stop) => stop()); };
-  }, [uid, first, current, scope]);
+    const database = getFirebaseFirestore();
+    void loadMedalHistory(completedLeaderboardWeeks([first], current),
+      week => profileDataSource({ collection, doc, onSnapshot }).readWeek(database, week, getDocs, uid),
+      (week, snapshot) => setResult(previous => ({ scope, awards: { ...(previous.scope === scope ? previous.awards : {}), [week]: weeklyAward(snapshot.docs.map(item => ({ ...item.data(), uid: item.id })), uid, week) } })),
+      () => active);
+    return () => { active = false; };
+  }, [uid, first, current, scope, refresh]);
   return countWeeklyMedals(result.scope === scope ? Object.values(result.awards) : []);
 }

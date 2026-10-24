@@ -5,6 +5,7 @@ import type { DailyTask } from "@/lib/daily-tasks";
 import type { PracticeProfile } from "@/lib/profile";
 import { getXpSummary } from "@/lib/xp";
 import { leaderboardWeek, resolveWeeklyResults } from "../../mobile-tasks/src/domain/weekly-results";
+import { profileDataSource } from "../../shared/profile-data-source";
 
 export type LeaderboardTask = { name: string; subject?: string; type?: string; minutesSpent?: number; completed: boolean; date: string; points: number };
 export type LeaderboardEntry = { uid: string; username: string; name: string; avatar?: string; points: number; xp?: number; level?: number; completed: number; overdue: number; inactiveDays: number; inactiveDates?: string[]; studyMinutes: number; week: string; focusDays?: Record<string, number>; focusXp?: number; focusMilliseconds?: number; focusPoints?: number; leaderboardTasks?: LeaderboardTask[]; completedTasks?: Array<{ name: string; subject?: string }> };
@@ -44,5 +45,5 @@ export async function publishLeaderboardEntry(user: User, profile: PracticeProfi
   await setDoc(doc(getFirebaseFirestore(), "leaderboards", week, "entries", user.uid), { uid: user.uid, username: profile.username, name: profile.name, ...(profile.avatar ? { avatar: profile.avatar } : {}), week, xp, level, ...score, leaderboardTasks, updatedAt: serverTimestamp() }, { merge: true });
 }
 export function watchLeaderboard(week: string, callback: (entries: LeaderboardEntry[]) => void): Unsubscribe {
-  return onSnapshot(collection(getFirebaseFirestore(), "leaderboards", week, "entries"), (snapshot) => callback(resolveWeeklyResults(snapshot.docs.map((item) => ({ ...item.data(), uid: item.id }) as LeaderboardEntry), week)), () => callback([]));
+  return profileDataSource({ collection, doc, onSnapshot }).watchWeek(getFirebaseFirestore(), week, (snapshot) => callback(resolveWeeklyResults(snapshot.docs.map((item) => ({ ...item.data(), uid: item.id }) as LeaderboardEntry), week)), () => callback([]));
 }
