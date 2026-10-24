@@ -1,4 +1,5 @@
 import { canReopenDailyWidgetTask } from "../domain/daily-task-widget";
+import { hasActiveTrackerSource, hasConfirmedTracker, watchTrackerSource } from "../domain/tracker-live-source";
 import { mergeQuestionDeletions } from "../domain/question-deletion";
 import { appendRecallQuestionSnapshots, type RecallQuestionInput } from "../domain/quick-recall-solutions";
 import { createInFlightLoader, createOrderedPublisher, learningPatchUnchanged, mergePatchUnchanged } from "../domain/practice-sync-policy";
@@ -432,7 +433,8 @@ export function watchPracticeSettings(user: User, callback: (value: Record<strin
 
 const trackerCollection = (user: User) => collection(getFirebaseFirestore(), "users", user.uid, "tracker");
 export async function migrateTrackerSections(user: User, sections: Record<string, unknown>) {
-  const remote = await getDocs(trackerCollection(user));
+  if (hasConfirmedTracker(getFirebaseFirestore(), user.uid)) return;
+  const remote = await getDocs(query(trackerCollection(user), limit(1)));
   if (remote.size) return;
   const batch = writeBatch(getFirebaseFirestore());
   Object.entries(sections).forEach(([key, value]) => batch.set(doc(trackerCollection(user), key), { value }));
@@ -442,7 +444,16 @@ export async function syncTrackerSections(user: User, before: Record<string, unk
   await Promise.all(Object.keys(next).filter((key) => JSON.stringify(before[key]) !== JSON.stringify(next[key])).map((key) => setDoc(doc(trackerCollection(user), key), { value: next[key] }, { merge: true })));
 }
 export function watchTrackerSections(user: User, callback: (sections: Record<string, unknown>) => void) {
-  return onSnapshot(trackerCollection(user), (snapshot) => callback(Object.fromEntries(snapshot.docs.map((item) => [item.id, item.data().value]))));
+  let previous: string | undefined;
+  return watchTrackerSource(getFirebaseFirestore(), user.uid,
+    (value, error) => onSnapshot(trackerCollection(user), { includeMetadataChanges: true }, value, error),
+    (snapshot) => {
+      const sections = Object.fromEntries(snapshot.docs.map((item) => [item.id, item.data().value]));
+      const signature = JSON.stringify(sections);
+      if (signature === previous) return;
+      previous = signature;
+      callback(sections);
+    });
 }
 
 /** Canonical web tracker test-log API: users/{uid}/tracker/tests.value.log. */
@@ -454,10 +465,20 @@ const normaliseTrackerTest = (value: unknown): TrackerTestLog | null => {
   return { id: String(test.id), date: String(test.date), createdAt: String(test.createdAt ?? test.date), subjectId: String(test.subjectId ?? ""), type: String(test.type ?? ""), score: test.score == null ? null : Number(test.score), total: test.total == null ? null : Number(test.total), accuracy: test.accuracy == null ? null : Number(test.accuracy), notes: String(test.notes ?? "") };
 };
 export function watchTrackerTests(user: User, callback: (tests: TrackerTestLog[]) => void) {
-  return onSnapshot(trackerTestsDoc(user), (snapshot) => {
-    const raw = snapshot.data()?.value as { log?: unknown[] } | undefined;
-    callback((Array.isArray(raw?.log) ? raw.log : []).map(normaliseTrackerTest).filter((item): item is TrackerTestLog => item !== null));
-  });
+  let previous: string | undefined;
+  const apply = (raw: { log?: unknown[] } | undefined) => {
+    const tests = (Array.isArray(raw?.log) ? raw.log : []).map(normaliseTrackerTest).filter((item): item is TrackerTestLog => item !== null);
+    const signature = JSON.stringify(tests);
+    if (signature === previous) return;
+    previous = signature;
+    callback(tests);
+  };
+  // Root registers the collection first. Standalone test-only consumers retain
+  // their one-document target instead of loading an entire tracker.
+  if (!hasActiveTrackerSource(getFirebaseFirestore(), user.uid)) {
+    return onSnapshot(trackerTestsDoc(user), snapshot => apply(snapshot.data()?.value));
+  }
+  return watchTrackerSections(user, sections => apply(sections.tests as { log?: unknown[] } | undefined));
 }
 export async function appendTrackerTest(user: User, test: TrackerTestLog, subjectName?: string) {
   const reference = trackerTestsDoc(user); const current = (await getDoc(reference)).data()?.value as Record<string, unknown> | undefined;

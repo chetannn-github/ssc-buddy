@@ -1,4 +1,4 @@
-import { collection, doc, getDocs, onSnapshot, setDoc, writeBatch } from "firebase/firestore";
+import { collection, doc, getDocs, limit, onSnapshot, query, setDoc, writeBatch, type QuerySnapshot, type DocumentData } from "firebase/firestore";
 import type { User } from "firebase/auth";
 import { getFirebaseFirestore } from "@/lib/firebase-sync";
 import { defaultData, type TrackerData } from "@/lib/tracker";
@@ -13,8 +13,12 @@ const collectionFor = (user: User) => collection(getFirebaseFirestore(), "users"
 const equal = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right);
 
 export async function migrateTrackerIfEmpty(user: User, data: TrackerData) {
-  const current = await getDocs(collectionFor(user));
+  const current = await getDocs(query(collectionFor(user), limit(1)));
   if (current.size) return;
+  await writeInitialSections(user, data);
+}
+
+async function writeInitialSections(user: User, data: TrackerData) {
   const batch = writeBatch(getFirebaseFirestore());
   sections.forEach((section) => batch.set(doc(collectionFor(user), section), { value: sectionValue(data, section) }));
   await batch.commit();
@@ -28,9 +32,23 @@ export async function syncTrackerSections(user: User, before: TrackerData, next:
   ));
 }
 
-/** One-time Firestore read used during page load; no live subscription is kept open. */
+/** One-time read; root separately keeps the live listener below. */
 export async function readTrackerSections(user: User): Promise<TrackerData> {
   const snapshot = await getDocs(collectionFor(user));
+  return trackerFromSnapshot(snapshot);
+}
+
+/** Reuse the existence read as hydration for an initialized remote tracker. */
+export async function initializeTrackerSections(user: User, local: TrackerData): Promise<TrackerData> {
+  const snapshot = await getDocs(collectionFor(user));
+  if (snapshot.size) return trackerFromSnapshot(snapshot);
+  // Preserve first-use migration and a fresh post-migration read, including
+  // partial legacy data and any concurrent remote additions.
+  await writeInitialSections(user, local);
+  return readTrackerSections(user);
+}
+
+function trackerFromSnapshot(snapshot: QuerySnapshot<DocumentData>): TrackerData {
   const values = Object.fromEntries(snapshot.docs.map((item) => [item.id, item.data()["value"]])) as Partial<Record<Section, unknown>>;
   const base = defaultData();
   return {
@@ -44,19 +62,9 @@ export async function readTrackerSections(user: User): Promise<TrackerData> {
   };
 }
 
-/** @deprecated Kept for the tracker package API; it now hydrates once only. */
+/** Live root tracker synchronization. */
 export function watchTrackerSections(user: User, callback: (data: TrackerData) => void) {
   return onSnapshot(collectionFor(user), (snapshot) => {
-    const values = Object.fromEntries(snapshot.docs.map((item) => [item.id, item.data()["value"]])) as Partial<Record<Section, unknown>>;
-    const base = defaultData();
-    callback({
-      ...base,
-      ...(values.meta && typeof values.meta === "object" ? { meta: { ...base.meta, ...(values.meta as TrackerData["meta"]) } } : {}),
-      ...(Array.isArray(values.subjects) ? { subjects: values.subjects as TrackerData["subjects"] } : {}),
-      ...(values.revision && typeof values.revision === "object" ? { revision: values.revision as TrackerData["revision"] } : {}),
-      ...(values.tests && typeof values.tests === "object" ? { tests: values.tests as TrackerData["tests"] } : {}),
-      ...(Array.isArray(values.activity) ? { activity: values.activity as TrackerData["activity"] } : {}),
-      ...(Array.isArray(values.pinned) ? { pinnedChapterIds: values.pinned as string[] } : {}),
-    });
+    callback(trackerFromSnapshot(snapshot));
   });
 }

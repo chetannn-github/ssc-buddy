@@ -1,13 +1,13 @@
 # Focus and Tasks/Habits DB integration
 
-Date: 2026-10-24. Branch: `codex/focus-tasks-habits-db-integration`.
+Date: 2026-10-24. Branch: `codex/combined-db-optimizations` (originally `codex/focus-tasks-habits-db-integration`).
 
 Combined branches:
 
 - `codex/tasks-habits-db-audit` at `b4565b5`, based on main `eb96ec5`.
 - `codex/focus-db-load` at `088f67d`, with separately synchronized UI history.
 
-This is a normal merge on a new integration branch, without rewriting either source branch or main. Practice was subsequently added as described below. Syllabus and Profile/Leaderboard optimization branches are not included.
+This is a normal merge on a new integration branch, without rewriting either source branch or main. Practice and Syllabus were subsequently added as described below. The Profile/Leaderboard optimization branch is not included.
 
 ## Conflict resolution
 
@@ -40,3 +40,13 @@ Final verification for the three-feature combination:
 - Web, Android and Windows TypeScript checks pass. Web production, Windows frontend and Android Metro export pass. Extension runtime sources were unchanged by this second merge; its tests pass in the combined suite and its previous integration bundle verification remains applicable.
 
 No native-device/production-billing test was performed. This additional merge is local until separately pushed on user request. No Syllabus or Profile/Leaderboard branch has been merged.
+
+## Syllabus Tracker integration
+
+After the Practice merge was committed/pushed as `43ac401`, the user renamed the local/remote integration branch to `codex/combined-db-optimizations`. Subsequently merged `codex/syllabus-db-audit` at `f593bf4` into the renamed branch with a normal merge. No merge conflicts occurred; Git combined the Tracker-specific Android Firebase edits with the existing Task/Habit/Practice helpers. All branches' shared-live-source files were identical, so a single helper remains.
+
+The resulting branch contains Focus, Tasks/Habits, Practice/Quick Recall and Syllabus optimizations. Profile/Leaderboard-specific optimizations have not been merged. Main and all individual source branches remain unchanged.
+
+Verification for this four-feature combination: 296 automated tests pass, including the full prior combined suite and Tracker initialization/source/isolation/fallback diagnostics. Five browser regression scripts cover native chapter drag/reorder, Mock Analysis filters, seven-hour Focus lifecycle, historical weekly-board current live XP, and Practice history/results/viewer/solutions. Web and Android TypeScript checks and web production/Android Metro builds pass. Windows/extension runtime files are unchanged by the Syllabus merge; their previous integration build checks remain applicable, and their tests run in the combined suite. Device timing and production billing remain unmeasured.
+
+This Syllabus merge is committed locally until the user separately requests a push.
