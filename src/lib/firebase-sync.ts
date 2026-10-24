@@ -1,5 +1,7 @@
 import { initializeApp, type FirebaseApp } from "firebase/app";
 import { appendRecallQuestionSnapshots, type RecallQuestionInput } from "../../mobile-tasks/src/domain/quick-recall-solutions";
+import { createInFlightLoader, createOrderedPublisher, learningPatchUnchanged, mergePatchUnchanged } from "../../mobile-tasks/src/domain/practice-sync-policy";
+import { practiceSnapshots, type PracticeCollectionSnapshot } from "../../mobile-tasks/src/domain/practice-live-source";
 import {
   getAuth,
   onAuthStateChanged,
@@ -109,7 +111,8 @@ export async function writeQuestionLearning(user: User, value: Record<string, un
         lastOutcome: localIsNewer ? local["lastOutcome"] : cloud["lastOutcome"],
       };
     });
-    transaction.set(reference, { ...remote, ...value, stats, updatedAt: serverTimestamp() }, { merge: true });
+    if (!learningPatchUnchanged(remote, value, stats))
+      transaction.set(reference, { ...remote, ...value, stats, updatedAt: serverTimestamp() }, { merge: true });
   });
 }
 
@@ -121,7 +124,11 @@ export type QuickRecallSeed = {
 };
 
 /** Uses the exact seed sources used by the Windows and Android Quick Recall widgets. */
-export async function loadQuickRecallSeed(user: User): Promise<QuickRecallSeed> {
+const seedLoads = createInFlightLoader<Awaited<ReturnType<typeof readQuickRecallSeed>>>();
+export function loadQuickRecallSeed(user: User) {
+  return seedLoads(user.uid, () => readQuickRecallSeed(user));
+}
+async function readQuickRecallSeed(user: User): Promise<QuickRecallSeed> {
   const database = getFirebaseFirestore();
   const [subjects, attempts, favourites, learning] = await Promise.all([
     getDocs(collection(database, "users", user.uid, "practiceSubjects")),
@@ -145,6 +152,10 @@ export async function loadQuickRecallSeed(user: User): Promise<QuickRecallSeed> 
  */
 export function watchQuickRecallSeed(user: User, callback: (seed: QuickRecallSeed) => void): Unsubscribe {
   const database = getFirebaseFirestore();
+  const watchCollection = (name: string, callback: (snapshot: PracticeCollectionSnapshot) => void) =>
+    practiceSnapshots(database, JSON.stringify([user.uid, name]),
+      (next, error) => onSnapshot(collection(database, "users", user.uid, name), { includeMetadataChanges: name === "practiceSubjects" }, next, error),
+      callback, () => console.warn("Could not load recall data."));
   let subjects: Array<Record<string, unknown>> = [];
   let attempts: Array<Record<string, unknown>> = [];
   let favouriteQuestionIds: string[] = [];
@@ -158,15 +169,15 @@ export function watchQuickRecallSeed(user: User, callback: (seed: QuickRecallSee
       callback({ subjects, attempts, favouriteQuestionIds, learningStats });
     });
   };
-  const stopSubjects = onSnapshot(collection(database, "users", user.uid, "practiceSubjects"), (snapshot) => {
+  const stopSubjects = watchCollection("practiceSubjects", (snapshot) => {
     subjects = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
     emit();
   });
-  const stopAttempts = onSnapshot(collection(database, "users", user.uid, "practiceAttempts"), (snapshot) => {
+  const stopAttempts = watchCollection("practiceAttempts", (snapshot) => {
     attempts = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
     emit();
   });
-  const stopFavourites = onSnapshot(collection(database, "users", user.uid, "practiceFavourites"), (snapshot) => {
+  const stopFavourites = watchCollection("practiceFavourites", (snapshot) => {
     favouriteQuestionIds = snapshot.docs.map((item) => String(item.data()["id"] ?? item.id));
     emit();
   });
@@ -473,6 +484,7 @@ export async function readPublicProfile(value: string): Promise<PublicProfile | 
 }
 
 /** Publishes only daily activity totals needed for a public heatmap. */
+const publicActivitySaves = createOrderedPublisher();
 export async function savePublicProfileActivity(
   user: User,
   profile: Record<string, unknown>,
@@ -489,11 +501,21 @@ export async function savePublicProfileActivity(
     ),
   );
   const { db: dbValue } = services();
-  await setDoc(
-    publicProfileDoc(dbValue, username),
-    { ...publicProfileFields(user, username, profile), activity: sanitizedActivity, dashboard, updatedAt: serverTimestamp() },
-    { merge: true },
-  );
+  const reference = publicProfileDoc(dbValue, username);
+  const payload = { ...publicProfileFields(user, username, profile), activity: sanitizedActivity, dashboard };
+  return publicActivitySaves(JSON.stringify([user.uid, username]), JSON.stringify(payload), async () => {
+    try {
+      await runTransaction(dbValue, async transaction => {
+        const current = await transaction.get(reference);
+        if (!mergePatchUnchanged(current.data() ?? {}, payload))
+          transaction.set(reference, { ...payload, updatedAt: serverTimestamp() }, { merge: true });
+      });
+    } catch {
+      // Transactions cannot queue offline. Retain the original setDoc delivery
+      // path on failure, so an offline update can still be replayed by the SDK.
+      await setDoc(reference, { ...payload, updatedAt: serverTimestamp() }, { merge: true });
+    }
+  });
 }
 
 export async function checkUsernameAvailability(user: User, value: string) {

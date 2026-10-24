@@ -1,6 +1,7 @@
 import { initializeApp } from "firebase/app";
 import { rankWeeklyEntries, resolveWeeklyResults } from "../../../mobile-tasks/src/domain/weekly-results";
 import { appendRecallQuestionSnapshots, type RecallQuestionInput } from "../../../mobile-tasks/src/domain/quick-recall-solutions";
+import { createInFlightLoader } from "../../../mobile-tasks/src/domain/practice-sync-policy";
 import {
   GoogleAuthProvider,
   createUserWithEmailAndPassword,
@@ -213,7 +214,11 @@ export function watchStreakActivity(user: User, callback: (dates: string[]) => v
 }
 
 /** Reads the existing practice collections without creating any widget-only data. */
-export async function loadQuickRecallSeed(user: User): Promise<QuickRecallSeed> {
+const seedLoads = createInFlightLoader<Awaited<ReturnType<typeof readQuickRecallSeed>>>();
+export function loadQuickRecallSeed(user: User) {
+  return seedLoads(user.uid, () => readQuickRecallSeed(user));
+}
+async function readQuickRecallSeed(user: User): Promise<QuickRecallSeed> {
   const [subjects, attempts, favourites, learning] = await Promise.all([
     getDocs(collection(db!, "users", user.uid, "practiceSubjects")),
     getDocs(collection(db!, "users", user.uid, "practiceAttempts")),

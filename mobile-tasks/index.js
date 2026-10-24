@@ -26,7 +26,7 @@ if (supportsAndroidWidgets) {
   const { loadProfile } = require("./src/lib/profile-store");
   const { dateKey } = require("./src/domain/tasks");
   const { renderQuickRecallWidget } = require("./src/widgets/QuickRecallWidget");
-  const { answerUnlockQuiz, advanceUnlockQuiz, getUnlockQuiz, releaseUnlockQuizReview, startUnlockQuiz } = require("./src/domain/unlock-quiz");
+  const { answerUnlockQuiz, advanceUnlockQuiz, getUnlockQuiz, loadUnlockQuiz, releaseUnlockQuizReview, startUnlockQuiz } = require("./src/domain/unlock-quiz");
   const { getFirebaseAuth, publishLeaderboardAfterWidgetTask, recordQuickRecallPractice, toggleTaskFromWidget, writeQuestionLearning } = require("./src/lib/firebase");
   const { onAuthStateChanged } = require("firebase/auth");
   const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -38,10 +38,16 @@ if (supportsAndroidWidgets) {
     const deadline = Number(quiz?.lockedUntil) || 0;
     while (deadline > Date.now()) {
       await wait(Math.min(1000, deadline - Date.now()));
-      // Once the correction window ends, unlock the manual Next button.
-      const latest = Date.now() >= deadline
-        ? await releaseUnlockQuizReview()
-        : await getUnlockQuiz();
+      // The countdown only needs local state. Cloud deletion checks still run
+      // at the next widget interaction, before answering/advancing.
+      let latest = await loadUnlockQuiz();
+      if (!latest || latest.runId !== quiz.runId || latest.index !== quiz.index) return;
+      if (latest.status !== "correction" || latest.lockedUntil !== deadline) {
+        if (latest.status === "review") renderWidget(renderQuickRecallWidget(latest));
+        return;
+      }
+      if (Date.now() >= deadline) latest = await releaseUnlockQuizReview();
+      if (!latest || latest.runId !== quiz.runId || latest.index !== quiz.index) return;
       renderWidget(renderQuickRecallWidget(latest));
     }
   };
@@ -138,7 +144,9 @@ if (supportsAndroidWidgets) {
         .catch(() => undefined);
       return;
     }
-    let quiz = await getUnlockQuiz();
+    if (widgetAction === "WIDGET_DELETED") return;
+    const newRecall = widgetAction === "WIDGET_CLICK" && clickAction === "QUIZ_NEW_SESSION";
+    let quiz = newRecall ? await startUnlockQuiz() : await getUnlockQuiz();
     let answered = false;
     let answeredQuestion = null;
     let answeredChoice = null;
@@ -153,12 +161,8 @@ if (supportsAndroidWidgets) {
         quiz = await answerUnlockQuiz(choice);
         answered = Boolean(quiz);
       }
-    } else if (widgetAction === "WIDGET_CLICK" && clickAction === "QUIZ_NEW_SESSION") {
-      quiz = await startUnlockQuiz();
     } else if (widgetAction === "WIDGET_CLICK" && clickAction === "QUIZ_NEXT") {
       quiz = await advanceUnlockQuiz();
-    } else {
-      quiz = await getUnlockQuiz();
     }
     // Render the answer/result first. Cloud work must never block feedback on
     // the home-screen widget, especially while Firebase restores auth.

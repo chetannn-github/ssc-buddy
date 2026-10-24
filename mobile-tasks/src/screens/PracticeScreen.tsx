@@ -345,9 +345,11 @@ export function PracticeScreen({ user, onOpenQuickRecall, focusLocked = false }:
       ]);
       if (stopped) return;
       const settings = await readPracticeSettings(user);
+      if (stopped) return;
       if (!settings?.marking || !Number.isFinite(Number((settings.marking as any)?.positive)) || !Number.isFinite(Number((settings.marking as any)?.negative))) {
         await patchPracticeSettings(user, { marking: bankRef.current.marking });
       }
+      if (stopped) return;
       stops.push(
         watchPracticeEntities(user, "practiceSubjects", (items) => {
           const subjects = items.map((item) => mergeQuestionDeletions(item as any, bankRef.current.subjects.find((local) => local.id === item.id)));

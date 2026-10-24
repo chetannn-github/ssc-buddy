@@ -1,5 +1,6 @@
 import { mergeQuestionDeletions } from "../../mobile-tasks/src/domain/question-deletion";
-import { collection, deleteDoc, doc, getDocs, onSnapshot, runTransaction, setDoc, type Unsubscribe, writeBatch } from "firebase/firestore";
+import { practiceSnapshots, type PracticeCollectionSnapshot } from "../../mobile-tasks/src/domain/practice-live-source";
+import { collection, deleteDoc, doc, getDoc, getDocs, limit, onSnapshot, query, runTransaction, setDoc, type Unsubscribe, writeBatch } from "firebase/firestore";
 import type { User } from "firebase/auth";
 import { getFirebaseFirestore } from "@/lib/firebase-sync";
 import { loadFavoriteQuestionIds, loadHistory, loadMarking, loadSubjects, onPracticePersist, saveFavoriteQuestionIds, saveHistory, saveMarking, saveSubjects, type MarkingScheme, type Subject, type TestRecord } from "@/lib/exam";
@@ -7,14 +8,18 @@ import { loadFavoriteQuestionIds, loadHistory, loadMarking, loadSubjects, onPrac
 type Item = { id: string };
 const equal = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 const docsFor = (user: User, name: string) => collection(getFirebaseFirestore(), "users", user.uid, name);
-// Full question-bank documents are intentionally cached only after a Practice
-// screen asks for them. This gives the global writer a lightweight baseline
-// without parsing that bank on unrelated routes.
+function watchCollection(user: User, name: string, callback: (snapshot: PracticeCollectionSnapshot) => void) {
+  return practiceSnapshots(getFirebaseFirestore(), JSON.stringify([user.uid, name]),
+    (next, error) => onSnapshot(docsFor(user, name), { includeMetadataChanges: name === "practiceSubjects" }, next, error),
+    callback, () => console.warn("Could not load practice data."));
+}
+// Account-scoped baselines let the global writer diff changed subjects.
 const subjectBaselines = new Map<string, Subject[]>();
 
 async function migrateCollection<T extends Item>(user: User, name: string, items: T[]) {
-  const remote = await getDocs(docsFor(user, name));
-  if (remote.size || !items.length) return;
+  if (!items.length) return;
+  const remote = await getDocs(query(docsFor(user, name), limit(1)));
+  if (remote.size) return;
   const batch = writeBatch(getFirebaseFirestore());
   items.forEach((item) => batch.set(doc(docsFor(user, name), item.id), item));
   await batch.commit();
@@ -36,13 +41,11 @@ async function syncCollection<T extends Item>(user: User, name: string, before: 
 }
 
 /**
- * Hydrates practice data once on browser load, then keeps local CRUD writes in
- * sync. We intentionally do not keep Firestore snapshot listeners open on the
- * website: a large question bank can otherwise repeatedly serialize on the
- * main thread and freeze unrelated routes.
+ * Hydrates practice data on browser load, then retains live synchronization and
+ * document-level CRUD. Startup migration checks are bounded existence queries.
  */
 type PracticeSyncOptions = {
-  /** Question-bank documents can be very large; only hydrate them on a Practice route. */
+  /** Include the bank in hydration/live sync. The root currently enables this. */
   includeSubjects?: boolean;
 };
 
@@ -73,17 +76,14 @@ export async function startPracticeSync(
     migrateCollection(user, "practiceFavourites", localFavourites),
   ]);
   const settingsRef = doc(getFirebaseFirestore(), "users", user.uid, "practiceSettings", "current");
-  const settings = await getDocs(collection(getFirebaseFirestore(), "users", user.uid, "practiceSettings"));
-  if (!settings.size && loadMarking()) await setDoc(settingsRef, { marking: loadMarking() });
+  const settings = await getDoc(settingsRef);
+  if (!settings.exists() && loadMarking()) await setDoc(settingsRef, { marking: loadMarking() });
 
-  // The website deliberately reads cloud data once per refresh. Keeping four
-  // snapshot streams plus a reconciliation interval alive made navigation and
-  // profile saves repeatedly re-enter the synchronisation loop.
-  const [remoteSubjects, remoteAttempts, remoteFavourites, settingsSnapshot] = await Promise.all([
+  // Reuse the settings read above; subsequent edits arrive through its listener.
+  const [remoteSubjects, remoteAttempts, remoteFavourites] = await Promise.all([
     includeSubjects ? getDocs(docsFor(user, "practiceSubjects")) : Promise.resolve(null),
     getDocs(docsFor(user, "practiceAttempts")),
     getDocs(docsFor(user, "practiceFavourites")),
-    getDocs(collection(getFirebaseFirestore(), "users", user.uid, "practiceSettings")),
   ]);
   let subjects = remoteSubjects?.size
     ? remoteSubjects.docs.map((item) => mergeQuestionDeletions({ ...item.data(), id: item.id } as Subject, localSubjects.find((local) => local.id === item.id)))
@@ -94,7 +94,7 @@ export async function startPracticeSync(
   let favourites = remoteFavourites.size
     ? remoteFavourites.docs.map((item) => ({ id: item.id }))
     : localFavourites;
-  let marking = settingsSnapshot.docs.find((item) => item.id === "current")?.data()["marking"] as MarkingScheme | undefined ?? loadMarking();
+  let marking = settings.data()?.["marking"] as MarkingScheme | undefined ?? loadMarking();
   if (remoteSubjects?.size) {
     subjectBaselines.set(user.uid, subjects);
     saveSubjects(subjects, { notify: false });
@@ -153,7 +153,7 @@ export async function startPracticeSync(
     }
   };
   if (includeSubjects) {
-    stopLiveListeners.push(onSnapshot(docsFor(user, "practiceSubjects"), { includeMetadataChanges: true }, (snapshot) => {
+    stopLiveListeners.push(watchCollection(user, "practiceSubjects", (snapshot) => {
       const local = loadSubjects();
       const next = snapshot.docs.map((item) => mergeQuestionDeletions({ ...item.data(), id: item.id } as Subject, local.find((subject) => subject.id === item.id)));
       const remote = snapshot.docs.map((item) => ({ ...item.data(), id: item.id }) as Subject);
@@ -168,7 +168,7 @@ export async function startPracticeSync(
       });
     }));
   }
-  stopLiveListeners.push(onSnapshot(docsFor(user, "practiceAttempts"), (snapshot) => {
+  stopLiveListeners.push(watchCollection(user, "practiceAttempts", (snapshot) => {
     const next = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as TestRecord);
     if (equal(attempts, next)) return;
     applyRemote(() => {
@@ -176,7 +176,7 @@ export async function startPracticeSync(
       saveHistory(next);
     });
   }));
-  stopLiveListeners.push(onSnapshot(docsFor(user, "practiceFavourites"), (snapshot) => {
+  stopLiveListeners.push(watchCollection(user, "practiceFavourites", (snapshot) => {
     const next = snapshot.docs.map((item) => ({ id: item.id }));
     if (equal(favourites, next)) return;
     applyRemote(() => {
