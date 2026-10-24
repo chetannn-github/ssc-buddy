@@ -1,13 +1,16 @@
 import { useEffect, useState } from "react";
 import { ActivityIndicator, AppState, Pressable, StyleSheet, Text, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { deviceFocusStatus, openDeviceUsageSettings, openDeviceOverlaySettings, supportsDeviceFocus } from "../lib/native-focus-lock";
+import { deviceFocusStatus, openDeviceUsageSettings, openDeviceOverlaySettings, openDeviceNotificationSettings, supportsDeviceFocus } from "../lib/native-focus-lock";
 
 export function DeviceFocusSetup() {
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [usageAccess, setUsageAccess] = useState(false);
   const [overlayAccess, setOverlayAccess] = useState(false);
-  const [opening, setOpening] = useState<"usage" | "overlay" | null>(null);
+  const [notificationSupported, setNotificationSupported] = useState(false);
+  const [notificationAccess, setNotificationAccess] = useState(false);
+  const [notificationError, setNotificationError] = useState("");
+  const [opening, setOpening] = useState<"usage" | "overlay" | "notifications" | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
     if (!supportsDeviceFocus) return;
@@ -17,6 +20,9 @@ export function DeviceFocusSetup() {
       setEnabled(value.enabled);
       setUsageAccess("usageAccess" in value && value.usageAccess === true);
       setOverlayAccess("overlayAccess" in value && value.overlayAccess === true);
+      setNotificationSupported("notificationSilenceSupported" in value && value.notificationSilenceSupported === true);
+      setNotificationAccess("notificationAccess" in value && value.notificationAccess === true);
+      setNotificationError("notificationError" in value ? value.notificationError || "" : "");
       setError("error" in value && value.error ? "App blocking needs attention." : "");
     }).catch(() => { if (!disposed) setError("Could not check app blocking access."); }); };
     refresh();
@@ -24,13 +30,14 @@ export function DeviceFocusSetup() {
     const timer = setInterval(refresh, 3000);
     return () => { disposed = true; listener.remove(); clearInterval(timer); };
   }, []);
-  if (!supportsDeviceFocus || (enabled && !error)) return null;
+  if (!supportsDeviceFocus || (enabled && !error && (!notificationSupported || notificationAccess) && !notificationError)) return null;
   const checking = enabled === null && !error;
   return <View style={styles.card}>
     {[
       { id: "usage" as const, label: "Usage access", granted: usageAccess, icon: "cellphone-check" as const, open: openDeviceUsageSettings },
       { id: "overlay" as const, label: "Display over other apps", granted: overlayAccess, icon: "layers-outline" as const, open: openDeviceOverlaySettings },
-    ].map(item => <Pressable key={item.id} accessibilityRole="button" accessibilityLabel={item.label} accessibilityState={{ disabled: opening !== null || checking || item.granted, busy: opening === item.id || checking }} disabled={opening !== null || checking || item.granted} style={styles.row} onPress={() => {
+      ...(notificationSupported ? [{ id: "notifications" as const, label: "Silent notifications", granted: notificationAccess, icon: "bell-sleep-outline" as const, open: openDeviceNotificationSettings }] : []),
+    ].filter(item => !item.granted).map(item => <Pressable key={item.id} accessibilityRole="button" accessibilityLabel={item.label} accessibilityState={{ disabled: opening !== null || checking || item.granted, busy: opening === item.id || checking }} disabled={opening !== null || checking || item.granted} style={styles.row} onPress={() => {
         if (opening !== null) return;
         setOpening(item.id); setError("");
         void item.open().catch(() => setError("Could not open permission settings.")).finally(() => setOpening(current => current === item.id ? null : current));
@@ -40,6 +47,7 @@ export function DeviceFocusSetup() {
         {opening === item.id || checking ? <ActivityIndicator size="small" color="#f5f5f5" /> : item.granted ? <MaterialCommunityIcons name="check" size={20} color="#86efac" /> : <Text style={[styles.action, { color: "#f5f5f5" }]}>Allow</Text>}
       </Pressable>)}
     {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
+    {!!notificationError && <Text accessibilityRole="alert" style={styles.error}>{notificationError}</Text>}
   </View>;
 }
 

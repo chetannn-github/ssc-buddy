@@ -79,6 +79,7 @@ class BuddyFocusService : Service(), SharedPreferences.OnSharedPreferenceChangeL
   private val ticker = object : Runnable {
     override fun run() {
       finishTimedBreak(this@BuddyFocusService)
+      FocusNotifications.reconcile(this@BuddyFocusService)
       FocusCompletionStore.observe(this@BuddyFocusService)
       if (!enabled(this@BuddyFocusService) || !FocusProtection.active(this@BuddyFocusService)) {
         if (enabled(this@BuddyFocusService) && FocusCompletionStore.pending(this@BuddyFocusService)) {

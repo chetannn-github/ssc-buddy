@@ -43,9 +43,13 @@ class BuddyMusicModule : Module() {
       val context = requireNotNull(appContext.reactContext)
       val prefs = BuddyFocusService.prefs(context)
       BuddyFocusService.ensureRunning(context)
+      FocusNotifications.reconcile(context)
       mapOf("enabled" to BuddyFocusService.enabled(context), "allowedCount" to prefs.getStringSet("allowed", emptySet()).orEmpty().size,
         "usageAccess" to BuddyFocusService.usageEnabled(context), "overlayAccess" to android.provider.Settings.canDrawOverlays(context),
         "scheduleAlarmAccess" to FocusSchedules.exactAccess(context),
+        "notificationSilenceSupported" to FocusNotifications.supported(),
+        "notificationAccess" to FocusNotifications.access(context),
+        "notificationError" to prefs.getString("notificationError", "").orEmpty(),
         "serviceConnected" to BuddyFocusService.connected, "lastEventAt" to BuddyFocusService.lastEventAt,
         "sessionActive" to (prefs.getLong("endsAt", 0) > System.currentTimeMillis() || prefs.getBoolean("paused", false)),
         "unlockAt" to prefs.getLong("endsAt", 0),
@@ -76,6 +80,11 @@ class BuddyMusicModule : Module() {
     AsyncFunction("openFocusOverlaySettings") {
       val context = requireNotNull(appContext.reactContext)
       openFocusPermission(context, android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
+    }.runOnQueue(Queues.MAIN)
+    AsyncFunction("openFocusNotificationSettings") {
+      val context = requireNotNull(appContext.reactContext)
+      context.startActivity(android.content.Intent(android.provider.Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
+        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
     }.runOnQueue(Queues.MAIN)
     AsyncFunction("configureFocusSchedules") { uid: String, json: String ->
       FocusSchedules.configure(requireNotNull(appContext.reactContext), uid, json)

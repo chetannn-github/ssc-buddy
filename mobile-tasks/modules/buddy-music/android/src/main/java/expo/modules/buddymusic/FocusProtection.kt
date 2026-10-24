@@ -34,6 +34,7 @@ internal object FocusProtection {
   }
   fun reconcile(context: Context) {
     BuddyFocusService.finishTimedBreak(context)
+    FocusNotifications.reconcile(context)
     val p = BuddyFocusService.prefs(context)
     val active = active(context)
     val dpm = manager(context)
